@@ -51,10 +51,10 @@ void CRectangle::SetTextPosition(float fontOffset)
 						  m_rectangle.getPosition().y + (m_rectangle.getSize().y * 0.5f) - fontOffset });
 }
 
-void CRectangle::MoveShape()
+void CRectangle::MoveShape(float deltaTime)
 {
-	ApplyPosition(m_rectangle.getPosition().x + m_velocity.x,
-				  m_rectangle.getPosition().y + m_velocity.y);
+	ApplyPosition(m_rectangle.getPosition().x + m_velocity.x * deltaTime,
+				  m_rectangle.getPosition().y + m_velocity.y * deltaTime);
 	m_position.x = m_rectangle.getPosition().x;
 	m_position.y = m_rectangle.getPosition().y;
 }

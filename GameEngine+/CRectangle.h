@@ -23,7 +23,7 @@ public:
     void DrawShape(sf::RenderWindow& window) override;
     void Includer(sf::RenderWindow& window) override;
     void SetTextPosition(float fontOffset) override;
-    void MoveShape() override; // custom to use current velocity
+    void MoveShape(float deltaTime = 1.0f / 60.0f) override; // custom to use current velocity
     void SetColor(float r, float g, float b);
     void SetRadius(float radius) override { m_rectangle.setSize(sf::Vector2f(radius,radius)); }
 

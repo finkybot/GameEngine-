@@ -24,6 +24,7 @@ void EntityManager::AddPendingEntities()
 	{
 		m_entities.push_back(entity);
 		m_entityMap[entity->GetTag()].push_back(entity);
+		m_quadTree.Insert(entity.get());
 	}
 	m_toAdd.clear();
 }
@@ -115,7 +116,7 @@ void EntityManager::UpdateQuadTreeAndRender()
 	}
 }
 
-void EntityManager::DetectAndResolveCollisions()
+void EntityManager::DetectAndResolveCollisions(float deltaTime)
 {
 	static std::vector<Entity*> foundRaw;
 	static size_t lastEntityCount = 0;
@@ -150,8 +151,12 @@ void EntityManager::DetectAndResolveCollisions()
 		QuadTree<Entity>::IncrementQueryCount();
 		m_quadTree.Query(foundRaw, rect, currentEntity);
 
-		for (Entity* entityPtr : foundRaw)
+	for (Entity* entityPtr : foundRaw)
 		{
+			// Validate pointer is still alive (safety check)
+			if (!entityPtr->IsAlive())
+				continue;
+			
 			if (!currentEntity->Intersects(entityPtr))
 				continue;
 			
@@ -171,8 +176,24 @@ void EntityManager::DetectAndResolveCollisions()
 			
 			Vec2 explosionVelocity = (currentSpeed >= otherSpeed) ? currentVel : otherVel;
 			
+			// Blend the colors of the two colliding entities
+			Vec3 blendedColor(255, 255, 255);  // default to white
+			CCircle* currentCircle = dynamic_cast<CCircle*>(currentEntity->cShape.get());
+			CCircle* otherCircle = dynamic_cast<CCircle*>(entityPtr->cShape.get());
+			
+			if (currentCircle && otherCircle)
+			{
+				sf::Color currentColor = currentCircle->GetColor();
+				sf::Color otherColor = otherCircle->GetColor();
+				
+				// Average the colors for a blend effect
+				blendedColor.x = (currentColor.r + otherColor.r) / 2.0f;
+				blendedColor.y = (currentColor.g + otherColor.g) / 2.0f;
+				blendedColor.z = (currentColor.b + otherColor.b) / 2.0f;
+			}
+			
 			Vec2 collisionPoint = (currentEntity->GetPosition() + entityPtr->GetPosition()) * 0.5f;
-			SpawnExplosion(collisionPoint, 20.0f, explosionVelocity);
+			SpawnExplosion(collisionPoint, 20.0f, explosionVelocity, blendedColor);
 				
 				currentEntity->Destroy();
 				entityPtr->Destroy();
@@ -185,11 +206,11 @@ void EntityManager::DetectAndResolveCollisions()
 		}
 
 		currentEntity->cShape->Includer(m_window);
-		currentEntity->cShape->MoveShape();
+		currentEntity->cShape->MoveShape(deltaTime);
 	}
 }
 
-void EntityManager::update()
+void EntityManager::update(float deltaTime)
 {
 	static auto fpsLast = std::chrono::steady_clock::now();
 	static int fpsFrames = 0;
@@ -209,7 +230,7 @@ void EntityManager::update()
 	
 	UpdateExplosions();
 
-	DetectAndResolveCollisions();
+	DetectAndResolveCollisions(deltaTime);
 
 	ReportFPS(fpsFrames, fpsLast, fpsSmooth, alpha);
 }
@@ -278,7 +299,6 @@ std::shared_ptr<Entity> EntityManager::addEntity(const std::string& tag, float r
 	e->SetMidLength(radius + 1);
 
 	m_toAdd.push_back(e);
-	m_quadTree.Insert(e.get());
 	return e;
 }
 
@@ -292,7 +312,7 @@ EntityVector& EntityManager::getEntities(const std::string& tag)
 	return m_entityMap[tag];
 }
 
-void EntityManager::SpawnExplosion(const Vec2& position, float radius, const Vec2& velocity)
+void EntityManager::SpawnExplosion(const Vec2& position, float radius, const Vec2& velocity, const Vec3& color)
 {
 	// Spawn a bright white circle explosion
 	// 20% bigger than max ball radius (3.0 * 1.2 = 3.6)
@@ -300,10 +320,12 @@ void EntityManager::SpawnExplosion(const Vec2& position, float radius, const Vec
 	// Dampen the velocity so explosions drift gently (30% of collision momentum)
 	Vec2 driftVelocity = velocity * 0.3f;
 	
-	auto explosionEntity = addEntity("Explosion", explosionRadius, Vec3(255, 255, 255), position, driftVelocity, 255);
+	auto explosionEntity = addEntity("Explosion", explosionRadius, color, position, driftVelocity, 255);
 	
-	// Track this explosion's creation time for fade effect
-	m_explosionTimes[m_totalEntities - 1] = std::chrono::high_resolution_clock::now();
+	// Track this explosion's creation time for fade effect using the actual entity ID
+	m_explosionTimes[explosionEntity->m_id] = std::chrono::high_resolution_clock::now();
+	// Store the explosion color
+	m_explosionColors[explosionEntity->m_id] = color;
 }
 
 void EntityManager::UpdateExplosions()
@@ -331,7 +353,11 @@ void EntityManager::UpdateExplosions()
 			// Check if fade is complete
 			if (elapsed >= FADE_DURATION)
 			{
+				// Mark for removal; RemoveDeadEntities will handle cleanup
 				entity->Destroy();
+				// Clean up the timer and color entries
+				m_explosionTimes.erase(entity->m_id);
+				m_explosionColors.erase(entity->m_id);
 				continue;
 			}
 			
@@ -361,19 +387,30 @@ void EntityManager::UpdateExplosions()
 			CCircle* circle = dynamic_cast<CCircle*>(entity->cShape.get());
 			if (circle)
 			{
-				circle->SetColor(255, 255, 255, currentAlpha);
+				// Retrieve the stored explosion color
+				auto colorIt = m_explosionColors.find(entity->m_id);
+				if (colorIt != m_explosionColors.end())
+				{
+					const Vec3& explosionColor = colorIt->second;
+					circle->SetColor(explosionColor.x, explosionColor.y, explosionColor.z, currentAlpha);
+				}
+				else
+				{
+					// Fallback to white if color not found
+					circle->SetColor(255, 255, 255, currentAlpha);
+				}
 				circle->SetRadius(currentRadius);
 				entity->SetMidLength(currentRadius + 1);
 			}
 		}
 	}
 	
-	// Clean up expired timers
+	// Additional cleanup for any stale timer entries (safety net)
 	std::vector<size_t> toRemove;
 	for (auto& explosionEntry : m_explosionTimes)
 	{
 		float elapsed = std::chrono::duration<float>(now - explosionEntry.second).count();
-		if (elapsed >= FADE_DURATION)
+		if (elapsed > FADE_DURATION + 0.5f)  // Extra margin to catch orphaned entries
 		{
 			toRemove.push_back(explosionEntry.first);
 		}
@@ -382,5 +419,6 @@ void EntityManager::UpdateExplosions()
 	for (auto id : toRemove)
 	{
 		m_explosionTimes.erase(id);
+		m_explosionColors.erase(id);
 	}
 }

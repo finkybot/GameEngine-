@@ -31,12 +31,14 @@ private:
 	
 	// Track explosion creation times: entity_id -> creation_time
 	std::map<size_t, std::chrono::high_resolution_clock::time_point> m_explosionTimes;
+	// Track explosion colors: entity_id -> color
+	std::map<size_t, Vec3> m_explosionColors;
 
 
 public:
 	EntityManager(sf::RenderWindow& window);
 	
-	void update();
+	void update(float deltaTime = 1.0f / 60.0f);
 
 	void ReportFPS(int& fpsFrames, std::chrono::steady_clock::time_point& fpsLast, double& fpsSmooth, const double alpha);
 
@@ -47,8 +49,8 @@ public:
 	EntityVector& getEntities(const std::string& tag);
 	int GetDeathCountThisFrame() const { return m_deathCountThisFrame; }
 	
-	// Spawn an explosion effect at a given position
-	void SpawnExplosion(const Vec2& position, float radius = 15.0f, const Vec2& velocity = Vec2(0, 0));
+	// Spawn an explosion effect at a given position with a color blend from colliding entities
+	void SpawnExplosion(const Vec2& position, float radius, const Vec2& velocity, const Vec3& color);
 	int GetExplosionCount() const { return static_cast<int>(m_explosionTimes.size()); }
 
 private:
@@ -56,7 +58,7 @@ void AddPendingEntities();
 void RemoveDeadEntities();
 void UpdateQuadTreeAndRender();
 void UpdateExplosions();
-void DetectAndResolveCollisions();
+void DetectAndResolveCollisions(float deltaTime);
 bool AreEnemies(Entity* entity1, Entity* entity2);
 };
 

@@ -46,11 +46,11 @@ void CCircle::SetTextPosition(float fontOffset)
                           m_circle.getPosition().y + (m_circle.getRadius() - fontOffset) });
 }
 
-void CCircle::MoveShape()
+void CCircle::MoveShape(float deltaTime)
 {
     m_velocity = m_velocityChanged; // adopt changed velocity
-    ApplyPosition(m_circle.getPosition().x + m_velocity.x,
-                  m_circle.getPosition().y + m_velocity.y);
+    ApplyPosition(m_circle.getPosition().x + m_velocity.x * deltaTime,
+                  m_circle.getPosition().y + m_velocity.y * deltaTime);
     m_position.x = m_circle.getPosition().x;
     m_position.y = m_circle.getPosition().y;
 }

@@ -27,7 +27,7 @@ public:
 
     // Centralized position and movement
     void SetPosition(float x, float y);
-    virtual void MoveShape();
+    virtual void MoveShape(float deltaTime = 1.0f / 60.0f);  // Default to 60 FPS for backward compatibility
 
     const Vec2& GetPosition() const noexcept { return m_position; }
 

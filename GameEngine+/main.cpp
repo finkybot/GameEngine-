@@ -57,8 +57,8 @@ static void InitializeGame(EntityManager& entityManager, sf::Vector2u windowSize
 	std::random_device randDevice;
 	std::default_random_engine generator(randDevice());
 
-	std::uniform_int_distribution<int> xVelocity(-2, 2);      // Moderate movement speed
-	std::uniform_int_distribution<int> yVelocity(-2, 2);      // Moderate movement speed
+	std::uniform_int_distribution<int> xVelocity(-150, 150);      // Faster movement speed
+	std::uniform_int_distribution<int> yVelocity(-150, 150);      // Faster movement speed
 	std::uniform_int_distribution<int> xDistro(20, windowSize.x - 5);
 	std::uniform_int_distribution<int> yDistro(20, windowSize.y - 5);
 	std::uniform_int_distribution<int> redVal(100, 255);      // Brighter reds
@@ -145,8 +145,8 @@ int main(int argc, char* argv[])
 	// Initialize random number generator once (not every frame)
 	std::random_device randDevice;
 	std::default_random_engine generator(randDevice());
-	std::uniform_int_distribution<int> xVelocity(-2, 2);      // Moderate movement speed
-	std::uniform_int_distribution<int> yVelocity(-2, 2);      // Moderate movement speed
+	std::uniform_int_distribution<int> xVelocity(-150, 150);      // Faster movement speed
+	std::uniform_int_distribution<int> yVelocity(-150, 150);      // Faster movement speed
 	std::uniform_int_distribution<int> xDistro(20, windowSize.x - 5);
 	std::uniform_int_distribution<int> yDistro(20, windowSize.y - 5);
 	std::uniform_int_distribution<int> redVal(100, 255);      // Brighter reds
@@ -172,8 +172,10 @@ int main(int argc, char* argv[])
 			}
 		}
 
-		// Update ImGui
-		ImGui::SFML::Update(window, deltaClock.restart());
+		// Update ImGui and calculate delta time for this frame
+		sf::Time frameTime = deltaClock.restart();
+		float deltaTime = frameTime.asSeconds();
+		ImGui::SFML::Update(window, frameTime);
 
 		// Dynamic population control: maintain ~10,000 entities by spawning to replace dead ones
 		size_t currentEntityCount = entity_manager.getEntities().size();
@@ -254,7 +256,7 @@ int main(int argc, char* argv[])
 		}
 
 		// Update game logic (entities, collisions, rendering)
-		entity_manager.update();
+		entity_manager.update(deltaTime);
 
 		// Render ImGui UI
 		RenderGameInfoWindow(entity_manager.getEntities().size(), entity_manager.GetDeathCountThisFrame(), entity_manager.GetExplosionCount());

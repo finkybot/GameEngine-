@@ -52,10 +52,10 @@ void CShape::SetPosition(float x, float y)
 	m_position.y = y;
 }
 
-void CShape::MoveShape()
+void CShape::MoveShape(float deltaTime)
 {
-	ApplyPosition(m_position.x + m_velocity.x, m_position.y + m_velocity.y);
-	m_position.x += m_velocity.x;
-	m_position.y += m_velocity.y;
+	ApplyPosition(m_position.x + m_velocity.x * deltaTime, m_position.y + m_velocity.y * deltaTime);
+	m_position.x += m_velocity.x * deltaTime;
+	m_position.y += m_velocity.y * deltaTime;
 }
 

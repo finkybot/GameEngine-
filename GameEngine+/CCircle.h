@@ -19,10 +19,11 @@ public:
     void DrawShape(sf::RenderWindow& window) override;
     void Includer(sf::RenderWindow& window) override;
     void SetTextPosition(float fontOffset) override;
-    void MoveShape() override; // custom to use velocityChanged
+    void MoveShape(float deltaTime = 1.0f / 60.0f) override; // custom to use velocityChanged
 
     void SetRadius(float radius) override { m_circle.setRadius(radius); }
     void SetColor(float r, float g, float b, int alpha);
+    sf::Color GetColor() const { return m_circle.getFillColor(); }
 
     float GetMidLength() const override { return m_midLength; }
     float GetWidth() const override { return m_circle.getRadius() * 2.f; }

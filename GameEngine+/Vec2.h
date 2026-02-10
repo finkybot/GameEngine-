@@ -55,22 +55,74 @@ public:
 	Vec2& operator-=(const Vec2& vector);
 
 
-	// Vector Magnitude
 	float Mag2() const;
+	/// <summary>
+	/// Get the magnitude (length) of the vector using Pythagorean theorem.
+	/// </summary>
+	/// <returns>Floating point value representing the length of the vector.</returns>
 	float Mag() const;
 
-	// Unit Vectors
+	/// <summary>
+	/// Get a unit vector (normalized) from calling vector if magnitude > 0, else return zero vector.
+	/// </summary>
+	/// <returns>Unit Vec2 object or zero vector if magnitude is zero.</returns>
 	Vec2 GetUnitVec() const;
+
+	/// <summary>
+	/// Normalize the calling vector (modify in place) if magnitude > 0.
+	/// </summary>
+	/// <returns>Reference to the normalized calling Vec2 object.</returns>
 	Vec2& Normalize();
 
-	float Distance(const Vec2& vector) const; // Vector Distance
-	float Dot(const Vec2& vector) const; // Dot Product
-	Vec2 ProjectOnto(const Vec2& vector) const;	// Vector Projection
-	float AngleBetween(const Vec2& vector) const; // Get the angle between two vectors 
-	Vec2 Reflect(const Vec2& normal) const;	// Reflect calling vector of the normal vector
+	/// <summary>
+	/// Calculate the distance between this vector and another vector.
+	/// </summary>
+	/// <param name="vector">Reference to another Vec2 object.</param>
+	/// <returns>Floating point distance value.</returns>
+	float Distance(const Vec2& vector) const;
 
-	void Rotate(float angle, const Vec2& aroundPoint); // Rotate calling vector around a point (calling vector modified)
-	Vec2 RotationResult(float angle, const Vec2& aroundPoint) const; // Rotate calling vector around a point (new vector returned)
+	/// <summary>
+	/// Calculate the dot product of two vectors.
+	/// </summary>
+	/// <param name="vector">Reference to another Vec2 object.</param>
+	/// <returns>Floating point dot product value.</returns>
+	float Dot(const Vec2& vector) const;
+
+	/// <summary>
+	/// Project the calling vector onto another vector.
+	/// </summary>
+	/// <param name="vector">Reference to the vector to project onto.</param>
+	/// <returns>Projected Vec2 object.</returns>
+	Vec2 ProjectOnto(const Vec2& vector) const;
+
+	/// <summary>
+	/// Calculate the angle (in radians) between two vectors.
+	/// </summary>
+	/// <param name="vector">Reference to another Vec2 object.</param>
+	/// <returns>Floating point angle in radians.</returns>
+	float AngleBetween(const Vec2& vector) const;
+
+	/// <summary>
+	/// Reflect the calling vector off a normal vector.
+	/// </summary>
+	/// <param name="normal">Reference to the normal vector to reflect off.</param>
+	/// <returns>Reflected Vec2 object.</returns>
+	Vec2 Reflect(const Vec2& normal) const;
+
+	/// <summary>
+	/// Rotate the calling vector around a point (modifies calling vector in place).
+	/// </summary>
+	/// <param name="angle">Rotation angle in radians.</param>
+	/// <param name="aroundPoint">Point to rotate around.</param>
+	void Rotate(float angle, const Vec2& aroundPoint);
+
+	/// <summary>
+	/// Get the result of rotating the calling vector around a point (returns new vector).
+	/// </summary>
+	/// <param name="angle">Rotation angle in radians.</param>
+	/// <param name="aroundPoint">Point to rotate around.</param>
+	/// <returns>Rotated Vec2 object.</returns>
+	Vec2 RotationResult(float angle, const Vec2& aroundPoint) const;
 
 	// Friends.
 	friend std::ostream& operator<<(std::ostream& consoleOut, const Vec2& vector); // Insertion operator (friend)

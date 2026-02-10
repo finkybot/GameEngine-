@@ -18,7 +18,6 @@ protected:
 public:
     CRectangle();
     CRectangle(float x, float y);
-    CRectangle(float x, float y, std::string& text, float textSize, sf::Font& font, Vec3 color);
 
     void DrawShape(sf::RenderWindow& window) override;
     void Includer(sf::RenderWindow& window) override;
@@ -27,7 +26,10 @@ public:
     void SetColor(float r, float g, float b);
     void SetRadius(float radius) override { m_rectangle.setSize(sf::Vector2f(radius,radius)); }
 
-    Vec2 GetCentrePoint() const override { return { 0,0 }; }
+    Vec2 GetCentrePoint() const override { 
+        return Vec2(m_rectangle.getPosition().x + m_rectangle.getSize().x * 0.5f,
+                    m_rectangle.getPosition().y + m_rectangle.getSize().y * 0.5f); 
+    }
     float GetWidth() const override { return m_rectangle.getSize().x; }
     float GetHeight() const override { return m_rectangle.getSize().y; }
     float GetMidLength() const override { return m_midLength; }

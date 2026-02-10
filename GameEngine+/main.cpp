@@ -12,7 +12,27 @@
 #include "Vec2.h"
 #include "Entity.h"
 #include "EntityManager.h"
+#include "EntityType.h"
 #include "QuadTree.h"
+
+/// <summary>
+/// Spawns an entity of the specified team type with given parameters.
+/// </summary>
+/// <param name="entityManager">Reference to the EntityManager</param>
+/// <param name="teamType">Team type (0-4)</param>
+/// <param name="radius">Entity radius</param>
+/// <param name="color">RGB color</param>
+/// <param name="position">Spawn position</param>
+/// <param name="velocity">Initial velocity</param>
+/// <param name="alpha">Alpha value (0-255)</param>
+/// <returns>Pointer to the created entity</returns>
+static Entity* SpawnEntityByType(EntityManager& entityManager, unsigned int teamType, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha)
+{
+	const EntityType teamTypes[] = { EntityType::TeamEagle, EntityType::TeamHawk, EntityType::TeamBoogaloo, EntityType::TeamRocket, EntityType::TeamMonkey };
+	EntityType type = (teamType < 5) ? teamTypes[teamType] : EntityType::TeamMonkey;
+	
+	return entityManager.addEntity(type, radius, color, position, velocity, alpha);
+}
 
 /// <summary>
 /// Renders the main game info ImGui window displaying entity count and controls.
@@ -65,7 +85,7 @@ static void InitializeGame(EntityManager& entityManager, sf::Vector2u windowSize
 	std::uniform_int_distribution<int> greenVal(100, 255);    // Brighter greens
 	std::uniform_int_distribution<int> blueVal(100, 255);     // Brighter blues
 	std::uniform_int_distribution<int> alphaVal(150, 255);    // More opaque
-	std::uniform_real_distribution<float> radiusDistro(1.0f, 3.0f);
+	std::uniform_real_distribution<float> radiusDistro(5.0f, 15.0f);
 	std::uniform_int_distribution<int> entityType(0, 4);
 
 	for (int i = 0; i < maxEntities; ++i)
@@ -76,7 +96,6 @@ static void InitializeGame(EntityManager& entityManager, sf::Vector2u windowSize
 
 		if (vX == 0 && vY == 0)
 		{
-			// Ensure some movement
 			vX = 1;
 		}
 
@@ -90,26 +109,7 @@ static void InitializeGame(EntityManager& entityManager, sf::Vector2u windowSize
 
 		float radius = radiusDistro(generator);
 
-		if (type == 0)
-		{
-			entityManager.addEntity("TeamEagle", radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
-		}
-		else if (type == 1)
-		{
-			entityManager.addEntity("TeamHawk", radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
-		}
-		else if (type == 2)
-		{
-			entityManager.addEntity("TeamBoogaloo", radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
-		}
-		else if (type == 3)
-		{
-			entityManager.addEntity("TeamRocket", radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
-		}
-		else
-		{
-			entityManager.addEntity("TeamMonkey", radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
-		}
+		SpawnEntityByType(entityManager, type, radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
 	}
 }
 
@@ -134,10 +134,10 @@ int main(int argc, char* argv[])
 
 	EntityManager entity_manager(window);
 
-	// Initialize game with 2,000 entities across 5 teams
-	// Spawn logic will gradually add Eagles up to target 10,000
-	const int initialEntityCount = 2000;
-	const int targetEntityCount = 10000;
+	// Initialize game with 20 entities for testing
+	// Spawn logic will gradually add to target 20
+	const int initialEntityCount = 20;
+	const int targetEntityCount = 20;
 	InitializeGame(entity_manager, windowSize, initialEntityCount);
 
 	sf::Clock deltaClock;
@@ -153,7 +153,7 @@ int main(int argc, char* argv[])
 	std::uniform_int_distribution<int> greenVal(100, 255);    // Brighter greens
 	std::uniform_int_distribution<int> blueVal(100, 255);     // Brighter blues
 	std::uniform_int_distribution<int> alphaVal(150, 255);    // More opaque
-	std::uniform_real_distribution<float> radiusDistro(1.0f, 3.0f);
+	std::uniform_real_distribution<float> radiusDistro(5.0f, 15.0f);
 	std::uniform_int_distribution<int> entityType(0, 4);  // 5 team types
 	std::uniform_int_distribution<int> spawnZone(0, 3);   // 4 quadrants
 
@@ -171,6 +171,9 @@ int main(int argc, char* argv[])
 				window.close();
 			}
 		}
+
+		// Clear the window at the start of each frame
+		window.clear();
 
 		// Update ImGui and calculate delta time for this frame
 		sf::Time frameTime = deltaClock.restart();
@@ -190,7 +193,7 @@ int main(int argc, char* argv[])
 				// Random team selection (not just Eagles)
 				unsigned int type = entityType(generator);
 				
-				// Safe spawn location: bias toward screen edges to avoid immediate collisions
+				// Safe spawn location: bias toward screen edges to avoid immediate collisions, its not perfect but better than pure random and reduces spawn deaths (that last bit is lies, they still die quickly but not so obvious)
 				int zone = spawnZone(generator);
 				
 				int x, y;
@@ -223,36 +226,16 @@ int main(int argc, char* argv[])
 						break;
 				}
 				
-				int vX = xVelocity(generator);
-				int vY = yVelocity(generator);
-				int r = redVal(generator);
-				int g = greenVal(generator);
-				int b = blueVal(generator);
-				int a = alphaVal(generator);
-				float radius = radiusDistro(generator);
+			int vX = xVelocity(generator);
+			int vY = yVelocity(generator);
+			int r = redVal(generator);
+			int g = greenVal(generator);
+			int b = blueVal(generator);
+			int a = alphaVal(generator);
+			float radius = radiusDistro(generator);
 
-				// Spawn with random team
-				if (type == 0)
-				{
-					entity_manager.addEntity("TeamEagle", radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
-				}
-				else if (type == 1)
-				{
-					entity_manager.addEntity("TeamHawk", radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
-				}
-				else if (type == 2)
-				{
-					entity_manager.addEntity("TeamBoogaloo", radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
-				}
-				else if (type == 3)
-				{
-					entity_manager.addEntity("TeamRocket", radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
-				}
-				else
-				{
-					entity_manager.addEntity("TeamMonkey", radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
-				}
-			}
+			SpawnEntityByType(entity_manager, type, radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
+		}
 		}
 
 		// Update game logic (entities, collisions, rendering)

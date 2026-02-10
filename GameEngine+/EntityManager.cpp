@@ -1,7 +1,7 @@
 #include "EntityManager.h"
 #include "Entity.h"
+#include "EntityType.h"
 #include "CCircle.h"
-#include "imgui/imgui.h"
 #include <algorithm>
 #include <chrono>
 #include <cmath>
@@ -14,17 +14,21 @@
 
 EntityManager::EntityManager(sf::RenderWindow& window)
 	: m_quadTree(BoundingBox(Vec2(0, 0), Vec2(window.getSize().x, window.getSize().y)), 16, 0, 5),
-	  m_window(window)
+	  m_window(window),
+	  m_collisionSystem(this)
 {
 }
 
 void EntityManager::AddPendingEntities()
 {
+	// Process all entities that were queued for addition
+	// Using a deferred addition pattern prevents invalidating iterators during game logic
 	for (auto& entity : m_toAdd)
 	{
-		m_entities.push_back(entity);
-		m_entityMap[entity->GetTag()].push_back(entity);
-		m_quadTree.Insert(entity.get());
+		Entity* entityPtr = entity.get();
+		m_entities.push_back(std::move(entity));
+		m_entityMap[entityPtr->GetType()].push_back(entityPtr);
+		m_quadTree.Insert(entityPtr);
 	}
 	m_toAdd.clear();
 }
@@ -34,7 +38,7 @@ void EntityManager::RemoveDeadEntities()
 	std::vector<Entity*> deadEntities;
 	
 	auto end = std::remove_if(m_entities.begin(), m_entities.end(), 
-		[&deadEntities](const auto e) { 
+		[&deadEntities](const auto& e) { 
 			if (!e->IsAlive())
 			{
 				deadEntities.push_back(e.get());
@@ -55,11 +59,6 @@ void EntityManager::RemoveDeadEntities()
 	{
 		m_quadTree.RemoveEntityFromTree(deadEntity);
 	}
-}
-
-bool EntityManager::AreEnemies(Entity* entity1, Entity* entity2)
-{
-	return entity1->GetTag() != entity2->GetTag();
 }
 
 void EntityManager::UpdateQuadTreeAndRender()
@@ -89,124 +88,47 @@ void EntityManager::UpdateQuadTreeAndRender()
 	if (shouldRebuild)
 	{
 		m_quadTree.ClearTree();
-		for (auto entity = m_entities.begin(); entity != m_entities.end(); ++entity)
+		for (auto& entity : m_entities)
 		{
-			m_quadTree.Insert(entity->get());
-			entity->get()->m_previousPosition = entity->get()->GetPosition();
+			m_quadTree.Insert(entity.get());
+			entity->m_previousPosition = entity->GetPosition();
 		}
 	}
 	else
 	{
-		for (auto entity = m_entities.begin(); entity != m_entities.end(); ++entity)
+		for (auto& entity : m_entities)
 		{
-			Entity* e = entity->get();
-			const Vec2& currentPos = e->GetPosition();
-			if ((currentPos.GetX() != e->m_previousPosition.GetX()) || 
-				(currentPos.GetY() != e->m_previousPosition.GetY()))
+			const Vec2& currentPos = entity->GetPosition();
+			if ((currentPos.GetX() != entity->m_previousPosition.GetX()) || 
+				(currentPos.GetY() != entity->m_previousPosition.GetY()))
 			{
-				m_quadTree.UpdatePosition(e);
-				e->m_previousPosition = currentPos;
+				m_quadTree.UpdatePosition(entity.get());
+				entity->m_previousPosition = currentPos;
 			}
 		}
 	}
 
-	for (auto entity = m_entities.begin(); entity != m_entities.end(); ++entity)
-	{
-		entity->get()->cShape->DrawShape(m_window);
-	}
+	m_renderSystem.Render(m_entities, m_window);
 }
 
 void EntityManager::DetectAndResolveCollisions(float deltaTime)
 {
-	static std::vector<Entity*> foundRaw;
-	static size_t lastEntityCount = 0;
-	
-	if (m_entities.size() != lastEntityCount && !m_entities.empty())
+	float windowWidth = static_cast<float>(m_window.getSize().x);
+	float windowHeight = static_cast<float>(m_window.getSize().y);
+	m_physicsSystem.Update(m_entities, deltaTime, windowWidth, windowHeight);
+
+	m_deathCountThisFrame += m_collisionSystem.DetectAndResolve(m_entities, m_quadTree, deltaTime);
+
+	for (auto& entity : m_entities)
 	{
-		foundRaw.reserve(std::max(size_t(16), m_entities.size() / 100));
-		lastEntityCount = m_entities.size();
-	}
-	
-	for (auto iterator = m_entities.begin(); iterator != m_entities.end(); ++iterator)
-	{
-		Entity* currentEntity = iterator->get();
-		
-		if (!currentEntity->IsAlive())
-			continue;
-		
-		// Skip collision detection for explosions - they're visual effects only
-		if (currentEntity->GetTag() == "Explosion")
-			continue;
-
-		const Vec2& position = currentEntity->GetPosition();
-		float width = currentEntity->GetWidth();
-		float height = currentEntity->GetHeight();
-
-		BoundingBox rect(
-			Vec2(position - Vec2(width * 1.5f, height * 1.5f)),
-			Vec2(position + Vec2(width * 1.5f, height * 1.5f))
-		);
-
-		foundRaw.clear();
-		QuadTree<Entity>::IncrementQueryCount();
-		m_quadTree.Query(foundRaw, rect, currentEntity);
-
-	for (Entity* entityPtr : foundRaw)
+		if (entity->IsAlive())
 		{
-			// Validate pointer is still alive (safety check)
-			if (!entityPtr->IsAlive())
-				continue;
-			
-			if (!currentEntity->Intersects(entityPtr))
-				continue;
-			
-			// Skip if other entity is an explosion
-			if (entityPtr->GetTag() == "Explosion")
-				continue;
-
-			if (AreEnemies(currentEntity, entityPtr))
+			auto shape = entity->GetComponent<CShape>();
+			if (shape)
 			{
-			// Spawn explosion at collision point
-			// Use the velocity of the faster moving entity for momentum-based drift
-			Vec2 currentVel = Vec2(currentEntity->cShape->GetVelocity().x, currentEntity->cShape->GetVelocity().y);
-			Vec2 otherVel = Vec2(entityPtr->cShape->GetVelocity().x, entityPtr->cShape->GetVelocity().y);
-			
-			float currentSpeed = std::sqrt(currentVel.x * currentVel.x + currentVel.y * currentVel.y);
-			float otherSpeed = std::sqrt(otherVel.x * otherVel.x + otherVel.y * otherVel.y);
-			
-			Vec2 explosionVelocity = (currentSpeed >= otherSpeed) ? currentVel : otherVel;
-			
-			// Blend the colors of the two colliding entities
-			Vec3 blendedColor(255, 255, 255);  // default to white
-			CCircle* currentCircle = dynamic_cast<CCircle*>(currentEntity->cShape.get());
-			CCircle* otherCircle = dynamic_cast<CCircle*>(entityPtr->cShape.get());
-			
-			if (currentCircle && otherCircle)
-			{
-				sf::Color currentColor = currentCircle->GetColor();
-				sf::Color otherColor = otherCircle->GetColor();
-				
-				// Average the colors for a blend effect
-				blendedColor.x = (currentColor.r + otherColor.r) / 2.0f;
-				blendedColor.y = (currentColor.g + otherColor.g) / 2.0f;
-				blendedColor.z = (currentColor.b + otherColor.b) / 2.0f;
-			}
-			
-			Vec2 collisionPoint = (currentEntity->GetPosition() + entityPtr->GetPosition()) * 0.5f;
-			SpawnExplosion(collisionPoint, 20.0f, explosionVelocity, blendedColor);
-				
-				currentEntity->Destroy();
-				entityPtr->Destroy();
-				m_deathCountThisFrame += 2;
-			}
-			else
-			{
-				currentEntity->Bounce(entityPtr);
+				shape->Includer(m_window);
 			}
 		}
-
-		currentEntity->cShape->Includer(m_window);
-		currentEntity->cShape->MoveShape(deltaTime);
 	}
 }
 
@@ -216,8 +138,6 @@ void EntityManager::update(float deltaTime)
 	static int fpsFrames = 0;
 	static double fpsSmooth = 0.0;
 	static constexpr double alpha = 0.15;
-
-	m_window.clear();
 
 	QuadTree<Entity>::ResetQueryStats();
 	
@@ -249,11 +169,21 @@ void EntityManager::ReportFPS(int& fpsFrames, std::chrono::steady_clock::time_po
 		}
 		else
 		{
-			fpsSmooth = alpha * currentFps + (1.0 - alpha) * fpsSmooth;	
+			fpsSmooth = (alpha * currentFps) + ((1.0 - alpha) * fpsSmooth);
 		}
-
-		snprintf(m_fpsTitle, sizeof(m_fpsTitle), "FPS: %.1f", fpsSmooth);
+		
+		std::stringstream ss;
+		ss << std::fixed << std::setprecision(1) << fpsSmooth;
+		std::string fpsStr = ss.str();
+		std::string title = "FPS: " + fpsStr;
+#pragma warning(push)
+#pragma warning(disable: 4996)
+		std::strncpy(m_fpsTitle, title.c_str(), sizeof(m_fpsTitle) - 1);
+#pragma warning(pop)
+		m_fpsTitle[sizeof(m_fpsTitle) - 1] = '\0';
+		
 		m_window.setTitle(m_fpsTitle);
+
 		fpsFrames = 0;
 		fpsLast = fpsNow;
 	}
@@ -263,43 +193,34 @@ void EntityManager::DrawBoundingBox(const std::vector<BoundingBox>& bboxes)
 {
 	for (const auto& bbox : bboxes)
 	{
-		sf::RectangleShape line1(sf::Vector2f(bbox.GetWidth(), 1.f));
-		line1.setPosition({ bbox.GetTopLeftPoint().GetX(), bbox.GetTopLeftPoint().GetY() });
-		line1.setFillColor(sf::Color(120, 130, 130, 127));
-		m_window.draw(line1);
-
-		sf::RectangleShape line2(sf::Vector2f(1.f, bbox.GetHeight()));
-		line2.setPosition({ bbox.GetBottomRightPoint().GetX(), bbox.GetTopLeftPoint().GetY() });
-		line2.setFillColor(sf::Color(60, 190, 130, 127));
-		m_window.draw(line2);
-
-		sf::RectangleShape line3(sf::Vector2f(bbox.GetWidth(), 1.f));
-		line3.setPosition({ bbox.GetTopLeftPoint().GetX(), bbox.GetBottomRightPoint().GetY() });
-		line3.setFillColor(sf::Color(200, 190, 60, 127));
-		m_window.draw(line3);
-
-		sf::RectangleShape line4(sf::Vector2f(1.f, bbox.GetHeight()));
-		line4.setPosition({ bbox.GetTopLeftPoint().GetX(), bbox.GetTopLeftPoint().GetY() });
-		line4.setFillColor(sf::Color(60, 230, 160, 127));
-		m_window.draw(line4);
+		sf::RectangleShape rect;
+		rect.setPosition(sf::Vector2f(bbox.topLeft.x, bbox.topLeft.y));
+		rect.setSize(sf::Vector2f(bbox.bottomRight.x - bbox.topLeft.x, bbox.bottomRight.y - bbox.topLeft.y));
+		rect.setFillColor(sf::Color::Transparent);
+		rect.setOutlineColor(sf::Color::Green);
+		rect.setOutlineThickness(1.0f);
+		m_window.draw(rect);
 	}
 }
 
-std::shared_ptr<Entity> EntityManager::addEntity(const std::string& tag, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha)
+Entity* EntityManager::addEntity(EntityType type, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha)
 {
-	auto e = std::shared_ptr<Entity>(new Entity(tag, m_totalEntities++));
+	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++));
+	
+	entity->AddComponent<CTransform>(position, velocity);
+	entity->AddComponent<CName>();
+	
 	auto circle = std::make_unique<CCircle>();
-
-	circle->SetColor(color.x, color.y, color.z, alpha);
-	circle->SetVelocity(velocity.x, velocity.y);
-	circle->SetPosition(position.x, position.y);
 	circle->SetRadius(radius);
-
-	e->cShape = std::move(circle);
-	e->SetMidLength(radius + 1);
-
-	m_toAdd.push_back(e);
-	return e;
+	circle->SetColor(color.x, color.y, color.z, alpha);
+	circle->SetPosition(position.x, position.y);
+	circle->SetInitialVelocity(velocity.x, velocity.y);
+	
+	entity->AddComponentPtr<CShape>(std::move(circle));
+	
+	Entity* entityPtr = entity.get();
+	m_toAdd.push_back(std::move(entity));
+	return entityPtr;
 }
 
 EntityVector& EntityManager::getEntities()
@@ -307,118 +228,78 @@ EntityVector& EntityManager::getEntities()
 	return m_entities;
 }
 
-EntityVector& EntityManager::getEntities(const std::string& tag)
+std::vector<Entity*>& EntityManager::getEntities(EntityType type)
 {
-	return m_entityMap[tag];
+	return m_entityMap[type];
 }
 
 void EntityManager::SpawnExplosion(const Vec2& position, float radius, const Vec2& velocity, const Vec3& color)
 {
-	// Spawn a bright white circle explosion
-	// 20% bigger than max ball radius (3.0 * 1.2 = 3.6)
-	float explosionRadius = 3.6f;
-	// Dampen the velocity so explosions drift gently (30% of collision momentum)
-	Vec2 driftVelocity = velocity * 0.3f;
+	auto explosionEntity = addEntity(
+		EntityType::Explosion,
+		radius,
+		color,
+		position,
+		velocity,
+		200
+	);
 	
-	auto explosionEntity = addEntity("Explosion", explosionRadius, color, position, driftVelocity, 255);
-	
-	// Track this explosion's creation time for fade effect using the actual entity ID
 	m_explosionTimes[explosionEntity->m_id] = std::chrono::high_resolution_clock::now();
-	// Store the explosion color
 	m_explosionColors[explosionEntity->m_id] = color;
 }
 
 void EntityManager::UpdateExplosions()
 {
-	// Update explosion fading and growing/shrinking
 	auto now = std::chrono::high_resolution_clock::now();
-	const float FADE_DURATION = 1.0f;  // 1 second for punchy effect
-	const float MIN_RADIUS = 3.6f;     // Starting radius
-	const float MAX_RADIUS = 7.0f;     // Max radius at midpoint
-	const float MIN_ALPHA = 100.0f;    // Don't fade completely to black - stay more visible
-	const float MAX_ALPHA = 255.0f;    // Start fully opaque
+	std::vector<size_t> expiredExplosions;
 	
-	// Update all explosions
-	for (auto& entity : m_entities)
+	for (auto& [explosionId, creationTime] : m_explosionTimes)
 	{
-		if (entity->GetTag() == "Explosion" && entity->IsAlive())
+		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - creationTime);
+		
+		if (elapsed.count() > 300)
 		{
-			// Find creation time for this explosion
-			auto it = m_explosionTimes.find(entity->m_id);
-			if (it == m_explosionTimes.end())
-				continue;
-			
-			float elapsed = std::chrono::duration<float>(now - it->second).count();
-			
-			// Check if fade is complete
-			if (elapsed >= FADE_DURATION)
+			for (auto& entity : m_entities)
 			{
-				// Mark for removal; RemoveDeadEntities will handle cleanup
-				entity->Destroy();
-				// Clean up the timer and color entries
-				m_explosionTimes.erase(entity->m_id);
-				m_explosionColors.erase(entity->m_id);
-				continue;
-			}
-			
-			// Calculate progress (0 to 1)
-			float progress = elapsed / FADE_DURATION;
-			
-		// Alpha: fade from MAX_ALPHA to MIN_ALPHA (stays brighter)
-		int currentAlpha = static_cast<int>(MAX_ALPHA * (1.0f - progress) + MIN_ALPHA * progress);
-		currentAlpha = std::max(static_cast<int>(MIN_ALPHA), std::min(static_cast<int>(MAX_ALPHA), currentAlpha));
-			
-			// Radius: grow in first half, shrink in second half
-			float radiusProgress;
-			if (progress < 0.5f)
-			{
-				// Growing phase (0 to 0.5)
-				radiusProgress = progress * 2.0f;  // 0 to 1
-			}
-			else
-			{
-				// Shrinking phase (0.5 to 1.0)
-				radiusProgress = 1.0f - ((progress - 0.5f) * 2.0f);  // 1 to 0
-			}
-			
-			float currentRadius = MIN_RADIUS + (MAX_RADIUS - MIN_RADIUS) * radiusProgress;
-			
-			// Apply changes to the explosion circle
-			CCircle* circle = dynamic_cast<CCircle*>(entity->cShape.get());
-			if (circle)
-			{
-				// Retrieve the stored explosion color
-				auto colorIt = m_explosionColors.find(entity->m_id);
-				if (colorIt != m_explosionColors.end())
+				if (entity->m_id == explosionId)
 				{
-					const Vec3& explosionColor = colorIt->second;
-					circle->SetColor(explosionColor.x, explosionColor.y, explosionColor.z, currentAlpha);
+					entity->Destroy();
+					break;
 				}
-				else
+			}
+			expiredExplosions.push_back(explosionId);
+		}
+		else
+		{
+			float fadeProgress = static_cast<float>(elapsed.count()) / 300.0f;
+			int newAlpha = static_cast<int>(200 * (1.0f - fadeProgress));
+			
+			for (auto& entity : m_entities)
+			{
+				if (entity->m_id == explosionId)
 				{
-					// Fallback to white if color not found
-					circle->SetColor(255, 255, 255, currentAlpha);
+					auto shape = entity->GetComponent<CShape>();
+					if (shape)
+					{
+						if (auto* circle = dynamic_cast<CCircle*>(shape))
+						{
+							sf::Color currentColor = circle->GetColor();
+							circle->SetColor(
+								static_cast<float>(currentColor.r),
+								static_cast<float>(currentColor.g),
+								static_cast<float>(currentColor.b),
+								newAlpha
+							);
+						}
+					}
 				}
-				circle->SetRadius(currentRadius);
-				entity->SetMidLength(currentRadius + 1);
 			}
 		}
 	}
 	
-	// Additional cleanup for any stale timer entries (safety net)
-	std::vector<size_t> toRemove;
-	for (auto& explosionEntry : m_explosionTimes)
+	for (size_t explosionId : expiredExplosions)
 	{
-		float elapsed = std::chrono::duration<float>(now - explosionEntry.second).count();
-		if (elapsed > FADE_DURATION + 0.5f)  // Extra margin to catch orphaned entries
-		{
-			toRemove.push_back(explosionEntry.first);
-		}
-	}
-	
-	for (auto id : toRemove)
-	{
-		m_explosionTimes.erase(id);
-		m_explosionColors.erase(id);
+		m_explosionTimes.erase(explosionId);
+		m_explosionColors.erase(explosionId);
 	}
 }

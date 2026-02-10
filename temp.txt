@@ -1,0 +1,2 @@
+    ^<ClCompile Include=\
+Utils.cpp\ /^>

@@ -14,21 +14,9 @@ CRectangle::CRectangle(float x, float y)
 	m_midLength = ((x >= y) ? x : y) + 1.f;
 }
 
-CRectangle::CRectangle(float x, float y, std::string& text, float textSize, sf::Font& font, Vec3 color)
-{
-	m_rectangle = sf::RectangleShape(sf::Vector2f(x, y));
-
-	size_t i = text.length() / 2;
-	m_text = new sf::Text(font, text, textSize);
-	m_textMidPoint = m_text->findCharacterPos(i).x;
-	m_midLength = ((x >= y) ? x : y) + 1.f;
-	m_text->setFillColor(sf::Color(color.x, color.y, color.z, 255));
-}
-
 void CRectangle::DrawShape(sf::RenderWindow& window)
 {
 	window.draw(m_rectangle);
-	if (m_text) window.draw(*m_text);
 }
 
 void CRectangle::Includer(sf::RenderWindow& window)
@@ -46,9 +34,6 @@ void CRectangle::Includer(sf::RenderWindow& window)
 
 void CRectangle::SetTextPosition(float fontOffset)
 {
-	if (!m_text) return;
-	m_text->setPosition({ m_rectangle.getPosition().x + (m_rectangle.getSize().x * 0.5f) - m_textMidPoint,
-						  m_rectangle.getPosition().y + (m_rectangle.getSize().y * 0.5f) - fontOffset });
 }
 
 void CRectangle::MoveShape(float deltaTime)

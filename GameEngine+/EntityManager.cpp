@@ -3,18 +3,17 @@
 #include "EntityType.h"
 #include "CCircle.h"
 #include <algorithm>
+#include <execution>
 #include <chrono>
 #include <cmath>
 #include <sstream>
 #include <iomanip>
-#include <iostream>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/Color.hpp>
 
 EntityManager::EntityManager(sf::RenderWindow& window)
-	: m_quadTree(BoundingBox(Vec2(0, 0), Vec2(window.getSize().x, window.getSize().y)), 16, 0, 5),
-	  m_window(window),
+	: m_window(window),
 	  m_collisionSystem(this)
 {
 }
@@ -28,7 +27,7 @@ void EntityManager::AddPendingEntities()
 		Entity* entityPtr = entity.get();
 		m_entities.push_back(std::move(entity));
 		m_entityMap[entityPtr->GetType()].push_back(entityPtr);
-		m_quadTree.Insert(entityPtr);
+		// Spatial hash will be rebuilt each frame
 	}
 	m_toAdd.clear();
 }
@@ -36,7 +35,7 @@ void EntityManager::AddPendingEntities()
 void EntityManager::RemoveDeadEntities()
 {
 	std::vector<Entity*> deadEntities;
-	
+
 	auto end = std::remove_if(m_entities.begin(), m_entities.end(), 
 		[&deadEntities](const auto& e) { 
 			if (!e->IsAlive())
@@ -55,57 +54,16 @@ void EntityManager::RemoveDeadEntities()
 		itr.second.erase(end, itr.second.end());
 	}
 
-	for (Entity* deadEntity : deadEntities)
-	{
-		m_quadTree.RemoveEntityFromTree(deadEntity);
-	}
+	// Spatial hash is rebuilt each frame, no explicit removal needed
 }
 
 void EntityManager::UpdateQuadTreeAndRender()
 {
-	static size_t lastEntityCount = 0;
-	static int framesSinceRebuild = 0;
-	
-	bool shouldRebuild = false;
-	
-	if (m_entities.size() != lastEntityCount)
+	// Rebuild spatial hash every frame (very fast)
+	m_spatialHash.Clear();
+	for (auto& entity : m_entities)
 	{
-		shouldRebuild = true;
-		lastEntityCount = m_entities.size();
-		framesSinceRebuild = 0;
-	}
-	else if (++framesSinceRebuild >= 30)
-	{
-		shouldRebuild = true;
-		framesSinceRebuild = 0;
-	}
-	else if (QuadTree<Entity>::GetAverageObjectsPerQuery() > 25.0)
-	{
-		shouldRebuild = true;
-		framesSinceRebuild = 0;
-	}
-
-	if (shouldRebuild)
-	{
-		m_quadTree.ClearTree();
-		for (auto& entity : m_entities)
-		{
-			m_quadTree.Insert(entity.get());
-			entity->m_previousPosition = entity->GetPosition();
-		}
-	}
-	else
-	{
-		for (auto& entity : m_entities)
-		{
-			const Vec2& currentPos = entity->GetPosition();
-			if ((currentPos.GetX() != entity->m_previousPosition.GetX()) || 
-				(currentPos.GetY() != entity->m_previousPosition.GetY()))
-			{
-				m_quadTree.UpdatePosition(entity.get());
-				entity->m_previousPosition = currentPos;
-			}
-		}
+		m_spatialHash.Insert(entity.get());
 	}
 
 	m_renderSystem.Render(m_entities, m_window);
@@ -117,7 +75,7 @@ void EntityManager::DetectAndResolveCollisions(float deltaTime)
 	float windowHeight = static_cast<float>(m_window.getSize().y);
 	m_physicsSystem.Update(m_entities, deltaTime, windowWidth, windowHeight);
 
-	m_deathCountThisFrame += m_collisionSystem.DetectAndResolve(m_entities, m_quadTree, deltaTime);
+	m_deathCountThisFrame += m_collisionSystem.DetectAndResolve(m_entities, m_spatialHash, deltaTime);
 
 	for (auto& entity : m_entities)
 	{
@@ -139,15 +97,15 @@ void EntityManager::update(float deltaTime)
 	static double fpsSmooth = 0.0;
 	static constexpr double alpha = 0.15;
 
-	QuadTree<Entity>::ResetQueryStats();
-	
+	SpatialHashGrid<Entity>::ResetQueryStats();
+
 	m_deathCountThisFrame = 0;
 
 	AddPendingEntities();
 	RemoveDeadEntities();
 
 	UpdateQuadTreeAndRender();
-	
+
 	UpdateExplosions();
 
 	DetectAndResolveCollisions(deltaTime);
@@ -171,18 +129,11 @@ void EntityManager::ReportFPS(int& fpsFrames, std::chrono::steady_clock::time_po
 		{
 			fpsSmooth = (alpha * currentFps) + ((1.0 - alpha) * fpsSmooth);
 		}
-		
+
 		std::stringstream ss;
 		ss << std::fixed << std::setprecision(1) << fpsSmooth;
-		std::string fpsStr = ss.str();
-		std::string title = "FPS: " + fpsStr;
-#pragma warning(push)
-#pragma warning(disable: 4996)
-		std::strncpy(m_fpsTitle, title.c_str(), sizeof(m_fpsTitle) - 1);
-#pragma warning(pop)
-		m_fpsTitle[sizeof(m_fpsTitle) - 1] = '\0';
-		
-		m_window.setTitle(m_fpsTitle);
+		std::string title = "FPS: " + ss.str();
+		m_window.setTitle(title);
 
 		fpsFrames = 0;
 		fpsLast = fpsNow;
@@ -194,8 +145,8 @@ void EntityManager::DrawBoundingBox(const std::vector<BoundingBox>& bboxes)
 	for (const auto& bbox : bboxes)
 	{
 		sf::RectangleShape rect;
-		rect.setPosition(sf::Vector2f(bbox.topLeft.x, bbox.topLeft.y));
-		rect.setSize(sf::Vector2f(bbox.bottomRight.x - bbox.topLeft.x, bbox.bottomRight.y - bbox.topLeft.y));
+		rect.setPosition(sf::Vector2f(bbox.topLeft.GetX(), bbox.topLeft.GetY()));
+		rect.setSize(sf::Vector2f(bbox.bottomRight.GetX() - bbox.topLeft.GetX(), bbox.bottomRight.GetY() - bbox.topLeft.GetY()));
 		rect.setFillColor(sf::Color::Transparent);
 		rect.setOutlineColor(sf::Color::Green);
 		rect.setOutlineThickness(1.0f);
@@ -206,20 +157,21 @@ void EntityManager::DrawBoundingBox(const std::vector<BoundingBox>& bboxes)
 Entity* EntityManager::addEntity(EntityType type, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha)
 {
 	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++));
-	
+
 	entity->AddComponent<CTransform>(position, velocity);
 	entity->AddComponent<CName>();
-	
+
 	auto circle = std::make_unique<CCircle>();
 	circle->SetRadius(radius);
 	circle->SetColor(color.x, color.y, color.z, alpha);
 	circle->SetPosition(position.x, position.y);
 	circle->SetInitialVelocity(velocity.x, velocity.y);
-	
+
 	entity->AddComponentPtr<CShape>(std::move(circle));
-	
+
 	Entity* entityPtr = entity.get();
 	m_toAdd.push_back(std::move(entity));
+
 	return entityPtr;
 }
 

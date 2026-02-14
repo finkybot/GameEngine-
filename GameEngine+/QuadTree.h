@@ -298,7 +298,7 @@ public:
 	bool UpdatePosition(T* object)
 	{
 		const Vec2 objectPos = object->GetCentrePoint();
-		
+
 		if (m_boundary.ContainsPoint(objectPos))
 		{
 			if (m_isSubDivided)

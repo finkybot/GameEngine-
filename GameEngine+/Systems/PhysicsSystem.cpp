@@ -1,16 +1,20 @@
 #include "PhysicsSystem.h"
 #include "../Entity.h"
 #include "../CShape.h"
+#include <execution>
+#include <algorithm>
 
 void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float windowWidth, float windowHeight)
 {
-	for (const auto& entity : entities)
-	{
-		if (!entity->IsAlive())
-			continue;
-		
-		MoveEntity(entity.get(), deltaTime, windowWidth, windowHeight);
-	}
+	// Parallel execution: process each entity's physics independently
+	std::for_each(std::execution::par, entities.begin(), entities.end(),
+		[this, deltaTime, windowWidth, windowHeight](const std::unique_ptr<Entity>& entity)
+		{
+			if (!entity->IsAlive())
+				return;
+
+			MoveEntity(entity.get(), deltaTime, windowWidth, windowHeight);
+		});
 }
 
 void PhysicsSystem::MoveEntity(Entity* entity, float deltaTime, float windowWidth, float windowHeight) const
@@ -37,11 +41,19 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 	if (!shape) return;
 
 	Vec2 position = shape->GetPosition();
-	Vec2 velocity = shape->GetVelocity();
 	float radius = entity->GetRadius();
-	
+
+	// Despawn entities that go off the left edge of screen
+	if (position.GetX() + radius < 0.0f)
+	{
+		entity->Destroy();
+		return;
+	}
+
+	/* LEGACY: Boundary bouncing code (kept for future use)
+	Vec2 velocity = shape->GetVelocity();
 	bool bounced = false;
-	
+
 	// Left boundary
 	if (position.GetX() - radius < 0.0f)
 	{
@@ -49,7 +61,7 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 		velocity.x = -velocity.x * 0.9f; // Reverse and dampen slightly
 		bounced = true;
 	}
-	
+
 	// Right boundary
 	else if (position.GetX() + radius > windowWidth)
 	{
@@ -57,7 +69,7 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 		velocity.x = -velocity.x * 0.9f; // Reverse and dampen slightly
 		bounced = true;
 	}
-	
+
 	// Top boundary
 	if (position.GetY() - radius < 0.0f)
 	{
@@ -65,7 +77,7 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 		velocity.y = -velocity.y * 0.9f; // Reverse and dampen slightly
 		bounced = true;
 	}
-	
+
 	// Bottom boundary
 	else if (position.GetY() + radius > windowHeight)
 	{
@@ -73,10 +85,11 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 		velocity.y = -velocity.y * 0.9f; // Reverse and dampen slightly
 		bounced = true;
 	}
-	
+
 	if (bounced)
 	{
 		shape->SetPosition(position.GetX(), position.GetY());
 		shape->SetInitialVelocity(velocity.GetX(), velocity.GetY());
 	}
+	*/
 }

@@ -7,52 +7,46 @@
 #include <algorithm>
 #include <cmath>
 
-int CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities, QuadTree<Entity>& quadTree, float deltaTime)
+int CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities, SpatialHashGrid<Entity>& spatialHash, float deltaTime)
 {
-	static std::vector<Entity*> foundRaw;
+	static std::vector<Entity*> nearbyEntities;
 	static size_t lastEntityCount = 0;
-	
+
 	if (entities.size() != lastEntityCount && !entities.empty())
 	{
-		foundRaw.reserve(std::max(size_t(16), entities.size() / 100));
+		nearbyEntities.reserve(std::max(size_t(16), entities.size() / 100));
 		lastEntityCount = entities.size();
 	}
-	
+
 	int deathCount = 0;
 
 	for (auto iterator = entities.begin(); iterator != entities.end(); ++iterator)
 	{
 		Entity* currentEntity = iterator->get();
-		
+
 		if (!currentEntity->IsAlive())
 			continue;
-		
+
 		// Skip collision detection for explosions - they're visual effects only
 		if (currentEntity->GetType() == EntityType::Explosion)
 			continue;
 
 		const Vec2& position = currentEntity->GetPosition();
-		float width = currentEntity->GetWidth();
-		float height = currentEntity->GetHeight();
+		float radius = currentEntity->GetRadius();
 
-		BoundingBox rect(
-			Vec2(position - Vec2(width * 1.5f, height * 1.5f)),
-			Vec2(position + Vec2(width * 1.5f, height * 1.5f))
-		);
+		// Query nearby entities using spatial hash
+		nearbyEntities.clear();
+		spatialHash.Query(nearbyEntities, position, radius * 3.0f, currentEntity);
 
-		foundRaw.clear();
-		QuadTree<Entity>::IncrementQueryCount();
-		quadTree.Query(foundRaw, rect, currentEntity);
-
-		for (Entity* entityPtr : foundRaw)
+		for (Entity* entityPtr : nearbyEntities)
 		{
 			// Validate pointer is still alive (safety check)
 			if (!entityPtr->IsAlive())
 				continue;
-			
+
 			if (!IsColliding(currentEntity, entityPtr))
 				continue;
-			
+
 			// Skip if other entity is an explosion
 			if (entityPtr->GetType() == EntityType::Explosion)
 				continue;

@@ -185,6 +185,7 @@
     <ClInclude Include="Includes.h" />
     <ClInclude Include="QuadTree.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="SpatialHashGrid.h" />
     <ClInclude Include="Systems\CollisionSystem.h" />
     <ClInclude Include="Systems\PhysicsSystem.h" />
     <ClInclude Include="Systems\RenderSystem.h" />

@@ -2,7 +2,7 @@
 #include <vector>
 #include <memory>
 #include "../Vec2.h"
-#include "../QuadTree.h"
+#include "../SpatialHashGrid.h"
 
 // Forward declarations
 class Entity;
@@ -33,7 +33,7 @@ public:
 	/// <param name="quadTree">Spatial partitioning structure for broad-phase detection</param>
 	/// <param name="deltaTime">Time elapsed since last frame (unused but kept for consistency)</param>
 	/// <returns>Number of entities destroyed this frame</returns>
-	int DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities, QuadTree<Entity>& quadTree, float deltaTime);
+	int DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities, SpatialHashGrid<Entity>& spatialHash, float deltaTime);
 
 private:
 	EntityManager* m_entityManager;

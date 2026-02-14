@@ -161,6 +161,9 @@
     <ClInclude Include="EntityType.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="SpatialHashGrid.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="GameEngine+.rc">

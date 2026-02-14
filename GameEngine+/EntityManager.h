@@ -8,7 +8,8 @@
 // Forward declaration for SFML type used by reference in this header
 namespace sf { class RenderWindow; }
 
-#include "QuadTree.h"
+#include "SpatialHashGrid.h"
+#include "QuadTree.h"  // For BoundingBox definition
 #include "Vec2.h"
 #include "EntityType.h"
 #include "Systems/PhysicsSystem.h"
@@ -24,7 +25,7 @@ typedef std::map<EntityType, std::vector<Entity*>> EntityMap;
 class EntityManager
 {
 private:
-	QuadTree<Entity>	m_quadTree;
+	SpatialHashGrid<Entity> m_spatialHash{100.0f};  // 100-unit cells for collision queries
 	EntityVector		m_entities;
 	EntityVector		m_toAdd;
 	EntityMap			m_entityMap;
@@ -59,7 +60,7 @@ public:
 
 	/// <summary>
 	/// Calculates and reports the current FPS to the window title.
-	/// Uses exponential moving average to smooth FPS values and avoid jitter.
+	/// Uses exponential moving average to smooth FPS values and avoid jitter, jitter is bad mkay.
 	/// Updates the window title once per second.
 	/// </summary>
 	void ReportFPS(int& fpsFrames, std::chrono::steady_clock::time_point& fpsLast, double& fpsSmooth, const double alpha);

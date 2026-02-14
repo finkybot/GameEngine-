@@ -22,6 +22,14 @@ void CCircle::DrawShape(sf::RenderWindow& window)
 
 void CCircle::Includer(sf::RenderWindow& window)
 {
+    // Check if circle has moved off the left edge of screen and despawn it
+    if (m_circle.getPosition().x + (m_circle.getRadius() * 2.f) < 0)
+    {
+        // Entity will be marked for destruction - handled by owner entity
+        return;
+    }
+
+    /* LEGACY: Boundary bouncing code (kept for future use)
     if (m_circle.getPosition().x < 0 || m_circle.getPosition().x + (m_circle.getRadius() * 2.f) > window.getSize().x)
     {
         m_velocity.x = -m_velocity.x;
@@ -31,6 +39,7 @@ void CCircle::Includer(sf::RenderWindow& window)
     {
         m_velocity.y = -m_velocity.y;
     }
+    */
 }
 
 void CCircle::SetTextPosition(float fontOffset)

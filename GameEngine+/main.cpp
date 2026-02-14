@@ -4,7 +4,6 @@
 #include <SFML/Window/VideoMode.hpp>
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <random>
@@ -13,7 +12,7 @@
 #include "Entity.h"
 #include "EntityManager.h"
 #include "EntityType.h"
-#include "QuadTree.h"
+#include "SpatialHashGrid.h"
 
 /// <summary>
 /// Spawns an entity of the specified team type with given parameters.
@@ -54,13 +53,12 @@ static void RenderGameInfoWindow(size_t entityCount, int deathCount, int explosi
 	ImGui::Separator();
 	
 	// QuadTree Performance Metrics
-	ImGui::Text("QuadTree Collision Detection");
+	ImGui::Text("Spatial Hash Collision Detection");
 	ImGui::Spacing();
-	
-	ImGui::BulletText("Queries/Frame: %zu", QuadTree<Entity>::GetQueryCount());
-	ImGui::BulletText("Total Objects Checked: %zu", QuadTree<Entity>::GetTotalObjectsQueried());
-	ImGui::BulletText("Avg Objects/Query: %.2f", QuadTree<Entity>::GetAverageObjectsPerQuery());
-	ImGui::BulletText("Nodes Visited: %zu", QuadTree<Entity>::GetTotalNodesVisited());
+
+	ImGui::BulletText("Queries/Frame: %zu", SpatialHashGrid<Entity>::GetQueryCount());
+	ImGui::BulletText("Total Objects Checked: %zu", SpatialHashGrid<Entity>::GetTotalObjectsQueried());
+	ImGui::BulletText("Avg Objects/Query: %.2f", SpatialHashGrid<Entity>::GetAverageObjectsPerQuery());
 	
 	ImGui::End();
 }
@@ -77,39 +75,33 @@ static void InitializeGame(EntityManager& entityManager, sf::Vector2u windowSize
 	std::random_device randDevice;
 	std::default_random_engine generator(randDevice());
 
-	std::uniform_int_distribution<int> xVelocity(-150, 150);      // Faster movement speed
-	std::uniform_int_distribution<int> yVelocity(-150, 150);      // Faster movement speed
-	std::uniform_int_distribution<int> xDistro(20, windowSize.x - 5);
-	std::uniform_int_distribution<int> yDistro(20, windowSize.y - 5);
 	std::uniform_int_distribution<int> redVal(100, 255);      // Brighter reds
 	std::uniform_int_distribution<int> greenVal(100, 255);    // Brighter greens
 	std::uniform_int_distribution<int> blueVal(100, 255);     // Brighter blues
 	std::uniform_int_distribution<int> alphaVal(150, 255);    // More opaque
-	std::uniform_real_distribution<float> radiusDistro(5.0f, 15.0f);
+	std::uniform_real_distribution<float> radiusDistro(1.5f, 4.0f);
 	std::uniform_int_distribution<int> entityType(0, 4);
+	std::uniform_real_distribution<float> velocityDistro(-220.0f, -180.0f);  // Randomize leftward velocity
 
 	for (int i = 0; i < maxEntities; ++i)
 	{
 		unsigned int type = entityType(generator);
-		int vX = xVelocity(generator);
-		int vY = yVelocity(generator);
 
-		if (vX == 0 && vY == 0)
-		{
-			vX = 1;
-		}
+		// Spawn anywhere on screen with randomized leftward velocity
+		float spawnX = std::uniform_real_distribution<float>(0.0f, static_cast<float>(windowSize.x))(generator);
+		float spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(windowSize.y))(generator);
 
-		int x = xDistro(generator);
-		int y = yDistro(generator);
+		// Randomized leftward movement, no vertical component
+		float velocityX = velocityDistro(generator);
+		float velocityY = 0.0f;
 
 		int r = redVal(generator);
 		int g = greenVal(generator);
 		int b = blueVal(generator);
 		int a = alphaVal(generator);
-
 		float radius = radiusDistro(generator);
 
-		SpawnEntityByType(entityManager, type, radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
+		SpawnEntityByType(entityManager, type, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velocityX, velocityY), a);
 	}
 }
 
@@ -121,7 +113,7 @@ int main(int argc, char* argv[])
 	sf::RenderWindow window(sf::VideoMode({ windowSize }), "SFML Game Engine");
 	
 	window.setFramerateLimit(240);
-	window.setVerticalSyncEnabled(true);
+	//window.setVerticalSyncEnabled(true);
 
 	bool isPressed = false;
 
@@ -134,10 +126,10 @@ int main(int argc, char* argv[])
 
 	EntityManager entity_manager(window);
 
-	// Initialize game with 20 entities for testing
-	// Spawn logic will gradually add to target 20
-	const int initialEntityCount = 20;
-	const int targetEntityCount = 20;
+	// Initialize game with 3000+ entities
+	// Spawn logic will maintain target count
+	const int initialEntityCount = 3500;
+	const int targetEntityCount = 3500;
 	InitializeGame(entity_manager, windowSize, initialEntityCount);
 
 	sf::Clock deltaClock;
@@ -153,7 +145,7 @@ int main(int argc, char* argv[])
 	std::uniform_int_distribution<int> greenVal(100, 255);    // Brighter greens
 	std::uniform_int_distribution<int> blueVal(100, 255);     // Brighter blues
 	std::uniform_int_distribution<int> alphaVal(150, 255);    // More opaque
-	std::uniform_real_distribution<float> radiusDistro(5.0f, 15.0f);
+	std::uniform_real_distribution<float> radiusDistro(1.5f, 4.0f);
 	std::uniform_int_distribution<int> entityType(0, 4);  // 5 team types
 	std::uniform_int_distribution<int> spawnZone(0, 3);   // 4 quadrants
 
@@ -167,7 +159,6 @@ int main(int argc, char* argv[])
 
 			if (event->is<sf::Event::Closed>())
 			{
-				std::cout << "Closing Application" << std::endl;
 				window.close();
 			}
 		}
@@ -189,52 +180,25 @@ int main(int argc, char* argv[])
 			int entitiesToSpawn = std::min(4, targetEntityCount - static_cast<int>(currentEntityCount));
 			
 		for (int i = 0; i < entitiesToSpawn; ++i)
-			{
-				// Random team selection (not just Eagles)
-				unsigned int type = entityType(generator);
-				
-				// Safe spawn location: bias toward screen edges to avoid immediate collisions, its not perfect but better than pure random and reduces spawn deaths (that last bit is lies, they still die quickly but not so obvious)
-				int zone = spawnZone(generator);
-				
-				int x, y;
-				int margin = 200;
-				int centerX = windowSize.x / 2;
-				int centerY = windowSize.y / 2;
-				int halfWidth = (windowSize.x / 2) - margin;
-				int halfHeight = (windowSize.y / 2) - margin;
-				
-				
-				// Spawn along one of 4 edges for visual "entering screen" effect
-				switch (zone)
-				{
-					case 0:  // Top edge
-						x = std::uniform_int_distribution<int>(50, windowSize.x - 50)(generator);
-						y = 50;
-						break;
-					case 1:  // Bottom edge
-						x = std::uniform_int_distribution<int>(50, windowSize.x - 50)(generator);
-						y = windowSize.y - 50;
-						break;
-					case 2:  // Left edge
-						x = 50;
-						y = std::uniform_int_distribution<int>(50, windowSize.y - 50)(generator);
-						break;
-					case 3:  // Right edge
-					default:
-						x = windowSize.x - 50;
-						y = std::uniform_int_distribution<int>(50, windowSize.y - 50)(generator);
-						break;
-				}
-				
-			int vX = xVelocity(generator);
-			int vY = yVelocity(generator);
+		{
+			// Random team selection
+			unsigned int type = entityType(generator);
+
+			// Spawn off the right edge of screen, move left across screen with randomized leftward velocity
+			float spawnX = static_cast<float>(windowSize.x) + 50.0f;  // Just off right edge
+			float spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(windowSize.y))(generator);
+
+			// Randomized leftward movement, no vertical component
+			float velocityX = std::uniform_real_distribution<float>(-220.0f, -180.0f)(generator);
+			float velocityY = 0.0f;
+
 			int r = redVal(generator);
 			int g = greenVal(generator);
 			int b = blueVal(generator);
 			int a = alphaVal(generator);
 			float radius = radiusDistro(generator);
 
-			SpawnEntityByType(entity_manager, type, radius, Vec3(r, g, b), Vec2(x, y), Vec2(vX, vY), a);
+			SpawnEntityByType(entity_manager, type, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velocityX, velocityY), a);
 		}
 		}
 

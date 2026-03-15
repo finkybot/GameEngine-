@@ -1,14 +1,15 @@
 // Utils.cpp
 
-// Includes.
+// ***** Includes *****
 #include"Utils.h"
-#include <cmath>
 #include <algorithm>
+#include <cmath>
 #include <cctype>
+#include <iostream>
 
 
-// Function definitions.
 
+// ***** Utility Function definitions *****
 bool IsEqual(float val1, float val2)
 {
 	return fabsf(val1 - val2) < EPSILON;
@@ -23,6 +24,7 @@ bool IsLessThanOrEqual(float val1, float val2)
 {
 	return val1 < val2 || IsEqual(val1, val2);
 }
+
 
 float MillisecondsToSeconds(unsigned int milliseconds)
 {
@@ -56,4 +58,28 @@ float Clamp(float val, float min, float max)
 	}
 
 	return val;
+}
+
+const char* readFile(const char* filePath)
+{
+	FILE* file = nullptr;
+	fopen_s(&file, filePath, "r");
+
+	if (!file)
+	{
+		std::cerr << "Failed to open file: " << filePath << std::endl;
+		return nullptr;
+	}
+
+	fseek(file, 0, SEEK_END);
+	size_t size = ftell(file);
+
+	rewind(file);
+	char* buffer = new char[size + 1];
+	fread(buffer, sizeof(char), size, file);
+	buffer[size] = '\0'; // Null-terminate the string
+
+	fclose(file);
+
+	return buffer;
 }

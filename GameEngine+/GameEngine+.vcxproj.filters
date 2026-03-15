@@ -81,6 +81,9 @@
     <ClCompile Include="CShape.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ImageManagementSystem.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CCircle.h">
@@ -164,6 +167,12 @@
     <ClInclude Include="SpatialHashGrid.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="AssetManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="ImageManagementSystem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="GameEngine+.rc">
@@ -171,7 +180,6 @@
     </ResourceCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="GameEngine+.aps" />
     <None Include="imgui.ini" />
     <None Include="GameEngine+.vcxproj.filters" />
   </ItemGroup>

@@ -1,3 +1,4 @@
+// ***** PhysicsSystem.h - Physics system for handling entity movement and collisions *****
 #pragma once
 #include <vector>
 #include <memory>
@@ -5,37 +6,22 @@
 
 class Entity;
 
-/// <summary>
-/// Physics System - Updates entity positions and handles boundary collisions
-/// Applies velocity to position and bounces entities off window edges
-/// </summary>
+// PhysicsSystem is responsible for all physics requirements, I also handle boundary collisions (for now, I will at some time remove or depreciate it).
 class PhysicsSystem
 {
+	// ****** Public Methods ******
 public:
-	/// <summary>Constructor</summary>
-	PhysicsSystem() = default;
-	
-	/// <summary>Destructor</summary>
-	~PhysicsSystem() = default;
+	PhysicsSystem() = default;	// Constructor - default is fine since we have no member variables to initialize
+	~PhysicsSystem() = default;	// Destructor - default is fine since we have no resources to clean up
 
-	/// <summary>
-	/// Update all entity positions based on their velocities and handle boundary collisions
-	/// </summary>
-	/// <param name="entities">List of all active entities</param>
-	/// <param name="deltaTime">Time elapsed since last frame (in seconds)</param>
-	/// <param name="windowWidth">Width of the render window</param>
-	/// <param name="windowHeight">Height of the render window</param>
+	// Updates the positions of all entities based on their velocities and handles boundary collisions. It iterates through the list of entities, moves each entity according to its velocity and the elapsed time (deltaTime), and checks for collisions with the window boundaries to apply rebounding effects.
 	void Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float windowWidth, float windowHeight);
 
+	// ****** Private Methods *****
 private:
-	/// <summary>
-	/// Move a single entity based on its velocity
-	/// </summary>
+	// Moves a single entity based on its velocity and the elapsed time (deltaTime). It updates the entity's position by adding the product of its velocity and deltaTime to its current position.
 	void MoveEntity(Entity* entity, float deltaTime, float windowWidth, float windowHeight) const;
 	
-	/// <summary>
-	/// Handle collision with window boundaries (rebounding off edges)
-	/// Reverses velocity component and applies damping when entity hits edge
-	/// </summary>
+	// Checks for collisions between the entity and the window boundaries. If a collision is detected, it inverts the corresponding velocity component (x or y) to create a rebounding effect and ensures the entity stays within the window bounds.
 	void HandleBoundaryCollision(Entity* entity, float windowWidth, float windowHeight) const;
 };

@@ -1,3 +1,4 @@
+// ***** CCircle.h - Header file for CCircle class, Component for circle shapes *****
 #pragma once
 #include "CShape.h"
 #include <SFML/Graphics/CircleShape.hpp>
@@ -7,81 +8,30 @@
 #include <string>
 #include "Vec2.h"
 
+// / CCircle component - represents a circle shape with properties and methods for drawing, movement, and collision handling
 class CCircle : public CShape
 {
+	//  ***** Protected member variables for shape-specific properties *****
 protected:
     sf::CircleShape m_circle;
     void ApplyPosition(float x, float y) override { m_circle.setPosition(sf::Vector2f(x, y)); }
+
+	//  ***** Public methods for shape manipulation and rendering *****
 public:
-    /// <summary>
-    /// Default constructor - creates a small circle with default properties
-    /// </summary>
-    CCircle();
-    
-    /// <summary>
-    /// Constructor with parameters
-    /// </summary>
-    /// <param name="size">Radius of the circle</param>
-    CCircle(float size);
+	CCircle();              // Default constructor - initializes the circle with default properties
+	CCircle(float size);    // Constructor with size parameter - initializes the circle with a specified radius
 
-    /// <summary>
-    /// Draw the circle and optional text to the render window
-    /// </summary>
-    void DrawShape(sf::RenderWindow& window) override;
-    
-    /// <summary>
-    /// Handle boundary collision logic
-    /// </summary>
-    void Includer(sf::RenderWindow& window) override;
-    
-    /// <summary>
-    /// Update text position relative to circle center
-    /// </summary>
-    void SetTextPosition(float fontOffset) override;
-
-    /// <summary>
-    /// Set the radius of the circle
-    /// </summary>
-    void SetRadius(float radius) override { m_circle.setRadius(radius); }
-    
-    /// <summary>
-    /// Set the fill color of the circle
-    /// </summary>
-    /// <param name="r">Red component (0-255)</param>
-    /// <param name="g">Green component (0-255)</param>
-    /// <param name="b">Blue component (0-255)</param>
-    /// <param name="alpha">Alpha/transparency (0-255)</param>
-    void SetColor(float r, float g, float b, int alpha);
-    
-    /// <summary>
-    /// Get the current fill color of the circle
-    /// </summary>
-    sf::Color GetColor() const { return m_circle.getFillColor(); }
-
-    /// <summary>
-    /// Get the mid-length (radius + 1)
-    /// </summary>
-    float GetMidLength() const override { return m_midLength; }
-    
-    /// <summary>
-    /// Get the width (diameter) of the circle
-    /// </summary>
-    float GetWidth() const override { return m_circle.getRadius() * 2.f; }
-    
-    /// <summary>
-    /// Get the height (diameter) of the circle
-    /// </summary>
-    float GetHeight() const override { return m_circle.getRadius() * 2.f; }
-    
-    /// <summary>
-    /// Get the center point of the circle
-    /// </summary>
-    Vec2 GetCentrePoint() const override;
-    
-    /// <summary>
-    /// Get the radius of the circle
-    /// </summary>
-    float GetRadius() const override { return m_circle.getRadius(); }
+	void DrawShape(sf::RenderWindow& window) override;                      // Draw the circle shape to the SFML render window
+	void Includer(sf::RenderWindow& window) override;                       // Include the circle shape in the quadtree for spatial partitioning (implementation depends on how the quadtree is structured, likely involves adding the circle's bounding box to the quadtree)
+	void SetTextPosition(float fontOffset) override;                        // Set the position of the text component relative to the circle shape (implementation depends on how the text is structured, likely involves setting the text position based on the circle's position and radius)
+	void SetRadius(float radius) override { m_circle.setRadius(radius); }   // Set the radius of the circle shape
+	void SetColor(float r, float g, float b, int alpha);                    // Set the fill color of the circle shape using RGBA values (alpha is an integer in the range [0, 255])
+	sf::Color GetColor() const { return m_circle.getFillColor(); }          // Get the current fill color of the circle shape as an SFML Color object
+	float GetMidLength() const override { return m_midLength; }             // Get the mid-length property, which for a circle is equivalent to the radius
+	float GetWidth() const override { return m_circle.getRadius() * 2.f; }  // Get the width (diameter) of the circle, which is twice the radius
+	float GetHeight() const override { return m_circle.getRadius() * 2.f; } // Get the height (diameter) of the circle, which is twice the radius
+	Vec2 GetCentrePoint() const override;									// Get the center point of the circle shape, which is the position plus the radius in both x and y directions
+	float GetRadius() const override { return m_circle.getRadius(); }		// Get the radius of the circle shape
 };
 
 

@@ -1,3 +1,4 @@
+// ***** CollisionSystem.cpp *****
 #include "CollisionSystem.h"
 #include "../Entity.h"
 #include "../CShape.h"
@@ -76,6 +77,7 @@ bool CollisionSystem::IsColliding(const Entity* entity1, const Entity* entity2) 
 
 int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const
 {
+	// Check if entities are enemies (different tags) or allies (same tag)
 	if (AreEnemies(entity1, entity2))
 	{
 		auto shape1 = entity1->GetComponent<CShape>();
@@ -96,6 +98,7 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const
 		CCircle* currentCircle = dynamic_cast<CCircle*>(shape1);
 		CCircle* otherCircle = dynamic_cast<CCircle*>(shape2);
 		
+		// Only blend colors if both shapes are circles (have color)
 		if (currentCircle && otherCircle)
 		{
 			sf::Color currentColor = currentCircle->GetColor();
@@ -107,9 +110,11 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const
 			blendedColor.z = (currentColor.b + otherColor.b) / 2.0f;
 		}
 		
+		// Calculate collision point as the point on the edge of entity1 in the direction of entity2
 		Vec2 distanceVec = entity2->GetCentrePoint() - entity1->GetCentrePoint();
 		float distance = entity1->GetCentrePoint().Distance(entity2->GetCentrePoint());
 		
+		// If distance is zero (perfect overlap), default to the midpoint between the two entities
 		Vec2 collisionPoint;
 		if (distance > 0.0f)
 		{
@@ -132,7 +137,7 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const
 		
 		return 2; // Two entities destroyed
 	}
-	else
+	else // Allies - bounce them apart
 	{
 		BounceEntities(entity1, entity2);
 		return 0; // No entities destroyed
@@ -141,8 +146,11 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const
 
 void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const
 {
+	// Get the shape components to access velocity and position
 	auto shape1 = entity1->GetComponent<CShape>();
 	auto shape2 = entity2->GetComponent<CShape>();
+	
+	// Guard clause to ensure both entities have shape components
 	if (!shape1 || !shape2) return;
 
 	// Distance between the two entity centres
@@ -176,6 +184,7 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const
 	Vec2 vel1 = shape1->GetVelocity();
 	Vec2 vel2 = shape2->GetVelocity();
 	
+	// Update velocities based on impulse and collision normal
 	shape1->SetInitialVelocity(vel1.GetX() - impulse * unitNorm.x, vel1.GetY() - impulse * unitNorm.y);
 	shape2->SetInitialVelocity(vel2.GetX() + impulse * unitNorm.x, vel2.GetY() + impulse * unitNorm.y);
 
@@ -197,5 +206,5 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const
 
 bool CollisionSystem::AreEnemies(const Entity* entity1, const Entity* entity2) const
 {
-	return entity1->GetType() != entity2->GetType();
+	return entity1->GetType() != entity2->GetType(); // Entities are enemies if they belong to different teams/types
 }

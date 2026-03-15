@@ -1,30 +1,31 @@
-#include <SFML/Graphics.hpp>
-#include <SFML/Window/Keyboard.hpp>
-#include <SFML/Window/Event.hpp>
-#include <SFML/Window/VideoMode.hpp>
+// main.cpp - Entry point of the game engine, responsible for initializing the game, 
+// creating the main window, handling the main game loop, and integrating ImGui for UI rendering. 
+// It sets up the initial game state by spawning entities, processes user input, updates game logic, 
+// and renders the scene each frame. The main loop also includes dynamic population control to maintain 
+// a target number of entities on screen and displays performance metrics using ImGui.
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
+
+#include <SFML/Graphics.hpp>
+
+#include <SFML/Window/Event.hpp>
+#include <SFML/Window/Keyboard.hpp>
+#include <SFML/Window/VideoMode.hpp>
+
 #include <memory>
 #include <optional>
 #include <random>
+#include <thread>
 
-#include "Vec2.h"
 #include "Entity.h"
 #include "EntityManager.h"
 #include "EntityType.h"
+#include "ImageManagementSystem.h"
 #include "SpatialHashGrid.h"
+#include "Vec2.h"
 
-/// <summary>
-/// Spawns an entity of the specified team type with given parameters.
-/// </summary>
-/// <param name="entityManager">Reference to the EntityManager</param>
-/// <param name="teamType">Team type (0-4)</param>
-/// <param name="radius">Entity radius</param>
-/// <param name="color">RGB color</param>
-/// <param name="position">Spawn position</param>
-/// <param name="velocity">Initial velocity</param>
-/// <param name="alpha">Alpha value (0-255)</param>
-/// <returns>Pointer to the created entity</returns>
+// Spawns an entity of the specified team type with random properties and adds it to the EntityManager. It takes the EntityManager reference, team type (0-4), radius, color, position, velocity, and alpha as parameters. 
+// The team type is mapped to a specific EntityType enum value, and the new entity is created and added to the EntityManager using the addEntity method.
 static Entity* SpawnEntityByType(EntityManager& entityManager, unsigned int teamType, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha)
 {
 	const EntityType teamTypes[] = { EntityType::TeamEagle, EntityType::TeamHawk, EntityType::TeamBoogaloo, EntityType::TeamRocket, EntityType::TeamMonkey };
@@ -33,12 +34,8 @@ static Entity* SpawnEntityByType(EntityManager& entityManager, unsigned int team
 	return entityManager.addEntity(type, radius, color, position, velocity, alpha);
 }
 
-/// <summary>
-/// Renders the main game info ImGui window displaying entity count and controls.
-/// </summary>
-/// <param name="entityCount">Number of active entities in the scene</param>
-/// <param name="deathCount">Number of entities killed this frame</param>
-/// <param name="explosionCount">Number of active explosions</param>
+// Renders the ImGui window displaying game information and performance metrics. It takes the current entity count, death count for the current frame, and active explosion count as parameters to display in the UI. 
+// The window is positioned at (10, 10) and sized to (450, 280) on first use, and it includes sections for entity statistics and spatial hash collision detection performance metrics.
 static void RenderGameInfoWindow(size_t entityCount, int deathCount, int explosionCount)
 {
 	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
@@ -63,23 +60,19 @@ static void RenderGameInfoWindow(size_t entityCount, int deathCount, int explosi
 	ImGui::End();
 }
 
-/// <summary>
-/// Initializes the game by creating and populating entities.
-/// </summary>
-/// <param name="entityManager">Reference to the EntityManager</param>
-/// <param name="windowSize">Size of the render window</param>
-/// <param name="maxEntities">Maximum number of entities to create</param>
+// Game Initialization
 static void InitializeGame(EntityManager& entityManager, sf::Vector2u windowSize, int maxEntities)
 {
 	// Initialize random number generator ONCE (not per entity)
 	std::random_device randDevice;
 	std::default_random_engine generator(randDevice());
 
-	std::uniform_int_distribution<int> redVal(100, 255);      // Brighter reds
-	std::uniform_int_distribution<int> greenVal(100, 255);    // Brighter greens
-	std::uniform_int_distribution<int> blueVal(100, 255);     // Brighter blues
-	std::uniform_int_distribution<int> alphaVal(150, 255);    // More opaque
-	std::uniform_real_distribution<float> radiusDistro(1.5f, 4.0f);
+	// Random entity colours, in the brighter colour range 
+	std::uniform_int_distribution<int> redVal(100, 255);    
+	std::uniform_int_distribution<int> greenVal(100, 255);    
+	std::uniform_int_distribution<int> blueVal(100, 255);     
+	std::uniform_int_distribution<int> alphaVal(150, 255);    
+	std::uniform_real_distribution<float> radiusDistro(1.5f, 2.0f);
 	std::uniform_int_distribution<int> entityType(0, 4);
 	std::uniform_real_distribution<float> velocityDistro(-220.0f, -180.0f);  // Randomize leftward velocity
 
@@ -102,19 +95,50 @@ static void InitializeGame(EntityManager& entityManager, sf::Vector2u windowSize
 		float radius = radiusDistro(generator);
 
 		SpawnEntityByType(entityManager, type, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velocityX, velocityY), a);
+		
 	}
 }
 
+// Entry point of the game engine, responsible for initializing the game, creating the main window, handling the main game loop, and integrating ImGui for UI rendering. 
+// It sets up the initial game state by spawning entities, processes user input, updates game logic, and renders the scene each frame. 
+// The main loop also includes dynamic population control to maintain a target number of entities on screen and displays performance metrics using ImGui.
 int main(int argc, char* argv[])
 {
-	// Get desktop resolution
+	// Setup the SFML window
 	sf::Vector2u windowSize = sf::VideoMode::getDesktopMode().size;
-	// Create the main window
 	sf::RenderWindow window(sf::VideoMode({ windowSize }), "SFML Game Engine");
 	
-	window.setFramerateLimit(240);
-	//window.setVerticalSyncEnabled(true);
+	//window.setFramerateLimit(240);
+	window.setVerticalSyncEnabled(true);
 
+	// Load tile map texture (Im working on a tile map rendering system 13/03/2026) 
+	sf::Image image;
+	IMS::LoadImage("assets/adventure.png", image);
+	std::vector<sf::Texture> textures;
+	IMS::CreateTileMap(0, 0, 32, 32, image, textures);
+
+
+	std::vector<sf::Sprite> sprites;
+
+	for (size_t i = 0; i < textures.size(); ++i)
+	{
+		sprites.emplace_back(textures[i]);
+	}
+
+	// Position sprites in a grid pattern across the window, wrapping to new rows as needed, this is just for demonstration purposes.
+	int x = 0;	int y = 0;
+	for (size_t i = 0; i < sprites.size(); ++i)
+	{
+		if (i % 32 == 0) 
+		{
+			x = 0; // Reset x to start of row
+			y = (y + 32) % windowSize.y; // Move down by 32 pixels and wrap around vertically
+		}
+		sprites[i].setPosition({ static_cast<float>(x), static_cast<float>(y) }); // Example positions, adjust as needed
+		x += 32; // Move to the next column
+	}
+	
+	// Flag to track if the spacebar is currently pressed, used to prevent multiple spawns per key pres, this shouldnt be here, I'll move it later
 	bool isPressed = false;
 
 	// Initialize ImGui with SFML backend
@@ -126,28 +150,30 @@ int main(int argc, char* argv[])
 
 	EntityManager entity_manager(window);
 
-	// Initialize game with 3000+ entities
+	// Initialize entities
 	// Spawn logic will maintain target count
-	const int initialEntityCount = 3500;
-	const int targetEntityCount = 3500;
+	const int initialEntityCount = 5000; // Start with 5,000 entities, spawn logic will maintain roughtly 4,000-5,000 entities on screen by spawning to replace those killed
+	const int targetEntityCount = 5000;
 	InitializeGame(entity_manager, windowSize, initialEntityCount);
 
 	sf::Clock deltaClock;
 
 	// Initialize random number generator once (not every frame)
-	std::random_device randDevice;
-	std::default_random_engine generator(randDevice());
-	std::uniform_int_distribution<int> xVelocity(-150, 150);      // Faster movement speed
-	std::uniform_int_distribution<int> yVelocity(-150, 150);      // Faster movement speed
-	std::uniform_int_distribution<int> xDistro(20, windowSize.x - 5);
-	std::uniform_int_distribution<int> yDistro(20, windowSize.y - 5);
-	std::uniform_int_distribution<int> redVal(100, 255);      // Brighter reds
-	std::uniform_int_distribution<int> greenVal(100, 255);    // Brighter greens
-	std::uniform_int_distribution<int> blueVal(100, 255);     // Brighter blues
-	std::uniform_int_distribution<int> alphaVal(150, 255);    // More opaque
-	std::uniform_real_distribution<float> radiusDistro(1.5f, 4.0f);
-	std::uniform_int_distribution<int> entityType(0, 4);  // 5 team types
-	std::uniform_int_distribution<int> spawnZone(0, 3);   // 4 quadrants
+	std::random_device randDevice;										// Random distributions for entity properties, adjusted for faster movement and brighter colors
+	std::default_random_engine generator(randDevice());					// Random entity colours, in the brighter colour range
+	std::uniform_int_distribution<int> xVelocity(-150, 150);			// Faster movement speed
+	std::uniform_int_distribution<int> yVelocity(-150, 150);			// Faster movement speed
+	std::uniform_int_distribution<int> xDistro(20, windowSize.x - 5);	// Spawn within screen bounds, leaving a 20-pixel margin on the left and a 5-pixel margin on the right to prevent immediate off-screen spawning
+	std::uniform_int_distribution<int> yDistro(20, windowSize.y - 5);	// Spawn within screen bounds, leaving a 20-pixel margin on the top and a 5-pixel margin on the bottom to prevent immediate off-screen spawning
+	std::uniform_int_distribution<int> redVal(100, 255);				// Brighter reds
+	std::uniform_int_distribution<int> greenVal(100, 255);				// Brighter greens
+	std::uniform_int_distribution<int> blueVal(100, 255);				// Brighter blues
+	std::uniform_int_distribution<int> alphaVal(150, 255);				// More opaque
+	std::uniform_real_distribution<float> radiusDistro(1.5f, 2.0f);		// Slightly larger radius for better visibility
+	std::uniform_int_distribution<int> entityType(0, 4);				// 5 team types
+	std::uniform_int_distribution<int> spawnZone(0, 3);					// 4 quadrants
+
+	int spriteIndex = 0;	// Example index, adjust as needed
 
 	// Main Loop, game logic is handled in here once per frame 
 	while (window.isOpen())
@@ -179,38 +205,46 @@ int main(int argc, char* argv[])
 			// Spawn up to 4 entities per frame to replace those killed in collisions
 			int entitiesToSpawn = std::min(4, targetEntityCount - static_cast<int>(currentEntityCount));
 			
-		for (int i = 0; i < entitiesToSpawn; ++i)
-		{
-			// Random team selection
-			unsigned int type = entityType(generator);
+			for (int i = 0; i < entitiesToSpawn; ++i)
+			{
+				// Random team selection
+				unsigned int type = entityType(generator);
 
-			// Spawn off the right edge of screen, move left across screen with randomized leftward velocity
-			float spawnX = static_cast<float>(windowSize.x) + 50.0f;  // Just off right edge
-			float spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(windowSize.y))(generator);
+				// Spawn off the right edge of screen, move left across screen with randomized leftward velocity
+				float spawnX = static_cast<float>(windowSize.x) + 50.0f;  // Just off right edge
+				float spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(windowSize.y))(generator);
 
-			// Randomized leftward movement, no vertical component
-			float velocityX = std::uniform_real_distribution<float>(-220.0f, -180.0f)(generator);
-			float velocityY = 0.0f;
+				// Randomized leftward movement, no vertical component
+				float velocityX = std::uniform_real_distribution<float>(-220.0f, -180.0f)(generator);
+				float velocityY = 0.0f;
 
-			int r = redVal(generator);
-			int g = greenVal(generator);
-			int b = blueVal(generator);
-			int a = alphaVal(generator);
-			float radius = radiusDistro(generator);
+				int r = redVal(generator);
+				int g = greenVal(generator);
+				int b = blueVal(generator);
+				int a = alphaVal(generator);
+				float radius = radiusDistro(generator);
 
-			SpawnEntityByType(entity_manager, type, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velocityX, velocityY), a);
-		}
+				SpawnEntityByType(entity_manager, type, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velocityX, velocityY), a);
+			}
 		}
 
 		// Update game logic (entities, collisions, rendering)
 		entity_manager.update(deltaTime);
+
+		
 
 		// Render ImGui UI
 		RenderGameInfoWindow(entity_manager.getEntities().size(), entity_manager.GetDeathCountThisFrame(), entity_manager.GetExplosionCount());
 
 		// Render ImGui and display
 		ImGui::SFML::Render(window);
+		for (const auto& sprite : sprites)
+		{ 
+			window.draw(sprite);
+		}
+
 		window.display();
+
 	}
 
 	// Shutdown ImGui

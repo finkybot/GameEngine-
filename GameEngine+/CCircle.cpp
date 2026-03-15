@@ -1,3 +1,4 @@
+// CCircle.cpp - Implementation of the CCircle class, which represents a circular shape in the game engine. This class inherits from CShape and provides specific functionality for circles, including drawing, spatial partitioning, and color manipulation.
 #include "CCircle.h"
 #include <SFML/Graphics/Color.hpp>
 #include <string>

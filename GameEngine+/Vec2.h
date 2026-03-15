@@ -1,6 +1,5 @@
-// Vector2D.h
+// ***** Vector2D.h - Vec2 class definition *****
 #pragma once
-
 
 // Includes.
 #include<iostream>
@@ -8,127 +7,60 @@
 
 // Class declaration.
 
-/// <summary>
-/// Vec2 class.
-/// </summary>
+// Vec2 class represents a 2D vector with x and y components.
 class Vec2
 {
+	// ***** Public Member Variables *****
 public:
 	float x;
 	float y;
 
-
+	// ***** Public Methods *****
 public:
-	// Static member variables.
-	static const Vec2 Zero;
+	static const Vec2 Zero;					// Static constant representing the zero vector (0, 0)
 
+	Vec2() : Vec2(0, 0) {}					// Default constructor initializes to zero vector
+	Vec2(float x, float y) : x(x), y(y) {}	// Constructor to initialize vector with specific x and y values
 
-	// Constructors ~ Destructors.
-	Vec2() : Vec2(0, 0) {} // Default
-	Vec2(float x, float y) : x(x), y(y) {}
+	inline void SetX(float x) { x = x; }	// Setter for x component
+	inline void SetY(float y) { y = y; }	// Setter for y component
 
-	// Methods.
-	// Helpers.
-	inline void SetX(float x) { x = x; }
-	inline void SetY(float y) { y = y; }
+	inline float GetX() const { return x; } // Getter for x component
+	inline float GetY() const { return y; } // Getter for y component
 
-	inline float GetX() const { return x; }
-	inline float GetY() const { return y; }
+	bool operator==(const Vec2& vector) const;	// Is Equal operator
+	bool operator!=(const Vec2& vector) const;	// Is Not Equal operator
+	Vec2 operator-() const;						// Negatation operator
+	Vec2 operator*(float scalar) const;			// Scalar multiplication (growing vectors) works with calling  Vector2D * scalar 
+	Vec2 operator/(float scalar) const;			// Scalar division (growing vectors)
+	Vec2& operator*=(float scalar);				// Scalar multiply equals
+	Vec2& operator/=(float scalar);				// Scalar divide equals
+	Vec2 operator+(const Vec2& vector) const;	// Vector addition
+	Vec2 operator-(const Vec2& vector) const;	// Vector subtraction
+	Vec2& operator+=(const Vec2& vector);		// Vector add equals
+	Vec2& operator-=(const Vec2& vector);		// Vector subtract equals
 
+	float Mag2() const;	// Get the squared magnitude (length) of the vector, which is more efficient than Mag() when you only need to compare magnitudes or avoid the cost of a square root operation.
+	float Mag() const;	// Get the magnitude (length) of the vector, calculated as the square root of the sum of squares of x and y components.
 
-	// Operator Overridding.
-	bool operator==(const Vec2& vector) const; // Is Equal operator
-	bool operator!=(const Vec2& vector) const; // Is Not Equal operator
+	Vec2 GetUnitVec() const;	// Get a unit vector (normalized) from calling vector if magnitude > 0, else return zero vector.
+	Vec2& Normalize();			// Normalize the calling vector in place (modifies the vector to have a magnitude of 1 while maintaining its direction). If the magnitude is zero, the vector remains unchanged to avoid division by zero.
 
-	Vec2 operator-() const;	// Negatation operator
-	
-	Vec2 operator*(float scalar) const;	// Scalar multiplication (growing vectors) works with calling  Vector2D * scalar 
-	Vec2 operator/(float scalar) const;	// Scalar division (growing vectors)
+	float Distance(const Vec2& vector) const;		// Calculate the distance between the calling vector and another vector, which is the magnitude of the difference between the two vectors.
+	float Dot(const Vec2& vector) const;			// Calculate the dot product of the calling vector and another vector, which is a scalar value representing the magnitude of one vector projected onto another. It is calculated as (x1 * x2) + (y1 * y2).
+	Vec2 ProjectOnto(const Vec2& vector) const;		// Project the calling vector onto another vector, which results in a new vector that represents the component of the calling vector in the direction of the other vector. It is calculated using the formula: (dot_product / magnitude_squared) * other_vector.
+	float AngleBetween(const Vec2& vector) const;	// Calculate the angle in radians between the calling vector and another vector, which is derived from the dot product and magnitudes of the two vectors using the formula: acos(dot_product / (magnitude1 * magnitude2)). The result is in the range [0, π].
 
-	Vec2& operator*=(float scalar);	// Scalar multiply equals
-	Vec2& operator/=(float scalar);	// Scalar divide equals
-
-	Vec2 operator+(const Vec2& vector) const;
-	Vec2 operator-(const Vec2& vector) const;
-
-	Vec2& operator+=(const Vec2& vector);
-	Vec2& operator-=(const Vec2& vector);
-
-
-	float Mag2() const;
-	/// <summary>
-	/// Get the magnitude (length) of the vector using Pythagorean theorem.
-	/// </summary>
-	/// <returns>Floating point value representing the length of the vector.</returns>
-	float Mag() const;
-
-	/// <summary>
-	/// Get a unit vector (normalized) from calling vector if magnitude > 0, else return zero vector.
-	/// </summary>
-	/// <returns>Unit Vec2 object or zero vector if magnitude is zero.</returns>
-	Vec2 GetUnitVec() const;
-
-	/// <summary>
-	/// Normalize the calling vector (modify in place) if magnitude > 0.
-	/// </summary>
-	/// <returns>Reference to the normalized calling Vec2 object.</returns>
-	Vec2& Normalize();
-
-	/// <summary>
-	/// Calculate the distance between this vector and another vector.
-	/// </summary>
-	/// <param name="vector">Reference to another Vec2 object.</param>
-	/// <returns>Floating point distance value.</returns>
-	float Distance(const Vec2& vector) const;
-
-	/// <summary>
-	/// Calculate the dot product of two vectors.
-	/// </summary>
-	/// <param name="vector">Reference to another Vec2 object.</param>
-	/// <returns>Floating point dot product value.</returns>
-	float Dot(const Vec2& vector) const;
-
-	/// <summary>
-	/// Project the calling vector onto another vector.
-	/// </summary>
-	/// <param name="vector">Reference to the vector to project onto.</param>
-	/// <returns>Projected Vec2 object.</returns>
-	Vec2 ProjectOnto(const Vec2& vector) const;
-
-	/// <summary>
-	/// Calculate the angle (in radians) between two vectors.
-	/// </summary>
-	/// <param name="vector">Reference to another Vec2 object.</param>
-	/// <returns>Floating point angle in radians.</returns>
-	float AngleBetween(const Vec2& vector) const;
-
-	/// <summary>
-	/// Reflect the calling vector off a normal vector.
-	/// </summary>
-	/// <param name="normal">Reference to the normal vector to reflect off.</param>
-	/// <returns>Reflected Vec2 object.</returns>
-	Vec2 Reflect(const Vec2& normal) const;
-
-	/// <summary>
-	/// Rotate the calling vector around a point (modifies calling vector in place).
-	/// </summary>
-	/// <param name="angle">Rotation angle in radians.</param>
-	/// <param name="aroundPoint">Point to rotate around.</param>
-	void Rotate(float angle, const Vec2& aroundPoint);
-
-	/// <summary>
-	/// Get the result of rotating the calling vector around a point (returns new vector).
-	/// </summary>
-	/// <param name="angle">Rotation angle in radians.</param>
-	/// <param name="aroundPoint">Point to rotate around.</param>
-	/// <returns>Rotated Vec2 object.</returns>
-	Vec2 RotationResult(float angle, const Vec2& aroundPoint) const;
+	Vec2 Reflect(const Vec2& normal) const;								// Reflect the calling vector across a surface with the given normal vector, which results in a new vector that represents the direction of the reflected vector. It is calculated using the formula: reflected_vector = original_vector - (2 * (original_vector . normal) * normal), where "." denotes the dot product.
+	void Rotate(float angle, const Vec2& aroundPoint);					// Rotate the calling vector by a specified angle (in radians) around a given point. This modifies the vector's position by applying a rotation transformation based on the angle and the pivot point.
+	Vec2 RotationResult(float angle, const Vec2& aroundPoint) const;	// Get the result of rotating the calling vector by a specified angle (in radians) around a given point. This returns a new vector representing the rotated position without modifying the original vector.
 
 	// Friends.
-	friend std::ostream& operator<<(std::ostream& consoleOut, const Vec2& vector); // Insertion operator (friend)
-	friend Vec2 operator*(float scalar, const Vec2& vec); // Scalar multiplication (friend) so we can multiply scalar * Vector2D 
+	friend std::ostream& operator<<(std::ostream& consoleOut, const Vec2& vector);	// Insertion operator (friend)
+	friend Vec2 operator*(float scalar, const Vec2& vec);							// Scalar multiplication (friend) so we can multiply scalar * Vector2D 
 };
 
+// Vec3 struct represents a simple 3D vector with x, y, and z components. It is defined as a struct for simplicity and is not intended to be used as a full-featured vector class like Vec2. It can be used for basic 3D vector operations or as a utility type in the game engine where a simple 3D vector is needed.
     struct Vec3  
     {  
        float x;  

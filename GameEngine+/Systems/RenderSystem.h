@@ -1,3 +1,4 @@
+// ***** RenderSystem.h - Render system for drawing entities *****
 #pragma once
 #include <vector>
 #include <memory>
@@ -5,30 +6,16 @@
 namespace sf { class RenderWindow; }
 class Entity;
 
-/// <summary>
-/// Render System - Draws all entities to the screen
-/// Iterates through all alive entities and calls their DrawShape method
-/// Also renders associated text if present
-/// </summary>
+// RenderSystem is responsible for rendering all alive entities to the SFML render window. It iterates through the list of entities, checks if they are alive, and draws their shapes and text components if present.
 class RenderSystem
 {
+	// ****** Public Methods *****
 public:
-	/// <summary>Constructor</summary>
-	RenderSystem() = default;
+	RenderSystem() = default;	// Constructor - default is fine since we have no member variables to initialize
+	~RenderSystem() = default;	// Destructor - default is fine since we have no resources to clean up
+
 	
-	/// <summary>Destructor</summary>
-	~RenderSystem() = default;
-
-	/// <summary>
-	/// Render all alive entities to the render window
-	/// </summary>
-	/// <param name="entities">List of all entities in the game</param>
-	/// <param name="window">SFML render window to draw to</param>
-	void Render(const std::vector<std::unique_ptr<Entity>>& entities, sf::RenderWindow& window);
-
+	// ****** Private Methods *****
 private:
-	/// <summary>
-	/// Render a single entity (shape and text if present)
-	/// </summary>
-	void RenderEntity(Entity* entity, sf::RenderWindow& window) const;
+	void RenderEntity(Entity* entity, sf::RenderWindow& window) const;	// Renders a single entity (shape and text if present)
 };

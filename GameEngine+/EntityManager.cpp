@@ -1,3 +1,4 @@
+// EntityManager.cpp
 #include "EntityManager.h"
 #include "Entity.h"
 #include "EntityType.h"
@@ -12,6 +13,7 @@
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/Color.hpp>
 
+// Constructor - takes reference to SFML render window for drawing and FPS reporting
 EntityManager::EntityManager(sf::RenderWindow& window)
 	: m_window(window),
 	  m_collisionSystem(this)
@@ -57,7 +59,7 @@ void EntityManager::RemoveDeadEntities()
 	// Spatial hash is rebuilt each frame, no explicit removal needed
 }
 
-void EntityManager::UpdateQuadTreeAndRender()
+void EntityManager::UpdateSpatialHashAndRender()
 {
 	// Rebuild spatial hash every frame (very fast)
 	m_spatialHash.Clear();
@@ -104,7 +106,7 @@ void EntityManager::update(float deltaTime)
 	AddPendingEntities();
 	RemoveDeadEntities();
 
-	UpdateQuadTreeAndRender();
+	UpdateSpatialHashAndRender();
 
 	UpdateExplosions();
 

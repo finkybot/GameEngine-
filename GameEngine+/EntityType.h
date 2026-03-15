@@ -1,9 +1,7 @@
+// ***** EntityType.h - EntityType enum class definition *****
 #pragma once
 
-/// <summary>
-/// EntityType enumeration for categorizing game entities
-/// Replaces string-based tags with efficient enum values
-/// </summary>
+// EntityType.h (Defines the EntityType enum class representing different types of entities in the game, such as teams and explosions.)
 enum class EntityType
 {
 	TeamEagle = 0,
@@ -15,9 +13,7 @@ enum class EntityType
 	Default = 6
 };
 
-/// <summary>
-/// Convert EntityType enum to string representation (for debugging/logging)
-/// </summary>
+// Utility function to convert EntityType enum values to human-readable strings for debugging and logging purposes.
 inline const char* EntityTypeToString(EntityType type)
 {
 	switch (type)

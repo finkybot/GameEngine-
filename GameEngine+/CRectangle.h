@@ -20,7 +20,7 @@ public:
     CRectangle(float x, float y);
 
     void DrawShape(sf::RenderWindow& window) override;
-    void Includer(sf::RenderWindow& window) override;
+    // boundary checks removed from shapes; handled by PhysicsSystem
     void SetTextPosition(float fontOffset) override;
     void MoveShape(float deltaTime = 1.0f / 60.0f) override; // custom to use current velocity
     void SetColor(float r, float g, float b);

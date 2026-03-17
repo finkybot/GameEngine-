@@ -68,7 +68,7 @@ void EntityManager::UpdateSpatialHashAndRender()
 		m_spatialHash.Insert(entity.get());
 	}
 
-	m_renderSystem.Render(m_entities, m_window);
+	m_renderSystem.RenderAliveEntities(m_entities, m_window);
 }
 
 void EntityManager::DetectAndResolveCollisions(float deltaTime)
@@ -79,17 +79,7 @@ void EntityManager::DetectAndResolveCollisions(float deltaTime)
 
 	m_deathCountThisFrame += m_collisionSystem.DetectAndResolve(m_entities, m_spatialHash, deltaTime);
 
-	for (auto& entity : m_entities)
-	{
-		if (entity->IsAlive())
-		{
-			auto shape = entity->GetComponent<CShape>();
-			if (shape)
-			{
-				shape->Includer(m_window);
-			}
-		}
-	}
+    // Boundary handling and off-screen despawn is performed in PhysicsSystem::HandleBoundaryCollision
 }
 
 void EntityManager::update(float deltaTime)
@@ -167,8 +157,8 @@ Entity* EntityManager::addEntity(EntityType type, float radius, Vec3 color, Vec2
 	circle->SetRadius(radius);
 	circle->SetColor(color.x, color.y, color.z, alpha);
 	circle->SetPosition(position.x, position.y);
-	circle->SetInitialVelocity(velocity.x, velocity.y);
-
+	circle->SetVelocity(velocity.x, velocity.y);
+	circle->SetVelocity(velocity.x, velocity.y);
 	entity->AddComponentPtr<CShape>(std::move(circle));
 
 	Entity* entityPtr = entity.get();

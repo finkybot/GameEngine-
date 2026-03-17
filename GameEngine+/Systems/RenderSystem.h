@@ -14,8 +14,9 @@ public:
 	RenderSystem() = default;	// Constructor - default is fine since we have no member variables to initialize
 	~RenderSystem() = default;	// Destructor - default is fine since we have no resources to clean up
 
+	void RenderAliveEntities(const std::vector<std::unique_ptr<Entity>>& entities, sf::RenderWindow& window); 	// Renders all alive entities to the provided SFML render window (why was you missing????)
 	
 	// ****** Private Methods *****
 private:
-	void RenderEntity(Entity* entity, sf::RenderWindow& window) const;	// Renders a single entity (shape and text if present)
+	void RenderEntity(Entity* entity, sf::RenderWindow& window) const;	// Helper function that renders a single entity (shape and text if present), called by the public Render method.
 };

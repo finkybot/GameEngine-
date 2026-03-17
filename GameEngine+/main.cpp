@@ -74,7 +74,7 @@ static void InitializeGame(EntityManager& entityManager, sf::Vector2u windowSize
 	std::uniform_int_distribution<int> alphaVal(150, 255);    
 	std::uniform_real_distribution<float> radiusDistro(1.5f, 2.0f);
 	std::uniform_int_distribution<int> entityType(0, 4);
-	std::uniform_real_distribution<float> velocityDistro(-220.0f, -180.0f);  // Randomize leftward velocity
+	std::uniform_real_distribution<float> velocityDistro(-420.0f, -60.0f);  // Randomize leftward velocity
 
 	for (int i = 0; i < maxEntities; ++i)
 	{
@@ -113,7 +113,9 @@ int main(int argc, char* argv[])
 
 	// Load tile map texture (Im working on a tile map rendering system 13/03/2026) 
 	sf::Image image;
-	IMS::LoadImage("assets/adventure.png", image);
+	std::filesystem::path imagePath = std::filesystem::absolute("assets\\adventure.png");
+	std::cout << "Loading image from: " << imagePath << std::endl;
+	IMS::LoadImage(imagePath.string(), image);
 	std::vector<sf::Texture> textures;
 	IMS::CreateTileMap(0, 0, 32, 32, image, textures);
 
@@ -215,7 +217,7 @@ int main(int argc, char* argv[])
 				float spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(windowSize.y))(generator);
 
 				// Randomized leftward movement, no vertical component
-				float velocityX = std::uniform_real_distribution<float>(-220.0f, -180.0f)(generator);
+				float velocityX = std::uniform_real_distribution<float>(-420.0f, -60.0f)(generator);
 				float velocityY = 0.0f;
 
 				int r = redVal(generator);

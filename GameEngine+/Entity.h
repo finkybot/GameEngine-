@@ -123,7 +123,7 @@ public:
 	// Get the position of the entity (delegates to CShape component)
 	inline const Vec2& GetPosition() const noexcept { 
 		auto shape = GetComponent<CShape>();
-		return shape ? shape->GetPosition() : Vec2::Zero;
+		return shape ? shape->m_position : Vec2::Zero;
 	}
 	
 	// Get the radius of the entity (delegates to CShape component)

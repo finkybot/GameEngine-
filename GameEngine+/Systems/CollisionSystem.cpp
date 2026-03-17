@@ -85,8 +85,8 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const
 		if (!shape1 || !shape2) return 0;
 
 		// Spawn explosion at collision point
-		Vec2 currentVel = shape1->GetVelocity();
-		Vec2 otherVel = shape2->GetVelocity();
+		Vec2 currentVel = shape1->m_velocity;
+		Vec2 otherVel = shape2->m_velocity;
 		
 		float currentSpeed = std::sqrt(currentVel.x * currentVel.x + currentVel.y * currentVel.y);
 		float otherSpeed = std::sqrt(otherVel.x * otherVel.x + otherVel.y * otherVel.y);
@@ -185,8 +185,8 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const
 	Vec2 vel2 = shape2->GetVelocity();
 	
 	// Update velocities based on impulse and collision normal
-	shape1->SetInitialVelocity(vel1.GetX() - impulse * unitNorm.x, vel1.GetY() - impulse * unitNorm.y);
-	shape2->SetInitialVelocity(vel2.GetX() + impulse * unitNorm.x, vel2.GetY() + impulse * unitNorm.y);
+	shape1->SetVelocity(vel1.x - impulse * unitNorm.x, vel1.y - impulse * unitNorm.y);
+	shape2->SetVelocity(vel2.x + impulse * unitNorm.x, vel2.y + impulse * unitNorm.y);
 
 	// Positional correction to avoid sinking
 	float overlap = (entity1->GetRadius() + entity2->GetRadius()) - scalerDist;
@@ -199,8 +199,8 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const
 		Vec2 pos1 = shape1->GetPosition();
 		Vec2 pos2 = shape2->GetPosition();
 		
-		shape1->SetPosition(pos1.GetX() - correction * unitNorm.x, pos1.GetY() - correction * unitNorm.y);
-		shape2->SetPosition(pos2.GetX() + correction * unitNorm.x, pos2.GetY() + correction * unitNorm.y);
+		shape1->SetPosition(pos1.x - correction * unitNorm.x, pos1.y - correction * unitNorm.y);
+		shape2->SetPosition(pos2.x + correction * unitNorm.x, pos2.y + correction * unitNorm.y);
 	}
 }
 

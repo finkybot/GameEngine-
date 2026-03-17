@@ -51,6 +51,21 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 		return;
 	}
 
+
+
+	// Consider the entity's bounding circle
+	//float left = position.GetX() - radius;
+	//float right = position.GetX() + radius;
+	//float top = position.GetY() - radius;
+	//float bottom = position.GetY() + radius;
+
+	//// If the entity has moved fully off any side of the window, despawn it
+	//if (right < 0.0f || left > windowWidth || bottom < 0.0f || top > windowHeight)
+	//{
+	//	entity->Destroy();
+	//	return;
+	//}
+
 	/* LEGACY: Boundary bouncing code (kept for future use)
 	Vec2 velocity = shape->GetVelocity();
 	bool bounced = false;

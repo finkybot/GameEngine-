@@ -19,18 +19,7 @@ void CRectangle::DrawShape(sf::RenderWindow& window)
 	window.draw(m_rectangle);
 }
 
-void CRectangle::Includer(sf::RenderWindow& window)
-{
-	if (m_rectangle.getPosition().x < 0 || m_rectangle.getPosition().x + m_rectangle.getSize().x > window.getSize().x)
-	{
-		m_velocity.x = -m_velocity.x;
-	}
-
-	if (m_rectangle.getPosition().y < 0 || m_rectangle.getPosition().y + m_rectangle.getSize().y > window.getSize().y)
-	{
-		m_velocity.y = -m_velocity.y;
-	}
-}
+// Includer removed; boundary handling moved to PhysicsSystem
 
 void CRectangle::SetTextPosition(float fontOffset)
 {

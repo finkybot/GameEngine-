@@ -4,21 +4,24 @@
 #include <SFML/Graphics/Rect.hpp>
 #include <cmath>
 
-bool ImageManagementSystem::LoadImage(const std::string& filePath, sf::Image& image)
+sf::Image ImageManagementSystem::LoadImage(const std::string& filePath)
 {
     try {
-        image.loadFromFile(filePath);
-        return true;
+        sf::Image image;
+        if (image.loadFromFile(filePath)) {
+            return image;
+        }
     }
     catch (const std::exception& e) {
         // Log the error message 
         std::cerr << "Error loading image from " << filePath << ": " << e.what() << std::endl;
 	}
-    return false;
+    return sf::Image();
 }
 
-bool ImageManagementSystem::CreateTileMap(int x, int y, int width, int height, const sf::Image& image, std::vector<sf::Texture>& textures)
+std::vector<sf::Texture> ImageManagementSystem::CreateTileMap(int x, int y, int width, int height, const sf::Image& image)
 {
+	std::vector<sf::Texture> textures;
 	int xnumTiles = std::floor(image.getSize().x / (width));
 	int ynumTiles = std::floor(image.getSize().y / (height));
     
@@ -35,10 +38,11 @@ bool ImageManagementSystem::CreateTileMap(int x, int y, int width, int height, c
             else
             {
                 std::cerr << "Failed to create tile map texture for tile at (" << col << ", " << row << ")." << std::endl;
-                return false;
+                return textures;
             }
 			padding = 1; // Set padding to 1 after the first tile to account for any spacing between tiles in the source image
         }
 	}
-    return true;
+	std::cout << "Created tile map with " << textures.size() << " tiles (" << xnumTiles << "x" << ynumTiles << ")." << std::endl;
+    return textures;
 }

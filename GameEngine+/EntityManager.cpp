@@ -8,6 +8,7 @@
 #include <chrono>
 #include <cmath>
 #include <sstream>
+#include <unordered_set>
 #include <iomanip>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
@@ -36,27 +37,36 @@ void EntityManager::AddPendingEntities()
 
 void EntityManager::RemoveDeadEntities()
 {
+	// First collect pointers to dead entities WITHOUT deleting them yet.
 	std::vector<Entity*> deadEntities;
+	deadEntities.reserve(m_entities.size() / 10);
 
-	auto end = std::remove_if(m_entities.begin(), m_entities.end(), 
-		[&deadEntities](const auto& e) { 
-			if (!e->IsAlive())
-			{
-				deadEntities.push_back(e.get());
-				return true;
-			}
-			return false;
-		});
-	m_entities.erase(end, m_entities.end());
-
-	for (auto& itr : m_entityMap)
+	for (const auto& up : m_entities)
 	{
-		auto end = std::remove_if(itr.second.begin(), itr.second.end(),
-			[](const auto e) { return !e->IsAlive(); });
-		itr.second.erase(end, itr.second.end());
+		if (!up->IsAlive())
+			deadEntities.push_back(up.get());
 	}
 
-	// Spatial hash is rebuilt each frame, no explicit removal needed
+	if (deadEntities.empty())
+		return;
+
+	// Build a fast lookup set of dead pointers so we can remove references without dereferencing them.
+	std::unordered_set<Entity*> deadSet(deadEntities.begin(), deadEntities.end());
+
+	// Remove references to dead entities from the entity map by pointer identity only
+	for (auto& deadEnt : m_entityMap)
+	{
+		auto& vec = deadEnt.second;
+		vec.erase(std::remove_if(vec.begin(), vec.end(), [&deadSet](Entity* e) { return deadSet.find(e) != deadSet.end(); }), vec.end());
+	}
+
+	// If we had a spatial tree that stored raw pointers,then we would need remove the dead ones now....but..... I'm using a SpatialHashGrid which is rebuilt each frame so explicit removal is not required (Yeeeeaaa Me!!!).
+	// AAAANNNYYWAY!!!!! I have included the cleanup for a tree; cleanup iterate over the deadEntities and remove each pointer from it:
+	// for (Entity* d : deadEntities) m_quadTree.RemoveEntityFromTree(d);
+
+	// It's is now safe to erase the owning unique_ptrs from m_entities and thus delete the objects.
+	auto end = std::remove_if(m_entities.begin(), m_entities.end(), [](const std::unique_ptr<Entity>& e) { return !e->IsAlive(); });
+	m_entities.erase(end, m_entities.end());
 }
 
 void EntityManager::UpdateSpatialHashAndRender()
@@ -201,7 +211,7 @@ void EntityManager::UpdateExplosions()
 	{
 		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - creationTime);
 		
-		if (elapsed.count() > 300)
+		if (elapsed.count() > 600)
 		{
 			for (auto& entity : m_entities)
 			{
@@ -215,7 +225,7 @@ void EntityManager::UpdateExplosions()
 		}
 		else
 		{
-			float fadeProgress = static_cast<float>(elapsed.count()) / 300.0f;
+			float fadeProgress = static_cast<float>(elapsed.count()) / 600.0f;
 			int newAlpha = static_cast<int>(200 * (1.0f - fadeProgress));
 			
 			for (auto& entity : m_entities)
@@ -227,6 +237,9 @@ void EntityManager::UpdateExplosions()
 					{
 						if (auto* circle = dynamic_cast<CCircle*>(shape))
 						{
+							circle->SetRadius(circle->GetRadius() + 0.5f); // Expand the explosion radius over time
+							Vec2 explosionPosition = circle->GetPosition();
+							circle->SetPosition(explosionPosition.x + 0.4f, explosionPosition.y - 0.5f); // Keep the explosion centered as it expands, adding a little drift for visual interest
 							sf::Color currentColor = circle->GetColor();
 							circle->SetColor(
 								static_cast<float>(currentColor.r),

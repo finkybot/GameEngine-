@@ -4,6 +4,7 @@
 #include "../CShape.h"
 #include <execution>
 #include <algorithm>
+#include "../Vec2.h"
 
 void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float windowWidth, float windowHeight)
 {

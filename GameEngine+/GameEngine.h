@@ -1,0 +1,48 @@
+// ***** GameEngine.h - Game engine manager *****
+#pragma once
+#include <SFML/Graphics.hpp>
+#include <SFML/Window.hpp>
+#include <SFML/System.hpp>
+#include <memory>
+//#include "Scene.h"
+#include "EntityManager.h"
+#include <map>
+#include <string>
+#include <iostream>
+
+#include <imgui/imgui.h>
+#include <imgui/backends/imgui-SFML.h>
+
+class Scene; // Forward declaration of Scene class to avoid circular dependency with GameEngine
+
+class GameEngine
+{
+private:
+	GameEngine();																// Constructor - initializes the game engine, sets up the window, and prepares for the game loop
+	~GameEngine();																// Destructor - cleans up resources and shuts down the game engine
+
+public:
+	//GameEngine(const GameEngine&) = delete;										// Deleted copy constructor to prevent copying of the game engine instance
+	//GameEngine& operator=(const GameEngine&) = delete;							// Deleted copy assignment operator to prevent copying of the game engine instance
+	
+
+	static GameEngine& GetInstance()											// Static method to access the singleton instance of the GameEngine, ensuring only one instance exists throughout the application
+	{
+		static GameEngine instance; // Guaranteed to be destroyed and instantiated on first use
+		return instance;
+	}
+	void AddScene(const std::string& sceneName, std::shared_ptr<Scene> scene);	// Adds a new scene to the game engine with the given name and scene instance, allowing for dynamic scene management
+	void ChangeScene(const std::string& sceneName);								// Changes the current scene to the specified scene name, allowing for scene management and transitions
+	void RemoveScene(const std::string& sceneName);								// Removes a scene from the game engine by its name, allowing for cleanup and resource management of scenes that are no longer needed
+	void Run();																	// Main game loop - handles events, updates game state, and renders frames until the window is closed
+	void update(float deltaTime);												// Updates the current scene and game state based on the elapsed time since the last frame, allowing for time-based updates and game logic processing
+
+	std::map<std::string, std::shared_ptr<Scene>> m_scenes;	// Map of scene names to scene instances, allowing for easy scene management and switching
+	sf::RenderWindow m_window;								// SFML RenderWindow for rendering the game, handling events, and managing the main game window
+	std::shared_ptr<Scene> m_currentScene;					// Pointer to the current active scene, used to determine which scene to update and render during the game loop
+	bool m_isRunning = false;								// Flag to indicate whether the game loop is currently running, used to control the main game loop execution
+
+	sf::Vector2u m_windowSize = { 0, 0 };					// Size of the game window, initialized to zero and set in the constructor based on the desktop mode
+
+};
+

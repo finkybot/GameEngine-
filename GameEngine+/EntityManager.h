@@ -26,14 +26,14 @@ class EntityManager
 {
 // ****** Private Member Variables ******
 private:
-	SpatialHashGrid<Entity> m_spatialHash{ 100.0f };// 100-unit cells for collision queries
-	EntityVector		m_entities;					// Active entities currently in the game, owned by EntityManager
-	EntityVector		m_toAdd;					// Entities queued for addition next frame to avoid iterator invalidation during game logic, owned by EntityManager
-	EntityMap			m_entityMap;				// Map of entity type to vector of raw pointers for quick access by type, not owned (raw pointers) since EntityManager owns the entities
-	size_t				m_totalEntities = 0;		// Total number of entities ever created, used for unique ID assignment
-	sf::RenderWindow& m_window;						// Reference to the SFML render window for drawing entities and updating the window title with FPS
-	char m_fpsTitle[64] = "FPS: 0.0";				// Buffer for storing the FPS title string
-	int					m_deathCountThisFrame = 0;	// Counter for tracking the number of deaths in the current frame
+	SpatialHashGrid<Entity> m_spatialHash{ 100.0f };	// 100-unit cells for collision queries
+	EntityVector		m_entities;						// Active entities currently in the game, owned by EntityManager
+	EntityVector		m_toAdd;						// Entities queued for addition next frame to avoid iterator invalidation during game logic, owned by EntityManager
+	EntityMap			m_entityMap;					// Map of entity type to vector of raw pointers for quick access by type, not owned (raw pointers) since EntityManager owns the entities
+	size_t				m_totalEntities = 0;			// Total number of entities ever created, used for unique ID assignment
+	sf::RenderWindow& m_window;							// Reference to the SFML render window for drawing entities and updating the window title with FPS
+	char m_fpsTitle[64] = "FPS: 0.0";					// Buffer for storing the FPS title string
+	int					m_deathCountThisFrame = 0;		// Counter for tracking the number of deaths in the current frame
 	
 	
 	std::map<size_t, std::chrono::high_resolution_clock::time_point> m_explosionTimes;	// Track explosion creation times: entity_id -> creation time
@@ -48,15 +48,16 @@ private:
 public:
 	EntityManager(sf::RenderWindow& window);	// Constructor - takes reference to SFML render window for drawing and FPS reporting
 	
-	void update(float deltaTime = 1.0f / 60.0f);																			// Main update method called each frame to update physics, handle collisions, render entities, and manage entity lifecycle. It takes the elapsed time since the last frame (deltaTime) as a parameter for time-based updates.
-	void ReportFPS(int& fpsFrames, std::chrono::steady_clock::time_point& fpsLast, double& fpsSmooth, const double alpha);	// Updates the FPS counter and sets the window title to display the current FPS. It uses an exponential moving average to smooth the FPS value over time, with a configurable alpha parameter for smoothing factor.
-	void DrawBoundingBox(const std::vector<BoundingBox>& bboxes);															// Debug method to draw bounding boxes for spatial partitioning visualization. It takes a vector of BoundingBox structures and draws them as rectangles on the SFML window for debugging purposes.
-	Entity* addEntity(EntityType type, float radius, Vec3 color, Vec2 positon, Vec2 velocity, int alpha);					// Creates a new entity with the specified parameters and adds it to the pending addition queue. It takes the entity type, radius, color, initial position, velocity, and alpha value as parameters, creates a new Entity instance, and queues it for addition in the next update cycle to avoid iterator invalidation during game logic.
-	EntityVector& getEntities();																							// Returns a reference to the vector of unique pointers for all active entities. This allows external systems (e.g. physics, collision, rendering) to access and iterate through the list of entities while maintaining ownership and memory management within EntityManager.
-	std::vector<Entity*>& getEntities(EntityType type);																		// Returns a reference to the vector of raw pointers for entities of the specified type. This allows external systems to quickly access entities by type without needing to filter through the entire list. It takes an EntityType as a parameter and returns a reference to the corresponding vector in the entity map.
-	int GetDeathCountThisFrame() const { return m_deathCountThisFrame; }													// Returns the number of deaths that occurred in the current frame, which is tracked by the EntityManager and can be used for game logic or UI display.
-	void SpawnExplosion(const Vec2& position, float radius, const Vec2& velocity, const Vec3& color);						// Spawns an explosion entity at the specified position with the given radius, velocity, and color. It creates a new explosion entity, adds it to the pending addition queue, and tracks its creation time and color for fading out over time in the UpdateExplosions method.
-	int GetExplosionCount() const { return static_cast<int>(m_explosionTimes.size()); }										// Returns the number of active explosions currently playing.
+	void Update(float deltaTime = 1.0f / 60.0f);																				// Main update method called each frame to update physics, handle collisions, render entities, and manage entity lifecycle. It takes the elapsed time since the last frame (deltaTime) as a parameter for time-based updates.
+	void ReportFPS(int& fpsFrames, std::chrono::steady_clock::time_point& fpsLast, double& fpsSmooth, const double alpha);		// Updates the FPS counter and sets the window title to display the current FPS. It uses an exponential moving average to smooth the FPS value over time, with a configurable alpha parameter for smoothing factor.
+	void DrawBoundingBox(const std::vector<BoundingBox>& bboxes);																// Debug method to draw bounding boxes for spatial partitioning visualization. It takes a vector of BoundingBox structures and draws them as rectangles on the SFML window for debugging purposes.
+	Entity* addEntity(EntityType type);																							// Adds an existing entity (passed as a unique_ptr) to the pending addition queue. This allows for more flexible entity creation (e.g. creating an entity with specific components before adding it to the manager). It takes ownership of the provided entity and queues it for addition in the next update cycle to avoid iterator invalidation during game logic.
+	Entity* addEntity(EntityType type, float radius, Vec3 color, Vec2 positon, Vec2 velocity, int alpha);						// Creates a new entity with the specified parameters and adds it to the pending addition queue. It takes the entity type, radius, color, initial position, velocity, and alpha value as parameters, creates a new Entity instance, and queues it for addition in the next update cycle to avoid iterator invalidation during game logic.
+	EntityVector& getEntities();																								// Returns a reference to the vector of unique pointers for all active entities. This allows external systems (e.g. physics, collision, rendering) to access and iterate through the list of entities while maintaining ownership and memory management within EntityManager.
+	std::vector<Entity*>& getEntities(EntityType type);																			// Returns a reference to the vector of raw pointers for entities of the specified type. This allows external systems to quickly access entities by type without needing to filter through the entire list. It takes an EntityType as a parameter and returns a reference to the corresponding vector in the entity map.
+	int GetDeathCountThisFrame() const { return m_deathCountThisFrame; }														// Returns the number of deaths that occurred in the current frame, which is tracked by the EntityManager and can be used for game logic or UI display.
+	void SpawnExplosion(const Vec2& position, float radius, const Vec2& velocity, const Vec3& color);							// Spawns an explosion entity at the specified position with the given radius, velocity, and color. It creates a new explosion entity, adds it to the pending addition queue, and tracks its creation time and color for fading out over time in the UpdateExplosions method.
+	int GetExplosionCount() const { return static_cast<int>(m_explosionTimes.size()); }											// Returns the number of active explosions currently playing.
 
 	// ***** Private Methods *****
 private:

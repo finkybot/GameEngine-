@@ -21,6 +21,7 @@ EntityManager::EntityManager(sf::RenderWindow& window)
 {
 }
 
+
 void EntityManager::AddPendingEntities()
 {
 	// Process all entities that were queued for addition
@@ -92,7 +93,7 @@ void EntityManager::DetectAndResolveCollisions(float deltaTime)
     // Boundary handling and off-screen despawn is performed in PhysicsSystem::HandleBoundaryCollision
 }
 
-void EntityManager::update(float deltaTime)
+void EntityManager::Update(float deltaTime)
 {
 	static auto fpsLast = std::chrono::steady_clock::now();
 	static int fpsFrames = 0;
@@ -154,6 +155,15 @@ void EntityManager::DrawBoundingBox(const std::vector<BoundingBox>& bboxes)
 		rect.setOutlineThickness(1.0f);
 		m_window.draw(rect);
 	}
+}
+
+Entity* EntityManager::addEntity(EntityType type)
+{
+	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++));
+	m_toAdd.push_back(std::move(entity));
+
+	Entity* entityPtr = entity.get();
+	return entityPtr;
 }
 
 Entity* EntityManager::addEntity(EntityType type, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha)

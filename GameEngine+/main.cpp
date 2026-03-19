@@ -23,23 +23,20 @@
 #include "Vec2.h"
 
 
-/*	Entry point of the game engine, responsible for initializing the game, creating the main window, handling the main game loop, and integrating ImGui for UI rendering.
-	I have moved the game initialization logic into the TestScene class, so this main function is now focused on setting up the game engine, creating the main window, and starting the main loop.
-	The code is now cleaner and more modular, with the TestScene class responsible for managing the game state and entity initialization and updating, 
-	while the main function handles the overall setup and execution of the game engine.	*/
+/*	Entry point of the game engine, responsible for initializing the game, creating the main window, handling the main game loop, and integrating ImGui for UI rendering. I have moved the game initialization logic into the TestScene class, so this main function is now focused on setting up 
+	the game engine, creating the main window, and starting the main loop. The code is now cleaner and more modular, with the TestScene class responsible for managing the game state and entity initialization and updating, while the main function handles the overall setup and execution 
+	of the game engine.	*/
 int main(int argc, char* argv[])
 {
-	// Setup Game Engine and Entity Manager
+	// Create the game engine instance (singleton)
 	GameEngine& gameEngine = GameEngine::GetInstance();
-	TestScene testScene(gameEngine, gameEngine.m_window);
-	testScene.InitializeGame(gameEngine.m_windowSize, 5000);
 
-	// Load tile map texture (Im working on a tile map rendering system 13/03/2026) 
+
+	// Load tile map texture (Im working on a tile map rendering system; this is to be moved to a more appropriate location once its ready, just testing it here for now) 
 	sf::Image image;
 	std::filesystem::path imagePath = std::filesystem::absolute("assets\\adventure.png");
 	image = IMS::LoadImage(imagePath.string());
 	std::vector<sf::Texture> textures = IMS::CreateTileMap(0, 0, 32, 32, image);
-
 	std::vector<sf::Sprite> sprites;
 
 	for (size_t i = 0; i < textures.size(); ++i)
@@ -60,16 +57,12 @@ int main(int argc, char* argv[])
 		x += 32; // Move to the next column
 	}
 	
-	bool isPressed = false; 	// Flag to track if the spacebar is currently pressed, used to prevent multiple spawns per key pres, this shouldnt be here, I'll move it later
+	bool isPressed = false; // Flag to track if the spacebar is currently pressed, used to prevent multiple spawns per key pres, this shouldnt be here, I'll move it later
 
-	/* Main Loop, game logic is handled in here once per frame */
-	while (gameEngine.m_window.isOpen())
-	{
-		testScene.Update(0.016f); // Update the scene with a fixed delta time (16ms for ~60 FPS), I can calculate actual delta time using the deltaClock for variable time steps
-	}
 
-	// Shutdown ImGui
-	ImGui::SFML::Shutdown();
+	gameEngine.Run(); // Start the main game loop.
 
+	// Cleanup ImGui resources before exiting the application
+	ImGui::SFML::Shutdown(); // Shutdown ImGui.
 	return 0;
 }

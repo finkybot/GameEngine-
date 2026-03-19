@@ -6,24 +6,19 @@
 #include <memory>
 #include <string>
 #include "Scene.h"
+#include "TestScene.h"
 #include <cstdlib>
 
 GameEngine::GameEngine()
 {
 	// Setup the SFML window
 	m_windowSize = sf::VideoMode::getDesktopMode().size;
-	m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine");
+	//m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine");
+	m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::State::Fullscreen);
 
-	//m_window->setFramerateLimit(240);
-	m_window.setVerticalSyncEnabled(true);	
+	m_window.setFramerateLimit(1000);
+	//m_window.setVerticalSyncEnabled(true);	
 	m_isRunning = true;
-
-	// Initialize ImGui with SFML backend
-	if (!ImGui::SFML::Init(m_window))
-	{
-		std::cerr << "Failed to initialize ImGui::SFML." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
 
 }
 
@@ -58,7 +53,33 @@ void GameEngine::RemoveScene(const std::string& sceneName)
 }
 
 void GameEngine::Run()
-{}
+{
+	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
+	AddScene("TestScene", std::make_shared<TestScene>(*this, m_window));
+	ChangeScene("TestScene");
+	m_currentScene->InitializeGame(m_windowSize);
 
-void GameEngine::update(float deltaTime)
-{}
+	/* Main Loop, game logic is handled in here once per frame */
+	while (m_window.isOpen())
+	{
+		Update(0.016f); // Update the scene with a fixed delta time (16ms for ~60 FPS), I can calculate actual delta time using the deltaClock for variable time steps
+	}
+}
+
+void GameEngine::Update(float deltaTime)
+{
+	// Handle events and input before updating the scene.
+	while (m_window.isOpen())
+	{
+		// Clear the window at the start of each frame
+		m_window.clear();
+
+
+		if (m_currentScene)
+		{
+			m_currentScene->Update(deltaTime);
+		}
+
+		m_window.display();
+	}
+}

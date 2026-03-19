@@ -3,6 +3,7 @@
 #include "Scene.h"
 #include <SFML/Window/Event.hpp>
 #include "Systems/PhysicsSystem.h"
+#include <random>
 
 class TestScene : public Scene
 {
@@ -23,12 +24,12 @@ public:
 	void UnloadResources() override;
 	
 	// Game Initialization
-	void InitializeGame(sf::Vector2u windowSize, int maxEntities);
+	void InitializeGame(sf::Vector2u windowSize);
 
 private:
 
-	Entity* SpawnEntityByType(unsigned int teamType, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha); 	// Spawns an entity of the specified team type with random properties and adds it to the EntityManager. It takes the EntityManager reference, team type (0-4), radius, color, position, velocity, and alpha as parameters. The team type is mapped to a specific EntityType enum value, and the new entity is created and added to the EntityManager using the addEntity method.
-	void RenderGameInfoWindow(size_t entityCount, int deathCount, int explosionCount);										// Renders the ImGui window displaying game information and performance metrics. It takes the current entity count, death count for the current frame, and active explosion count as parameters to display in the UI. The window is positioned at (10, 10) and sized to (450, 280) on first use, and it includes sections for entity statistics and spatial hash collision detection performance metrics.
+	void SpawnEntityByType(unsigned int teamType, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha); 	// Spawns an entity of the specified team type with random properties and adds it to the EntityManager. It takes the EntityManager reference, team type (0-4), radius, color, position, velocity, and alpha as parameters. The team type is mapped to a specific EntityType enum value, and the new entity is created and added to the EntityManager using the addEntity method.
+	void RenderGameInfoWindow(size_t entityCount, int deathCount, int explosionCount);									// Renders the ImGui window displaying game information and performance metrics. It takes the current entity count, death count for the current frame, and active explosion count as parameters to display in the UI. The window is positioned at (10, 10) and sized to (450, 280) on first use, and it includes sections for entity statistics and spatial hash collision detection performance metrics.
 	const int targetEntityCount = 5000;
 
 	// Random distributions for entity properties

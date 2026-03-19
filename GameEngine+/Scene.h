@@ -28,10 +28,13 @@ public:
 	virtual void OnExit() = 0;
 	virtual void LoadResources() = 0;
 	virtual void UnloadResources() = 0;
+	virtual void InitializeGame(sf::Vector2u windowSize) = 0;
 
 	// non-copyable
 	Scene(const Scene&) = delete;
 	Scene& operator=(const Scene&) = delete;
+
+	EntityManager* m_entityManager;
 
 protected:
 	// Construction contract: derived scenes must initialize these references
@@ -39,7 +42,6 @@ protected:
 
 	// injected references (Scene does not own these)
 	GameEngine& m_gameEngine;
-	EntityManager* m_entityManager;
 
 	// scene state
 	int m_frameCount = 0;
@@ -50,4 +52,3 @@ protected:
 
 	sf::Clock deltaClock;
 };
-

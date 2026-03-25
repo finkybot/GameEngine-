@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <cmath>
 
-int CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities, SpatialHashGrid<Entity>& spatialHash, float deltaTime)
+void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities, SpatialHashGrid<Entity>& spatialHash, float deltaTime)
 {
 	static std::vector<Entity*> nearbyEntities;
 	static size_t lastEntityCount = 0;
@@ -55,8 +55,6 @@ int CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>>
 			deathCount += ResolveCollision(currentEntity, entityPtr);
 		}
 	}
-
-	return deathCount;
 }
 
 bool CollisionSystem::IsColliding(const Entity* entity1, const Entity* entity2) const
@@ -127,13 +125,15 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const
 		}
 		
 		// Adjust collision point to account for SFML's top-left positioning
-		// The explosion radius is 20.0f, so subtract it to get the correct top-left position
-		const float explosionRadius = 20.0f;
+		// The explosion radius is 5.0f, so subtract it to get the correct top-left position
+		const float explosionRadius = 5.0f;
 		Vec2 explosionPosition = collisionPoint - Vec2(explosionRadius, explosionRadius);
-		m_entityManager->SpawnExplosion(explosionPosition, explosionRadius, explosionVelocity, blendedColor);
+		m_entityManager->addEntity(EntityType::Explosion, explosionRadius, blendedColor, explosionPosition, explosionVelocity, 200);
 		
-		entity1->Destroy();
-		entity2->Destroy();
+		m_entityManager->KillEntity(entity1);
+		m_entityManager->KillEntity(entity2);
+		//entity1->Destroy();
+		//entity2->Destroy();
 		
 		return 2; // Two entities destroyed
 	}

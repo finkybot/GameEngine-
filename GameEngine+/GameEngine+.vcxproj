@@ -143,6 +143,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CCircle.cpp" />
+    <ClCompile Include="CExplosion.cpp" />
     <ClCompile Include="CName.cpp" />
     <ClCompile Include="CShape.cpp" />
     <ClCompile Include="CTransform.cpp" />
@@ -170,6 +171,7 @@
   <ItemGroup>
     <ClInclude Include="AssetManager.h" />
     <ClInclude Include="CCircle.h" />
+    <ClInclude Include="CExplosion.h" />
     <ClInclude Include="CName.h" />
     <ClInclude Include="Component.h" />
     <ClInclude Include="CShape.h" />

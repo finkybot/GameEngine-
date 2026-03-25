@@ -5,6 +5,10 @@
 #include <execution>
 #include <algorithm>
 #include "../Vec2.h"
+#include <SFML/Graphics/Color.hpp>
+#include <chrono>
+#include <memory>
+#include <vector>
 
 void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float windowWidth, float windowHeight)
 {
@@ -45,8 +49,8 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 	Vec2 position = shape->GetPosition();
 	float radius = entity->GetRadius();
 
-	// Despawn entities that go off the left edge of screen
-	if (position.GetX() + radius < 0.0f)
+	// Despawn entities that go off the of the screen, allowing a 100-unit buffer for them to fully exit before despawning. This prevents entities from bouncing back and forth at the edges and allows for a more natural flow of entities across the screen.
+	if (position.GetX() + radius < -101.0f || position.GetX() - radius > windowWidth + 101.0f || position.GetY() + radius < -101.0f || position.GetY() - radius > windowHeight + 101.0f)
 	{
 		entity->Destroy();
 		return;
@@ -110,3 +114,62 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 	}
 	*/
 }
+
+//void PhysicsSystem::UpdateExplosions()
+//{
+//	auto now = std::chrono::high_resolution_clock::now();
+//	std::vector<size_t> expiredExplosions;
+//
+//	for (auto& [explosionId, creationTime] : m_explosionTimes)
+//	{
+//		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - creationTime);
+//
+//		if (elapsed.count() > 600)
+//		{
+//			for (auto& entity : m_entities)
+//			{
+//				if (entity->m_id == explosionId)
+//				{
+//					entity->Destroy();
+//					break;
+//				}
+//			}
+//			expiredExplosions.push_back(explosionId);
+//		}
+//		else
+//		{
+//			float fadeProgress = static_cast<float>(elapsed.count()) / 600.0f;
+//			int newAlpha = static_cast<int>(200 * (1.0f - fadeProgress));
+//
+//			for (auto& entity : m_entities)
+//			{
+//				if (entity->m_id == explosionId)
+//				{
+//					auto shape = entity->GetComponent<CShape>();
+//					if (shape)
+//					{
+//						if (auto* circle = dynamic_cast<CCircle*>(shape))
+//						{
+//							circle->SetRadius(circle->GetRadius() + 0.5f); // Expand the explosion radius over time
+//							Vec2 explosionPosition = circle->GetPosition();
+//							circle->SetPosition(explosionPosition.x + 0.4f, explosionPosition.y - 0.5f); // Keep the explosion centered as it expands, adding a little drift for visual interest
+//							sf::Color currentColor = circle->GetColor();
+//							circle->SetColor(
+//								static_cast<float>(currentColor.r),
+//								static_cast<float>(currentColor.g),
+//								static_cast<float>(currentColor.b),
+//								newAlpha
+//							);
+//						}
+//					}
+//				}
+//			}
+//		}
+//	}
+//
+//	for (size_t explosionId : expiredExplosions)
+//	{
+//		m_explosionTimes.erase(explosionId);
+//		m_explosionColors.erase(explosionId);
+//	}
+//}

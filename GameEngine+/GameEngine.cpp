@@ -13,7 +13,6 @@ GameEngine::GameEngine()
 {
 	// Setup the SFML window
 	m_windowSize = sf::VideoMode::getDesktopMode().size;
-	//m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine");
 	m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::State::Fullscreen);
 
 	m_window.setFramerateLimit(1000);

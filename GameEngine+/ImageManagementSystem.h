@@ -11,9 +11,10 @@ class ImageManagementSystem
 {
 	// ***** Public Methods *****
 public:
-		
+
 	static sf::Image LoadImage(const std::string& filePath);														// Loads an image from the specified file path and returns it as an sf::Image object. It takes a string representing the file path of the image to load, attempts to load the image using SFML's loadFromFile method, and returns the loaded image. If loading fails, it logs an error message to the console and returns an empty sf::Image object.
-	static std::vector<sf::Texture> CreateTileMap(int x, int y, int width, int height, const sf::Image& image);	// Creates a tile map texture by slicing the provided image into smaller textures based on the specified tile dimensions. It takes the x and y coordinates of the top-left corner of the tile, the width and height of each tile, and the source image as parameters. It calculates how many tiles can fit horizontally and vertically in the source image, creates a new texture for each tile by loading a sub-rectangle of the image, and returns a vector of the created textures. If any texture creation fails, it logs an error message and returns false.
+	static std::vector<sf::Texture> CreateTileMap(int x, int y, int width, int height, const sf::Image& image);		// Creates a tile map texture by slicing the provided image into smaller textures based on the specified tile dimensions. It takes the x and y coordinates of the top-left corner of the tile, the width and height of each tile, and the source image as parameters. It calculates how many tiles can fit horizontally and vertically in the source image, creates a new texture for each tile by loading a sub-rectangle of the image, and returns a vector of the created textures. If any texture creation fails, it logs an error message and returns false.
+
 private:
 	ImageManagementSystem();	// Private constructor to prevent instantiation of this utility class, since all methods are static and it is not meant to be instantiated.
 

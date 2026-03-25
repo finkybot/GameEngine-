@@ -132,8 +132,6 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const
 		
 		m_entityManager->KillEntity(entity1);
 		m_entityManager->KillEntity(entity2);
-		//entity1->Destroy();
-		//entity2->Destroy();
 		
 		return 2; // Two entities destroyed
 	}

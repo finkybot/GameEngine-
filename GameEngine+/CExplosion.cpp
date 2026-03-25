@@ -1,3 +1,4 @@
+// CExplosion.cpp - Implementation of the CExplosion class, which represents an explosion shape in the game engine. It inherits from CShape and uses an SFML CircleShape to represent the visual aspect of the explosion. The class provides methods for setting the position, color, and radius of the explosion, as well as retrieving its properties for rendering and collision detection.
 #include "CExplosion.h"
 #include <SFML/Graphics/Color.hpp>
 #include <string>

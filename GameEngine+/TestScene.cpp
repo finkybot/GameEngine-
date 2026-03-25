@@ -1,16 +1,23 @@
+// TestScene.cpp - Implementation of the TestScene class, responsible for managing the game logic, entity updates, and rendering for a test scene in the game engine
 #include <random>
 
 #include "TestScene.h"
 #include "GameEngine.h"
 #include "EntityManager.h"
-#include <SFML/Window/Event.hpp>
-#include "Entity.h"
-#include "Vec2.h"
 
 #include "CCircle.h"
-#include "CExplosion.h"
-#include "EntityType.h"
 #include "CShape.h"
+#include "CExplosion.h"
+
+#include "Entity.h"
+#include "EntityType.h"
+#include "GameController.h" 
+
+#include "InputAction.h" 
+#include "InputController.h"
+#include "Vec2.h"
+
+#include <SFML/Window/Event.hpp>
 
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
@@ -44,13 +51,14 @@ void TestScene::Update(float /*deltaTime*/)
 	float deltaTime = frameTime.asSeconds();					// Convert the frame time to seconds for use in game logic updates, allowing for time-based movement and animations that are independent of frame rate
 	ImGui::SFML::Update(m_gameEngine.m_window, frameTime);		// Update ImGui with the current frame time, this should give us a responsive UI
 
-	// Handle events
-	while (const std::optional event = m_gameEngine.m_window.pollEvent())
+    // Handle events (SFML 3.0: pollEvent returns std::optional<sf::Event>)
+	while (auto eventOpt = m_gameEngine.m_window.pollEvent())
 	{
-		ImGui::SFML::ProcessEvent(m_gameEngine.m_window, *event);
+		ImGui::SFML::ProcessEvent(m_gameEngine.m_window, *eventOpt);
 
-		if (event->is<sf::Event::Closed>())
+		if (eventOpt->is<sf::Event::Closed>())
 		{
+			std::cout << "Window close event received. Closing the game." << std::endl;
 			m_gameEngine.m_window.close();
 		}
 	}
@@ -147,7 +155,24 @@ void TestScene::UnloadResources()
 
 void TestScene::InitializeGame(sf::Vector2u windowSize)
 {
+    ButtonAction testAction;
+	testAction.key = sf::Keyboard::Key::Escape;  // Example key
+	testAction.action = [this](uint32_t dt, InputState state) {
+		if (state) // pressed
+		{
+			std::cout << "Key pressed! Delta time: " << dt << " ms" << std::endl;
+			m_window.close(); // Close the window when the key is released
+		}
+		else
+		{
+			std::cout << "Key released!" << std::endl;
+		}
+	};
+
+	m_GameController.AddInputActionForKey(testAction);
+
 	int maxEntities = 5000; // Target entity population to maintain in the scene (it won't reach this number as to many will be murdered in collisions, but still should be a lively scene)
+	
 	// Initialize random number generator ONCE (not per entity)
 	std::random_device randDevice;
 	std::default_random_engine generator(randDevice());
@@ -263,6 +288,7 @@ void TestScene::ReportFPS(int& fpsFrames, std::chrono::steady_clock::time_point&
 
 void TestScene::UpdateExplosions()
 {
+	m_explosionCount = 0; // Reset explosion count and recalculate based on active explosions in the scene
 	auto now = std::chrono::high_resolution_clock::now();
 	std::vector<size_t> expiredExplosions;
 
@@ -277,6 +303,7 @@ void TestScene::UpdateExplosions()
 			}
 			else
 			{
+				m_explosionCount++; // Increment explosion count for active explosions that have not yet expired
 				float fadeProgress = static_cast<float>(elapsed.count()) / 600.0f;
 				int newAlpha = static_cast<int>(80 * (1.0f - fadeProgress));
 

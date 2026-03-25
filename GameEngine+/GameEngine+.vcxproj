@@ -149,6 +149,7 @@
     <ClCompile Include="CTransform.cpp" />
     <ClCompile Include="Entity.cpp" />
     <ClCompile Include="EntityManager.cpp" />
+    <ClCompile Include="GameController.cpp" />
     <ClCompile Include="GameEngine.cpp" />
     <ClCompile Include="ImageManagementSystem.cpp" />
     <ClCompile Include="imgui\backends\imgui_impl_dx9.cpp" />
@@ -159,6 +160,7 @@
     <ClCompile Include="imgui\imgui_draw.cpp" />
     <ClCompile Include="imgui\imgui_tables.cpp" />
     <ClCompile Include="imgui\imgui_widgets.cpp" />
+    <ClCompile Include="InputController.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="Systems\CollisionSystem.cpp" />
@@ -179,6 +181,7 @@
     <ClInclude Include="Entity.h" />
     <ClInclude Include="EntityManager.h" />
     <ClInclude Include="EntityType.h" />
+    <ClInclude Include="GameController.h" />
     <ClInclude Include="GameEngine.h" />
     <ClInclude Include="ImageManagementSystem.h" />
     <ClInclude Include="imgui\backends\imgui_impl_dx9.h" />
@@ -192,6 +195,8 @@
     <ClInclude Include="imgui\imstb_textedit.h" />
     <ClInclude Include="imgui\imstb_truetype.h" />
     <ClInclude Include="Includes.h" />
+    <ClInclude Include="InputAction.h" />
+    <ClInclude Include="InputController.h" />
     <ClInclude Include="QuadTree.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Scene.h" />

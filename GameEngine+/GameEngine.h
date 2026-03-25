@@ -4,6 +4,8 @@
 #include <memory>
 //#include "Scene.h"
 #include "EntityManager.h"
+#include "InputController.h"
+
 #include <map>
 #include <string>
 #include <iostream>
@@ -16,6 +18,9 @@ class GameEngine
 private:
 	GameEngine();																		// Constructor - initializes the game engine, sets up the window, and prepares for the game loop
 	~GameEngine();																		// Destructor - cleans up resources and shuts down the game engine
+
+
+	InputController	m_InputController;													// Input controller
 
 public:
 	GameEngine(const GameEngine&) = delete;												// Deleted copy constructor to prevent copying of the game engine instance

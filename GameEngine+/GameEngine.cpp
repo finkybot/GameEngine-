@@ -53,10 +53,16 @@ void GameEngine::RemoveScene(const std::string& sceneName)
 
 void GameEngine::Run()
 {
+	// Setup Event Handler.
+	bool running = true; // Create a Boolean variable to manage the engine running state
+
 	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
 	AddScene("TestScene", std::make_shared<TestScene>(*this, m_window));
 	ChangeScene("TestScene");
 	m_currentScene->InitializeGame(m_windowSize);
+	m_InputController.SetGameController(m_currentScene->GetGameController());
+
+	m_InputController.Init([&running](uint32_t deltaT, InputState state) { running = false; std::cout << "Quitting" << std::endl; }, &m_window); // The defined function will be called when we quit the game..
 
 	/* Main Loop, game logic is handled in here once per frame */
 	while (m_window.isOpen())
@@ -73,6 +79,9 @@ void GameEngine::Update(float deltaTime)
 		// Clear the window at the start of each frame
 		m_window.clear();
 
+		
+		// Update method will run  (carry out) these actions.
+		m_InputController.Update(deltaTime);
 
 		if (m_currentScene)
 		{

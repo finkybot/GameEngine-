@@ -1,9 +1,11 @@
 // ***** TestScene.h *****
 #pragma once
 #include "Scene.h"
+
 #include <SFML/Window/Event.hpp>
-#include "Systems/PhysicsSystem.h"
 #include <random>
+
+#include "Systems/PhysicsSystem.h"
 
 class TestScene : public Scene
 {

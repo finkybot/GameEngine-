@@ -12,6 +12,7 @@
 // / CExplosion component - represents an explosion shape with properties and methods for drawing, movement, and collision handling
 class CExplosion : public CShape
 {
+	// ***** Public member variables for the explosion shape *****
 public:
 	sf::CircleShape m_circle; // SFML CircleShape object representing the visual circle shape
 

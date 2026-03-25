@@ -8,6 +8,7 @@
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/VideoMode.hpp>
 #include <SFML/System/Clock.hpp>
+#include "GameEngine.h"
 
 class GameEngine;
 class EntityManager;
@@ -30,6 +31,8 @@ public:
 	virtual void UnloadResources() = 0;
 	virtual void InitializeGame(sf::Vector2u windowSize) = 0;
 
+	GameController* GetGameController() { return &m_GameController; }
+
 	// non-copyable
 	Scene(const Scene&) = delete;
 	Scene& operator=(const Scene&) = delete;
@@ -39,6 +42,8 @@ public:
 protected:
 	// Construction contract: derived scenes must initialize these references
 	Scene(GameEngine& gameEngine);
+	
+	GameController m_GameController;
 
 	// injected references (Scene does not own these)
 	GameEngine& m_gameEngine;

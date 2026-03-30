@@ -145,6 +145,7 @@
     <ClCompile Include="CCircle.cpp" />
     <ClCompile Include="CExplosion.cpp" />
     <ClCompile Include="CName.cpp" />
+    <ClCompile Include="CRectangle.cpp" />
     <ClCompile Include="CShape.cpp" />
     <ClCompile Include="CTransform.cpp" />
     <ClCompile Include="Entity.cpp" />
@@ -166,6 +167,7 @@
     <ClCompile Include="Systems\CollisionSystem.cpp" />
     <ClCompile Include="Systems\PhysicsSystem.cpp" />
     <ClCompile Include="Systems\RenderSystem.cpp" />
+    <ClCompile Include="Systems\TileSystem.cpp" />
     <ClCompile Include="TestScene.cpp" />
     <ClCompile Include="Utils.cpp" />
     <ClCompile Include="Vec2.cpp" />
@@ -177,6 +179,8 @@
     <ClInclude Include="CName.h" />
     <ClInclude Include="Component.h" />
     <ClInclude Include="CShape.h" />
+    <ClInclude Include="CStatic.h" />
+    <ClInclude Include="CTileMap.h" />
     <ClInclude Include="CTransform.h" />
     <ClInclude Include="Entity.h" />
     <ClInclude Include="EntityManager.h" />
@@ -198,12 +202,14 @@
     <ClInclude Include="InputAction.h" />
     <ClInclude Include="InputController.h" />
     <ClInclude Include="QuadTree.h" />
+    <ClInclude Include="Raycast.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="SpatialHashGrid.h" />
     <ClInclude Include="Systems\CollisionSystem.h" />
     <ClInclude Include="Systems\PhysicsSystem.h" />
     <ClInclude Include="Systems\RenderSystem.h" />
+    <ClInclude Include="Systems\TileSystem.h" />
     <ClInclude Include="TestScene.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="Vec2.h" />

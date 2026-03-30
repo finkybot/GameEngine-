@@ -57,7 +57,7 @@ void GameEngine::Run()
 	bool running = true; // Create a Boolean variable to manage the engine running state
 
 	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
-	AddScene("TestScene", std::make_shared<TestScene>(*this, m_window));
+    AddScene("TestScene", std::make_shared<TestScene>(*this, m_window)); // Adding TestScene
 	ChangeScene("TestScene");
 	m_currentScene->InitializeGame(m_windowSize);
 	m_InputController.SetGameController(m_currentScene->GetGameController());

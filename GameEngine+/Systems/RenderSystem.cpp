@@ -17,9 +17,15 @@ void RenderSystem::RenderAliveEntities(const std::vector<std::unique_ptr<Entity>
 
 void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const
 {
-	auto shape = entity->GetComponent<CShape>();
-	if (shape)
+	if (auto shape = entity->GetComponent<CShape>())
 	{
+		auto transform = entity->GetComponent<CTransform>();
+		{
+			if (transform)
+			{
+				shape->GetShape().setPosition(sf::Vector2f(transform->m_position.x, transform->m_position.y));
+			}
+		}
 		window.draw(shape->GetShape());
 	}
 }

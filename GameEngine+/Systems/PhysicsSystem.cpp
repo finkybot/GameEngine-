@@ -9,6 +9,7 @@
 #include <chrono>
 #include <memory>
 #include <vector>
+#include "../CStatic.h"
 
 void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float windowWidth, float windowHeight)
 {
@@ -19,24 +20,43 @@ void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities,
 			if (!entity->IsAlive())
 				return;
 
+			SlowEntity(entity.get(), 0.9992f); // Apply a global slow factor to simulate friction (can be adjusted or made dynamic)
 			MoveEntity(entity.get(), deltaTime, windowWidth, windowHeight);
 		});
 }
 
+void PhysicsSystem::SlowEntity(Entity* entity, float slowFactor) const
+{
+	// If entity is marked static, skip slowing
+	if (entity->HasComponent<CStatic>())
+		return;
+	// Prefer transform component as authoritative velocity source
+	auto transform = entity->GetComponent<CTransform>();
+	auto shape = entity->GetComponent<CShape>();
+	if (transform)
+	{
+		transform->m_velocity.x *= slowFactor;
+		transform->m_velocity.y *= slowFactor;
+	}
+}
+
 void PhysicsSystem::MoveEntity(Entity* entity, float deltaTime, float windowWidth, float windowHeight) const
 {
-	auto shape = entity->GetComponent<CShape>();
-	if (!shape) return;
+    // If entity is marked static, skip movement
+	if (entity->HasComponent<CStatic>())
+		return;
 
-	const Vec2& velocity = shape->GetVelocity();
-	const Vec2& position = shape->GetPosition();
-	
-	// Update position based on velocity
-	shape->SetPosition(
-		position.GetX() + velocity.GetX() * deltaTime,
-		position.GetY() + velocity.GetY() * deltaTime
-	);
-	
+	// Prefer transform component as authoritative position/velocity source
+	auto transform = entity->GetComponent<CTransform>();
+	auto shape = entity->GetComponent<CShape>();
+
+	if (transform)
+	{
+		// Update transform position
+		transform->m_position.x += transform->m_velocity.x * deltaTime;
+		transform->m_position.y += transform->m_velocity.y * deltaTime;
+	}
+
 	// Handle boundary collisions
 	HandleBoundaryCollision(entity, windowWidth, windowHeight);
 }
@@ -46,7 +66,10 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 	auto shape = entity->GetComponent<CShape>();
 	if (!shape) return;
 
-	Vec2 position = shape->GetPosition();
+	auto transform = entity->GetComponent<CTransform>();
+	if (!transform) return;
+
+	Vec2 position = transform->m_position;
 	float radius = entity->GetRadius();
 
 	// Despawn entities that go off the of the screen, allowing a 100-unit buffer for them to fully exit before despawning. This prevents entities from bouncing back and forth at the edges and allows for a more natural flow of entities across the screen.
@@ -55,6 +78,9 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 		entity->Destroy();
 		return;
 	}
+
+
+
 
 
 

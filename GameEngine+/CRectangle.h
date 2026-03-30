@@ -14,26 +14,24 @@ class CRectangle : public CShape
 {
     sf::RectangleShape m_rectangle;
 protected:
-    void ApplyPosition(float x, float y) override { m_rectangle.setPosition(sf::Vector2f(x, y)); }
+    void ApplyPosition(float x, float y) override;
 public:
     CRectangle();
     CRectangle(float x, float y);
 
-    void DrawShape(sf::RenderWindow& window) override;
-    // boundary checks removed from shapes; handled by PhysicsSystem
-    void SetTextPosition(float fontOffset) override;
-    void MoveShape(float deltaTime = 1.0f / 60.0f) override; // custom to use current velocity
-    void SetColor(float r, float g, float b);
-    void SetRadius(float radius) override { m_rectangle.setSize(sf::Vector2f(radius,radius)); }
+    Vec2 GetCentrePoint() const override;
 
-    Vec2 GetCentrePoint() const override { 
-        return Vec2(m_rectangle.getPosition().x + m_rectangle.getSize().x * 0.5f,
-                    m_rectangle.getPosition().y + m_rectangle.getSize().y * 0.5f); 
-    }
-    float GetWidth() const override { return m_rectangle.getSize().x; }
     float GetHeight() const override { return m_rectangle.getSize().y; }
     float GetMidLength() const override { return m_midLength; }
     float GetRadius() const override { return m_rectangle.getSize().x; }
+    float GetWidth() const override { return m_rectangle.getSize().x; }
+
+    sf::Color GetColor() const { return m_rectangle.getFillColor(); }          // Get the current fill color of the rectangle shape as an SFML Color object
+    sf::Shape& GetShape()  override { return m_rectangle; }					// Get a reference to the underlying SFML shape (used for drawing and collision detection)
+
+    void SetColor(float r, float g, float b, int alpha);                    // Set the fill color of the circle shape using RGBA values (alpha is an integer in the range [0, 255])
+    void SetRadius(float radius) override { m_rectangle.setSize(sf::Vector2f(radius, radius)); }
+
 };
 
 

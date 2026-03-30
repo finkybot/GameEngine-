@@ -14,26 +14,21 @@ CRectangle::CRectangle(float x, float y)
 	m_midLength = ((x >= y) ? x : y) + 1.f;
 }
 
-void CRectangle::DrawShape(sf::RenderWindow& window)
-{
-	window.draw(m_rectangle);
-}
-
 // Includer removed; boundary handling moved to PhysicsSystem
 
-void CRectangle::SetTextPosition(float fontOffset)
-{
-}
-
-void CRectangle::MoveShape(float deltaTime)
-{
-	ApplyPosition(m_rectangle.getPosition().x + m_velocity.x * deltaTime,
-				  m_rectangle.getPosition().y + m_velocity.y * deltaTime);
-	m_position.x = m_rectangle.getPosition().x;
-	m_position.y = m_rectangle.getPosition().y;
-}
-
-void CRectangle::SetColor(float r, float g, float b)
+void CRectangle::SetColor(float r, float g, float b, int alpha)
 {
 	m_rectangle.setFillColor(sf::Color(static_cast<int>(r), static_cast<int>(g), static_cast<int>(b)));
 }
+
+void CRectangle::ApplyPosition(float x, float y)
+{
+	m_rectangle.setPosition(sf::Vector2f(x, y));
+}
+
+Vec2 CRectangle::GetCentrePoint() const
+{
+	return Vec2(m_rectangle.getPosition().x + m_rectangle.getSize().x * 0.5f,
+				m_rectangle.getPosition().y + m_rectangle.getSize().y * 0.5f);
+}
+

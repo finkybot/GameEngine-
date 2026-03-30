@@ -14,9 +14,31 @@
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/Color.hpp>
+#include "CRectangle.h"
+#include "CStatic.h"
+#include "Systems/TileSystem.h"
 
 // Constructor - takes reference to SFML render window for drawing and FPS reporting
-EntityManager::EntityManager(sf::RenderWindow& window): m_window(window),  m_collisionSystem(this) {}
+EntityManager::EntityManager(sf::RenderWindow& window, float cellSize)
+	: m_window(window)
+	, m_spatialHash(cellSize)
+	, m_collisionSystem(this)
+{
+    // initialize systems that need the entity manager pointer
+	m_tileSystem = std::make_unique<TileSystem>(this);
+}
+
+Entity* EntityManager::CreateTileMapEntity(const TileMap& map)
+{
+	Entity* e = addEntity(EntityType::TileMap);
+	if (!e) return nullptr;
+
+	// Attach the tilemap component which TileSystem will process on next Update
+	e->AddComponent<CTileMap>(TileMap(map.width, map.height, map.tileSize));
+	// copy tiles
+	e->GetComponent<CTileMap>()->map.tiles = map.tiles;
+	return e;
+}
 
 
 void EntityManager::AddPendingEntities()
@@ -32,6 +54,7 @@ void EntityManager::AddPendingEntities()
 	}
 	m_toAdd.clear();
 }
+
 
 void EntityManager::RemoveDeadEntities()
 {
@@ -67,6 +90,70 @@ void EntityManager::RemoveDeadEntities()
 	m_entities.erase(end, m_entities.end());
 }
 
+void EntityManager::AddTileMapAsEntities(const TileMap& map, int tileValueToTreatAsSolid)
+{
+	if (map.width <= 0 || map.height <= 0) return;
+    // Ensure spatial hash cell size matches tile size for optimal alignment and query accuracy
+	// Recreate the spatial hash with the tile size so tiles map 1:1 to cells when possible
+	m_spatialHash = SpatialHashGrid<Entity>(map.tileSize);
+	
+	// 2D greedy rectangle merging: create maximal rectangles of contiguous solid tiles	
+	std::vector<char> used(map.width * map.height, 0);
+	for (int y = 0; y < map.height; ++y)
+	{
+		for (int x = 0; x < map.width; ++x)
+		{
+			int idx = y * map.width + x;
+			if (used[idx]) continue;
+			if (!map.IsSolid(x, y)) continue;
+
+			// determine maximal width
+			int w = 1;
+			while (x + w < map.width && map.IsSolid(x + w, y) && !used[y * map.width + (x + w)]) ++w;
+
+			// determine maximal height we can extend where every row has the same solid run
+			int h = 1;
+			bool canExtend = true;
+			while (y + h < map.height && canExtend)
+			{
+				for (int xi = 0; xi < w; ++xi)
+				{
+					if (!map.IsSolid(x + xi, y + h) || used[(y + h) * map.width + (x + xi)])
+					{
+						canExtend = false;
+						break;
+					}
+				}
+				if (canExtend) ++h;
+			}
+
+			// mark used
+			for (int yy = 0; yy < h; ++yy)
+				for (int xx = 0; xx < w; ++xx)
+					used[(y + yy) * map.width + (x + xx)] = 1;
+
+			float tileW = map.tileSize * w;
+			float tileH = map.tileSize * h;
+			float posX = x * map.tileSize;
+			float posY = y * map.tileSize;
+
+            Entity* e = addEntity(EntityType::TileMap);
+            if (e)
+			{
+				// When creating tile entities through AddTileMapAsEntities we mark them as static colliders.
+				e->AddComponent<CTransform>(Vec2(posX, posY), Vec2(0.0f, 0.0f));
+				auto rect = std::make_unique<CRectangle>(tileW, tileH);
+				rect->SetColor(160.0f, 160.0f, 160.0f, 200);
+				e->AddComponentPtr<CShape>(std::move(rect));
+				e->AddComponent<CStatic>();
+			}
+		}
+	}
+}
+
+		
+
+
 void EntityManager::UpdateSpatialHashAndRender()
 {
 	// Rebuild spatial hash every frame (very fast)
@@ -88,52 +175,63 @@ void EntityManager::Update(float deltaTime)
 	AddPendingEntities();
 	RemoveDeadEntities();
 
+    // Process tilemaps into tile entities before rebuilding spatial hash
+	if (m_tileSystem)
+	{
+		// TileSystem implementation is in Systems/TileSystem.cpp — include header here to call
+		m_tileSystem->Process();
+	}
+
 	UpdateSpatialHashAndRender();
 }
 
 Entity* EntityManager::addEntity(EntityType type)
 {
 	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++));
+	entity->m_creationTime = std::chrono::high_resolution_clock::now(); // Track creation time for entity (currently used for explosions but could be useful for other time-based logic in the future)
+    // Ensure new entities have a transform so systems can rely on it
+	entity->AddComponent<CTransform>(Vec2::Zero, Vec2::Zero);
 	Entity* entityPtr = entity.get();  // Capture pointer BEFORE moving
 	m_toAdd.push_back(std::move(entity));
 	
 	return entityPtr;
 }
 
-Entity* EntityManager::addEntity(EntityType type, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha)
-{
-	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++));
-	entity->m_creationTime = std::chrono::high_resolution_clock::now(); // Track creation time for entity (currently used for explosions but could be useful for other time-based logic in the future)
-
-	entity->AddComponent<CTransform>(position, velocity);
-	entity->AddComponent<CName>();
-
-	if (EntityType::Explosion == type)
-	{
-		auto explosion = std::make_unique<CExplosion>();
-		explosion->SetRadius(radius);
-		explosion->SetColor(color.x, color.y, color.z, alpha);
-		explosion->SetPosition(position.x, position.y);
-		explosion->SetVelocity(velocity.x, velocity.y);
-		entity->AddComponentPtr<CShape>(std::move(explosion));
-	}
-	else
-	{
-		auto circle = std::make_unique<CCircle>();
-		circle->SetRadius(radius);
-		circle->SetColor(color.x, color.y, color.z, alpha);
-		circle->SetPosition(position.x, position.y);
-		circle->SetVelocity(velocity.x, velocity.y);
-		circle->SetVelocity(velocity.x, velocity.y);
-		entity->AddComponentPtr<CShape>(std::move(circle));
-	}
-
-
-	Entity* entityPtr = entity.get();
-	m_toAdd.push_back(std::move(entity));
-
-	return entityPtr;
-}
+// Set for Depreation - use the more flexible addEntity that takes a unique_ptr to an existing entity instance instead, which allows for more complex entity creation logic (e.g. creating an entity with specific components before adding it to the manager).
+//Entity* EntityManager::addEntity(EntityType type, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha)
+//{
+//	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++));
+//	entity->m_creationTime = std::chrono::high_resolution_clock::now(); // Track creation time for entity (currently used for explosions but could be useful for other time-based logic in the future)
+//
+//	entity->AddComponent<CTransform>(position, velocity);
+//	entity->AddComponent<CName>();
+//
+//	if (EntityType::Explosion == type)
+//	{
+//		auto explosion = std::make_unique<CExplosion>();
+//		explosion->SetRadius(radius);
+//		explosion->SetColor(color.x, color.y, color.z, alpha);
+//		explosion->SetPosition(position.x, position.y);
+//		explosion->SetVelocity(velocity.x, velocity.y);
+//		entity->AddComponentPtr<CShape>(std::move(explosion));
+//	}
+//	else
+//	{
+//		auto circle = std::make_unique<CCircle>();
+//		circle->SetRadius(radius);
+//		circle->SetColor(color.x, color.y, color.z, alpha);
+//		circle->SetPosition(position.x, position.y);
+//		circle->SetVelocity(velocity.x, velocity.y);
+//		circle->SetVelocity(velocity.x, velocity.y);
+//		entity->AddComponentPtr<CShape>(std::move(circle));
+//	}
+//
+//
+//	Entity* entityPtr = entity.get();
+//	m_toAdd.push_back(std::move(entity));
+//
+//	return entityPtr;
+//}
 
 void EntityManager::KillEntity(Entity* entity)
 {
@@ -149,6 +247,11 @@ EntityVector& EntityManager::getEntities()
 std::vector<Entity*>& EntityManager::getEntities(EntityType type)
 {
 	return m_entityMap[type];
+}
+
+SpatialHashGrid<Entity>& EntityManager::GetSpatialHash()
+{
+	return m_spatialHash;
 }
 
 

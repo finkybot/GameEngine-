@@ -17,6 +17,8 @@ public:
 	// Updates the positions of all entities based on their velocities and handles boundary collisions. It iterates through the list of entities, moves each entity according to its velocity and the elapsed time (deltaTime), and checks for collisions with the window boundaries to apply rebounding effects.
 	void Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float windowWidth, float windowHeight);
 
+	void SlowEntity(Entity* entity, float slowFactor) const; // Applies a slowing effect to the entity by multiplying its velocity by the specified slow factor (a value between 0 and 1). This method reduces the entity's speed, simulating effects like friction or slowing zones in the game.
+
 	// ****** Private Methods *****
 private:
 	// Moves a single entity based on its velocity and the elapsed time (deltaTime). It updates the entity's position by adding the product of its velocity and deltaTime to its current position.

@@ -3,8 +3,10 @@
 #include "../Entity.h"
 #include "../CShape.h"
 #include "../CCircle.h"
+#include "../CExplosion.h"
 #include "../EntityType.h"
 #include "../EntityManager.h"
+#include "../CStatic.h"
 #include <algorithm>
 #include <cmath>
 
@@ -30,6 +32,10 @@ void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>
 
 		// Skip collision detection for explosions - they're visual effects only
 		if (currentEntity->GetType() == EntityType::Explosion)
+			continue;
+
+        // Skip static tiles as they are handled separately and do not move
+		if (currentEntity->HasComponent<CStatic>())
 			continue;
 
 		const Vec2& position = currentEntity->GetPosition();
@@ -78,13 +84,18 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const
 	// Check if entities are enemies (different tags) or allies (same tag)
 	if (AreEnemies(entity1, entity2))
 	{
-		auto shape1 = entity1->GetComponent<CShape>();
+        auto shape1 = entity1->GetComponent<CShape>();
 		auto shape2 = entity2->GetComponent<CShape>();
 		if (!shape1 || !shape2) return 0;
 
 		// Spawn explosion at collision point
-		Vec2 currentVel = shape1->m_velocity;
-		Vec2 otherVel = shape2->m_velocity;
+		// Prefer velocities from CTransform when available
+		Vec2 currentVel = Vec2::Zero;
+		Vec2 otherVel = Vec2::Zero;
+		if (auto t1 = entity1->GetComponent<CTransform>()) currentVel = t1->m_velocity;
+		//else currentVel = shape1->m_velocity;
+		if (auto t2 = entity2->GetComponent<CTransform>()) otherVel = t2->m_velocity;
+		//else otherVel = shape2->m_velocity;
 		
 		float currentSpeed = std::sqrt(currentVel.x * currentVel.x + currentVel.y * currentVel.y);
 		float otherSpeed = std::sqrt(otherVel.x * otherVel.x + otherVel.y * otherVel.y);
@@ -128,8 +139,22 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const
 		// The explosion radius is 5.0f, so subtract it to get the correct top-left position
 		const float explosionRadius = 5.0f;
 		Vec2 explosionPosition = collisionPoint - Vec2(explosionRadius, explosionRadius);
-		m_entityManager->addEntity(EntityType::Explosion, explosionRadius, blendedColor, explosionPosition, explosionVelocity, 200);
+		//m_entityManager->addEntity(EntityType::Explosion, explosionRadius, blendedColor, explosionPosition, explosionVelocity, 200);
 		
+        Entity* en = m_entityManager->addEntity(EntityType::Explosion);
+
+		// Set transform for explosion so UpdateExplosions can use creation time and transform
+		en->AddComponent<CTransform>(explosionPosition, explosionVelocity);
+
+		auto explosion = std::make_unique<CExplosion>();
+		explosion->SetRadius(explosionRadius);
+		explosion->SetColor(blendedColor.x, blendedColor.y, blendedColor.z, 200);
+		//explosion->SetPosition(explosionPosition.x, explosionPosition.y);
+		//explosion->SetVelocity(explosionVelocity.x, explosionVelocity.y);
+
+		en->AddComponentPtr<CShape>(std::move(explosion));
+
+
 		m_entityManager->KillEntity(entity1);
 		m_entityManager->KillEntity(entity2);
 		
@@ -162,7 +187,7 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const
 	Vec2 unitNorm = distanceVec / scalerDist;
 
 	// Relative velocity
-	Vec2 relVel = shape2->GetVelocity() - shape1->GetVelocity();
+	Vec2 relVel = entity1->GetComponent<CTransform>()->m_velocity - entity2->GetComponent<CTransform>()->m_velocity;
 
 	// Velocity along the normal
 	float velAlongNormal = relVel.x * unitNorm.x + relVel.y * unitNorm.y;
@@ -179,12 +204,12 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const
 	impulse /= 2; // Assuming equal mass for both circles
 	
 	// Apply impulse to the circles' velocities
-	Vec2 vel1 = shape1->GetVelocity();
-	Vec2 vel2 = shape2->GetVelocity();
+	Vec2 vel1 = entity1->GetComponent<CTransform>()->m_velocity;
+	Vec2 vel2 = entity2->GetComponent<CTransform>()->m_velocity;
 	
 	// Update velocities based on impulse and collision normal
-	shape1->SetVelocity(vel1.x - impulse * unitNorm.x, vel1.y - impulse * unitNorm.y);
-	shape2->SetVelocity(vel2.x + impulse * unitNorm.x, vel2.y + impulse * unitNorm.y);
+	entity1->GetComponent<CTransform>()->m_velocity = Vec2(vel1.x - impulse * unitNorm.x, vel1.y - impulse * unitNorm.y);
+	entity2->GetComponent<CTransform>()->m_velocity = Vec2(vel2.x + impulse * unitNorm.x, vel2.y + impulse * unitNorm.y);
 
 	// Positional correction to avoid sinking
 	float overlap = (entity1->GetRadius() + entity2->GetRadius()) - scalerDist;
@@ -194,11 +219,11 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const
 		const float slop = 0.01f; // usually 0.01 to 0.1
 		float correction = std::max(overlap - slop, 0.0f) / 2 * percent;
 		
-		Vec2 pos1 = shape1->GetPosition();
-		Vec2 pos2 = shape2->GetPosition();
+		Vec2 pos1 = entity1->GetComponent<CTransform>()->m_position;
+		Vec2 pos2 = entity2->GetComponent<CTransform>()->m_position;
 		
-		shape1->SetPosition(pos1.x - correction * unitNorm.x, pos1.y - correction * unitNorm.y);
-		shape2->SetPosition(pos2.x + correction * unitNorm.x, pos2.y + correction * unitNorm.y);
+		entity1->GetComponent<CTransform>()->m_position = Vec2(pos1.x - correction * unitNorm.x, pos1.y - correction * unitNorm.y);
+		entity2->GetComponent<CTransform>()->m_position = Vec2(pos2.x + correction * unitNorm.x, pos2.y + correction * unitNorm.y);
 	}
 }
 

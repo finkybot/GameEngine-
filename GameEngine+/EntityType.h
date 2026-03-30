@@ -10,7 +10,10 @@ enum class EntityType
 	TeamRocket = 3,
 	TeamMonkey = 4,
 	Explosion = 5,
-	Default = 6
+ TileMap = 6,
+	Tile = 7,
+
+	Default = 8		
 };
 
 // Utility function to convert EntityType enum values to human-readable strings for debugging and logging purposes.
@@ -24,6 +27,7 @@ inline const char* EntityTypeToString(EntityType type)
 		case EntityType::TeamRocket: return "TeamRocket";
 		case EntityType::TeamMonkey: return "TeamMonkey";
 		case EntityType::Explosion: return "Explosion";
+		case EntityType::Tile: return "Tile";
 		case EntityType::Default: return "Default";
 		default: return "Unknown";
 	}

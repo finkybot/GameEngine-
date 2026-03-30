@@ -129,10 +129,11 @@ public:
 	}
 	
 	// Get the position of the entity (delegates to CShape component)
-	inline const Vec2& GetPosition() const noexcept 
+    inline const Vec2& GetPosition() const noexcept 
 	{ 
-		auto shape = GetComponent<CShape>();
-		return shape ? shape->m_position : Vec2::Zero;
+		// Prefer transform component as authoritative position when present
+		auto transform = GetComponent<CTransform>();
+		if (transform) return transform->m_position;
 	}
 	
 	// Get the radius of the entity (delegates to CShape component)

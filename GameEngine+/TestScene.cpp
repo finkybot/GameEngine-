@@ -18,6 +18,7 @@
 #include "Vec2.h"
 
 #include <SFML/Window/Event.hpp>
+#include <SFML/System/Vector2.hpp>
 
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
@@ -25,7 +26,7 @@
 
 TestScene::TestScene(GameEngine& engine, sf::RenderWindow& win) : m_window(win), Scene(engine)
 {
-	EntityManager* entityManager = new EntityManager(win); // Create a new EntityManager instance for this scene, passing the window reference for rendering purposes
+    EntityManager* entityManager = new EntityManager(win, 32.0f); // Create a new EntityManager instance for this scene, passing the window reference for rendering purposes and tile-sized spatial hash
 	m_entityManager = entityManager;
 
 	// Initialize ImGui with SFML backend
@@ -232,7 +233,29 @@ void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 colo
 	const EntityType teamTypes[] = { EntityType::TeamEagle, EntityType::TeamHawk, EntityType::TeamBoogaloo, EntityType::TeamRocket, EntityType::TeamMonkey };
 	EntityType type = (teamType < 5) ? teamTypes[teamType] : EntityType::TeamMonkey;
 
-	Entity* en = m_entityManager->addEntity(type, radius, color, position, velocity, alpha);
+	Entity* en = m_entityManager->addEntity(type);
+
+	en->AddComponent<CTransform>(position, velocity);
+	en->AddComponent<CName>();
+
+    // Use CTransform's public members (position / velocity)
+    en->GetComponent<CTransform>()->m_position = Vec2(position.x + 0.4f, position.y - 0.5f);
+	en->GetComponent<CTransform>()->m_velocity = Vec2(velocity.x, velocity.y);
+
+	if (EntityType::Explosion == type)
+	{
+		auto explosion = std::make_unique<CExplosion>();
+		explosion->SetRadius(radius);
+		explosion->SetColor(color.x, color.y, color.z, alpha);
+		en->AddComponentPtr<CShape>(std::move(explosion));
+	}
+	else
+	{
+		auto circle = std::make_unique<CCircle>();
+		circle->SetRadius(radius);
+		circle->SetColor(color.x, color.y, color.z, alpha);
+		en->AddComponentPtr<CShape>(std::move(circle));
+	}
 }
 
 // Renders the ImGui window displaying game information and performance metrics. It takes the current entity count, death count for the current frame, and active explosion count as parameters to display in the UI. 
@@ -297,14 +320,14 @@ void TestScene::UpdateExplosions()
 		if (entity->GetType() == EntityType::Explosion)
 		{
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->m_creationTime);
-			if (elapsed.count() > 600)
+			if (elapsed.count() > 2900)
 			{
 				entity->Destroy();
 			}
 			else
 			{
 				m_explosionCount++; // Increment explosion count for active explosions that have not yet expired
-				float fadeProgress = static_cast<float>(elapsed.count()) / 600.0f;
+				float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
 				int newAlpha = static_cast<int>(80 * (1.0f - fadeProgress));
 
 				auto shape = entity->GetComponent<CShape>();
@@ -312,9 +335,12 @@ void TestScene::UpdateExplosions()
 				{
 					if (auto* explosion = dynamic_cast<CExplosion*>(shape))
 					{
-						explosion->SetRadius(explosion->GetRadius() + 0.5f); // Expand the explosion radius over time
-						Vec2 explosionPosition = explosion->GetPosition();
-						explosion->SetPosition(explosionPosition.x + 0.4f, explosionPosition.y - 0.5f); // Keep the explosion centered as it expands, adding a little drift for visual interest
+						float xpos = entity->GetComponent<CTransform>()->m_position.x;
+						float radiusDifference = explosion->GetRadius();
+						explosion->SetRadius(explosion->GetRadius() * 1.004f); // Expand the explosion radius over time
+						radiusDifference = explosion->GetRadius() - radiusDifference; // Calculate the change in radius to adjust position for consistent center
+                        Vec2 explosionPosition = entity->GetComponent<CTransform>()->m_position;
+						entity->GetComponent<CTransform>()->m_position = Vec2(explosionPosition.x - radiusDifference, explosionPosition.y - radiusDifference); // Adjust the explosion's position to keep it centered as it expands, since SFML circles expand downwards and to the right from their position
 						sf::Color currentColor = explosion->GetColor();
 						explosion->SetColor(
 							static_cast<float>(currentColor.r),

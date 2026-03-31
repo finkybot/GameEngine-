@@ -37,6 +37,8 @@ Entity* EntityManager::CreateTileMapEntity(const TileMap& map)
 	e->AddComponent<CTileMap>(TileMap(map.width, map.height, map.tileSize));
 	// copy tiles
 	e->GetComponent<CTileMap>()->map.tiles = map.tiles;
+    // mark manager flag so TileSystem will be processed on next update
+	m_hasPendingTileMaps = true;
 	return e;
 }
 
@@ -151,9 +153,6 @@ void EntityManager::AddTileMapAsEntities(const TileMap& map, int tileValueToTrea
 	}
 }
 
-		
-
-
 void EntityManager::UpdateSpatialHashAndRender()
 {
 	// Rebuild spatial hash every frame (very fast)
@@ -176,10 +175,10 @@ void EntityManager::Update(float deltaTime)
 	RemoveDeadEntities();
 
     // Process tilemaps into tile entities before rebuilding spatial hash
-	if (m_tileSystem)
+    if (m_tileSystem && m_hasPendingTileMaps)
 	{
-		// TileSystem implementation is in Systems/TileSystem.cpp — include header here to call
-		m_tileSystem->Process();
+		m_tileSystem->Process(); // Process pending tilemaps
+		m_hasPendingTileMaps = false;
 	}
 
 	UpdateSpatialHashAndRender();
@@ -196,42 +195,6 @@ Entity* EntityManager::addEntity(EntityType type)
 	
 	return entityPtr;
 }
-
-// Set for Depreation - use the more flexible addEntity that takes a unique_ptr to an existing entity instance instead, which allows for more complex entity creation logic (e.g. creating an entity with specific components before adding it to the manager).
-//Entity* EntityManager::addEntity(EntityType type, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha)
-//{
-//	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++));
-//	entity->m_creationTime = std::chrono::high_resolution_clock::now(); // Track creation time for entity (currently used for explosions but could be useful for other time-based logic in the future)
-//
-//	entity->AddComponent<CTransform>(position, velocity);
-//	entity->AddComponent<CName>();
-//
-//	if (EntityType::Explosion == type)
-//	{
-//		auto explosion = std::make_unique<CExplosion>();
-//		explosion->SetRadius(radius);
-//		explosion->SetColor(color.x, color.y, color.z, alpha);
-//		explosion->SetPosition(position.x, position.y);
-//		explosion->SetVelocity(velocity.x, velocity.y);
-//		entity->AddComponentPtr<CShape>(std::move(explosion));
-//	}
-//	else
-//	{
-//		auto circle = std::make_unique<CCircle>();
-//		circle->SetRadius(radius);
-//		circle->SetColor(color.x, color.y, color.z, alpha);
-//		circle->SetPosition(position.x, position.y);
-//		circle->SetVelocity(velocity.x, velocity.y);
-//		circle->SetVelocity(velocity.x, velocity.y);
-//		entity->AddComponentPtr<CShape>(std::move(circle));
-//	}
-//
-//
-//	Entity* entityPtr = entity.get();
-//	m_toAdd.push_back(std::move(entity));
-//
-//	return entityPtr;
-//}
 
 void EntityManager::KillEntity(Entity* entity)
 {

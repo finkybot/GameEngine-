@@ -57,12 +57,13 @@ void TestScene::Update(float /*deltaTime*/)
 	{
 		ImGui::SFML::ProcessEvent(m_gameEngine.m_window, *eventOpt);
 
-		if (eventOpt->is<sf::Event::Closed>())
-		{
-			std::cout << "Window close event received. Closing the game." << std::endl;
-			m_gameEngine.m_window.close();
-		}
+		//if (eventOpt->is<sf::Event::Closed>())
+		//{
+		//	std::cout << "Window close event received. Closing the game." << std::endl;
+		//	m_gameEngine.m_window.close();
+		//}
 	}
+
 
 	// scene update logic
 	// Dynamic population control: maintain entities by spawning to replace dead ones
@@ -158,7 +159,8 @@ void TestScene::InitializeGame(sf::Vector2u windowSize)
 {
     ButtonAction testAction;
 	testAction.key = sf::Keyboard::Key::Escape;  // Example key
-	testAction.action = [this](uint32_t dt, InputState state) {
+	testAction.action = [this](uint32_t dt, InputState state) 
+	{
 		if (state) // pressed
 		{
 			std::cout << "Key pressed! Delta time: " << dt << " ms" << std::endl;
@@ -180,19 +182,19 @@ void TestScene::InitializeGame(sf::Vector2u windowSize)
 
 
 	// Initialize random number generator once (not every frame)
-	m_generator = std::default_random_engine(randDevice());									// Random entity colours, in the brighter colour range
-	m_xVelocity = std::uniform_int_distribution<int>(-420, -60);							// Faster movement speed
-	m_yVelocity = std::uniform_int_distribution<int>(-150, 150);							// Faster movement speed
-	m_xDistro = std::uniform_int_distribution<int>(20, m_gameEngine.m_windowSize.x - 20);	// Spawn within screen bounds, leaving a 20-pixel margin on the left and a 5-pixel margin on the right to prevent immediate off-screen spawning
-	m_yDistro = std::uniform_int_distribution<int>(20, m_gameEngine.m_windowSize.y - 20);	// Spawn within screen bounds, leaving a 20-pixel margin on the top and a 5-pixel margin on the bottom to prevent immediate off-screen spawning
-	m_redVal = std::uniform_int_distribution<int>(100, 255);								// Brighter reds
-	m_greenVal = std::uniform_int_distribution<int>(100, 255);								// Brighter greens
-	m_blueVal = std::uniform_int_distribution<int>(100, 255);								// Brighter blues
-	m_alphaVal = std::uniform_int_distribution<int>(150, 255);								// More opaque
-	m_radiusDistro = std::uniform_real_distribution<float>(1.5f, 2.0f);						// Slightly larger radius for better visibility
-	m_entityType = std::uniform_int_distribution<int>(0, 4);								// 5 team types
-	m_spawnZone = std::uniform_int_distribution<int>(0, 3);									// 4 quadrants
-	m_direction = std::uniform_int_distribution<int>(0, 1);									// 2 movement directions: leftward or rightward
+	m_generator		= std::default_random_engine(randDevice());									// Random entity colours, in the brighter colour range
+	m_xVelocity		= std::uniform_int_distribution<int>(-420, -60);							// Faster movement speed
+	m_yVelocity		= std::uniform_int_distribution<int>(-150, 150);							// Faster movement speed
+	m_xDistro		= std::uniform_int_distribution<int>(20, m_gameEngine.m_windowSize.x - 20);	// Spawn within screen bounds, leaving a 20-pixel margin on the left and a 5-pixel margin on the right to prevent immediate off-screen spawning
+	m_yDistro		= std::uniform_int_distribution<int>(20, m_gameEngine.m_windowSize.y - 20);	// Spawn within screen bounds, leaving a 20-pixel margin on the top and a 5-pixel margin on the bottom to prevent immediate off-screen spawning
+	m_redVal		= std::uniform_int_distribution<int>(100, 255);								// Brighter reds
+	m_greenVal		= std::uniform_int_distribution<int>(100, 255);								// Brighter greens
+	m_blueVal		= std::uniform_int_distribution<int>(100, 255);								// Brighter blues
+	m_alphaVal		= std::uniform_int_distribution<int>(150, 255);								// More opaque
+	m_radiusDistro	= std::uniform_real_distribution<float>(1.5f, 2.0f);						// Slightly larger radius for better visibility
+	m_entityType	= std::uniform_int_distribution<int>(0, 4);									// 5 team types
+	m_spawnZone		= std::uniform_int_distribution<int>(0, 3);									// 4 quadrants
+	m_direction		= std::uniform_int_distribution<int>(0, 1);									// 2 movement directions: leftward or rightward
 
 	for (int i = 0; i < maxEntities; ++i)
 	{
@@ -208,6 +210,7 @@ void TestScene::InitializeGame(sf::Vector2u windowSize)
 		int g = m_greenVal(generator);
 		int b = m_blueVal(generator);
 		int a = m_alphaVal(generator);
+		
 		float radius = m_radiusDistro(generator);
 		int direction = m_direction(generator); 
 

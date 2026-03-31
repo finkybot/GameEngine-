@@ -10,8 +10,9 @@ void TileSystem::Process()
         Entity* e = up.get();
         if (!e->IsAlive()) continue;
         auto tileComp = e->GetComponent<CTileMap>();
-        if (!tileComp) continue;
-        if (tileComp->m_processed) continue;
+        if (!tileComp) continue; // Skip entities that don't have a CTileMap component
+        // Skip tilemaps that have already been processed into tile entities unless marked dirty
+        if (tileComp->m_processed && !tileComp->m_dirty) continue;
 
         // Ensure spatial hash aligns with tile size
         m_entityManager->GetSpatialHash() = SpatialHashGrid<Entity>(tileComp->GetTileSize());
@@ -24,8 +25,8 @@ void TileSystem::Process()
             for (int x = 0; x < map.width; ++x)
             {
                 int idx = y * map.width + x;
-                if (used[idx]) continue;
-                if (!map.IsSolid(x, y)) continue;
+				if (used[idx]) continue; // Skip tiles that have already been merged into a rectangle
+				if (!map.IsSolid(x, y)) continue; // Skip non-solid tiles
 
                 int w = 1;
                 while (x + w < map.width && map.IsSolid(x + w, y) && !used[y * map.width + (x + w)]) ++w;
@@ -67,5 +68,6 @@ void TileSystem::Process()
         }
 
         tileComp->m_processed = true;
+        tileComp->m_dirty = false;
     }
 }

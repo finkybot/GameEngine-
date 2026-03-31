@@ -56,5 +56,5 @@ private:
 	std::uniform_real_distribution<float> m_radiusDistro;	// random radius between 1.5 and 2.0 for more visible entities
 	std::uniform_int_distribution<int> m_entityType;		// entity type (0-4) for team assignment
 	std::uniform_int_distribution<int> m_spawnZone;			// spawn zone (0-3) for more even distribution of entities across the screen, preventing clustering in one area
-	std::uniform_int_distribution<int> m_direction;				// direction (0-1) for left or right movement,
+	std::uniform_int_distribution<int> m_direction;			// direction (0-1) for left or right movement,
 };	

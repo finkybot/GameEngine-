@@ -24,7 +24,7 @@ void InputController::Update(uint32_t deltaT)
 		{
 			if (m_Quit) // Add null check
 			{
-				//mQuit(deltaT, 1); // 1 for pressed state
+				m_Quit(deltaT, 1); // 1 for pressed state
 			}
 		}
 		
@@ -56,7 +56,8 @@ void InputController::Update(uint32_t deltaT)
 				
 				if (action)
 				{
-					//action(1, position); // 1 for pressed state
+					InputState state = 1; // 1 for pressed state
+					action(state, position); // 1 for pressed state
 				}
 			}
 		}
@@ -74,7 +75,8 @@ void InputController::Update(uint32_t deltaT)
 				
 				if (action)
 				{
-					//action(0, position); // 0 for released state
+					InputState state = 0; // 0 for released state
+					action(state, position); // 0 for released state
 				}
 			}
 		}
@@ -102,7 +104,7 @@ void InputController::Update(uint32_t deltaT)
 				InputAction action = m_CurrentController->GetActionForKey(static_cast<InputKey>(keyReleased->code));
 				if (action)
 				{
-					//action(deltaT, 0); // 0 for released state
+					action(deltaT, 0); // 0 for released state
 				}
 			}
 		}

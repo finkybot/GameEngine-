@@ -10,6 +10,7 @@ class CTileMap : public Component
 public:
     TileMap map; // underlying tile data
     bool m_processed = false; // whether the map has been converted to collider entities
+    bool m_dirty = true; // whether the map needs processing (set true when map is created or modified)
 
     CTileMap() = default;
     explicit CTileMap(const TileMap& m) : map(m) {}

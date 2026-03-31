@@ -5,6 +5,7 @@
 
 // ***** Includes *****
 #include <string>
+#include <optional>
 
 
 // ***** Constants *****
@@ -28,4 +29,11 @@ float MillisecondsToSeconds(unsigned int milliseconds);							// Converts a time
 unsigned int GetIndex(unsigned int width, unsigned int row, unsigned int col);	// Converts 2D grid coordinates (row, col) into a 1D index based on the provided width of the grid.
 bool StringCompare(const std::string& a, const std::string& b);					// Compares two strings for equality in a case-insensitive manner. Returns true if the strings are of the same length and contain the same characters regardless of case, otherwise returns false.
 float Clamp(float val, float min, float max);									// Clamps a float value between a minimum and maximum range; if the value is less than the minimum, the minimum is returned; if the value is greater than the maximum, the maximum is returned; otherwise, the original value is returned.
+// Forward declaration for TileMap (defined in Raycast.h)
+struct TileMap;
+
+// Ad-hoc JSON save/load helpers for TileMap (implementations in Utils.cpp)
+bool SaveTileMapJSON(const TileMap& map, const std::string& path, std::string* outErr = nullptr);
+std::optional<TileMap> LoadTileMapJSON(const std::string& path, std::string* outErr = nullptr);
+const char* readFile(const char* filePath);										// Can you guess what it does? Really hard to figure it out from the name, I know. Reads the contents of a file specified by the filePath and returns it as a C-style string (const char*). You better take responsiblity for managing the memory of the returned string.
 const char* readFile(const char* filePath);										// Can you guess what it does? Really hard to figure it out from the name, I know. Reads the contents of a file specified by the filePath and returns it as a C-style string (const char*). You better take responsiblity for managing the memory of the returned string.

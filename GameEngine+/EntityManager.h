@@ -51,6 +51,9 @@ public:
     void AddTileMapAsEntities(const TileMap& map, int tileValueToTreatAsSolid = 1);
     // Preferred: create a CTileMap entity which will be processed by TileSystem
     Entity* CreateTileMapEntity(const TileMap& map);
+    // When creating/updating CTileMap components set this flag so TileSystem knows work is pending
+    void SetHasPendingTileMaps(bool v) { m_hasPendingTileMaps = v; }
+    bool HasPendingTileMaps() const { return m_hasPendingTileMaps; }
 
 private:
     void AddPendingEntities();
@@ -70,5 +73,6 @@ private:
     CollisionSystem m_collisionSystem;
     RenderSystem m_renderSystem;
     std::unique_ptr<TileSystem> m_tileSystem;
+    bool m_hasPendingTileMaps = true;
 };
       

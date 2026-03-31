@@ -7,6 +7,7 @@
 #include <string>
 #include "Scene.h"
 #include "TestScene.h"
+#include "TileMapScene.h"
 #include <cstdlib>
 
 GameEngine::GameEngine()
@@ -58,7 +59,9 @@ void GameEngine::Run()
 
 	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
     AddScene("TestScene", std::make_shared<TestScene>(*this, m_window)); // Adding TestScene
-	ChangeScene("TestScene");
+	AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, m_window)); // Adding TileMapScene
+	//ChangeScene("TestScene");
+	ChangeScene("TileMapScene");
 	m_currentScene->InitializeGame(m_windowSize);
 	m_InputController.SetGameController(m_currentScene->GetGameController());
 
@@ -79,13 +82,21 @@ void GameEngine::Update(float deltaTime)
 		// Clear the window at the start of each frame
 		m_window.clear();
 
+		// Poll events (SFML 3: pollEvent returns std::optional<sf::Event>) and forward to current scene
+		while (auto eventOpt = m_window.pollEvent())
+		{
+			if (m_currentScene) m_currentScene->HandleEvent(*eventOpt);
+			if (eventOpt->is<sf::Event::Closed>()) m_window.close();
+		}
 		
 		// Update method will run  (carry out) these actions.
 		m_InputController.Update(deltaTime);
 
 		if (m_currentScene)
 		{
-			m_currentScene->Update(deltaTime);
+          m_currentScene->Update(deltaTime);
+			// Call scene render so scenes can draw debug overlays or custom visuals
+			m_currentScene->Render();
 		}
 
 		m_window.display();

@@ -108,6 +108,9 @@
     <ClCompile Include="Systems\TileSystem.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TileMapScene.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CCircle.h">
@@ -218,9 +221,6 @@
     <ClInclude Include="GameController.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Raycast.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="CStatic.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -228,6 +228,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Systems\TileSystem.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TileMapScene.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Raycast.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

@@ -26,7 +26,7 @@ public:
     float GetRadius() const override { return m_rectangle.getSize().x; }
     float GetWidth() const override { return m_rectangle.getSize().x; }
 
-    sf::Color GetColor() const { return m_rectangle.getFillColor(); }          // Get the current fill color of the rectangle shape as an SFML Color object
+    sf::Color GetColor() const { return m_rectangle.getFillColor(); }       // Get the current fill color of the rectangle shape as an SFML Color object
     sf::Shape& GetShape()  override { return m_rectangle; }					// Get a reference to the underlying SFML shape (used for drawing and collision detection)
 
     void SetColor(float r, float g, float b, int alpha);                    // Set the fill color of the circle shape using RGBA values (alpha is an integer in the range [0, 255])

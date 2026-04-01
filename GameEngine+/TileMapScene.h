@@ -33,25 +33,37 @@ private:
     void DrawPreviewLine();
     
     // Input helpers
-    void ProcessDebugToggle();
-    void ProcessMouseDrag(bool mouseDown, const Vec2& mouseWorld);
-    void ProcessKeyInput(bool keyDown);
+    void ProcessDebugToggle(bool keyDown);
+    void ProcessEscapeKey(bool keyDown);
+
+    void ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouseWorld);
+	void ProcessMouseRightDrag(bool &rightMouseDown, const Vec2& mouseWorld);
+
     
     sf::RenderWindow& m_window; // reference passed in constructor for render/context
+    Vec2 m_currentTile; // 2D grid of tile values for rendering
+
     std::vector<std::pair<Vec2, Vec2>> m_debugLines; // lines to draw for raycasts
     std::vector<Vec2> m_debugPoints; // hit points
     std::vector<Vec2> m_rawHitPoints; // raw hit positions (before clamping) for debug
     
     // Mouse drag state for interactive raycasts
-    bool m_dragging = false;
-    Vec2 m_dragStart = Vec2(0,0);
-    Vec2 m_dragEnd = Vec2(0,0);
+    bool m_lmbdragging = false;
+	bool m_rmbdragging = false;
+
+    Vec2 m_lmbDragStart = Vec2(0,0);
+    Vec2 m_lmbDragEnd = Vec2(0,0);
+	Vec2 m_rmbDragStart = Vec2(0, 0);
+	Vec2 m_rmbDragEnd = Vec2(0, 0);
+
     bool m_previewActive = false;
     
     std::pair<Vec2, Vec2> m_previewLine;
-    TileMap m_testMap;
+    TileMap m_tileMap;
     
-    bool m_prevMouseDown = false;
+    bool m_prevLmbMouseDown = false;
+    bool m_prevRmbMouseDown = false;
+
     bool m_visualDebug = true; // runtime toggle for visual debug overlays
     bool m_prevDebugKeyDown = false; // previous state of debug toggle key
     

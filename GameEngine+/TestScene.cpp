@@ -130,7 +130,7 @@ void TestScene::DoAction()
 	// scene-specific action
 }
 
-void TestScene::HandleEvent(const sf::Event& /*event*/)
+void TestScene::HandleEvent(const std::optional<sf::Event>& event)
 {
 	// handle input events
 }

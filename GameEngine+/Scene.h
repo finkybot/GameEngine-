@@ -24,7 +24,7 @@ public:
 	virtual void DoAction() = 0;
 
 	// Event / lifecycle
-	virtual void HandleEvent(const sf::Event& event) = 0;
+	virtual void HandleEvent(const std::optional<sf::Event>& event) = 0;
 	virtual void OnEnter() = 0;
 	virtual void OnExit() = 0;
 	virtual void LoadResources() = 0;

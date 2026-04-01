@@ -152,3 +152,4 @@ public:
 		if (shape) shape->SetMidLength(length);
 	}
 };
+

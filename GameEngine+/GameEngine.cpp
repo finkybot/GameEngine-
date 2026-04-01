@@ -85,7 +85,7 @@ void GameEngine::Update(float deltaTime)
 		// Poll events (SFML 3: pollEvent returns std::optional<sf::Event>) and forward to current scene
 		while (auto eventOpt = m_window.pollEvent())
 		{
-			if (m_currentScene) m_currentScene->HandleEvent(*eventOpt);
+			if (m_currentScene) m_currentScene->HandleEvent(eventOpt);
 			if (eventOpt->is<sf::Event::Closed>()) m_window.close();
 		}
 		

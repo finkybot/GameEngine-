@@ -19,7 +19,7 @@ public:
 	void DoAction() override;
 
 	// Scene interface
-	void HandleEvent(const sf::Event& event) override;
+	void HandleEvent(const std::optional<sf::Event>& event) override;
 	void OnEnter() override;
 	void OnExit() override;
 	void LoadResources() override;

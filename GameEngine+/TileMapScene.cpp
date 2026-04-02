@@ -23,6 +23,11 @@ TileMapScene::TileMapScene(GameEngine& engine, sf::RenderWindow& win) : Scene(en
 // Destructor - defaulted since we don't have any special cleanup logic, but we could add it if needed in the future
 TileMapScene::~TileMapScene() = default;
 
+// Process left control key state to enable/disable
+void TileMapScene::ProcessLeftCtrlKey(bool keyDown)
+{
+	m_leftCtrlKeyDown = keyDown;
+}
 
 // Process debug toggle key (D) to show/hide visual debug overlays
 void TileMapScene::ProcessDebugToggle(bool debugToggle)
@@ -202,7 +207,24 @@ void TileMapScene::ProcessMouseRightDrag(bool& rightMouseDown, const Vec2& mouse
 
 
 // Process key input to close the window when any key is pressed
-void TileMapScene::ProcessEscapeKey(bool keyDown) { if (keyDown) m_gameEngine.m_window.close(); }
+void TileMapScene::ProcessEscapeKey(bool keyDown) const { if (keyDown) m_gameEngine.m_window.close(); }
+
+void TileMapScene::ProcessSaveKey(bool keyDown) const
+{
+    if (keyDown && m_leftCtrlKeyDown)
+    {
+        std::string filename = "assets//testmap.json";
+        std::string err;
+        if (!SaveTileMapJSON(m_tileMap, filename, &err))
+        {
+			std::cerr << "Error saving tilemap: " << err << std::endl;
+        }
+        else
+        {
+            std::cout << "Tilemap saved to " << filename << std::endl;
+        }
+    }
+}
 
 
 // Update method - handles events, updates the entity manager, and prepares debug visualization data for rendering
@@ -358,13 +380,17 @@ void TileMapScene::HandleEvent(const std::optional<sf::Event>& event)
     bool leftMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
 	bool rightMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Right);
     
+    bool leftCtrlKeyDown = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::LControl);
     bool escapeKeyDown = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape);
     bool debugToggle = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
+	bool saveKeyDown = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S);
 
+	ProcessLeftCtrlKey(leftCtrlKeyDown);
     ProcessDebugToggle(debugToggle);
     ProcessMouseDragRaycast(leftMouseDown, mouseWorld);
 	ProcessMouseRightDrag(rightMouseDown, mouseWorld);
     ProcessEscapeKey(escapeKeyDown);
+	ProcessSaveKey(saveKeyDown);
 }
 
 

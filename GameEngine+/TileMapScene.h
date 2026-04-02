@@ -33,8 +33,10 @@ private:
     void DrawPreviewLine();
     
     // Input helpers
+	void ProcessLeftCtrlKey(bool keyDown);
     void ProcessDebugToggle(bool keyDown);
-    void ProcessEscapeKey(bool keyDown);
+    void ProcessEscapeKey(bool keyDown) const;
+    void ProcessSaveKey(bool keyDown) const;
 
     void ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouseWorld);
 	void ProcessMouseRightDrag(bool &rightMouseDown, const Vec2& mouseWorld);
@@ -63,6 +65,7 @@ private:
     
     bool m_prevLmbMouseDown = false;
     bool m_prevRmbMouseDown = false;
+	bool m_leftCtrlKeyDown  = false;
 
     bool m_visualDebug = true; // runtime toggle for visual debug overlays
     bool m_prevDebugKeyDown = false; // previous state of debug toggle key

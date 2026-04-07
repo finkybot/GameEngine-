@@ -32,6 +32,9 @@ public:
     ~EntityManager() = default;
 
     void Update(float deltaTime = 1.0f / 60.0f);
+    void RenderShapes();
+    void RenderText();
+    void RenderAll(RenderSystem::RenderMode mode = RenderSystem::RenderMode::ShapesThenText);
 
     Entity* addEntity(EntityType type);
     void KillEntity(Entity* entity);
@@ -46,7 +49,7 @@ public:
 
     PhysicsSystem GetPhysicsSystem() { return m_physicsSystem; }
     CollisionSystem GetCollisionSystem() { return m_collisionSystem; }
-    RenderSystem GetRenderSystem() { return m_renderSystem; }
+    RenderSystem& GetRenderSystem() { return m_renderSystem; }
 
     void AddTileMapAsEntities(const TileMap& map, int tileValueToTreatAsSolid = 1);
     // Preferred: create a CTileMap entity which will be processed by TileSystem

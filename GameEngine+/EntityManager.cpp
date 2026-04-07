@@ -25,7 +25,9 @@ EntityManager::EntityManager(sf::RenderWindow& window, float cellSize)
 	, m_collisionSystem(this)
 {
     // initialize systems that need the entity manager pointer
-	m_tileSystem = std::make_unique<TileSystem>(this);
+    m_tileSystem = std::make_unique<TileSystem>(this);
+
+	// If the engine owns a FontManager, bind it to the render system later via caller.
 }
 
 Entity* EntityManager::CreateTileMapEntity(const TileMap& map)
@@ -162,7 +164,24 @@ void EntityManager::UpdateSpatialHashAndRender()
 		m_spatialHash.Insert(entity.get());
 	}
 
-	m_renderSystem.RenderAliveEntities(m_entities, m_window);
+	// Rendering is now controlled explicitly by the engine's render pass.
+}
+
+// Render entities' shapes. The engine should call this during its render phase before scene overlays if desired.
+void EntityManager::RenderShapes()
+{
+	m_renderSystem.RenderShapes(m_entities, m_window);
+}
+
+// Render entities' text. The engine should call this after scene overlays if desired.
+void EntityManager::RenderText()
+{
+	m_renderSystem.RenderText(m_entities, m_window);
+}
+
+void EntityManager::RenderAll(RenderSystem::RenderMode mode)
+{
+	m_renderSystem.RenderAll(m_entities, m_window, mode);
 }
 
 void EntityManager::Update(float deltaTime)
@@ -179,6 +198,7 @@ void EntityManager::Update(float deltaTime)
 	{
 		m_tileSystem->Process(); // Process pending tilemaps
 		m_hasPendingTileMaps = false;
+		AddPendingEntities(); // Add any new tile entities created by TileSystem
 	}
 
 	UpdateSpatialHashAndRender();

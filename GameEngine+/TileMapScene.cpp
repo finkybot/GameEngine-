@@ -10,6 +10,7 @@
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Event.hpp>
 #include "Entity.h"
+#include "CText.h"
 
 
 // Constructor - initializes the tile map scene with a reference to the game engine and the render window, and sets up the entity manager
@@ -17,6 +18,8 @@ TileMapScene::TileMapScene(GameEngine& engine, sf::RenderWindow& win) : Scene(en
 {
     EntityManager* em = new EntityManager(win);
     m_entityManager = em;
+    // Bind engine FontManager to the render system so text can be drawn without passing the manager each call
+    m_entityManager->GetRenderSystem().SetFontManager(&m_gameEngine.GetFontManager());
 }
 
 
@@ -175,8 +178,9 @@ void TileMapScene::ProcessMouseRightDrag(bool& rightMouseDown, const Vec2& mouse
     if (rightMouseDown && !m_prevRmbMouseDown && currentTile != m_currentTile)
     {
         m_rmbdragging = true;           
-        m_rmbDragStart = mouseWorld;    
-		ToggleTileAt(currentTile.x, currentTile.y);
+        m_rmbDragStart = mouseWorld;
+		m_currentTile = currentTile; // Set the current tile to the tile under the mouse when we start dragging, so that we can track which tile we last toggled and avoid toggling the same tile multiple times on click.
+	    ToggleTileAt(currentTile.x, currentTile.y);
     }
 	// Otherwise if the right mouse button is released and was pressed in the previous frame, we end the drag operation. If we were dragging, we record the drag end position 
     // and calculate the drag direction vector, although for tile toggling we may not need the direction.
@@ -185,12 +189,14 @@ void TileMapScene::ProcessMouseRightDrag(bool& rightMouseDown, const Vec2& mouse
 		// Only end dragging if we were actually dragging, otherwise it was just a click without movement, and we will handle that case separately to toggle tile state. 
         // This prevents us from performing unnecessary toggles on simple clicks
         if (m_rmbdragging)
-        {
+        {            
             m_rmbdragging = false;                      
             m_rmbDragEnd = mouseWorld;                      
             Vec2 dir = m_rmbDragEnd - m_rmbDragStart;   
+           // if (currentTile != m_currentTile) ToggleTileAt(currentTile.x, currentTile.y); // Toggle the tile at the current mouse position on release if it's different from the last toggled tile, to ensure we toggle the tile on click as well as on drag.
+
 			m_currentTile = Vec2(static_cast<int>(std::floor(m_rmbDragStart.x / m_tileMap.tileSize)), static_cast<int>(std::floor(m_rmbDragStart.y / m_tileMap.tileSize)));
-            ToggleTileAt(currentTile.x, currentTile.y);
+            //ToggleTileAt(currentTile.x, currentTile.y);
         }
     }
 	// If the right mouse button is currently down and we are in a dragging state, we will update the drag end position and toggle the tile at the current mouse position if it's different from the last toggled tile.
@@ -200,6 +206,12 @@ void TileMapScene::ProcessMouseRightDrag(bool& rightMouseDown, const Vec2& mouse
 		m_currentTile = Vec2(static_cast<int>(std::floor(m_rmbDragEnd.x / m_tileMap.tileSize)), static_cast<int>(std::floor(m_rmbDragEnd.y / m_tileMap.tileSize)));
         ToggleTileAt(currentTile.x, currentTile.y);
     }
+	// Additionally, we want to support toggling tiles on simple right-clicks without dragging. To do this, we will check if the right mouse button is currently down and was not down in the previous frame (indicating a new click), 
+    // and if the current tile under the mouse is the same as the last toggled tile, we will toggle it again. This allows us to toggle a tile immediately on right-click without dragging, while still supporting dragging to toggle multiple tiles.
+    else if (rightMouseDown && !m_prevRmbMouseDown && currentTile == m_currentTile)
+    {
+        ToggleTileAt(currentTile.x, currentTile.y);
+	}
 
 
     m_prevRmbMouseDown = rightMouseDown;
@@ -260,6 +272,8 @@ void TileMapScene::Render()
     DrawRawHitPoints();
     DrawVisitedCells();
     DrawPreviewLine();
+
+    // Text is rendered by the RenderSystem during EntityManager::Update; no per-scene text draw here to avoid double-rendering.
 }
 
 
@@ -412,23 +426,6 @@ void TileMapScene::LoadResources()
 }
 
 
-// Helper: create a synthetic RaycastHit representing an immediate hit at the start cell
-RaycastHit TileMapScene::MakeStartCellHit(int tileX, int tileY, const Vec2& origin)
-{
-    RaycastHit h;
-	if (tileX < 0 || tileY < 0) return h; // Guard: invalid cell, return no hit
-    
-	// We assume the caller has already checked that the start cell is solid. We create a hit at the origin with distance 0 and the tile value for diagnostics.
-    h.hit = true;
-    h.tileX = tileX;
-    h.tileY = tileY;
-    h.tileValue = m_tileMap.GetTile(tileX, tileY);
-    h.position = origin;
-    h.distance = 0.0f;
-    return h;
-}
-
-
 // UnloadResources method - currently empty, but could be used to free textures, sounds, or other resources when the scene is unloaded
 void TileMapScene::UnloadResources()
 {
@@ -438,10 +435,28 @@ void TileMapScene::UnloadResources()
 // InitializeGame method - loads the tile map from a JSON file and creates a tile map entity in the entity manager. Errors are ignored or could be handled via UI, and there is no console output in this method.
 void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/)
 {
+	sf::Vector2u windowSize = m_window.getSize(); // Get the actual window size for use in tile map loading and entity setup
+
     // Load tilemap (no console output; errors are ignored or can be handled via UI)
     std::string err;
     auto maybe = LoadTileMapJSON("assets\\testmap.json", &err);
     if (maybe) { m_tileMap = *maybe; m_entityManager->CreateTileMapEntity(m_tileMap); }
+
+
+    if (!m_gameEngine.GetFontManager().LoadFont("regular", "assets\\fonts\\roboto\\Roboto-Regular.ttf")) std::cerr << "Error loading font" << std::endl;
+    if (!m_gameEngine.GetFontManager().LoadFont("thin", "assets\\fonts\\roboto\\Roboto-Thin.ttf")) std::cerr << "Error loading font" << std::endl;
+
+	// Create an entity and add a text component to it to display the scene name. This demonstrates how to create entities and add components in the entity manager.
+    // We load a font and set the text to "TileMapScene Demo" with a size of 20 and white color. If the font fails to load, we print an error message to the console.
+	Entity* fontEntity = m_entityManager->addEntity(EntityType::Default);
+    
+    fontEntity->AddComponent<CTransform>(Vec2(50, 50), Vec2::Zero);
+	if(!fontEntity->AddComponent<CText>("RayCasting Demo, with TileMap \nUsing GameEngine+", sf::Color::Cyan, "regular", 60)) /* Handle error if needed */ std::cerr << "Error loading font for text entity" << std::endl;
+
+	Entity* instructionsEntity = m_entityManager->addEntity(EntityType::Default);
+	
+	instructionsEntity->AddComponent<CTransform>(Vec2(50, windowSize.y - 150), Vec2::Zero);
+    if(!instructionsEntity->AddComponent<CText>("Left Click + Drag: Raycast\nRight Click + Drag: Toggle Tiles\nPress 'D' to toggle debug visualization\nPress 'Ctrl+S' to save tilemap", sf::Color::Yellow, "thin", 20)) std::cerr << "Error loading font for instructions entity" << std::endl;
 }
 
 
@@ -521,6 +536,22 @@ void TileMapScene::SpawnTestTileMap()
 }
 
 
+// Helper: create a synthetic RaycastHit representing an immediate hit at the start cell
+RaycastHit TileMapScene::MakeStartCellHit(int tileX, int tileY, const Vec2& origin)
+{
+    RaycastHit h;
+    if (tileX < 0 || tileY < 0) return h; // Guard: invalid cell, return no hit
+
+    // We assume the caller has already checked that the start cell is solid. We create a hit at the origin with distance 0 and the tile value for diagnostics.
+    h.hit = true;
+    h.tileX = tileX;
+    h.tileY = tileY;
+    h.tileValue = m_tileMap.GetTile(tileX, tileY);
+    h.position = origin;
+    h.distance = 0.0f;
+    return h;
+}
+
 // Toggle a tile at the specified map cell coordinates (tx, ty). This method toggles the tile value between 0 and 1, updates the tile map in the entity manager, and marks it as dirty for rendering. This allows for interactive editing of the tile map by clicking on cells.
 void TileMapScene::ToggleTileAt(int tx, int ty)
 {
@@ -545,16 +576,11 @@ void TileMapScene::ToggleTileAt(int tx, int ty)
                 comp->map = m_tileMap;
                 comp->m_dirty = true;
                 m_entityManager->SetHasPendingTileMaps(true);
-                
-                // Remove any existing generated tile entities so TileSystem can recreate them from the updated map
-                for (Entity* te : m_entityManager->getEntities(EntityType::Tile))
-                {
-                    if (te) m_entityManager->KillEntity(te);
-                }
                 updated = true;
                 break;
             }
         }
+
         if (!updated)
         {
             // Create a new CTileMap entity so TileSystem can process it on the next update

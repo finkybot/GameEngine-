@@ -39,6 +39,9 @@ public:
 
 	EntityManager* m_entityManager;
 
+	// Helper to access the injected entity manager as a reference
+	EntityManager& GetEntityManager() { return *m_entityManager; }
+
 protected:
 	// Construction contract: derived scenes must initialize these references
 	Scene(GameEngine& gameEngine);

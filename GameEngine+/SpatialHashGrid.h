@@ -32,7 +32,7 @@ private:
 		int cellX = static_cast<int>(x / cellSize);
 		int cellY = static_cast<int>(y / cellSize);
 		
-		// Cantor pairing function for 2D -> 1D hash
+		// Cantor pairing function for 2D -> 1D reversable hash
 		size_t hash = ((cellX + cellY) * (cellX + cellY + 1)) / 2 + cellY;
 		return hash;
 	}
@@ -59,16 +59,20 @@ public:
 		m_grid[hash].push_back(object);
 	}
 
-	// Performs a spatial query to find all objects within a specified radius of a position using a grid-based spatial hash.
-	void Query(std::vector<T*>& found, const Vec2& position, float queryRadius) noexcept
+	// Performs a spatial query to find all objects within a specified radius of a position using a grid-based spatial hash. I'll store the results in the provided outFound vector, this version of the method
+	// will include all objects within the query radius, including the object performing the query if it is within the radius. Our query works by checking all cells within a radius of the given position.
+	// For each cell, we calculate the hash and look up any objects in that cell. We then check the distance from each object to the query position to determine if it falls within the query radius, 
+	// and if so, we add it to the outFound vector. We also increment our query performance counters for monitoring.
+	void Query(std::vector<T*>& outFound, const Vec2& position, float queryRadius) noexcept
 	{
-		++s_queryCount;
+		++s_queryCount; // performance monitoring: Increment the query count each time this method is called.
 		
 		// Query all cells within radius
 		int cellX = static_cast<int>(position.GetX() / m_cellSize);
 		int cellY = static_cast<int>(position.GetY() / m_cellSize);
 		int cellRadius = static_cast<int>(queryRadius / m_cellSize) + 1; // Get the radius in terms of cells but add 1 to ensure we cover the entire query radius even if it extends slightly beyond the last cell boundary.
 
+		// Loop through all cells within the calculated cell radius and check for objects in those cells.
 		for (int x = cellX - cellRadius; x <= cellX + cellRadius; ++x)
 		{
 			for (int y = cellY - cellRadius; y <= cellY + cellRadius; ++y)
@@ -88,7 +92,7 @@ public:
 
 						if (distSq <= radiusSq)
 						{
-							found.push_back(obj);
+							outFound.push_back(obj);
 							++s_totalObjectsQueried;
 						}
 					}
@@ -99,8 +103,11 @@ public:
 		++s_totalQueriesThisFrame;
 	}
 
-	// Overloaded Query; this will exclude a specific object from the results, e,g. the object performing the query to avoid self-collision checks.
-	void Query(std::vector<T*>& found, const Vec2& position, float queryRadius, const T* excludeObject) noexcept
+	// Overloaded Query; Performs a spatial query to find all objects within a specified radius of a position using a grid-based spatial hash. I'll store the results in the provided outFound vector, this version of the method
+	// will include any objects found within the query radius, excluding the object passed to the query (e.g. the object performing the query so theres no self collision). The query works by checking all cells within a radius 
+	// of the given position. For each cell, we calculate the hash and look up any objects in that cell. We then check the distance from each object to the query position to determine if it falls within the query radius, 
+	// and if so, we add it to the outFound vector. We also increment our query performance counters for monitoring.
+	void Query(std::vector<T*>& outFound, const Vec2& position, float queryRadius, const T* excludeObject) noexcept
 	{
 		++s_queryCount; // Increment query count for performance monitoring.
 		
@@ -131,7 +138,7 @@ public:
 
 						if (distSq <= radiusSq)
 						{
-							found.push_back(obj);
+							outFound.push_back(obj);
 							++s_totalObjectsQueried;
 						}
 					}
@@ -142,9 +149,7 @@ public:
 		++s_totalQueriesThisFrame; // Increment total queries for performance monitoring.
 	}
 
-	// Static query statistics methods for performance monitoring.
-	
-	// Resets the query statistics counters (this should be called at the start of each frame to track per-frame query performance).
+	// Static query statistics method for performance monitoring. Resets the query statistics counters (this should be called at the start of each frame to track per-frame query performance).
 	static void ResetQueryStats() noexcept
 	{
 		s_totalQueriesThisFrame = 0;
@@ -152,13 +157,13 @@ public:
 		s_queryCount = 0;
 	}
 
-	// Gets the total number of queries performed in the current frame.
+	// Static query statistics method for performance monitoring. Gets the total number of queries performed in the current frame.
 	static size_t GetQueryCount() noexcept { return s_queryCount; }
 
-	// Gets the total number of objects queried across all queries.
+	// Static query statistics method for performance monitoring. Gets the total number of objects queried across all queries.
 	static size_t GetTotalObjectsQueried() noexcept { return s_totalObjectsQueried; }
 	
-	// Gets the average number of objects returned per query, calculated as total objects queried divided by total queries, with a check to avoid division by zero.
+	// Static query statistics method for performance monitoring. Gets the average number of objects returned per query, calculated as total objects queried divided by total queries, with a check to avoid division by zero.
 	static double GetAverageObjectsPerQuery() noexcept
 	{
 		return s_queryCount > 0 ? static_cast<double>(s_totalObjectsQueried) / s_queryCount : 0.0;

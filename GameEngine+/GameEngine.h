@@ -5,6 +5,7 @@
 //#include "Scene.h"
 #include "EntityManager.h"
 #include "InputController.h"
+#include "FontManager.h"
 
 #include <map>
 #include <string>
@@ -46,5 +47,10 @@ public:
 
 	sf::Clock m_deltaClock;																// SFML Clock to measure the time elapsed between frames, used for calculating delta time for updates and game logic processing
 	sf::Vector2u m_windowSize = { 0, 0 };												// Size of the game window, initialized to zero and set in the constructor based on the desktop mode
+
+	FontManager m_fontManager;															// Font manager instance for managing fonts across the game, allowing for loading, retrieving, and unloading fonts in a centralized manner
+
+	// Accessor for shared font manager
+	FontManager& GetFontManager() { return m_fontManager; }
 };
 

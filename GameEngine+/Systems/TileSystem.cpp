@@ -14,8 +14,16 @@ void TileSystem::Process()
         // Skip tilemaps that have already been processed into tile entities unless marked dirty
         if (tileComp->m_processed && !tileComp->m_dirty) continue;
 
+        // Remove any existing generated tile entities so TileSystem can recreate them from the updated map
+        for (Entity* te : m_entityManager->getEntities(EntityType::Tile))
+        {
+            if (te) m_entityManager->KillEntity(te);
+        }
+
+
         // Ensure spatial hash aligns with tile size
         m_entityManager->GetSpatialHash() = SpatialHashGrid<Entity>(tileComp->GetTileSize());
+
 
         // Convert tilemap to merged rectangles (greedy 2D merge) - similar logic to existing AddTileMapAsEntities
         TileMap& map = tileComp->map;

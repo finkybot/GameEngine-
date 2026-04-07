@@ -23,7 +23,7 @@ struct Size
 
 // ***** Utility functions *****
 bool IsEqual(float val1, float val2);											// Returns true if the two float values are equal within a small tolerance defined by EPSILON, accounting for floating-point precision issues.
-bool IsGreaterThanOrEqual(float val1, float val2);								//  Returns true if the float val1 is greater than or equal to the float val2 (to the tolerance EPSILON).
+bool IsGreaterThanOrEqual(float val1, float val2);								// Returns true if the float val1 is greater than or equal to the float val2 (to the tolerance EPSILON).
 bool IsLessThanOrEqual(float val1, float val2);									// Returns true if the float val1 is less than or equal to the float val2 (to the tolerance EPSILON).
 float MillisecondsToSeconds(unsigned int milliseconds);							// Converts a time value in milliseconds to seconds by dividing the input value by 1000.0f, returning the result as a float.
 unsigned int GetIndex(unsigned int width, unsigned int row, unsigned int col);	// Converts 2D grid coordinates (row, col) into a 1D index based on the provided width of the grid.

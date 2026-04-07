@@ -7,10 +7,11 @@
 
 class TileMapScene : public Scene
 {
-public:
+public: // Constructors / Destructors
     TileMapScene(GameEngine& engine, sf::RenderWindow& win);
     ~TileMapScene() override;
 
+public: // Scene overrides
     void Update(float deltaTime) override;
     void Render() override;
     void DoAction() override;
@@ -22,8 +23,7 @@ public:
     void UnloadResources() override;
     void InitializeGame(sf::Vector2u windowSize) override;
 
-private:
-    void SpawnTestTileMap();
+private: // Scene helpers
     // Render helpers
     void DrawTileGrid();
     void DrawDebugLines();
@@ -40,8 +40,13 @@ private:
 
     void ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouseWorld);
 	void ProcessMouseRightDrag(bool &rightMouseDown, const Vec2& mouseWorld);
-
     
+	// Tile map helpers
+    void SpawnTestTileMap();
+	RaycastHit MakeStartCellHit(int tileX, int tileY, const Vec2& origin); // Helper to create a synthetic RaycastHit representing an immediate hit at the start cell, since DDA will return no hit in this case
+    void ToggleTileAt(int tx, int ty); // Toggle tile state at given tile coordinates (for editing)
+
+private: // Member variables
     sf::RenderWindow& m_window; // reference passed in constructor for render/context
     Vec2 m_currentTile; // 2D grid of tile values for rendering
 
@@ -77,11 +82,7 @@ private:
     
     std::vector<std::pair<int,int>> m_visitedCells; // cells visited by last DDA cast
     // helper to synthesize a start-cell hit when ray begins inside a solid tile
-    
-    RaycastHit MakeStartCellHit(int tileX, int tileY, const Vec2& origin);
-    // Additional comment for clarity
-    
-    
-    // Toggle a tile at map cell (x,y)
-    void ToggleTileAt(int tx, int ty);
+
+    // FontManager m_fontManager; // Font manager for text rendering
+    // Scenes should use the engine's shared FontManager via m_gameEngine.GetFontManager().
 };

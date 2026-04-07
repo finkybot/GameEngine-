@@ -1,5 +1,6 @@
 // GameEngine.cpp - Implementation of the GameEngine class, responsible for managing the game loop, scenes, and rendering using SFML
 #include "GameEngine.h"
+#include "FontManager.h"
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Window/VideoMode.hpp>
@@ -95,8 +96,13 @@ void GameEngine::Update(float deltaTime)
 		if (m_currentScene)
 		{
           m_currentScene->Update(deltaTime);
-			// Call scene render so scenes can draw debug overlays or custom visuals
+			// Engine render pass ordering:
+			// 1) Entity shapes
+			m_currentScene->GetEntityManager().RenderShapes();
+			// 2) Scene overlays
 			m_currentScene->Render();
+			// 3) Entity text (render on top of overlays)
+			m_currentScene->GetEntityManager().RenderText();
 		}
 
 		m_window.display();

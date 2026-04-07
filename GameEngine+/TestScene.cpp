@@ -24,17 +24,14 @@
 #include <imgui/backends/imgui-SFML.h>
 
 
-TestScene::TestScene(GameEngine& engine, sf::RenderWindow& win) : m_window(win), Scene(engine)
+TestScene::TestScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager) : m_window(win), Scene(engine, entityManager)
 {
-    EntityManager* entityManager = new EntityManager(win, 32.0f); // Create a new EntityManager instance for this scene, passing the window reference for rendering purposes and tile-sized spatial hash
-	m_entityManager = entityManager;
-
-	// Initialize ImGui with SFML backend
-	if (!ImGui::SFML::Init(engine.m_window))
-	{
-		std::cerr << "Failed to initialize ImGui::SFML." << std::endl;
-		std::exit(EXIT_FAILURE);
-	}
+    // Initialize ImGui with SFML backend
+    if (!ImGui::SFML::Init(engine.m_window))
+    {
+        std::cerr << "Failed to initialize ImGui::SFML." << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
 }
 
 TestScene::~TestScene() = default;
@@ -67,7 +64,7 @@ void TestScene::Update(float /*deltaTime*/)
 
 	// scene update logic
 	// Dynamic population control: maintain entities by spawning to replace dead ones
-	size_t currentEntityCount = m_entityManager->getEntities().size();
+    size_t currentEntityCount = m_entityManager.getEntities().size();
 	if (currentEntityCount < targetEntityCount)
 	{
 		// Spawn entities to maintain target population
@@ -107,15 +104,15 @@ void TestScene::Update(float /*deltaTime*/)
 		}
 	}
 
-	// Update game logic (entities, collisions, rendering)
-	m_entityManager->Update(deltaTime);
+    // Update game logic (entities, collisions, rendering)
+	m_entityManager.Update(deltaTime);
 	UpdateExplosions();
-	
-	m_entityManager->GetPhysicsSystem().Update(m_entityManager->getEntities(), deltaTime, m_window.getSize().x, m_window.getSize().y); // Do physics and boundary collisions first for spatial hash accuracy.
-	m_entityManager->GetCollisionSystem().DetectAndResolve(m_entityManager->getEntities(), m_entityManager->GetSpatialHash(), deltaTime); // Then do collision detection and resolution, which may mark entities as dead and spawn explosions.
 
-	// Render ImGui UI
-	RenderGameInfoWindow(m_entityManager->getEntities().size(), m_entityManager->GetDeathCountThisFrame(), m_explosionCount);
+	m_entityManager.GetPhysicsSystem().Update(m_entityManager.getEntities(), deltaTime, m_window.getSize().x, m_window.getSize().y); // Do physics and boundary collisions first for spatial hash accuracy.
+	m_entityManager.GetCollisionSystem().DetectAndResolve(m_entityManager.getEntities(), m_entityManager.GetSpatialHash(), deltaTime); // Then do collision detection and resolution, which may mark entities as dead and spawn explosions.
+
+    // Render ImGui UI
+	RenderGameInfoWindow(m_entityManager.getEntities().size(), m_entityManager.GetDeathCountThisFrame(), m_explosionCount);
 	// Render ImGui and display
 	ImGui::SFML::Render(m_gameEngine.m_window);
 }
@@ -236,7 +233,7 @@ void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 colo
 	const EntityType teamTypes[] = { EntityType::TeamEagle, EntityType::TeamHawk, EntityType::TeamBoogaloo, EntityType::TeamRocket, EntityType::TeamMonkey };
 	EntityType type = (teamType < 5) ? teamTypes[teamType] : EntityType::TeamMonkey;
 
-	Entity* en = m_entityManager->addEntity(type);
+    Entity* en = m_entityManager.addEntity(type);
 
 	en->AddComponent<CTransform>(position, velocity);
 	en->AddComponent<CName>();
@@ -318,7 +315,7 @@ void TestScene::UpdateExplosions()
 	auto now = std::chrono::high_resolution_clock::now();
 	std::vector<size_t> expiredExplosions;
 
-	for (auto& entity : m_entityManager->getEntities()) // Iterate over all entities to find explosions and update their state based on elapsed time since creation
+    for (auto& entity : m_entityManager.getEntities()) // Iterate over all entities to find explosions and update their state based on elapsed time since creation
 	{
 		if (entity->GetType() == EntityType::Explosion)
 		{

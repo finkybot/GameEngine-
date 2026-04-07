@@ -21,6 +21,10 @@ GameEngine::GameEngine()
 	//m_window.setVerticalSyncEnabled(true);	
 	m_isRunning = true;
 
+	// Create a single engine-wide EntityManager and bind shared resources
+	m_entityManager = std::make_unique<EntityManager>(m_window);
+	m_entityManager->GetRenderSystem().SetFontManager(&m_fontManager);
+
 }
 
 GameEngine::~GameEngine()
@@ -59,11 +63,13 @@ void GameEngine::Run()
 	bool running = true; // Create a Boolean variable to manage the engine running state
 
 	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
-    AddScene("TestScene", std::make_shared<TestScene>(*this, m_window)); // Adding TestScene
-	AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, m_window)); // Adding TileMapScene
+    AddScene("TestScene", std::make_shared<TestScene>(*this, m_window, *m_entityManager)); // Adding TestScene
+	AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, m_window, *m_entityManager)); // Adding TileMapScene
 	//ChangeScene("TestScene");
 	ChangeScene("TileMapScene");
 	m_currentScene->InitializeGame(m_windowSize);
+
+    // FontManager already bound to engine-owned EntityManager in constructor
 	m_InputController.SetGameController(m_currentScene->GetGameController());
 
 	m_InputController.Init([&running](uint32_t deltaT, InputState state) { running = false; std::cout << "Quitting" << std::endl; }, &m_window); // The defined function will be called when we quit the game..

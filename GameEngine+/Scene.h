@@ -37,14 +37,15 @@ public:
 	Scene(const Scene&) = delete;
 	Scene& operator=(const Scene&) = delete;
 
-	EntityManager* m_entityManager;
+    // Scene holds a non-owning reference to the engine's EntityManager
+	EntityManager& m_entityManager;
 
-	// Helper to access the injected entity manager as a reference
-	EntityManager& GetEntityManager() { return *m_entityManager; }
+	// Helper to access the injected entity manager (already a reference)
+	EntityManager& GetEntityManager() { return m_entityManager; }
 
 protected:
-	// Construction contract: derived scenes must initialize these references
-	Scene(GameEngine& gameEngine);
+    // Construction contract: derived scenes must initialize these references
+	Scene(GameEngine& gameEngine, EntityManager& entityManager);
 	
 	GameController m_GameController;
 

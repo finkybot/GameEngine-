@@ -8,11 +8,11 @@
 class TileMapScene : public Scene
 {
 public: // Constructors / Destructors
-    TileMapScene(GameEngine& engine, sf::RenderWindow& win);
+    TileMapScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager);
     ~TileMapScene() override;
 
 public: // Scene overrides
-    void Update(float deltaTime) override;
+    void Update(float deltaTime) override; // Updated method signature for clarity
     void Render() override;
     void DoAction() override;
 

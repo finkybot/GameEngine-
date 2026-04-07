@@ -29,7 +29,7 @@ class EntityManager
 {
 public:
     explicit EntityManager(sf::RenderWindow& window, float cellSize = 32.0f);
-    ~EntityManager() = default;
+    ~EntityManager();
 
     void Update(float deltaTime = 1.0f / 60.0f);
     void RenderShapes();

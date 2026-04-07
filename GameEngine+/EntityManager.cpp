@@ -30,6 +30,12 @@ EntityManager::EntityManager(sf::RenderWindow& window, float cellSize)
 	// If the engine owns a FontManager, bind it to the render system later via caller.
 }
 
+EntityManager::~EntityManager()
+{
+	// ensure proper destruction order for forward-declared types
+	m_tileSystem.reset();
+}
+
 Entity* EntityManager::CreateTileMapEntity(const TileMap& map)
 {
 	Entity* e = addEntity(EntityType::TileMap);

@@ -11,7 +11,7 @@ class TestScene : public Scene
 {
 public:
 	// Must call base constructor with injected refs
-	TestScene(GameEngine& engine, sf::RenderWindow& win);
+    TestScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager);
 	~TestScene() override;
 
 	void Update(float deltaTime) override;

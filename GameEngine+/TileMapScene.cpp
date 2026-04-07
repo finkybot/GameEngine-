@@ -14,12 +14,8 @@
 
 
 // Constructor - initializes the tile map scene with a reference to the game engine and the render window, and sets up the entity manager
-TileMapScene::TileMapScene(GameEngine& engine, sf::RenderWindow& win) : Scene(engine), m_window(win)
+TileMapScene::TileMapScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager) : Scene(engine, entityManager), m_window(win)
 {
-    EntityManager* em = new EntityManager(win);
-    m_entityManager = em;
-    // Bind engine FontManager to the render system so text can be drawn without passing the manager each call
-    m_entityManager->GetRenderSystem().SetFontManager(&m_gameEngine.GetFontManager());
 }
 
 
@@ -258,7 +254,7 @@ void TileMapScene::Update(float /*deltaTime*/)
 
 
     // simple update: run entity manager update
-    m_entityManager->Update(0.016f);
+    m_entityManager.Update(0.016f);
 }
 
 
@@ -440,7 +436,7 @@ void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/)
     // Load tilemap (no console output; errors are ignored or can be handled via UI)
     std::string err;
     auto maybe = LoadTileMapJSON("assets\\testmap.json", &err);
-    if (maybe) { m_tileMap = *maybe; m_entityManager->CreateTileMapEntity(m_tileMap); }
+    if (maybe) { m_tileMap = *maybe; m_entityManager.CreateTileMapEntity(m_tileMap); }
 
 
     if (!m_gameEngine.GetFontManager().LoadFont("regular", "assets\\fonts\\roboto\\Roboto-Regular.ttf")) std::cerr << "Error loading font" << std::endl;
@@ -448,14 +444,14 @@ void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/)
 
 	// Create an entity and add a text component to it to display the scene name. This demonstrates how to create entities and add components in the entity manager.
     // We load a font and set the text to "TileMapScene Demo" with a size of 20 and white color. If the font fails to load, we print an error message to the console.
-	Entity* fontEntity = m_entityManager->addEntity(EntityType::Default);
+    Entity* fontEntity = m_entityManager.addEntity(EntityType::Default);
     
     fontEntity->AddComponent<CTransform>(Vec2(50, 50), Vec2::Zero);
 	if(!fontEntity->AddComponent<CText>("RayCasting Demo, with TileMap \nUsing GameEngine+", sf::Color::Cyan, "regular", 60)) /* Handle error if needed */ std::cerr << "Error loading font for text entity" << std::endl;
 
-	Entity* instructionsEntity = m_entityManager->addEntity(EntityType::Default);
-	
-	instructionsEntity->AddComponent<CTransform>(Vec2(50, windowSize.y - 150), Vec2::Zero);
+    Entity* instructionsEntity = m_entityManager.addEntity(EntityType::Default);
+
+    instructionsEntity->AddComponent<CTransform>(Vec2(50, windowSize.y - 150), Vec2::Zero);
     if(!instructionsEntity->AddComponent<CText>("Left Click + Drag: Raycast\nRight Click + Drag: Toggle Tiles\nPress 'D' to toggle debug visualization\nPress 'Ctrl+S' to save tilemap", sf::Color::Yellow, "thin", 20)) std::cerr << "Error loading font for instructions entity" << std::endl;
 }
 
@@ -532,7 +528,7 @@ void TileMapScene::SpawnTestTileMap()
 
     // store and create entity
     m_tileMap = map;
-    m_entityManager->CreateTileMapEntity(map);
+    m_entityManager.CreateTileMapEntity(map);
 }
 
 
@@ -560,13 +556,13 @@ void TileMapScene::ToggleTileAt(int tx, int ty)
     // Toggle between 0 and 1
     m_tileMap.SetTile(tx, ty, value == 0 ? 1 : 0);
     // Mark entity manager tilemap dirty by creating/updating the component entity
-    if (m_entityManager)
+    // (m_entityManager is a reference guaranteed to be valid)
     {
         // Try to find an existing CTileMap component and update it
         bool updated = false;
 
 		// Get the entities from the entity manager and look for one with a CTileMap component. If found, update its map reference and mark it dirty. We also remove any existing tile entities so that the TileSystem will recreate them based on the u
-        for (auto& up_entity: m_entityManager->getEntities())
+        for (auto& up_entity: m_entityManager.getEntities())
         {
             Entity* entity = up_entity.get();
             if (!entity) continue;
@@ -575,7 +571,7 @@ void TileMapScene::ToggleTileAt(int tx, int ty)
             {
                 comp->map = m_tileMap;
                 comp->m_dirty = true;
-                m_entityManager->SetHasPendingTileMaps(true);
+                m_entityManager.SetHasPendingTileMaps(true);
                 updated = true;
                 break;
             }
@@ -585,12 +581,12 @@ void TileMapScene::ToggleTileAt(int tx, int ty)
         {
             // Create a new CTileMap entity so TileSystem can process it on the next update
             // mark existing tile entities for removal first
-            for (Entity* te : m_entityManager->getEntities(EntityType::Tile))
+            for (Entity* te : m_entityManager.getEntities(EntityType::Tile))
             {
-                if (te) m_entityManager->KillEntity(te);
+                if (te) m_entityManager.KillEntity(te);
             }
-            m_entityManager->CreateTileMapEntity(m_tileMap);
-            m_entityManager->SetHasPendingTileMaps(true);
+            m_entityManager.CreateTileMapEntity(m_tileMap);
+            m_entityManager.SetHasPendingTileMaps(true);
         }
         // Do NOT recreate tile entities immediately here. Let TileSystem process the dirty CTileMap
         // during the EntityManager::Update cycle so dead tile entities are removed first and

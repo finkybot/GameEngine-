@@ -3,9 +3,9 @@
 #include "GameEngine.h"
 #include "EntityManager.h"
 
-Scene::Scene(GameEngine& gameEngine)
+Scene::Scene(GameEngine& gameEngine, EntityManager& entityManager)
 	: m_gameEngine(gameEngine)
-	, m_entityManager(nullptr)	// Derived scenes must initialize this reference in their constructor after calling the base constructor
+	, m_entityManager(entityManager)
 	, m_frameCount(0)
 	, m_currentFrame(0)
 	, m_isLoaded(false)

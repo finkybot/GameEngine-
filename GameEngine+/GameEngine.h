@@ -52,5 +52,9 @@ public:
 
 	// Accessor for shared font manager
 	FontManager& GetFontManager() { return m_fontManager; }
+
+	// Central EntityManager owned by the engine. Scenes should use this by default.
+	std::unique_ptr<EntityManager> m_entityManager;
+	EntityManager& GetEntityManager() { return *m_entityManager; }
 };
 

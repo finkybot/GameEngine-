@@ -25,6 +25,9 @@ GameEngine::GameEngine()
 	m_entityManager = std::make_unique<EntityManager>(m_window);
 	m_entityManager->GetRenderSystem().SetFontManager(&m_fontManager);
 
+	// Preload a default atlas if present (non-fatal)
+	m_textureManager.LoadAtlas("adventure", "assets\\adventure.png", 32, 32);
+
 }
 
 GameEngine::~GameEngine()

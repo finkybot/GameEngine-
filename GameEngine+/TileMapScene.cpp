@@ -4,6 +4,7 @@
 #include "CTileMap.h"
 #include <iostream>
 #include "Raycast.h"
+#include "TileMap.h"
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <Utils.h>
 #include "Vec2.h"
@@ -223,7 +224,7 @@ void TileMapScene::ProcessSaveKey(bool keyDown) const
     {
         std::string filename = "assets//testmap.json";
         std::string err;
-        if (!SaveTileMapJSON(m_tileMap, filename, &err))
+        if (!m_tileMap.SaveToJSON(filename, &err))
         {
 			std::cerr << "Error saving tilemap: " << err << std::endl;
         }
@@ -435,7 +436,7 @@ void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/)
 
     // Load tilemap (no console output; errors are ignored or can be handled via UI)
     std::string err;
-    auto maybe = LoadTileMapJSON("assets\\testmap.json", &err);
+    auto maybe = TileMap::LoadFromJSON("assets\\testmap.json", &err);
     if (maybe) { m_tileMap = *maybe; m_entityManager.CreateTileMapEntity(m_tileMap); }
 
 

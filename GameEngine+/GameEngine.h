@@ -6,6 +6,7 @@
 #include "EntityManager.h"
 #include "InputController.h"
 #include "FontManager.h"
+#include "TextureManager.h"
 
 #include <map>
 #include <string>
@@ -49,12 +50,13 @@ public:
 	sf::Vector2u m_windowSize = { 0, 0 };												// Size of the game window, initialized to zero and set in the constructor based on the desktop mode
 
 	FontManager m_fontManager;															// Font manager instance for managing fonts across the game, allowing for loading, retrieving, and unloading fonts in a centralized manner
+	std::unique_ptr<EntityManager> m_entityManager;										// Unique pointer to the central EntityManager owned by the engine, responsible for managing game entities and providing access to the entity system throughout the game
 
-	// Accessor for shared font manager
-	FontManager& GetFontManager() { return m_fontManager; }
+	FontManager& GetFontManager() { return m_fontManager; }								// Accessor for shared font manager
 
-	// Central EntityManager owned by the engine. Scenes should use this by default.
-	std::unique_ptr<EntityManager> m_entityManager;
-	EntityManager& GetEntityManager() { return *m_entityManager; }
+	// Texture manager for atlases/tilesets
+	TextureManager m_textureManager;
+	TextureManager& GetTextureManager() { return m_textureManager; }
+	EntityManager& GetEntityManager() const { return *m_entityManager; }						// Accessor for central entity manager, returns a reference to the EntityManager instance owned by the engine, allowing scenes and other game components to access and manage entities through the engine's central entity management system
 };
 

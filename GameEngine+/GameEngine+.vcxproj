@@ -171,6 +171,9 @@
     <ClCompile Include="Systems\RenderSystem.cpp" />
     <ClCompile Include="Systems\TileSystem.cpp" />
     <ClCompile Include="TestScene.cpp" />
+    <ClCompile Include="TextureAtlas.cpp" />
+    <ClCompile Include="TextureManager.cpp" />
+    <ClCompile Include="TileMap.cpp" />
     <ClCompile Include="TileMapScene.cpp" />
     <ClCompile Include="Utils.cpp" />
     <ClCompile Include="Vec2.cpp" />
@@ -216,6 +219,9 @@
     <ClInclude Include="Systems\RenderSystem.h" />
     <ClInclude Include="Systems\TileSystem.h" />
     <ClInclude Include="TestScene.h" />
+    <ClInclude Include="TextureAtlas.h" />
+    <ClInclude Include="TextureManager.h" />
+    <ClInclude Include="TileMap.h" />
     <ClInclude Include="TileMapScene.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="Vec2.h" />

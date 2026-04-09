@@ -1,6 +1,12 @@
 // ***** EntityManager.h - EntityManager class definition *****
 #pragma once
 
+// Forward Declarations
+class TileSystem;   // Forward declaration of TileSystem to avoid circular dependency with EntityManager, since EntityManager will have a unique_ptr to TileSystem and TileSystem will need to access EntityManager for managing tile entities. This allows us to use pointers to TileSystem in EntityManager without needing the full definition of TileSystem at this point, which helps to reduce compilation dependencies and improve build times.
+namespace sf { class RenderWindow; }
+class Entity;
+
+// Include necessary headers for SFML, standard library containers, and other components used by EntityManager
 #include <vector>
 #include <memory>
 #include <map>
@@ -15,15 +21,11 @@
 #include "Systems/CollisionSystem.h"
 #include "Systems/RenderSystem.h"
 #include "CTileMap.h"
-class TileSystem;
-#include <memory>
 
-// Forward Declarations
-namespace sf { class RenderWindow; }
-class Entity;
-
+// Type aliases (for convenience and readability)
 using EntityVector = std::vector<std::unique_ptr<Entity>>;
 using EntityMap = std::map<EntityType, std::vector<Entity*>>;
+
 
 class EntityManager
 {
@@ -52,10 +54,9 @@ public:
     RenderSystem& GetRenderSystem() { return m_renderSystem; }
 
     void AddTileMapAsEntities(const TileMap& map, int tileValueToTreatAsSolid = 1);
-    // Preferred: create a CTileMap entity which will be processed by TileSystem
-    Entity* CreateTileMapEntity(const TileMap& map);
-    // When creating/updating CTileMap components set this flag so TileSystem knows work is pending
-    void SetHasPendingTileMaps(bool v) { m_hasPendingTileMaps = v; }
+    Entity* CreateTileMapEntity(const TileMap& map);                                                // Preferred: create a CTileMap entity which will be processed by TileSystem
+    
+    void SetHasPendingTileMaps(bool v) { m_hasPendingTileMaps = v; }                                // When creating/updating CTileMap components set this flag so TileSystem knows work is pending
     bool HasPendingTileMaps() const { return m_hasPendingTileMaps; }
 
 private:

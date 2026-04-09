@@ -32,33 +32,6 @@ int main(int argc, char* argv[])
 	GameEngine& gameEngine = GameEngine::GetInstance();
 
 
-	// Load tile map texture (Im working on a tile map rendering system; this is to be moved to a more appropriate location once its ready, just testing it here for now) 
-	sf::Image image;
-	std::filesystem::path imagePath = std::filesystem::absolute("assets\\adventure.png");
-	image = IMS::LoadImage(imagePath.string());
-	std::vector<sf::Texture> textures = IMS::CreateTileMap(0, 0, 32, 32, image);
-	std::vector<sf::Sprite> sprites;
-
-	for (size_t i = 0; i < textures.size(); ++i)
-	{
-		sprites.emplace_back(textures[i]);
-	}
-
-	/*	Position sprites in a grid pattern across the window, wrapping to new rows as needed, this is just for demonstration purposes.	*/
-	int x = 0;	int y = 0;
-	for (size_t i = 0; i < sprites.size(); ++i)
-	{
-		if (i % 32 == 0) 
-		{
-			x = 0; // Reset x to start of row
-			y = (y + 32) % gameEngine.m_windowSize.y; // Move down by 32 pixels and wrap around vertically
-		}
-		sprites[i].setPosition({ static_cast<float>(x), static_cast<float>(y) }); // Example positions, adjust as needed
-		x += 32; // Move to the next column
-	}
-	
-	bool isPressed = false; // Flag to track if the spacebar is currently pressed, used to prevent multiple spawns per key pres, this shouldnt be here, I'll move it later
-
 
 	gameEngine.Run(); // Start the main game loop.
 

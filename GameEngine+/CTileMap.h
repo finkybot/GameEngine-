@@ -2,7 +2,7 @@
 #pragma once
 
 #include "Component.h"
-#include "Raycast.h"
+#include "TileMap.h"
 
 // CTileMap component - stores a TileMap inside an entity so systems can operate on tilemaps via ECS
 class CTileMap : public Component

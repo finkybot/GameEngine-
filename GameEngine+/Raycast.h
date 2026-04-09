@@ -13,6 +13,7 @@
 #include <string>
 #include <iomanip>
 #include "Utils.h"
+// TileMap is referenced here via TileMap.h included below by caller when needed
 
 // Debug helpers to optionally collect visited cells when performing raycasts.
 namespace RaycastDebug {
@@ -27,22 +28,8 @@ namespace RaycastDebug {
     inline const std::vector<std::pair<int,int>>& GetLastVisited() { return lastVisited; }
 }
 
-// Simple tile map structure used by the raycaster
-struct TileMap
-{
-    int width = 0;
-    int height = 0;
-    float tileSize = 32.0f;
-    std::vector<int> tiles; // 0 = empty, non-zero = solid
-
-    TileMap() = default;
-    TileMap(int w, int h, float sz = 32.0f) : width(w), height(h), tileSize(sz), tiles(w*h, 0) {}
-
-    inline bool InBounds(int x, int y) const { return x >= 0 && y >= 0 && x < width && y < height; }
-    inline int GetTile(int x, int y) const { return InBounds(x,y) ? tiles[y*width + x] : 0; }
-    inline void SetTile(int x, int y, int v) { if (InBounds(x,y)) tiles[y*width + x] = v; }
-    inline bool IsSolid(int x, int y) const { return GetTile(x,y) != 0; }
-};
+// TileMap is defined in TileMap.h - include it for use in raycast utilities
+#include "TileMap.h"
 
 // JSON save/load for TileMap moved to Utils.* to centralize parsing utilities.
 

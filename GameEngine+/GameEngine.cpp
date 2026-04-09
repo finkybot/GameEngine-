@@ -9,6 +9,9 @@
 #include "Scene.h"
 #include "TestScene.h"
 #include "TileMapScene.h"
+#include "TileMapEditorScene.h"
+#include <imgui/imgui.h>
+#include <imgui/backends/imgui-SFML.h>
 #include <cstdlib>
 
 GameEngine::GameEngine()
@@ -25,9 +28,14 @@ GameEngine::GameEngine()
 	m_entityManager = std::make_unique<EntityManager>(m_window);
 	m_entityManager->GetRenderSystem().SetFontManager(&m_fontManager);
 
-	// Preload a default atlas if present (non-fatal)
+    // Preload a default atlas if present (non-fatal)
 	m_textureManager.LoadAtlas("adventure", "assets\\adventure.png", 32, 32);
 
+	// Initialize ImGui-SFML early so scenes can safely call ImGui during Update
+	if (!ImGui::SFML::Init(m_window)) {
+		std::cerr << "Warning: Failed to initialize ImGui::SFML in GameEngine" << std::endl;
+		// continue without ImGui but scenes must tolerate absence
+	}
 }
 
 GameEngine::~GameEngine()
@@ -68,8 +76,9 @@ void GameEngine::Run()
 	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
     AddScene("TestScene", std::make_shared<TestScene>(*this, m_window, *m_entityManager)); // Adding TestScene
 	AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, m_window, *m_entityManager)); // Adding TileMapScene
+	AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, m_window, *m_entityManager)); // Adding TileMapEditor
 	//ChangeScene("TestScene");
-	ChangeScene("TileMapScene");
+	ChangeScene("TileMapEditor");
 	m_currentScene->InitializeGame(m_windowSize);
 
     // FontManager already bound to engine-owned EntityManager in constructor
@@ -89,12 +98,19 @@ void GameEngine::Update(float deltaTime)
 	// Handle events and input before updating the scene.
 	while (m_window.isOpen())
 	{
-		// Clear the window at the start of each frame
+        // Clear the window at the start of each frame
 		m_window.clear();
+
+		// Restart delta clock and update ImGui once per frame
+		sf::Time frameTime = m_deltaClock.restart();
+		if (ImGui::GetCurrentContext()) ImGui::SFML::Update(m_window, frameTime);
 
 		// Poll events (SFML 3: pollEvent returns std::optional<sf::Event>) and forward to current scene
 		while (auto eventOpt = m_window.pollEvent())
 		{
+            // Forward events to ImGui-SFML so UI widgets receive input
+			if (ImGui::GetCurrentContext()) ImGui::SFML::ProcessEvent(m_window, *eventOpt);
+
 			if (m_currentScene) m_currentScene->HandleEvent(eventOpt);
 			if (eventOpt->is<sf::Event::Closed>()) m_window.close();
 		}
@@ -104,7 +120,12 @@ void GameEngine::Update(float deltaTime)
 
 		if (m_currentScene)
 		{
-          m_currentScene->Update(deltaTime);
+			// Let the scene update (handles ImGui update and input)
+			m_currentScene->Update(deltaTime);
+
+			// Ensure the scene's EntityManager processes game logic (tile system, pending entities)
+			m_currentScene->GetEntityManager().Update(deltaTime);
+
 			// Engine render pass ordering:
 			// 1) Entity shapes
 			m_currentScene->GetEntityManager().RenderShapes();
@@ -113,6 +134,16 @@ void GameEngine::Update(float deltaTime)
 			// 3) Entity text (render on top of overlays)
 			m_currentScene->GetEntityManager().RenderText();
 		}
+
+        // Draw any debug overlays from the current scene before ImGui so they are visible
+		if (m_currentScene) m_currentScene->RenderDebugOverlay();
+
+        // Render ImGui on top of everything (ImGui::SFML::Render without args uses current target)
+		if (ImGui::GetCurrentContext() && (m_currentScene == nullptr || m_currentScene->IsImGuiEnabled())) {
+			ImGui::SFML::Render(m_window);
+		}
+
+
 
 		m_window.display();
 	}

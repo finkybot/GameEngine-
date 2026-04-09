@@ -151,6 +151,7 @@
     <ClCompile Include="CTransform.cpp" />
     <ClCompile Include="Entity.cpp" />
     <ClCompile Include="EntityManager.cpp" />
+    <ClCompile Include="FileDialog.cpp" />
     <ClCompile Include="FontManager.cpp" />
     <ClCompile Include="GameController.cpp" />
     <ClCompile Include="GameEngine.cpp" />
@@ -174,6 +175,7 @@
     <ClCompile Include="TextureAtlas.cpp" />
     <ClCompile Include="TextureManager.cpp" />
     <ClCompile Include="TileMap.cpp" />
+    <ClCompile Include="TileMapEditorScene.cpp" />
     <ClCompile Include="TileMapScene.cpp" />
     <ClCompile Include="Utils.cpp" />
     <ClCompile Include="Vec2.cpp" />
@@ -192,6 +194,7 @@
     <ClInclude Include="Entity.h" />
     <ClInclude Include="EntityManager.h" />
     <ClInclude Include="EntityType.h" />
+    <ClInclude Include="FileDialog.h" />
     <ClInclude Include="FontManager.h" />
     <ClInclude Include="GameController.h" />
     <ClInclude Include="GameEngine.h" />
@@ -222,6 +225,7 @@
     <ClInclude Include="TextureAtlas.h" />
     <ClInclude Include="TextureManager.h" />
     <ClInclude Include="TileMap.h" />
+    <ClInclude Include="TileMapEditorScene.h" />
     <ClInclude Include="TileMapScene.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="Vec2.h" />

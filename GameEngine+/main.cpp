@@ -31,8 +31,6 @@ int main(int argc, char* argv[])
 	// Create the game engine instance (singleton)
 	GameEngine& gameEngine = GameEngine::GetInstance();
 
-
-
 	gameEngine.Run(); // Start the main game loop.
 
 	// Cleanup ImGui resources before exiting the application

@@ -31,6 +31,12 @@ public:
 	virtual void UnloadResources() = 0;
 	virtual void InitializeGame(sf::Vector2u windowSize) = 0;
 
+	// Optional: draw overlays after ImGui/UI has been rendered (engine calls this after ImGui::SFML::Render)
+	virtual void RenderDebugOverlay() {}
+
+	// Allow scene to control whether ImGui should be updated/rendered for this scene
+	virtual bool IsImGuiEnabled() { return true; }
+
 	GameController* GetGameController() { return &m_GameController; }
 
 	// non-copyable

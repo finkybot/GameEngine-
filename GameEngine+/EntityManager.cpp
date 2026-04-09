@@ -42,9 +42,8 @@ Entity* EntityManager::CreateTileMapEntity(const TileMap& map)
 	if (!e) return nullptr;
 
 	// Attach the tilemap component which TileSystem will process on next Update
-	e->AddComponent<CTileMap>(TileMap(map.width, map.height, map.tileSize));
-	// copy tiles
-	e->GetComponent<CTileMap>()->map.tiles = map.tiles;
+    // copy entire TileMap (including tileset metadata) so TileSystem has full information
+	e->AddComponent<CTileMap>(map);
     // mark manager flag so TileSystem will be processed on next update
 	m_hasPendingTileMaps = true;
 	return e;

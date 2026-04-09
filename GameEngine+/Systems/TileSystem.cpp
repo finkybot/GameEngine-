@@ -1,6 +1,8 @@
 #include "TileSystem.h"
 #include "../CRectangle.h"
 #include "../CStatic.h"
+#include "../CTexture.h"
+#include "../GameEngine.h"
 
 void TileSystem::Process()
 {
@@ -34,10 +36,11 @@ void TileSystem::Process()
             {
                 int idx = y * map.width + x;
 				if (used[idx]) continue; // Skip tiles that have already been merged into a rectangle
-				if (!map.IsSolid(x, y)) continue; // Skip non-solid tiles
+                int baseVal = map.GetTile(x, y);
+                if (baseVal == 0) continue; // Skip non-solid/empty tiles
 
                 int w = 1;
-                while (x + w < map.width && map.IsSolid(x + w, y) && !used[y * map.width + (x + w)]) ++w;
+                while (x + w < map.width && map.GetTile(x + w, y) == baseVal && !used[y * map.width + (x + w)]) ++w;
 
                 int h = 1;
                 bool canExtend = true;
@@ -45,7 +48,7 @@ void TileSystem::Process()
                 {
                     for (int xi = 0; xi < w; ++xi)
                     {
-                        if (!map.IsSolid(x + xi, y + h) || used[(y + h) * map.width + (x + xi)])
+                        if (map.GetTile(x + xi, y + h) != baseVal || used[(y + h) * map.width + (x + xi)])
                         {
                             canExtend = false;
                             break;
@@ -67,9 +70,37 @@ void TileSystem::Process()
                 if (tileEntity)
                 {
                     tileEntity->AddComponent<CTransform>(Vec2(posX, posY), Vec2(0.0f, 0.0f));
+                    bool textureAttached = false;
+                    // Attach texture component if tileset metadata is present and atlas contains the index
+                    if (!map.tilesetKey.empty() && map.tilesetTileW > 0 && map.tilesetTileH > 0)
+                    {
+                        // Tile indices in map.tiles are assumed to be 1-based (0 == empty). Convert to 0-based atlas index.
+                        int tileVal = map.GetTile(x, y);
+                        int atlasIndex = tileVal > 0 ? (tileVal - 1) : 0;
+                        // Verify atlas exists and index is valid
+                        auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(map.tilesetKey);
+                        if (atlasOpt.has_value()) {
+                            auto atlasPtr = *atlasOpt;
+                            if (atlasPtr && atlasIndex >= 0 && (size_t)atlasIndex < atlasPtr->TileCount()) {
+                                // Attach texture component and set area to merged rectangle size so RenderSystem
+                                // knows not to scale a single sprite over the merged area.
+                                tileEntity->AddComponent<CTexture>(map.tilesetKey, atlasIndex, tileW, tileH);
+                                textureAttached = true;
+                                // Debug log
+                                std::cout << "TileSystem: attached texture atlas='" << map.tilesetKey << "' index=" << atlasIndex << " at (" << posX << "," << posY << ") size=" << tileW << "x" << tileH << "\n";
+                            } else {
+                                std::cout << "TileSystem: atlas index out of range or atlas missing for key='" << map.tilesetKey << "' index=" << atlasIndex << "\n";
+                            }
+                        } else {
+                            std::cout << "TileSystem: atlas not found for key='" << map.tilesetKey << "'\n";
+                        }
+                    }
+                    // Fallback shape for collision visualization if no texture is available
+                    // If texture is attached, still add a CShape but mark it invisible so it doesn't draw over the sprite.
                     auto rect = std::make_unique<CRectangle>(tileW, tileH);
                     rect->SetColor(160.0f, 160.0f, 160.0f, 200);
                     tileEntity->AddComponentPtr<CShape>(std::move(rect));
+                    if (textureAttached) tileEntity->GetComponent<CShape>()->GetShape().setFillColor(sf::Color::Transparent);
                     tileEntity->AddComponent<CStatic>();
                 }
             }

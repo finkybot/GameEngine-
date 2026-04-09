@@ -7,6 +7,7 @@
 #include "InputController.h"
 #include "FontManager.h"
 #include "TextureManager.h"
+#include "Utils/FPSCounter.h"
 
 #include <map>
 #include <string>
@@ -55,6 +56,8 @@ public:
 	FontManager& GetFontManager() { return m_fontManager; }								// Accessor for shared font manager
 
 	// Texture manager for atlases/tilesets
+    FPSCounter m_fpsCounter;															// Shared FPS counter that scenes and UI can query
+	FPSCounter& GetFPSCounter() { return m_fpsCounter; }
 	TextureManager m_textureManager;
 	TextureManager& GetTextureManager() { return m_textureManager; }
 	EntityManager& GetEntityManager() const { return *m_entityManager; }						// Accessor for central entity manager, returns a reference to the EntityManager instance owned by the engine, allowing scenes and other game components to access and manage entities through the engine's central entity management system

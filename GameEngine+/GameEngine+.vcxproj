@@ -189,6 +189,7 @@
     <ClInclude Include="CShape.h" />
     <ClInclude Include="CStatic.h" />
     <ClInclude Include="CText.h" />
+    <ClInclude Include="CTexture.h" />
     <ClInclude Include="CTileMap.h" />
     <ClInclude Include="CTransform.h" />
     <ClInclude Include="Entity.h" />
@@ -228,6 +229,7 @@
     <ClInclude Include="TileMapEditorScene.h" />
     <ClInclude Include="TileMapScene.h" />
     <ClInclude Include="Utils.h" />
+    <ClInclude Include="Utils\FPSCounter.h" />
     <ClInclude Include="Vec2.h" />
   </ItemGroup>
   <ItemGroup>

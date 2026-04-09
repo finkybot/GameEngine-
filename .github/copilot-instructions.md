@@ -6,4 +6,6 @@
 - Avoid calling methods on raw pointers that may have been deleted; when removing entities, collect dead pointers then remove them from other structures by pointer comparison (use unordered_set) to avoid use-after-free.
 - Render entity text after scene overlays; ensure that entity text is displayed on top of scene overlays for better visibility.
 - Plan to create a full sprite system and combine tilemaps with textures; ensure that rendering logic accommodates both sprites and tilemaps effectively.
- 
+
+## Audio Integration
+- Prepare to implement audio (sound effects and music) integration into the GameEngine+ project.

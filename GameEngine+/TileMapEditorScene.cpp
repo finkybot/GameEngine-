@@ -5,6 +5,7 @@
 #include "FileDialog.h"
 #include "Entity.h"
 #include "CTileMap.h"
+#include "CTexture.h"
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 // Internal context pointer used to safely check whether ImGui NewFrame() has been called
@@ -17,10 +18,10 @@ TileMapEditorScene::TileMapEditorScene(GameEngine& engine, sf::RenderWindow& win
 // Destructor - defaulted since we don't have any special cleanup logic, but we could add it if needed in the future
 TileMapEditorScene::~TileMapEditorScene() = default;
 
-void TileMapEditorScene::Update(float /*deltaTime*/)
+void TileMapEditorScene::Update(float deltaTime)
 {
-    // ImGui backend update (match TestScene behavior)
-    sf::Time frameTime = m_gameEngine.m_deltaClock.restart();
+    // Update shared FPS counter is handled by the engine; query it here for display
+    m_fps = m_gameEngine.GetFPSCounter().GetFPS();
     // Disabled ImGui update while debugging visuals
     // ImGui::SFML::Update(m_gameEngine.m_window, frameTime);
 
@@ -34,6 +35,10 @@ void TileMapEditorScene::Update(float /*deltaTime*/)
 
         ImGui::Text("File: %s", m_currentFilename.empty() ? "<unsaved>" : m_currentFilename.c_str());
         ImGui::Text("Map: %d x %d, tileSize: %.1f", m_tileMap.width, m_tileMap.height, m_tileMap.tileSize);
+        ImGui::SameLine(0.0f, 10.0f);
+        ImGui::Text("FPS (smoothed): %.1f", m_fps);
+        ImGui::SameLine(0.0f, 10.0f);
+        ImGui::Text("FPS (instant): %.1f", m_gameEngine.GetFPSCounter().GetInstantFPS());
         ImGui::Separator();
 
         // Keep track of selected file from navigator
@@ -47,6 +52,17 @@ void TileMapEditorScene::Update(float /*deltaTime*/)
                 m_currentFilename = fullpath;
                 m_dirty = false;
                 std::cout << "Loaded tilemap: " << fullpath << std::endl;
+                // If we have an existing CTileMap entity, update its component so TileSystem will reprocess
+                if (m_tileMapEntity) {
+                    auto cmp = m_tileMapEntity->GetComponent<CTileMap>();
+                    if (cmp) {
+                        cmp->map = m_tileMap; // copy whole TileMap including tileset metadata
+                        cmp->m_dirty = true;
+                        cmp->m_processed = false;
+                        m_entityManager.SetHasPendingTileMaps(true);
+                        m_entityManager.Update(0.0f); // force immediate processing so textures attach when atlas available
+                    }
+                }
             } else {
                 std::cerr << "Failed to load tilemap: " << err << std::endl;
             }
@@ -99,8 +115,9 @@ void TileMapEditorScene::Update(float /*deltaTime*/)
                 if (!p.is_absolute()) p = m_currentDir / p;
                 std::string path = p.string();
                 if (!path.empty()) {
-                    std::string err; if (m_tileMap.SaveToJSON(path, &err)) { m_currentFilename = path; m_dirty = false; }
-                    else { std::cerr << "Error saving tilemap: " << err << std::endl; }
+                    std::string err; if (m_tileMap.SaveToJSON(path, &err)) { m_currentFilename = path; m_dirty = false; 
+                        // Also ensure saved file includes tileset metadata from current map
+                    } else { std::cerr << "Error saving tilemap: " << err << std::endl; }
                 }
                 ImGui::CloseCurrentPopup(); m_showSaveDialog = false;
             }
@@ -177,6 +194,131 @@ void TileMapEditorScene::Update(float /*deltaTime*/)
         }
         ImGui::EndChild();
 
+        // Atlas loader UI: try to load adventure.png into engine atlas
+        static std::string s_atlas_status;
+        bool atlasLoaded = m_gameEngine.GetTextureManager().GetAtlas("adventure").has_value();
+        ImGui::Separator();
+        ImGui::Text("Atlas 'adventure': %s", atlasLoaded ? "Loaded" : "Not loaded");
+        if (ImGui::Button("Load adventure.png into atlas")) {
+            std::vector<std::filesystem::path> candidates = {
+                m_currentDir / "adventure.png",
+                m_currentDir / "assets" / "adventure.png",
+                std::filesystem::current_path() / "assets" / "adventure.png",
+                std::filesystem::current_path() / "adventure.png"
+            };
+            std::string found;
+            std::error_code ec;
+            for (auto &c : candidates) {
+                if (!c.empty() && std::filesystem::exists(c, ec) && !ec) { found = c.string(); break; }
+            }
+                if (found.empty()) {
+                s_atlas_status = "adventure.png not found in candidates";
+                std::cerr << s_atlas_status << std::endl;
+            } else {
+                bool ok = m_gameEngine.GetTextureManager().LoadAtlas("adventure", found, 32, 32);
+                s_atlas_status = ok ? (std::string("Loaded: ") + found) : (std::string("Failed to load: ") + found);
+                if (ok) std::cout << "Texture atlas loaded: " << found << std::endl; else std::cerr << s_atlas_status << std::endl;
+                    if (ok) {
+                        // Ensure current tilemap knows which tileset to use so TileSystem will attach textures
+                        m_tileMap.tilesetKey = "adventure";
+                        m_tileMap.tilesetTileW = 32;
+                        m_tileMap.tilesetTileH = 32;
+                        // Mark CTileMap component dirty so TileSystem recreates tile entities with textures
+                        if (m_tileMapEntity) {
+                            auto cmp = m_tileMapEntity->GetComponent<CTileMap>();
+                            if (cmp) {
+                                cmp->map.tilesetKey = m_tileMap.tilesetKey;
+                                cmp->map.tilesetTileW = m_tileMap.tilesetTileW;
+                                cmp->map.tilesetTileH = m_tileMap.tilesetTileH;
+                                cmp->m_dirty = true;
+                                cmp->m_processed = false;
+                                m_entityManager.SetHasPendingTileMaps(true);
+                                m_entityManager.Update(0.0f); // force immediate processing
+                            }
+                        }
+                    }
+            }
+        }
+        if (!s_atlas_status.empty()) ImGui::TextUnformatted(s_atlas_status.c_str());
+        // Tile entities textures panel
+        ImGui::Separator();
+        if (ImGui::CollapsingHeader("Tile Entities (Textures)")) {
+            auto& tileEntities = m_entityManager.getEntities(EntityType::Tile);
+            ImGui::BeginChild("tile_textures", ImVec2(0, 200), true);
+            int count = 0;
+            for (Entity* te : tileEntities) {
+                if (!te) continue;
+                auto texComp = te->GetComponent<CTexture>();
+                if (!texComp) continue;
+                // Lookup atlas and rect
+                auto atlasOpt = m_gameEngine.GetTextureManager().GetAtlas(texComp->atlasKey);
+                if (!atlasOpt.has_value()) continue;
+                auto atlasPtr = *atlasOpt;
+                if (!atlasPtr) continue;
+                auto tileRectOpt = atlasPtr->GetRectForTile((size_t)texComp->tileIndex);
+                auto texPtr = atlasPtr->GetTexture();
+                if (!tileRectOpt.has_value() || !texPtr) continue;
+                auto tr = *tileRectOpt;
+
+                // Create sprite for thumbnail
+                sf::Sprite sprite(*texPtr);
+                sprite.setTextureRect(sf::IntRect(sf::Vector2i(tr.x, tr.y), sf::Vector2i(tr.w, tr.h)));
+
+                // Thumbnail size (scaled to 32 px region preserving aspect by simple fit)
+                float thumb = 32.0f;
+                sf::Vector2f thumbSize(thumb, thumb);
+
+                std::string id = "tile_tex_" + std::to_string(count);
+                if (ImGui::ImageButton(id.c_str(), sprite, thumbSize)) {
+                    // Set brush to this tile value (map tile values are 1-based)
+                    m_brushTileValue = texComp->tileIndex + 1;
+                }
+                ImGui::SameLine();
+                ImGui::Text("%s [%d]", texComp->atlasKey.c_str(), texComp->tileIndex);
+                ImGui::NewLine();
+                ++count;
+            }
+            ImGui::EndChild();
+            // Debug: show how many textured tile entities were found
+            int texturedCount = 0;
+            for (Entity* te : tileEntities) if (te && te->GetComponent<CTexture>()) ++texturedCount;
+            ImGui::Text("Textured tile entities: %d", texturedCount);
+        }
+
+        // Atlas browser (debug): show all tiles from loaded 'adventure' atlas so user can pick one even if no tile entities exist
+        ImGui::Separator();
+        ImGui::Text("Atlas Browser (adventure)");
+        auto atlasOpt = m_gameEngine.GetTextureManager().GetAtlas("adventure");
+        if (!atlasOpt.has_value() || !(*atlasOpt)) {
+            ImGui::TextUnformatted("(atlas not loaded)");
+        } else {
+            auto atlasPtr = *atlasOpt;
+            auto texPtr = atlasPtr->GetTexture();
+            if (!texPtr) {
+                ImGui::TextUnformatted("(atlas texture missing)");
+            } else {
+                int tileCount = static_cast<int>(atlasPtr->TileCount());
+                ImGui::Text("Tiles in atlas: %d", tileCount);
+                const int cols = 8;
+                float thumb = 32.0f;
+                ImGui::BeginChild("atlas_grid", ImVec2(0, 200), true);
+                for (int i = 0; i < tileCount; ++i) {
+                    auto trOpt = atlasPtr->GetRectForTile((size_t)i);
+                    if (!trOpt.has_value()) continue;
+                    auto tr = *trOpt;
+                    sf::Sprite sprite(*texPtr);
+                    sprite.setTextureRect(sf::IntRect(sf::Vector2i(tr.x, tr.y), sf::Vector2i(tr.w, tr.h)));
+                    std::string id = std::string("atlas_tile_") + std::to_string(i);
+                    if (ImGui::ImageButton(id.c_str(), sprite, sf::Vector2f(thumb, thumb))) {
+                        m_brushTileValue = i + 1; // atlas 0-based -> map 1-based
+                    }
+                    if ((i % cols) != (cols - 1)) ImGui::SameLine();
+                }
+                ImGui::EndChild();
+            }
+        }
+
+
         ImGui::End();
     }
 
@@ -199,17 +341,7 @@ void TileMapEditorScene::RenderDebugOverlay()
     sf::View view = m_window.getDefaultView();
     m_window.setView(view);
 
-    // Draw grid and highlight on top of ImGui and entities (in default view)
-    // Diagnostic: draw a fullscreen translucent test rect to confirm overlay rendering
-    {
-        sf::Vector2u ws = m_window.getSize();
-        sf::RectangleShape testBg(sf::Vector2f(static_cast<float>(ws.x), static_cast<float>(ws.y)));
-        testBg.setPosition(sf::Vector2f(0.0f, 0.0f));
-        testBg.setFillColor(sf::Color(0, 0, 128, 32)); // subtle translucent blue
-        testBg.setOutlineColor(sf::Color::Blue);
-        testBg.setOutlineThickness(2.0f);
-        m_window.draw(testBg);
-    }
+    // Draw grid and highlight on top of entities (no fullscreen diagnostic overlay)
     DrawGrid();
     if (m_lastClickedX >= 0 && m_lastClickedY >= 0) {
         sf::RectangleShape highlight(sf::Vector2f(m_tileMap.tileSize, m_tileMap.tileSize));
@@ -302,7 +434,10 @@ void TileMapEditorScene::DrawGrid()
     // Draw using the current view (world coordinates) so grid aligns with mouse/world coords
     for (int y = 0; y < m_tileMap.height; ++y) {
         for (int x = 0; x < m_tileMap.width; ++x) {
-            if (m_tileMap.IsSolid(x,y)) {
+            // Only draw a filled grey rectangle for tiles when no texture atlas is configured.
+            // When a tileset/atlas is present we rely on the RenderSystem to draw textured sprites
+            // and avoid drawing the grey fill which would blend over the texture thumbnail.
+            if (m_tileMap.IsSolid(x,y) && m_tileMap.tilesetKey.empty()) {
                 sf::RectangleShape rect(sf::Vector2f(m_tileMap.tileSize, m_tileMap.tileSize));
                 rect.setPosition(sf::Vector2f(x * m_tileMap.tileSize, y * m_tileMap.tileSize));
                 rect.setFillColor(sf::Color(160,160,160,220));

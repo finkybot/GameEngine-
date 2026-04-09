@@ -61,4 +61,5 @@ private:
 	Entity* m_tileMapEntity = nullptr;			// Entity representing the tile map in the entity manager, used for rendering the tile map using the engine's TileSystem. We keep a pointer to it so we can update or replace it when the tile map changes.
 	bool m_enableImGui = true;					// whether to enable ImGui rendering and input for this scene, can be toggled for debugging purposes to isolate scene rendering without UI
     std::filesystem::path m_currentDir;			// current folder for file navigator
+  float m_fps = 0.0f;                             // smoothed FPS value for ImGui display
 };

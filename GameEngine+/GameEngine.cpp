@@ -28,8 +28,8 @@ GameEngine::GameEngine()
 	m_entityManager = std::make_unique<EntityManager>(m_window);
 	m_entityManager->GetRenderSystem().SetFontManager(&m_fontManager);
 
-    // Preload a default atlas if present (non-fatal)
-	m_textureManager.LoadAtlas("adventure", "assets\\adventure.png", 32, 32);
+    // Do not preload atlases automatically. Atlases should be loaded explicitly via the editor UI so users
+	// can choose which atlas to use at runtime.
 
 	// Initialize ImGui-SFML early so scenes can safely call ImGui during Update
 	if (!ImGui::SFML::Init(m_window)) {
@@ -105,6 +105,9 @@ void GameEngine::Update(float deltaTime)
 		sf::Time frameTime = m_deltaClock.restart();
 		if (ImGui::GetCurrentContext()) ImGui::SFML::Update(m_window, frameTime);
 
+		// Update shared FPS counter with the real frame time
+		m_fpsCounter.Update(frameTime.asSeconds());
+
 		// Poll events (SFML 3: pollEvent returns std::optional<sf::Event>) and forward to current scene
 		while (auto eventOpt = m_window.pollEvent())
 		{
@@ -115,13 +118,14 @@ void GameEngine::Update(float deltaTime)
 			if (eventOpt->is<sf::Event::Closed>()) m_window.close();
 		}
 		
-		// Update method will run  (carry out) these actions.
+        // Update method will run  (carry out) these actions.
 		m_InputController.Update(deltaTime);
 
 		if (m_currentScene)
 		{
 			// Let the scene update (handles ImGui update and input)
-			m_currentScene->Update(deltaTime);
+			// Use the actual frame time measured above so scenes get accurate timing for FPS and logic.
+			m_currentScene->Update(frameTime.asSeconds());
 
 			// Ensure the scene's EntityManager processes game logic (tile system, pending entities)
 			m_currentScene->GetEntityManager().Update(deltaTime);

@@ -5,6 +5,9 @@
 #include "../CTransform.h"
 #include "../CText.h"
 #include "../FontManager.h"
+#include "../CTexture.h"
+#include "../GameEngine.h"
+#include <SFML/Graphics/Sprite.hpp>
 
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/Text.hpp>
@@ -30,6 +33,57 @@ void RenderSystem::RenderAll(const std::vector<std::unique_ptr<Entity>>& entitie
 
 void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const
 {
+    // Prefer texture component when present
+    if (auto tex = entity->GetComponent<CTexture>())
+    {
+        if (!tex->visible) return;
+        auto transform = entity->GetComponent<CTransform>();
+        if (!transform) return;
+        // Lookup atlas texture via engine's TextureManager
+        auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(tex->atlasKey);
+        if (atlasOpt.has_value()) {
+            auto atlasPtr = *atlasOpt; // shared_ptr<TextureAtlas>
+            if (atlasPtr) {
+                auto texPtr = atlasPtr->GetTexture();
+                auto rectOpt = atlasPtr->GetSfFloatRectForTile((size_t)tex->tileIndex);
+                if (texPtr && rectOpt.has_value()) {
+                    sf::Sprite sprite(*texPtr);
+                    sf::FloatRect fr = *rectOpt;
+                    // Use sf::FloatRect's position/size members (SFML variant in this project)
+                    // Construct IntRect from position and size vectors (SFML Rect constructor overload)
+                    sprite.setTextureRect(sf::IntRect(sf::Vector2i((int)fr.position.x, (int)fr.position.y), sf::Vector2i((int)fr.size.x, (int)fr.size.y)));
+                    // setPosition in SFML 3 takes a Vector2f
+                    sprite.setPosition(sf::Vector2f(transform->m_position.x, transform->m_position.y));
+                    // If this entity has a shape with size larger than a single atlas tile (merged rectangle),
+                    // tile the sprite rather than scaling it to avoid stretching across adjacent tiles.
+                    // If the texture component specified an explicit area (merged rectangle), tile the atlas
+                    // across that area instead of scaling a single sprite.
+                    if (auto texComp = entity->GetComponent<CTexture>()) {
+                        if (texComp->areaW > 0.0f && texComp->areaH > 0.0f) {
+                            int atlasW = atlasPtr->TileWidth();
+                            int atlasH = atlasPtr->TileHeight();
+                            if (atlasW > 0 && atlasH > 0) {
+                                int tilesX = static_cast<int>(std::round(texComp->areaW / static_cast<float>(atlasW)));
+                                int tilesY = static_cast<int>(std::round(texComp->areaH / static_cast<float>(atlasH)));
+                                for (int ty = 0; ty < tilesY; ++ty) {
+                                    for (int tx = 0; tx < tilesX; ++tx) {
+                                        sf::Sprite tileSprite(*texPtr);
+                                        tileSprite.setTextureRect(sf::IntRect(sf::Vector2i((int)fr.position.x, (int)fr.position.y), sf::Vector2i((int)fr.size.x, (int)fr.size.y)));
+                                        tileSprite.setPosition(sf::Vector2f(transform->m_position.x + tx * atlasW, transform->m_position.y + ty * atlasH));
+                                        window.draw(tileSprite);
+                                    }
+                                }
+                                return;
+                            }
+                        }
+                    }
+                    window.draw(sprite);
+                    return;
+                }
+            }
+        }
+    }
+
     if (auto shape = entity->GetComponent<CShape>())
     {
         auto transform = entity->GetComponent<CTransform>();

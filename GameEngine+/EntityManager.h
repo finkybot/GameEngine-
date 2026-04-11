@@ -3,6 +3,7 @@
 
 // Forward Declarations
 class TileSystem;   // Forward declaration of TileSystem to avoid circular dependency with EntityManager, since EntityManager will have a unique_ptr to TileSystem and TileSystem will need to access EntityManager for managing tile entities. This allows us to use pointers to TileSystem in EntityManager without needing the full definition of TileSystem at this point, which helps to reduce compilation dependencies and improve build times.
+class MusicSystem;  // forward declare MusicSystem
 namespace sf { class RenderWindow; }
 class Entity;
 
@@ -77,6 +78,6 @@ private:
     CollisionSystem m_collisionSystem;
     RenderSystem m_renderSystem;
     std::unique_ptr<TileSystem> m_tileSystem;
+    std::unique_ptr<MusicSystem> m_musicSystem; // system owning runtime sf::Music objects
     bool m_hasPendingTileMaps = true;
 };
-      

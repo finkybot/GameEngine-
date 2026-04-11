@@ -6,6 +6,8 @@
 #include "Entity.h"
 #include "CTileMap.h"
 #include "CTexture.h"
+#include "CMusic.h"
+
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 // Internal context pointer used to safely check whether ImGui NewFrame() has been called
@@ -318,6 +320,64 @@ void TileMapEditorScene::Update(float deltaTime)
             }
         }
 
+
+        // Music loader UI.. I can use imgui to test loading of and playing of music
+        ImGui::Separator();
+        ImGui::Text("Music (assets)");
+        static std::string s_music_status;
+
+		// Try to load ambition.mp3 from candidates and play it using CMusic component on a temporary entity
+        if (ImGui::Button("Load assets/ambition.mp3")) 
+        {
+            std::vector<std::filesystem::path> candidates = { m_currentDir / "ambition.mp3", m_currentDir / "assets" / "ambition.mp3", 
+                                                                            std::filesystem::current_path() / "assets" / "ambition.mp3",
+                                                                            std::filesystem::current_path() / "ambition.mp3"
+            };
+
+			// Check candidates for existence and pick the first one found
+            std::string found;
+			std::error_code errorCode; // To avoid exceptions in the filesystem operations. If an error occurs, the error code will be set and we can check it instead of catching exceptions.
+            for (auto &candidate : candidates) 
+            {
+                if (!candidate.empty() && std::filesystem::exists(candidate, errorCode) && !errorCode) 
+                { 
+                    found = candidate.string(); 
+                    break; 
+                }
+            }
+			// If found, create a music entity with CMusic component to play it. Otherwise, log an error.
+			// Note: the music file must be a valid format supported by SFML (e.g. OGG, WAV, FLAC) and not too large to load into memory, since SFML's sf::Music streams from file but still needs 
+            // to load the file header and manage it with sf::Music instance. If the file is very large or in an unsupported format, loading may fail. ....Shit we can load Flac????? HollllyyyySsseeehhhhiiiit
+            if (found.empty()) // check if there is nothing, report error
+            {
+                s_music_status = "ambition.mp3 not found in candidates";
+                std::cerr << s_music_status << std::endl;
+            } 
+            // otherwise create 
+            else {
+                // Create an entity and attach a music component. Constructor: (path, volume, looped, playOnStart) and play....
+                Entity* musicEntity = m_entityManager.addEntity(EntityType::Default);
+                if (musicEntity) 
+                {
+                    auto* musicComponent = musicEntity->AddComponent<CMusic>(found, 80.f, true, true);
+                    musicComponent->state = CMusic::State::Playing;
+                    musicComponent->loop = true;
+                    // Force immediate processing so MusicSystem opens/plays the file now
+                    m_entityManager.Update(0.0f);
+                    s_music_status = std::string("Loaded: ") + found;
+                    std::cout << s_music_status << std::endl;
+                }
+				// If entity or component creation failed, log an error
+                else 
+                {
+                    s_music_status = "Failed to create music entity";
+                    std::cerr << s_music_status << std::endl;
+                }
+            }
+        }
+
+		// Display music status (loaded file or errors)
+        if (!s_music_status.empty()) ImGui::TextUnformatted(s_music_status.c_str());
 
         ImGui::End();
     }

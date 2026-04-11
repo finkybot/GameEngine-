@@ -17,6 +17,7 @@
 #include "CRectangle.h"
 #include "CStatic.h"
 #include "Systems/TileSystem.h"
+#include "MusicSystem.h"
 
 // Constructor - takes reference to SFML render window for drawing and FPS reporting
 EntityManager::EntityManager(sf::RenderWindow& window, float cellSize)
@@ -26,6 +27,7 @@ EntityManager::EntityManager(sf::RenderWindow& window, float cellSize)
 {
     // initialize systems that need the entity manager pointer
     m_tileSystem = std::make_unique<TileSystem>(this);
+	m_musicSystem = std::make_unique<MusicSystem>(*this);
 
 	// If the engine owns a FontManager, bind it to the render system later via caller.
 }
@@ -33,6 +35,7 @@ EntityManager::EntityManager(sf::RenderWindow& window, float cellSize)
 EntityManager::~EntityManager()
 {
 	// ensure proper destruction order for forward-declared types
+    m_musicSystem.reset();
 	m_tileSystem.reset();
 }
 
@@ -198,12 +201,17 @@ void EntityManager::Update(float deltaTime)
 	AddPendingEntities();
 	RemoveDeadEntities();
 
+    // Let MusicSystem reconcile component data with runtime sf::Music instances.
+    if (m_musicSystem) m_musicSystem->Process();
+
     // Process tilemaps into tile entities before rebuilding spatial hash
     if (m_tileSystem && m_hasPendingTileMaps)
 	{
 		m_tileSystem->Process(); // Process pending tilemaps
 		m_hasPendingTileMaps = false;
 		AddPendingEntities(); // Add any new tile entities created by TileSystem
+		// allow music system to pick up any newly-created entities with CMusic
+		if (m_musicSystem) m_musicSystem->Process();
 	}
 
 	UpdateSpatialHashAndRender();

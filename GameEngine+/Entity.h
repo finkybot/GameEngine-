@@ -31,6 +31,7 @@ private:
 public:
 	// ****** Public Member Variables *****
 	std::chrono::high_resolution_clock::time_point m_creationTime;		// Track the creation time of this entity, used for explosion fading and other time-based logic
+	size_t GetId() const { return m_id; }
 
 	// ****** Public Methods *****
 public:

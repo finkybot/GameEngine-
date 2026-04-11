@@ -9,3 +9,4 @@
 
 ## Audio Integration
 - Prepare to implement audio (sound effects and music) integration into the GameEngine+ project.
+- Design the music component to be data-only, with a MusicSystem managing playback. The Music component should contain only data fields such as path, volume, loop, autoplay, and shouldPlay.

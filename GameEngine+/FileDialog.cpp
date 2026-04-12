@@ -86,6 +86,9 @@ std::optional<std::string> ShowOpenFileDialogWithOwner(void* ownerHandle, const 
 	// terminated. Then set the file buffer and its size, and if an initial directory is provided, convert it to wide string and set it as well.
     ofn.hwndOwner = hwnd;
     std::wstring wfilter = Utf8ToWide(filter);
+    // Ensure double-null termination for filter as required by GetOpenFileNameW
+    if (wfilter.empty() || wfilter.back() != L'\0') wfilter.push_back(L'\0');
+    wfilter.push_back(L'\0');
     ofn.lpstrFilter = wfilter.c_str();
     ofn.lpstrFile = szFile;
 	ofn.nMaxFile = MAX_PATH; // set the maximum size of the file buffer to prevent buffer overflows. The API will not write more than this number of characters to the buffer, including the null terminator.
@@ -101,11 +104,11 @@ std::optional<std::string> ShowOpenFileDialogWithOwner(void* ownerHandle, const 
     // and OFN_NOCHANGEDIR prevents the dialog from changing the current working directory of the application, which can help avoid issues with relative paths after the dialog is closed.
     ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
 
-    // If we have an owner window, temporarily minimize it so the dialog appears above (helps with fullscreen windows)
-	BOOL result = FALSE; // set result as false by default, and only set to true if the user successfully selects a file. This allows us to return std::nullopt if the user cancels or an error occurs.
+    // If we have an owner window, disable it while the dialog is open so input goes to the dialog.
+    // Do not minimize the owner window (prevents the app being hidden when dialogs open).
+    BOOL result = FALSE; // set result as false by default, and only set to true if the user successfully selects a file. This allows us to return std::nullopt if the user cancels or an error occurs.
     if (hwnd) {
-        // minimize then disable input while dialog is open
-        ShowWindow(hwnd, SW_MINIMIZE);
+        // disable input while dialog is open
         EnableWindow(hwnd, FALSE);
     }
 
@@ -114,9 +117,8 @@ std::optional<std::string> ShowOpenFileDialogWithOwner(void* ownerHandle, const 
     // to UTF-8 and return it; otherwise, return std::nullopt.
     result = GetOpenFileNameW(&ofn);
     if (hwnd) {
-        // restore window and re-enable input
+        // re-enable owner window and bring to foreground
         EnableWindow(hwnd, TRUE);
-        ShowWindow(hwnd, SW_RESTORE);
         SetForegroundWindow(hwnd);
     }
 
@@ -148,6 +150,8 @@ std::optional<std::string> ShowSaveFileDialogWithOwner(void* ownerHandle, const 
     }
     ofn.hwndOwner = hwnd;
     std::wstring wfilter = Utf8ToWide(filter);
+    if (wfilter.empty() || wfilter.back() != L'\0') wfilter.push_back(L'\0');
+    wfilter.push_back(L'\0');
     ofn.lpstrFilter = wfilter.c_str();
     ofn.lpstrFile = szFile;
     ofn.nMaxFile = MAX_PATH;
@@ -157,16 +161,14 @@ std::optional<std::string> ShowSaveFileDialogWithOwner(void* ownerHandle, const 
     }
 	ofn.Flags = OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR; // OFN_OVERWRITEPROMPT will cause the dialog to prompt the user if they select an existing file, which is standard behavior for save dialogs. OFN_NOCHANGEDIR prevents the dialog from changing the current working directory of the application, which can help avoid issues with relative paths after the dialog is closed.
 
-    // If we have an owner window, minimize it so the dialog isn't hidden behind a fullscreen window
+    // If we have an owner window, disable it while the dialog is open so input goes to the dialog.
     BOOL result = FALSE;
     if (hwnd) {
-        ShowWindow(hwnd, SW_MINIMIZE);
         EnableWindow(hwnd, FALSE);
     }
     result = GetSaveFileNameW(&ofn);
     if (hwnd) {
         EnableWindow(hwnd, TRUE);
-        ShowWindow(hwnd, SW_RESTORE);
         SetForegroundWindow(hwnd);
     }
     if (result) {

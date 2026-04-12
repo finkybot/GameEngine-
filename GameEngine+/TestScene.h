@@ -30,6 +30,10 @@ public:
 	// Game Initialization
 	void InitializeGame(sf::Vector2u windowSize);
 
+	// Key Processing
+	// Process key input to close the window when any key is pressed
+	void ProcessEscapeKey(bool keyDown) const { if (keyDown) m_gameEngine.m_window.close(); }
+
 private:
 	void UpdateExplosions();																								// Updates the state of all active explosions; iterates through the tracked explosion entities, calculates their age based on their creation time, updates their color alpha for fading effect, and removes them if they have exceeded their lifespan; dont like this being here.
 	void SpawnEntityByType(unsigned int teamType, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha); 		// Spawns an entity of the specified team type with random properties and adds it to the EntityManager. It takes the EntityManager reference, team type (0-4), radius, color, position, velocity, and alpha as parameters. The team type is mapped to a specific EntityType enum value, and the new entity is created and added to the EntityManager using the addEntity method.

@@ -217,6 +217,12 @@ void EntityManager::Update(float deltaTime)
 	UpdateSpatialHashAndRender();
 }
 
+void EntityManager::ProcessPending()
+{
+	AddPendingEntities();
+	// Do not run systems or rebuild spatial hash - caller may request full Update later in the frame.
+}
+
 Entity* EntityManager::addEntity(EntityType type)
 {
 	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++));

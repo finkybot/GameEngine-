@@ -7,7 +7,9 @@
 #include "CTileMap.h"
 #include "CTexture.h"
 #include "CMusic.h"
-
+#include "CCircle.h"
+#include "CExplosion.h"
+#include "MusicSystem.h"
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 // Internal context pointer used to safely check whether ImGui NewFrame() has been called
@@ -22,10 +24,13 @@ TileMapEditorScene::~TileMapEditorScene() = default;
 
 void TileMapEditorScene::Update(float deltaTime)
 {
+    // Update explosions (move/expand/fade) similar to TestScene behaviour so audio-reactive spawned explosions animate
+    UpdateExplosions();
+
     // Update shared FPS counter is handled by the engine; query it here for display
     m_fps = m_gameEngine.GetFPSCounter().GetFPS();
     // Disabled ImGui update while debugging visuals
-    // ImGui::SFML::Update(m_gameEngine.m_window, frameTime);
+    //ImGui::SFML::Update(m_gameEngine.m_window, frameTime);
 
     // ImGui toolbar (minimal)
     // Ensure instance current dir is initialized once
@@ -62,7 +67,8 @@ void TileMapEditorScene::Update(float deltaTime)
                         cmp->m_dirty = true;
                         cmp->m_processed = false;
                         m_entityManager.SetHasPendingTileMaps(true);
-                        m_entityManager.Update(0.0f); // force immediate processing so textures attach when atlas available
+
+                        //m_entityManager.Update(0.0f); // force immediate processing so textures attach when atlas available
                     }
                 }
             } else {
@@ -235,13 +241,17 @@ void TileMapEditorScene::Update(float deltaTime)
                                 cmp->m_dirty = true;
                                 cmp->m_processed = false;
                                 m_entityManager.SetHasPendingTileMaps(true);
-                                m_entityManager.Update(0.0f); // force immediate processing
+
+
+                                //m_entityManager.Update(0.0f); // force immediate processing
                             }
                         }
                     }
             }
         }
+
         if (!s_atlas_status.empty()) ImGui::TextUnformatted(s_atlas_status.c_str());
+        
         // Tile entities textures panel
         ImGui::Separator();
         if (ImGui::CollapsingHeader("Tile Entities (Textures)")) {
@@ -331,8 +341,7 @@ void TileMapEditorScene::Update(float deltaTime)
         {
             std::vector<std::filesystem::path> candidates = { m_currentDir / "ambition.mp3", m_currentDir / "assets" / "ambition.mp3", 
                                                                             std::filesystem::current_path() / "assets" / "ambition.mp3",
-                                                                            std::filesystem::current_path() / "ambition.mp3"
-            };
+                                                                            std::filesystem::current_path() / "ambition.mp3" };
 
 			// Check candidates for existence and pick the first one found
             std::string found;
@@ -362,8 +371,16 @@ void TileMapEditorScene::Update(float deltaTime)
                     auto* musicComponent = musicEntity->AddComponent<CMusic>(found, 80.f, true, true);
                     musicComponent->state = CMusic::State::Playing;
                     musicComponent->loop = true;
-                    // Force immediate processing so MusicSystem opens/plays the file now
-                    m_entityManager.Update(0.0f);
+                    // remember this entity so reactive spawner targets it
+                    m_musicEntity = musicEntity;
+
+                    // Commit the newly-created entity so systems (MusicSystem) can see it immediately
+                    m_entityManager.ProcessPending();
+                    if (auto ms = m_entityManager.GetMusicSystem()) {
+                        // Force MusicSystem to process so it opens the file and prepares analysis buffer now
+                        ms->Process();
+                    }
+
                     s_music_status = std::string("Loaded: ") + found;
                     std::cout << s_music_status << std::endl;
                 }
@@ -376,8 +393,89 @@ void TileMapEditorScene::Update(float deltaTime)
             }
         }
 
-		// Display music status (loaded file or errors)
+        // Display music status (loaded file or errors)
         if (!s_music_status.empty()) ImGui::TextUnformatted(s_music_status.c_str());
+
+        // remember last created music entity so reactive spawner can query its level
+        if (!m_musicEntity) {
+            for (auto& up : m_entityManager.getEntities()) {
+                if (up && up->HasComponent<CMusic>()) { m_musicEntity = up.get(); break; }
+            }
+        }
+        // end TileMap Editor window
+        ImGui::End();
+    }
+
+
+    // ---- Audio-reactive spawner window (bottom-right) ----
+    if (GImGui && GImGui->WithinFrameScope) {
+        // Small floating window anchored bottom-right
+        ImVec2 winSize(300, 120);
+        ImVec2 pos((float)m_window.getSize().x - winSize.x - 10.0f, (float)m_window.getSize().y - winSize.y - 10.0f);
+        ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
+        ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
+        ImGui::Begin("Audio Reactive", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+        // Toggle reactive spawning
+        ImGui::Checkbox("Enable Reactive Spawn", &m_audioReactive);
+        ImGui::SliderFloat("Threshold", &m_spawnThreshold, 0.001f, 0.5f, "%.3f");
+        ImGui::SliderFloat("Cooldown (s)", &m_spawnCooldown, 0.02f, 1.0f, "%.2f");
+
+            // show level for the current music entity (if any)
+            float level = 0.0f;
+            bool hasBuffer = false;
+            if (m_musicEntity) {
+                if (auto ms = m_entityManager.GetMusicSystem()) {
+                    // Ensure MusicSystem has processed this frame so level is up-to-date for reactive spawning
+                    ms->Process();
+                    level = ms->GetLevel(m_musicEntity->GetId());
+                    hasBuffer = ms->HasAnalysisBuffer(m_musicEntity->GetId());
+                }
+            }
+            ImGui::Text("Level: %.4f", level);
+            ImGui::SameLine(); ImGui::TextUnformatted(hasBuffer ? "(analyzing)" : "(no analysis)");
+
+        // advance spawn timer
+        m_spawnTimer += ImGui::GetIO().DeltaTime;
+
+        // If enabled and level above threshold and cooldown passed spawn shape entity
+        if (m_audioReactive && level > m_spawnThreshold) {
+            if (m_spawnTimer >= m_spawnCooldown) {
+                // spawn a circle near bottom-right area
+                Entity* e = m_entityManager.addEntity(EntityType::Explosion);
+                if (e) {
+                    // random size
+                    float size = 6.0f + static_cast<float>(std::rand() % 36); // 6..41
+                    // Use AddComponentPtr<CShape> so RenderSystem can find it via GetComponent<CShape>()
+                    auto circle = std::make_unique<CExplosion>(size);
+                    // random color
+                    int r = 100 + (std::rand() % 156);
+                    int g = 100 + (std::rand() % 156);
+                    int b = 100 + (std::rand() % 156);
+                    circle->SetColor((float)r, (float)g, (float)b, 220);
+                    e->AddComponentPtr<CShape>(std::move(circle));
+
+                    // place near center of the screen with small random jitter so they are visible
+                    float cx = static_cast<float>(m_window.getSize().x) * 0.5f;
+                    float cy = static_cast<float>(m_window.getSize().y) * 0.5f;
+                    // expand spawn area around center so shapes spread over a larger central region
+                    float jitter = 250.0f; // pixels - +-jitter around center
+                    float x = cx + (static_cast<float>(std::rand() % (static_cast<int>(jitter * 2 + 1))) - jitter);
+                    float y = cy + (static_cast<float>(std::rand() % (static_cast<int>(jitter * 2 + 1))) - jitter);
+                    // Ensure the entity has a transform so RenderSystem positions it
+                    // Add a CTransform with initial position/velocity instead of relying on it existing
+                    auto* t = e->AddComponent<CTransform>(Vec2(x, y), Vec2(0.0f, -40.0f - static_cast<float>(std::rand() % 120)));
+                    (void)t; // silence unused variable warnings
+
+                    // Commit the spawned entity immediately so it will be visible this frame
+                    m_entityManager.ProcessPending();
+
+                    // reset timer and let EntityManager add entity on next update
+                    // log spawn to console for debugging
+                    std::cout << "AudioReactive: Spawned entity id=" << e->GetId() << " size=" << size << " pos=(" << x << "," << y << ")" << std::endl;
+                    m_spawnTimer = 0.0f;
+                }
+            }
+        }
 
         ImGui::End();
     }
@@ -390,7 +488,9 @@ void TileMapEditorScene::Update(float deltaTime)
 
 void TileMapEditorScene::Render()
 {
-    // Scene render: nothing (grid and overlays are drawn after ImGui by RenderDebugOverlay)
+    // Ensure entities are rendered for this scene. The engine normally drives rendering centrally
+    // but call EntityManager render here to guarantee spawned entities are drawn while debugging.
+    //m_entityManager.RenderShapes();
 }
 
 void TileMapEditorScene::RenderDebugOverlay()
@@ -403,6 +503,8 @@ void TileMapEditorScene::RenderDebugOverlay()
 
     // Draw grid and highlight on top of entities (no fullscreen diagnostic overlay)
     DrawGrid();
+    // (debug markers removed)
+    // (debug overlay shapes removed)
     if (m_lastClickedX >= 0 && m_lastClickedY >= 0) {
         sf::RectangleShape highlight(sf::Vector2f(m_tileMap.tileSize, m_tileMap.tileSize));
         highlight.setPosition(sf::Vector2f(m_lastClickedX * m_tileMap.tileSize, m_lastClickedY * m_tileMap.tileSize));
@@ -486,6 +588,39 @@ void TileMapEditorScene::InitializeGame(sf::Vector2u windowSize)
     }
 
     // ensure engine texture manager has default atlas preloaded in GameEngine ctor
+
+    //// Debug: create a few large visible explosions at startup so they are easy to spot
+    //for (int i = 0; i < 3; ++i) {
+    //    float x = static_cast<float>(windowSize.x) * (0.3f + 0.2f * i);
+    //    float y = static_cast<float>(windowSize.y) * 0.5f;
+    //    Entity* e = m_entityManager.addEntity(EntityType::Default);
+    //    if (!e) continue;
+    //    float size = 40.0f + 20.0f * i;
+    //    auto* ex = e->AddComponent<CExplosion>(size);
+    //    if (ex) {
+    //        ex->SetColor(255.0f - 40.0f * i, 80.0f + 40.0f * i, 40.0f, 240);
+    //        ex->SetRadius(size);
+    //        ex->GetShape().setOutlineColor(sf::Color::Black);
+    //        ex->GetShape().setOutlineThickness(3.0f);
+    //    }
+    //    e->AddComponent<CTransform>(Vec2(x, y), Vec2(0.0f, 0.0f));
+    //}
+    // Spread the three debug explosions further apart so they don't overlap the reactive spawn area
+    //if (m_entityManager.getEntities().size() > 0) {
+    //    int placed = 0;
+    //    for (auto& up : m_entityManager.getEntities()) {
+    //        if (!up) continue;
+    //        auto ent = up.get();
+    //        if (ent->HasComponent<CExplosion>()) {
+    //            float nx = static_cast<float>(windowSize.x) * (0.25f + 0.25f * placed);
+    //            float ny = static_cast<float>(windowSize.y) * (0.35f + 0.15f * placed);
+    //            if (auto t = ent->GetComponent<CTransform>()) t->m_position = Vec2(nx, ny);
+    //            ++placed;
+    //            if (placed >= 3) break;
+    //        }
+    //    }
+    //}
+   // m_entityManager.Update(0.0f);
 }
 
 void TileMapEditorScene::DrawGrid()
@@ -567,8 +702,45 @@ void TileMapEditorScene::ToggleTileAt(int tx, int ty, bool setSolid)
             cmp->m_processed = false;
             m_entityManager.SetHasPendingTileMaps(true);
             // Process tile system immediately so tile entities appear this frame
-            m_entityManager.Update(0.0f);
+           // m_entityManager.Update(0.0f);
             std::cout << "Tile entities now: " << m_entityManager.getEntities(EntityType::Tile).size() << std::endl;
+        }
+    }
+}
+
+void TileMapEditorScene::UpdateExplosions()
+{
+    m_explosionCount = 0;
+    auto now = std::chrono::high_resolution_clock::now();
+
+    for (auto& entity : m_entityManager.getEntities()) {
+        if (entity->GetType() == EntityType::Explosion) {
+            auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->m_creationTime);
+            if (elapsed.count() > 2900) {
+                entity->Destroy();
+            } else {
+                ++m_explosionCount;
+                float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
+                int newAlpha = static_cast<int>(80 * (1.0f - fadeProgress));
+
+                auto shape = entity->GetComponent<CShape>();
+                if (shape) {
+                    if (auto* explosion = dynamic_cast<CExplosion*>(shape)) {
+                        float radiusDifference = explosion->GetRadius();
+                        explosion->SetRadius(explosion->GetRadius() * 1.004f);
+                        radiusDifference = explosion->GetRadius() - radiusDifference;
+                        Vec2 explosionPosition = entity->GetComponent<CTransform>()->m_position;
+                        entity->GetComponent<CTransform>()->m_position = Vec2(explosionPosition.x, explosionPosition.y);
+                        sf::Color currentColor = explosion->GetColor();
+                        explosion->SetColor(
+                            static_cast<float>(currentColor.r),
+                            static_cast<float>(currentColor.g),
+                            static_cast<float>(currentColor.b),
+                            newAlpha
+                        );
+                    }
+                }
+            }
         }
     }
 }

@@ -54,11 +54,16 @@ public:
     CollisionSystem GetCollisionSystem() { return m_collisionSystem; }
     RenderSystem& GetRenderSystem() { return m_renderSystem; }
 
+    // Accessor for MusicSystem (may be nullptr)
+    class MusicSystem* GetMusicSystem() { return m_musicSystem.get(); }
+
     void AddTileMapAsEntities(const TileMap& map, int tileValueToTreatAsSolid = 1);
     Entity* CreateTileMapEntity(const TileMap& map);                                                // Preferred: create a CTileMap entity which will be processed by TileSystem
     
     void SetHasPendingTileMaps(bool v) { m_hasPendingTileMaps = v; }                                // When creating/updating CTileMap components set this flag so TileSystem knows work is pending
     bool HasPendingTileMaps() const { return m_hasPendingTileMaps; }
+    // Commit pending entities without running full Update(). This moves entities from the add-queue into the active list so systems can see them.
+    void ProcessPending();
 
 private:
     void AddPendingEntities();

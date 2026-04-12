@@ -255,7 +255,7 @@ void TileMapScene::Update(float /*deltaTime*/)
 
 
     // simple update: run entity manager update
-    m_entityManager.Update(0.016f);
+    //m_entityManager.Update(0.016f);
 }
 
 

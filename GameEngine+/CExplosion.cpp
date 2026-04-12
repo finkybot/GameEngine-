@@ -8,13 +8,16 @@ CExplosion::CExplosion()
 {
     m_circle = sf::CircleShape(3.f);
     m_midLength = 4.f;
-    m_circle.setFillColor(sf::Color(255, 255, 255, 255));
+    m_circle.setFillColor(sf::Color(220, 80, 40, 220));
+    m_circle.setOrigin(sf::Vector2f(3.f, 3.f));
 }
 
 CExplosion::CExplosion(float size)
 {
     m_circle = sf::CircleShape(size);
     m_midLength = size + 1.f;
+    m_circle.setFillColor(sf::Color(220, 120, 40, 220));
+    m_circle.setOrigin(sf::Vector2f(size, size));
 }
 
 Vec2 CExplosion::GetCentrePoint() const

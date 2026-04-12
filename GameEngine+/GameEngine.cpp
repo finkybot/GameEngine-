@@ -10,15 +10,18 @@
 #include "TestScene.h"
 #include "TileMapScene.h"
 #include "TileMapEditorScene.h"
+#include "MusicVisualizerScene.h"
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 #include <cstdlib>
 
 GameEngine::GameEngine()
 {
-	// Setup the SFML window
+    // Setup the SFML window as borderless (fullscreen-windowed) to avoid exclusive fullscreen quirks
 	m_windowSize = sf::VideoMode::getDesktopMode().size;
-	m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::State::Fullscreen);
+	// Create a borderless window sized to the desktop resolution and position it at (0,0)
+	m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::Style::None);
+	m_window.setPosition(sf::Vector2i(0, 0));
 
 	m_window.setFramerateLimit(1000);
 	//m_window.setVerticalSyncEnabled(true);	
@@ -77,8 +80,9 @@ void GameEngine::Run()
     AddScene("TestScene", std::make_shared<TestScene>(*this, m_window, *m_entityManager)); // Adding TestScene
 	AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, m_window, *m_entityManager)); // Adding TileMapScene
 	AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, m_window, *m_entityManager)); // Adding TileMapEditor
-	//ChangeScene("TestScene");
-	ChangeScene("TileMapEditor");
+    AddScene("MusicVisualizer", std::make_shared<MusicVisualizerScene>(*this, m_window, *m_entityManager)); // Adding MusicVisualizer
+    //ChangeScene("TestScene");
+    ChangeScene("MusicVisualizer");
 	m_currentScene->InitializeGame(m_windowSize);
 
     // FontManager already bound to engine-owned EntityManager in constructor
@@ -140,14 +144,12 @@ void GameEngine::Update(float deltaTime)
 		}
 
         // Draw any debug overlays from the current scene before ImGui so they are visible
-		if (m_currentScene) m_currentScene->RenderDebugOverlay();
+		//if (m_currentScene) m_currentScene->RenderDebugOverlay();
 
         // Render ImGui on top of everything (ImGui::SFML::Render without args uses current target)
 		if (ImGui::GetCurrentContext() && (m_currentScene == nullptr || m_currentScene->IsImGuiEnabled())) {
 			ImGui::SFML::Render(m_window);
 		}
-
-
 
 		m_window.display();
 	}

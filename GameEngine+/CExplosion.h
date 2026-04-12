@@ -35,5 +35,5 @@ public:
 	Vec2 GetCentrePoint() const override;									// Get the center point of the circle shape, which is the position plus the radius in both x and y directions
 
 	void SetColor(float r, float g, float b, int alpha);                    // Set the fill color of the explosion shape using RGBA values (alpha is an integer in the range [0, 255])
-	void SetRadius(float radius) override { m_circle.setRadius(radius); }   // Set the radius of the explosion shape
+    void SetRadius(float radius) override { m_circle.setRadius(radius); m_circle.setOrigin(sf::Vector2f(radius, radius)); }   // Set the radius of the explosion shape and update origin
 };

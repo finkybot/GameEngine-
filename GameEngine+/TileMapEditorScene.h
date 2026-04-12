@@ -62,4 +62,12 @@ private:
 	bool m_enableImGui = true;					// whether to enable ImGui rendering and input for this scene, can be toggled for debugging purposes to isolate scene rendering without UI
     std::filesystem::path m_currentDir;			// current folder for file navigator
   float m_fps = 0.0f;                             // smoothed FPS value for ImGui display
+    // Audio-reactive spawn state
+	Entity* m_musicEntity = nullptr;                // music entity created by the UI (if any)
+	bool m_audioReactive = false;                   // whether to spawn shapes to music
+	float m_spawnThreshold = 0.04f;                 // RMS threshold to trigger spawn
+	float m_spawnCooldown = 0.12f;                  // seconds between spawns on peaks
+	float m_spawnTimer = 0.0f;                      // accumulates delta time
+    int m_explosionCount = 0;                        // active explosion count for UI
+	void UpdateExplosions();                         // update explosion lifetimes and visuals
 };

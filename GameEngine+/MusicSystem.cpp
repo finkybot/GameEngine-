@@ -14,26 +14,62 @@
 //#pragma comment(lib, "sfml-audio.lib")
 //#endif
 
-
-
 MusicSystem::MusicSystem(EntityManager& entityManager) : m_entityManager(entityManager) {}
 
 void MusicSystem::StopAllMusic()
 {
-	for (auto &p : m_activeMusic) {
+    for (auto &p : m_activeMusic) 
+	{
 		if (p.second) p.second->stop();
 	}
+
 	m_activeMusic.clear();
 	std::lock_guard<std::mutex> lk(m_levelsMutex);
 	m_buffers.clear();
 	m_levels.clear();
 }
 
+float MusicSystem::GetPlayingOffset(size_t entityId) const
+{
+	auto it = m_activeMusic.find(entityId);
+	if (it == m_activeMusic.end() || !it->second) return 0.0f;
+	try 
+	{
+		return it->second->getPlayingOffset().asSeconds();
+	} 
+	catch (...) { return 0.0f; }
+}
+
+float MusicSystem::GetDuration(size_t entityId) const
+{
+	auto it = m_activeMusic.find(entityId);
+	if (it == m_activeMusic.end() || !it->second) return 0.0f;
+	try 
+	{
+		return it->second->getDuration().asSeconds();
+	} 
+	catch (...) { return 0.0f; }
+}
+
+void MusicSystem::Seek(size_t entityId, float seconds)
+{
+	auto it = m_activeMusic.find(entityId);
+	if (it == m_activeMusic.end() || !it->second) return;
+	try 
+	{
+		it->second->setPlayingOffset(sf::seconds(seconds));
+	} 
+	catch (...) {}
+}
+
+// Other methods remain unchanged
 MusicSystem::~MusicSystem()
 {
 	// Stop all music activity and clear the active music map
-    for (auto& pair : m_activeMusic) {
-		if (pair.second) {
+    for (auto& pair : m_activeMusic) 
+	{
+		if (pair.second) 
+		{
 			pair.second->stop(); // Stop the music if it's currently playing
 		}
 	}
@@ -137,6 +173,7 @@ void MusicSystem::Process()
 						auto itb = m_buffers.find(id);
 						if (itb != m_buffers.end()) buf = itb->second;
 					}
+					
 					if (buf) 
 					{
 						// determine sample index from music playing offset
@@ -210,11 +247,15 @@ sf::Music* MusicSystem::GetOrCreateMusic(Entity& entity)
 	m_activeMusic.emplace(id, std::move(newMusic));
 
 	// If a path is specified, attempt to open it now
-	if (!musicComp->path.empty()) {
-     if (!musicPtr->openFromFile(musicComp->path)) {
+	if (!musicComp->path.empty()) 
+	{
+		if (!musicPtr->openFromFile(musicComp->path)) 
+		{
 			std::cerr << "MusicSystem: Failed to open audio file: " << musicComp->path << std::endl;
 			// leave instance in map but it will be skipped during Process if unopened
-		} else {
+		} 
+		else 
+		{
 			std::cout << "MusicSystem: Opened audio file: " << musicComp->path << " for entity " << id << std::endl;
 		}
 	}
@@ -228,15 +269,20 @@ sf::Music* MusicSystem::GetOrCreateMusic(Entity& entity)
 	// Attempt to load an sf::SoundBuffer for offline analysis (non-realtime)
 	try {
 		auto buf = std::make_shared<sf::SoundBuffer>();
-		if (buf->loadFromFile(musicComp->path)) {
+		if (buf->loadFromFile(musicComp->path)) 
+		{
 			std::lock_guard<std::mutex> lk(m_levelsMutex);
 			m_buffers[id] = buf;
 			std::cout << "MusicSystem: Loaded buffer for analysis for entity " << id << std::endl;
-		} else {
+		} 
+		else 
+		{
 			// buffer failed (maybe large file), we'll fall back to no-analysis
 			std::cerr << "MusicSystem: Failed to load buffer for analysis: " << musicComp->path << std::endl;
 		}
-	} catch (...) {
+	} 
+	catch (...) 
+	{
 		// ignore - analysis optional
 	}
 

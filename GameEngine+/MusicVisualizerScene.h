@@ -44,6 +44,13 @@ private:
     bool m_dirty = false;
     bool m_imguiOwned = false;
     bool m_showOpenDialog = false;
+    std::string m_musicStatus;
+
+    // UI helpers extracted from Update()
+    void ShowOpenFileBrowser();
+    void DrawAudioReactiveWindow();
+    void DrawPlaybackControls();
+    void LoadMusicFromPath(const std::string& path);
     bool m_showLoadDialog = false;
     bool m_showSaveDialog = false;
     char m_saveFilenameBuffer[260] = { 0 };
@@ -66,4 +73,13 @@ private:
     float m_spawnCooldown = 0.12f;
     float m_spawnTimer = 0.0f;
     int m_explosionCount = 0;
+    // Debug UI: force OS cursor visible
+    bool m_forceShowCursor = false;
+    // Loop checkbox and playhead state
+    bool m_loopEnabled = true;
+    float m_playhead = 0.0f; // current playhead position in seconds
+    float m_duration = 0.0f; // current track duration in seconds
+    // Playhead drag state: pause on drag, resume on release
+    bool m_playheadActive = false;
+    bool m_wasPlayingBeforeSeek = false;
 };

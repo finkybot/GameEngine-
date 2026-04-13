@@ -31,6 +31,15 @@ public:
 	// Return whether offline analysis buffer is available for entity
 	bool HasAnalysisBuffer(size_t entityId) const;
 
+	// Query playback position (seconds) for a given entity. Returns 0.0 if not available.
+	float GetPlayingOffset(size_t entityId) const;
+
+	// Query total duration (seconds) for a given entity. Returns 0.0 if not available.
+	float GetDuration(size_t entityId) const;
+
+	// Seek to a given offset (seconds) for a given entity. No-op if music not available.
+	void Seek(size_t entityId, float seconds);
+
 private:
     // Latest measured audio levels (RMS) per entity id
 	std::unordered_map<size_t, float> m_levels;

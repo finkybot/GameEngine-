@@ -19,9 +19,9 @@ GameEngine::GameEngine()
 {
     // Setup the SFML window as borderless (fullscreen-windowed) to avoid exclusive fullscreen quirks
 	m_windowSize = sf::VideoMode::getDesktopMode().size;
-	// Create a borderless window sized to the desktop resolution and position it at (0,0)
-	m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::Style::None);
-	m_window.setPosition(sf::Vector2i(0, 0));
+	//m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::Style::None);
+	//m_window.setPosition(sf::Vector2i(0, 0));
+	m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::State::Fullscreen);
 
 	m_window.setFramerateLimit(1000);
 	//m_window.setVerticalSyncEnabled(true);	
@@ -34,7 +34,7 @@ GameEngine::GameEngine()
     // Do not preload atlases automatically. Atlases should be loaded explicitly via the editor UI so users
 	// can choose which atlas to use at runtime.
 
-	// Initialize ImGui-SFML early so scenes can safely call ImGui during Update
+    // Initialize ImGui-SFML early so scenes can safely call ImGui during Update
 	if (!ImGui::SFML::Init(m_window)) {
 		std::cerr << "Warning: Failed to initialize ImGui::SFML in GameEngine" << std::endl;
 		// continue without ImGui but scenes must tolerate absence
@@ -107,7 +107,7 @@ void GameEngine::Update(float deltaTime)
 
 		// Restart delta clock and update ImGui once per frame
 		sf::Time frameTime = m_deltaClock.restart();
-		if (ImGui::GetCurrentContext()) ImGui::SFML::Update(m_window, frameTime);
+       if (ImGui::GetCurrentContext()) ImGui::SFML::Update(m_window, frameTime);
 
 		// Update shared FPS counter with the real frame time
 		m_fpsCounter.Update(frameTime.asSeconds());

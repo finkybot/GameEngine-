@@ -15,8 +15,7 @@
 #include <imgui/backends/imgui-SFML.h>
 #include <cstdlib>
 
-GameEngine::GameEngine()
-{
+GameEngine::GameEngine() {
     // Setup the SFML window as borderless (fullscreen-windowed) to avoid exclusive fullscreen quirks
 	m_windowSize = sf::VideoMode::getDesktopMode().size;
 	//m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::Style::None);
@@ -41,38 +40,29 @@ GameEngine::GameEngine()
 	}
 }
 
-GameEngine::~GameEngine()
-{}
+GameEngine::~GameEngine() {}
 
-void GameEngine::AddScene(const std::string & sceneName, std::shared_ptr<Scene> scene)
-{
+void GameEngine::AddScene(const std::string & sceneName, std::shared_ptr<Scene> scene) {
 	m_scenes[sceneName] = scene;
 }
 
-void GameEngine::ChangeScene(const std::string & sceneName)
-{
+void GameEngine::ChangeScene(const std::string & sceneName) {
 	auto it = m_scenes.find(sceneName);
-	if (it != m_scenes.end())
-	{
+	if (it != m_scenes.end()) {
 		m_currentScene = it->second;
-	}
-	else
-	{
+	} else {
 		std::cerr << "Scene '" << sceneName << "' not found!" << std::endl;
 	}
 }
 
-void GameEngine::RemoveScene(const std::string& sceneName)
-{
+void GameEngine::RemoveScene(const std::string& sceneName) {
 	auto it = m_scenes.find(sceneName);
-	if (it != m_scenes.end())
-	{
+	if (it != m_scenes.end()) {
 		m_scenes.erase(it);
 	}
 }
 
-void GameEngine::Run()
-{
+void GameEngine::Run() {
 	// Setup Event Handler.
 	bool running = true; // Create a Boolean variable to manage the engine running state
 
@@ -91,17 +81,14 @@ void GameEngine::Run()
 	m_InputController.Init([&running](uint32_t deltaT, InputState state) { running = false; std::cout << "Quitting" << std::endl; }, &m_window); // The defined function will be called when we quit the game..
 
 	/* Main Loop, game logic is handled in here once per frame */
-	while (m_window.isOpen())
-	{
+	while (m_window.isOpen()) {
 		Update(0.016f); // Update the scene with a fixed delta time (16ms for ~60 FPS), I can calculate actual delta time using the deltaClock for variable time steps
 	}
 }
 
-void GameEngine::Update(float deltaTime)
-{
+void GameEngine::Update(float deltaTime) {
 	// Handle events and input before updating the scene.
-	while (m_window.isOpen())
-	{
+	while (m_window.isOpen()) {
         // Clear the window at the start of each frame
 		m_window.clear();
 
@@ -113,8 +100,7 @@ void GameEngine::Update(float deltaTime)
 		m_fpsCounter.Update(frameTime.asSeconds());
 
 		// Poll events (SFML 3: pollEvent returns std::optional<sf::Event>) and forward to current scene
-		while (auto eventOpt = m_window.pollEvent())
-		{
+		while (auto eventOpt = m_window.pollEvent()) {
             // Forward events to ImGui-SFML so UI widgets receive input
 			if (ImGui::GetCurrentContext()) ImGui::SFML::ProcessEvent(m_window, *eventOpt);
 
@@ -125,8 +111,7 @@ void GameEngine::Update(float deltaTime)
         // Update method will run  (carry out) these actions.
 		m_InputController.Update(deltaTime);
 
-		if (m_currentScene)
-		{
+		if (m_currentScene)	{
 			// Let the scene update (handles ImGui update and input)
 			// Use the actual frame time measured above so scenes get accurate timing for FPS and logic.
 			m_currentScene->Update(frameTime.asSeconds());

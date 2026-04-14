@@ -18,14 +18,14 @@ class EntityManager;
 class MusicSystem
 {
 public:
-	explicit MusicSystem(EntityManager& entityManager);		// Constructor that takes a reference to the EntityManager, which is used to access entities and their components.
-	~MusicSystem();											// Destructor to clean up any active music instances when the MusicSystem is destroyed.
-	void Update(float deltaSeconds);						// Update method that should be called every frame to manage music playback based on the state of CMusic components in the entities.
+	explicit MusicSystem(EntityManager& entityManager);	// Constructor that takes a reference to the EntityManager, which is used to access entities and their components.
+	~MusicSystem();	// Destructor to clean up any active music instances when the MusicSystem is destroyed.
+	void Update(float deltaSeconds); // Update method that should be called every frame to manage music playback based on the state of CMusic components in the entities.
 
-	void Process(); 										// Process method to handle starting, stopping, and updating music playback based on the state of CMusic components in the entities. This is where the main logic for managing music playback will be implemented.
+	void Process();	// Process method to handle starting, stopping, and updating music playback based on the state of CMusic components in the entities. This is where the main logic for managing music playback will be implemented.
 
-		// Stop and clear all active music instances immediately
-		void StopAllMusic();
+	// Stop and clear all active music instances immediately
+	void StopAllMusic();
 
 	float GetLevel(size_t entityId) const;						// Query latest measured RMS / level measured for a given entity id (0.0 .. 1.0)
 	// Return whether offline analysis buffer is available for entity
@@ -44,12 +44,13 @@ private:
     // Latest measured audio levels (RMS) per entity id
 	std::unordered_map<size_t, float> m_levels;
 	mutable std::mutex m_levelsMutex; // protects map structure
+
 	// Optional decoded buffers used for analysis (loaded once when music opens)
 	std::unordered_map<size_t, std::shared_ptr<sf::SoundBuffer>> m_buffers;
-	EntityManager& m_entityManager;												// Reference to the EntityManager for accessing entities and their components.
-	std::unordered_map<size_t, std::unique_ptr<sf::Music>> m_activeMusic;		// Map of entity ID to active sf::Music instance for entities that have a CMusic component currently playing. This allows us to manage multiple music tracks if needed, and ensures we can stop or update them as necessary.
+	EntityManager& m_entityManager;	// Reference to the EntityManager for accessing entities and their components.
+	std::unordered_map<size_t, std::unique_ptr<sf::Music>> m_activeMusic; // Map of entity ID to active sf::Music instance for entities that have a CMusic component currently playing. This allows us to manage multiple music tracks if needed, and ensures we can stop or update them as necessary.
 
-	sf::Music* GetOrCreateMusic(Entity& entity);			// Helper method to get the existing sf::Music instance for an entity with a CMusic component, or create a new one if it doesn't exist. This method will handle loading the music file and configuring the sf::Music instance based on the properties of the CMusic component.
+	sf::Music* GetOrCreateMusic(Entity& entity); // Helper method to get the existing sf::Music instance for an entity with a CMusic component, or create a new one if it doesn't exist. This method will handle loading the music file and configuring the sf::Music instance based on the properties of the CMusic component.
 
 };
 

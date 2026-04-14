@@ -173,6 +173,7 @@
     <ClCompile Include="Systems\CollisionSystem.cpp" />
     <ClCompile Include="Systems\PhysicsSystem.cpp" />
     <ClCompile Include="Systems\RenderSystem.cpp" />
+    <ClCompile Include="Systems\SpawnSystem.cpp" />
     <ClCompile Include="Systems\TileSystem.cpp" />
     <ClCompile Include="TestScene.cpp" />
     <ClCompile Include="TextureAtlas.cpp" />
@@ -227,6 +228,7 @@
     <ClInclude Include="Systems\CollisionSystem.h" />
     <ClInclude Include="Systems\PhysicsSystem.h" />
     <ClInclude Include="Systems\RenderSystem.h" />
+    <ClInclude Include="Systems\SpawnSystem.h" />
     <ClInclude Include="Systems\TileSystem.h" />
     <ClInclude Include="TestScene.h" />
     <ClInclude Include="TextureAtlas.h" />

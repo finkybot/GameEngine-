@@ -218,18 +218,13 @@ void TileMapScene::ProcessMouseRightDrag(bool& rightMouseDown, const Vec2& mouse
 // Process key input to close the window when any key is pressed
 void TileMapScene::ProcessEscapeKey(bool keyDown) const { if (keyDown) m_gameEngine.m_window.close(); }
 
-void TileMapScene::ProcessSaveKey(bool keyDown) const
-{
-    if (keyDown && m_leftCtrlKeyDown)
-    {
+void TileMapScene::ProcessSaveKey(bool keyDown) const {
+    if (keyDown && m_leftCtrlKeyDown) {
         std::string filename = "assets//testmap.json";
         std::string err;
-        if (!m_tileMap.SaveToJSON(filename, &err))
-        {
+        if (!m_tileMap.SaveToJSON(filename, &err)) {
 			std::cerr << "Error saving tilemap: " << err << std::endl;
-        }
-        else
-        {
+        } else {
             std::cout << "Tilemap saved to " << filename << std::endl;
         }
     }
@@ -237,15 +232,12 @@ void TileMapScene::ProcessSaveKey(bool keyDown) const
 
 
 // Update method - handles events, updates the entity manager, and prepares debug visualization data for rendering
-void TileMapScene::Update(float /*deltaTime*/)
-{
+void TileMapScene::Update(float /*deltaTime*/) {
     // Handle events (SFML 3.0: pollEvent returns std::optional<sf::Event>)
-    while (auto eventOpt = m_gameEngine.m_window.pollEvent())
-    {
+    while (auto eventOpt = m_gameEngine.m_window.pollEvent()) {
         // ImGui::SFML::ProcessEvent(m_gameEngine.m_window, *eventOpt);
 
-        if (eventOpt->is<sf::Event::Closed>())
-        {
+        if (eventOpt->is<sf::Event::Closed>()) {
             m_gameEngine.m_window.close();
         }
 
@@ -260,8 +252,7 @@ void TileMapScene::Update(float /*deltaTime*/)
 
 
 // Render method - draws the tile grid and any debug visualization overlays
-void TileMapScene::Render()
-{
+void TileMapScene::Render() {
     // draw tile grid (solid tiles)
     DrawTileGrid();
     DrawDebugLines();
@@ -275,21 +266,15 @@ void TileMapScene::Render()
 
 
 // DoAction method - currently empty, but could be used for game logic that needs to run on a fixed timestep or in response to certain conditions
-void TileMapScene::DoAction()
-{
-}
+void TileMapScene::DoAction() {}
 
 
 // Draw the tile grid by iterating over the tile map and drawing a semi-transparent rectangle for each solid tile
-void TileMapScene::DrawTileGrid()
-{
+void TileMapScene::DrawTileGrid() {
     if (m_tileMap.width <= 0 || m_tileMap.height <= 0) return;
-    for (int y = 0; y < m_tileMap.height; ++y)
-    {
-        for (int x = 0; x < m_tileMap.width; ++x)
-        {
-            if (m_tileMap.IsSolid(x, y))
-            {
+    for (int y = 0; y < m_tileMap.height; ++y) {
+        for (int x = 0; x < m_tileMap.width; ++x) {
+            if (m_tileMap.IsSolid(x, y)) {
                 sf::RectangleShape rect(sf::Vector2f(m_tileMap.tileSize, m_tileMap.tileSize));
                 rect.setPosition(sf::Vector2f(x * m_tileMap.tileSize, y * m_tileMap.tileSize));
                 rect.setFillColor(sf::Color(100, 100, 100, 150));
@@ -302,13 +287,10 @@ void TileMapScene::DrawTileGrid()
 
 
 // Draw debug lines for raycasts, using red color for visibility. Only draws if visual debug mode is enabled.
-void TileMapScene::DrawDebugLines()
-{
+void TileMapScene::DrawDebugLines() {
     if (!m_visualDebug) return;
-    for (const auto& pr : m_debugLines)
-    {
-        sf::Vertex line[] =
-        {
+    for (const auto& pr : m_debugLines) {
+        sf::Vertex line[] = {
             sf::Vertex(sf::Vector2f(pr.first.x, pr.first.y), sf::Color::Red),
             sf::Vertex(sf::Vector2f(pr.second.x, pr.second.y), sf::Color::Red)
         };
@@ -318,11 +300,9 @@ void TileMapScene::DrawDebugLines()
 
 
 // Draw hit points as yellow circles, only if visual debug mode is enabled. This shows the final hit position after clamping to the ray length.
-void TileMapScene::DrawHitPoints()
-{
+void TileMapScene::DrawHitPoints() {
     if (!m_visualDebug) return;
-    for (const auto& p : m_debugPoints)
-    {
+    for (const auto& p : m_debugPoints) {
         sf::CircleShape dot(4.0f);
         dot.setFillColor(sf::Color::Yellow);
         dot.setOrigin(sf::Vector2f(4.0f, 4.0f));
@@ -333,11 +313,9 @@ void TileMapScene::DrawHitPoints()
 
 
 // Draw raw hit points (before clamping) as blue circles, only if visual debug mode is enabled. This can show the actual intersection point with the tile boundary, which may be outside the ray length if the ray starts inside a solid tile.
-void TileMapScene::DrawRawHitPoints()
-{
+void TileMapScene::DrawRawHitPoints() {
     if (!m_visualDebug) return;
-    for (const auto& p : m_rawHitPoints)
-    {
+    for (const auto& p : m_rawHitPoints) {
         sf::CircleShape dot(3.0f);
         dot.setFillColor(sf::Color::Blue);
         dot.setOrigin(sf::Vector2f(3.0f, 3.0f));
@@ -348,11 +326,9 @@ void TileMapScene::DrawRawHitPoints()
 
 
 // Draw visited cells as semi-transparent blue rectangles, only if visual debug mode is enabled. This shows which cells have been visited during raycasting or other pathfinding operations.
-void TileMapScene::DrawVisitedCells()
-{
+void TileMapScene::DrawVisitedCells() {
     if (!m_visualDebug) return;
-    for (const auto& cell : m_visitedCells)
-    {
+    for (const auto& cell : m_visitedCells) {
         int cx = cell.first;
         int cy = cell.second;
         if (!m_tileMap.InBounds(cx, cy)) continue;
@@ -367,11 +343,9 @@ void TileMapScene::DrawVisitedCells()
 
 
 // Draw a preview line during mouse drag to show the current ray segment being defined by the drag. This is drawn in green and only shown when the preview is active and visual debug mode is enabled.
-void TileMapScene::DrawPreviewLine()
-{
+void TileMapScene::DrawPreviewLine() {
     if (!(m_previewActive && m_visualDebug)) return;
-    sf::Vertex line[] =
-    {
+    sf::Vertex line[] = {
         sf::Vertex(sf::Vector2f(m_previewLine.first.x, m_previewLine.first.y), sf::Color::Green),
         sf::Vertex(sf::Vector2f(m_previewLine.second.x, m_previewLine.second.y), sf::Color::Green)
     };
@@ -380,8 +354,7 @@ void TileMapScene::DrawPreviewLine()
 
 
 // HandleEvent now delegates to input helpers to keep logic centralized
-void TileMapScene::HandleEvent(const std::optional<sf::Event>& event)
-{
+void TileMapScene::HandleEvent(const std::optional<sf::Event>& event) {
     //(void)event;
     // get mouse pixel coords then convert to world coords using the window's view
     sf::Vector2i mousePixelPos = sf::Mouse::getPosition(m_window);
@@ -406,32 +379,23 @@ void TileMapScene::HandleEvent(const std::optional<sf::Event>& event)
 
 
 // OnEnter method - currently empty, but could be used for setup logic that needs to run when the scene becomes active
-void TileMapScene::OnEnter()
-{
-}
+void TileMapScene::OnEnter() {}
 
 
 // OnExit method - currently empty, but could be used for cleanup logic that needs to run when the scene is no longer active
-void TileMapScene::OnExit()
-{
-}
+void TileMapScene::OnExit() {}
 
 
 // LoadResources method - currently empty, but could be used to load textures, sounds, or other resources needed by the scene. In this example, we load the tile map in InitializeGame instead, but we could also move it here if we wanted to separate resource loading from game initialization.
-void TileMapScene::LoadResources()
-{
-}
+void TileMapScene::LoadResources() {}
 
 
 // UnloadResources method - currently empty, but could be used to free textures, sounds, or other resources when the scene is unloaded
-void TileMapScene::UnloadResources()
-{
-}
+void TileMapScene::UnloadResources() {}
 
 
 // InitializeGame method - loads the tile map from a JSON file and creates a tile map entity in the entity manager. Errors are ignored or could be handled via UI, and there is no console output in this method.
-void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/)
-{
+void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	sf::Vector2u windowSize = m_window.getSize(); // Get the actual window size for use in tile map loading and entity setup
 
     // Load tilemap (no console output; errors are ignored or can be handled via UI)
@@ -458,8 +422,7 @@ void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/)
 
 
 // SpawnTestTileMap method - creates a simple test tile map with various platforms and obstacles for testing raycasting and visualization. This method is not currently called, but can be used to generate a procedural tile map instead of loading from JSON.
-void TileMapScene::SpawnTestTileMap()
-{
+void TileMapScene::SpawnTestTileMap() {
     // Create a tilemap sized to at least cover the window so platforms span the screen
     const float tileSize = 32.0f;
     const auto winSz = m_window.getSize();
@@ -479,8 +442,7 @@ void TileMapScene::SpawnTestTileMap()
     }
 
     // several floating platforms across the level
-    for (int x = 6; x + 6 < cols; x += 12)
-    {
+    for (int x = 6; x + 6 < cols; x += 12) {
         int py = std::max(2, groundY - 4 - ((x / 12) % 4));
         for (int lx = 0; lx < 6; ++lx) map.SetTile(x + lx, py, 1);
     }

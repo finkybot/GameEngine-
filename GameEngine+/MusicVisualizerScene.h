@@ -8,6 +8,9 @@
 #include "FileDialog.h"
 #include <filesystem>
 
+// Forward declarations
+namespace Spawn { class SpawnSystem; }
+
 
 // MusicVisualizerScene: A scene that visualizes music by spawning explosion entities based on audio analysis. It features a grid background and an ImGui interface for loading music, controlling playback, and adjusting audio-reactive spawn settings.
 class MusicVisualizerScene : public Scene
@@ -122,4 +125,10 @@ private:
     // Playhead drag state: pause on drag, resume on release
     bool m_playheadActive = false;
     bool m_wasPlayingBeforeSeek = false;
+
+    // Spawn system for audio-reactive entities
+    Spawn::SpawnSystem* m_spawnSystem = nullptr;
+
+    // Request to restart the track from the beginning (used when pressing Play after track ends)
+    bool m_requestRestart = false;
 };

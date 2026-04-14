@@ -23,6 +23,7 @@ public:
 	bool loop = false;				// whether the music should loop when it reaches the end
 	bool playOnStart = false;		// whether the music should start playing immediately when the component is added to an entity
 	bool autoPlay = false;			// whether the music should automatically play when the component is added to an entity (this can be used in conjunction with playOnStart for more control over when the music starts)
+    // Note: removal of restart flag - restart now handled by UI invoking Seek before Process.
 	State state = State::Stopped;	// current playback state of the music (stopped, playing, or paused)
 
 	// Public metheds (Constructors, etc.)

@@ -330,89 +330,13 @@ void MusicVisualizerScene::ShowOpenFileBrowser()
 		static bool showNonAudio = false;
 		static std::filesystem::path lastRefreshedDir; // Track which directory we last refreshed
 
-           // Lambda function to refresh the directory listing. This will read the contents of the current directory and populate the 'entries' vector with the directory entries.
-        auto refresh = [&]() {
-            entries.clear();
-            refreshError.clear();
+		// If we haven't refreshed the current directory yet, or if the current directory has changed since the last refresh, only refresh when necessary to avoid redundant directory reads and improve performance
+        if (entries.empty() || lastRefreshedDir != m_currentDir) {
+            if (!RefreshDirectoryListing(m_currentDir, entries, refreshError, skippedCount, showNonAudio)) {
+                // on failure entries will be empty and refreshError contains the message
+            }
             lastRefreshedDir = m_currentDir;
-            skippedCount = 0;
-
-			// Use directory options to skip permission denied entries and follow symlinks, which can help avoid some common issues when reading directories. We will still catch and count any errors that occur on individual entries.
-            std::filesystem::directory_options opts = std::filesystem::directory_options::skip_permission_denied | std::filesystem::directory_options::follow_directory_symlink;
-
-			// Try to create a directory iterator for the current directory. If this fails (e.g. due to permissions), we will catch the error and display it.
-            std::error_code dirEc;
-            std::filesystem::directory_iterator dirIter(m_currentDir, opts, dirEc);
-            if (dirEc) 
-            {
-                refreshError = std::string("Error opening directory: ") + dirEc.message();
-                return;
-            }
-
-			// Iterate through the directory entries. For each entry, we will check if it's a directory or an audio file (based on extension) and add it to the 'entries' vector accordingly. 
-            // We will also catch and count any errors that occur when checking the entry type or reading the filename, which can happen with special files or permission issues.
-            for (auto& entry : dirIter) 
-            {
-				// Setup error code and flag for checking if the entry is a directory.
-                std::error_code ec_entry;
-                bool is_dir = false;
-
-				// Check if the entry is a directory. If this fails, we will skip this entry and count it as skipped.
-                try 
-                {
-                    is_dir = entry.is_directory(ec_entry);
-                } 
-                catch (...) 
-                {
-                    ++skippedCount;
-                    continue;
-                }
-
-				    
-                if (ec_entry) { ++skippedCount; continue; }             // If we got an error when checking if it's a directory, skip this entry and count it as skipped.
-				if (is_dir) { entries.push_back(entry); continue; }     // If it's a directory, we add it to the entries list so we can navigate into it, then continue to the next entry.
-                
-				// Not a directory, if showNonAudio is true we add it to the list
-                if (showNonAudio) 
-                {
-                    entries.push_back(entry);
-                } 
-				// Otherwise we only want audio files (mp3, ogg, wav, flac) so check the file extension and add it as an entry if it's music
-                else 
-                {
-                    std::string fileExt;
-                    try { fileExt = entry.path().extension().string(); } catch(...) { fileExt.clear(); }
-
-                    for (auto &c : fileExt) c = (char)tolower((unsigned char)c);
-                    if (fileExt == ".mp3" || fileExt == ".ogg" || fileExt == ".wav" || fileExt == ".flac") 
-                    {
-                        entries.push_back(entry);
-                    }
-                }
-            }
-
-			// Sort entries: directories first, then alphabetically. Using try/catch to handle potential errors via a lambda comparator.
-            try 
-            {
-                std::sort(entries.begin(), entries.end(), [](auto const& entryA, auto const& entryB) 
-                                                            {
-                                                                std::error_code ea, eb;
-                                                                bool a_dir = false, b_dir = false;
-                                                                try { a_dir = std::filesystem::is_directory(entryA.path(), ea); } catch(...) { a_dir = false; }
-                                                                try { b_dir = std::filesystem::is_directory(entryB.path(), eb); } catch(...) { b_dir = false; }
-                                                                if (a_dir != b_dir) return a_dir > b_dir;
-                                                                return entryA.path().filename() < entryB.path().filename();
-                                                            }); // lambda be lambdaing
-            } 
-			catch (...) // If we get any error during sorting, clear the entries and show an error message.
-            {
-                entries.clear();
-                refreshError = "Error sorting directory entries.";
-            }
-        };
-
-		// Refresh if entries are empty OR if we've navigated to a different directory
-		if (entries.empty() || lastRefreshedDir != m_currentDir) refresh();
+        }
 
 		// Drive selection combo box: On Windows (I'm not planning this for other platforms but....), Users can select different drives (C:\, D:\, etc.) so populate a list of available drives 
 		// and show it in a combo box. When the user selects a drive, change the current directory to the given drive and refresh the entries.
@@ -425,14 +349,15 @@ void MusicVisualizerScene::ShowOpenFileBrowser()
 			std::error_code errorCode; 
 			if (std::filesystem::exists(root, errorCode)) drives.push_back(root);
 		}
-		// If we have any drives, show the combo box for drive selection and refresh the directory listing.
+		
+        // If we have any drives, show the combo box for drive selection and refresh the directory listing.
 		static int selDrive = -1;
 		if (!drives.empty()) 
 		{
             if (selDrive < 0 || selDrive >= (int)drives.size()) selDrive = 0;
             std::string items;
             for (size_t i = 0; i < drives.size(); ++i) { items += drives[i]; items.push_back('\0'); }
-            if (ImGui::Combo("Drive", &selDrive, items.c_str())) { m_currentDir = drives[selDrive]; refresh(); }
+            if (ImGui::Combo("Drive", &selDrive, items.c_str())) { m_currentDir = drives[selDrive]; RefreshDirectoryListing(m_currentDir, entries, refreshError, skippedCount, showNonAudio); lastRefreshedDir = m_currentDir; }
         }
         
         // Checkbox to toggle showing non-audio files. When toggled, it will refresh the directory listing to apply the new filter.
@@ -441,7 +366,8 @@ void MusicVisualizerScene::ShowOpenFileBrowser()
         // Search box to filter filenames shown in the file browser
         static char searchBuf[256] = "";
         ImGui::SameLine(); ImGui::PushItemWidth(200);
-        if (ImGui::InputText("Search", searchBuf, sizeof(searchBuf))) {
+        if (ImGui::InputText("Search", searchBuf, sizeof(searchBuf))) 
+        {
             /* user typed, we'll filter display */
         }
         ImGui::PopItemWidth();
@@ -451,10 +377,10 @@ void MusicVisualizerScene::ShowOpenFileBrowser()
         if (ImGui::Button("Up") && m_currentDir.has_parent_path()) 
         { 
             m_currentDir = m_currentDir.parent_path(); 
-            refresh(); 
+            RefreshDirectoryListing(m_currentDir, entries, refreshError, skippedCount, showNonAudio); lastRefreshedDir = m_currentDir; 
         }
 		// Refresh button to manually refresh the directory listing.
-        ImGui::SameLine(); if (ImGui::Button("Refresh")) refresh();
+        ImGui::SameLine(); if (ImGui::Button("Refresh")) { RefreshDirectoryListing(m_currentDir, entries, refreshError, skippedCount, showNonAudio); lastRefreshedDir = m_currentDir; }
 
 		// Display any errors that occur during directory reading or refreshing, as well as the count of skipped entries due to permissions or other issues. Finally, show the count of items being displayed.
         if (!refreshError.empty()) { ImGui::TextColored(ImVec4(1,0.3f,0.3f,1), "%s", refreshError.c_str()); }
@@ -466,7 +392,18 @@ void MusicVisualizerScene::ShowOpenFileBrowser()
         // Track how many entries we actually display after applying the search filter
         int displayedCount = 0;
         std::string queryLower;
-        try { queryLower = std::string(searchBuf); } catch(...) { queryLower.clear(); }
+
+		// Convert search query to lowercase for case-insensitive comparison. Using try/catch to handle any issues with the search string
+        try 
+        { 
+            queryLower = std::string(searchBuf); 
+        } 
+        catch(...) 
+        { 
+            queryLower.clear(); 
+        }
+
+
         for (auto &ent : entries) 
         {
             // Apply search filter (case-insensitive substring). If empty, show all.
@@ -483,13 +420,15 @@ void MusicVisualizerScene::ShowOpenFileBrowser()
             std::string entPathStr; try { entPathStr = ent.path().string(); } catch(...) { entPathStr.clear(); }
             bool selected = (!selectedPath.empty() && selectedPath == entPathStr);
             
-            if (ImGui::Selectable(label.c_str(), selected)) {
+			// Render the selectable entry. If it's selected, update the selectedPath. If it's a directory and we double-click it, navigate into it and refresh the listing.
+            if (ImGui::Selectable(label.c_str(), selected)) 
+            {
                 if (!entPathStr.empty()) selectedPath = entPathStr;
                 if (is_dir) {
                     m_currentDir = ent.path();
                     refreshError.clear();
                     skippedCount = 0;
-                    refresh();
+                    RefreshDirectoryListing(m_currentDir, entries, refreshError, skippedCount, showNonAudio); lastRefreshedDir = m_currentDir;
                     selectedPath.clear();
                 }
             }
@@ -540,6 +479,54 @@ void MusicVisualizerScene::ShowOpenFileBrowser()
         ImGui::SameLine(); if (ImGui::Button("Cancel")) { ImGui::CloseCurrentPopup(); m_showOpenDialog = false; }
         ImGui::EndPopup();
     }
+}
+
+// Refresh directory listing helper moved out of ShowOpenFileBrowser to avoid lambda capture/lifetime issues.
+bool MusicVisualizerScene::RefreshDirectoryListing(const std::filesystem::path& dir, std::vector<std::filesystem::directory_entry>& outEntries, std::string& outError, int& outSkipped, bool showNonAudio)
+{
+    outEntries.clear(); outError.clear(); outSkipped = 0;
+
+    // Basic validation
+    try {
+        auto native = dir.native();
+        if (native.empty()) { outError = "Directory path empty"; return false; }
+        if (native.size() > 32768) { outError = "Directory path too long"; return false; }
+    } catch (...) {
+        outError = "Invalid directory path";
+        return false;
+    }
+
+    std::filesystem::directory_options opts = std::filesystem::directory_options::skip_permission_denied | std::filesystem::directory_options::follow_directory_symlink;
+
+    try {
+        std::error_code dirEc;
+        std::filesystem::directory_iterator it(dir, opts, dirEc);
+        if (dirEc) { outError = std::string("Error opening directory: ") + dirEc.message(); return false; }
+
+        for (auto &entry : it) {
+            std::error_code ec_entry; bool is_dir = false;
+            try { is_dir = entry.is_directory(ec_entry); } catch(...) { ++outSkipped; continue; }
+            if (ec_entry) { ++outSkipped; continue; }
+            if (is_dir) { outEntries.push_back(entry); continue; }
+            if (showNonAudio) { outEntries.push_back(entry); continue; }
+            std::string fileExt;
+            try { fileExt = entry.path().extension().string(); } catch(...) { fileExt.clear(); }
+            for (auto &c : fileExt) c = (char)tolower((unsigned char)c);
+            if (fileExt == ".mp3" || fileExt == ".ogg" || fileExt == ".wav" || fileExt == ".flac") outEntries.push_back(entry);
+        }
+    } catch (const std::exception& ex) { outError = std::string("Error iterating directory: ") + ex.what(); outEntries.clear(); return false; } catch(...) { outError = "Unknown error iterating directory"; outEntries.clear(); return false; }
+
+    try {
+        std::sort(outEntries.begin(), outEntries.end(), [](auto const& a, auto const& b){
+            std::error_code ea, eb; bool ad=false, bd=false;
+            try { ad = std::filesystem::is_directory(a.path(), ea); } catch(...) { ad = false; }
+            try { bd = std::filesystem::is_directory(b.path(), eb); } catch(...) { bd = false; }
+            if (ad != bd) return ad > bd;
+            return a.path().filename() < b.path().filename();
+        });
+    } catch(...) { outEntries.clear(); outError = "Error sorting directory entries."; return false; }
+
+    return true;
 }
 
 

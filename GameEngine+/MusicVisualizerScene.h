@@ -63,6 +63,9 @@ private:
     void DrawPlaybackControls();
     void LoadMusicFromPath(const std::string& path);
 
+    // Refresh directory listing helper
+    bool RefreshDirectoryListing(const std::filesystem::path& dir, std::vector<std::filesystem::directory_entry>& outEntries, std::string& outError, int& outSkipped, bool showNonAudio);
+
     // Audio-reactive visual effects
     void SpawnAudioReactiveExplosion(bool resetSpawnTimer = true);
     void SpawnCircularExplosion(bool resetSpawnTimer = true);

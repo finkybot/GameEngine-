@@ -5,6 +5,8 @@
 class
 	TileSystem; // Forward declaration of TileSystem to avoid circular dependency with EntityManager, since EntityManager will have a unique_ptr to TileSystem and TileSystem will need to access EntityManager for managing tile entities. This allows us to use pointers to TileSystem in EntityManager without needing the full definition of TileSystem at this point, which helps to reduce compilation dependencies and improve build times.
 class MusicSystem; // forward declare MusicSystem
+#include <array>
+#include "Entity.h"
 namespace sf {
 class RenderWindow;
 }
@@ -16,6 +18,7 @@ class Entity;
 #include <map>
 #include <string>
 #include <chrono>
+#include <thread>
 
 #include "SpatialHashGrid.h"
 #include "Vec2.h"
@@ -69,6 +72,13 @@ public:
 	// Commit pending entities without running full Update(). This moves entities from the add-queue into the active list so systems can see them.
 	void ProcessPending();
 
+	// Debug: validate internal container integrity (only enabled in debug builds)
+	void ValidateIntegrity() const;
+	// Layer buckets access for RenderSystem (incremental maintenance)
+	std::array<std::vector<Entity*>, 4>& GetLayerBuckets() { return m_layerBuckets; }
+	// Helper to set an entity's layer (moves between buckets)
+	void SetEntityLayer(Entity* e, Entity::Layer layer);
+
 private:
 	void AddPendingEntities();
 	void RemoveDeadEntities();
@@ -89,4 +99,8 @@ private:
 	std::unique_ptr<TileSystem> m_tileSystem;
 	std::unique_ptr<MusicSystem> m_musicSystem; // system owning runtime sf::Music objects
 	bool m_hasPendingTileMaps = true;
+    // Incremental layer buckets for fast rendering
+	std::array<std::vector<Entity*>, 4> m_layerBuckets;
+    // Thread id that owns this EntityManager (captured at construction). Used to detect cross-thread access in debug builds.
+	std::thread::id m_ownerThreadId;
 };

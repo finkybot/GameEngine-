@@ -98,10 +98,21 @@ void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const 
 }
 
 void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& entities, sf::RenderWindow& window) {
+	// Render in logical layers: Background -> Mid -> Foreground -> Overlay
+    // Build per-layer buckets to avoid querying GetLayer() frequently in tight loop
+	std::array<std::vector<Entity*>, 4> buckets;
 	for (const auto& entity : entities) {
 		if (!entity->IsAlive())
 			continue;
-		RenderEntity(entity.get(), window);
+		int layerIdx = static_cast<int>(entity->GetLayer());
+		if (layerIdx < 0) layerIdx = 0;
+		if (layerIdx > 3) layerIdx = 3;
+		buckets[layerIdx].push_back(entity.get());
+	}
+	for (int layer = 0; layer <= 3; ++layer) {
+		for (Entity* e : buckets[layer]) {
+			RenderEntity(e, window);
+		}
 	}
 }
 

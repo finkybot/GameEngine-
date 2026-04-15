@@ -647,6 +647,10 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 	circle->SetColor((float)r, (float)g, (float)b, 220);
 	entity->AddComponentPtr<CShape>(std::move(circle));
 	entity->AddComponent<CTransform>(Vec2(x, y), Vec2(xVelocity, yVelocity));
+    // Place the initial explosion behind subsequent after-effects
+	if (m_entityManager) {
+		m_entityManager->SetEntityLayer(entity, Entity::Layer::Background);
+	}
     // Defer processing of pending entities to the main EntityManager update to
 	// avoid possible re-entrancy and ensure all systems run in the expected order.
 }

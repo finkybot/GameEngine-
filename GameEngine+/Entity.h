@@ -8,6 +8,7 @@
 #include "CName.h"
 #include "CShape.h"
 #include "CTransform.h"
+#include "CLayer.h"
 #include "Vec2.h"
 #include "EntityType.h"
 
@@ -23,10 +24,29 @@ private:
 	std::map<std::type_index, std::unique_ptr<Component>> m_components;
 	Vec2 m_previousPosition = Vec2::Zero;
 
-	// Private constructor, only callable by EntityManager
+    // Private constructor, only callable by EntityManager
 	Entity(EntityType type, size_t id);
 
 public:
+    // Rendering layer for the entity. Default to Mid so most entities draw in the main layer.
+	// Backward-compatible with new CLayer component: if CLayer exists, renderer will prefer it;
+	// otherwise these accessors provide a fallback stored on the entity.
+	enum class Layer { Background = 0, Mid = 1, Foreground = 2, Overlay = 3 };
+
+    // Layer accessors for rendering ordering (component-first, fallback to entity-level)
+	Layer GetLayer() const {
+		if (auto cl = GetComponent<CLayer>()) {
+			return static_cast<Layer>(cl->m_layer);
+		}
+		return m_layer;
+	}
+	void SetLayer(Layer layer) {
+		if (auto cl = GetComponent<CLayer>()) {
+			cl->m_layer = static_cast<CLayer::Layer>(layer);
+		}
+		m_layer = layer;
+	}
+
 	// Public member variable to track the creation time of the entity, used for time-based logic such as explosion lifespan
 	std::chrono::high_resolution_clock::time_point m_creationTime;
 	size_t GetId() const { return m_id; }
@@ -142,4 +162,17 @@ public:
 		if (shape)
 			shape->SetMidLength(length);
 	}
+
+	// Bucket metadata for incremental per-layer rendering maintenance
+	// bucket id: which layer bucket the entity is in (-1 = none)
+	int GetBucketId() const { return m_bucketId; }
+	int GetBucketPos() const { return m_bucketPos; }
+	void SetBucketInfo(int bucketId, int bucketPos) { m_bucketId = bucketId; m_bucketPos = bucketPos; }
+
+private:
+	// Backing field for render layer (default Mid)
+	Layer m_layer = Layer::Mid;
+    // per-entity bucket metadata for EntityManager layer buckets
+	int m_bucketId = -1;
+	int m_bucketPos = -1;
 };

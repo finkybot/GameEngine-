@@ -38,6 +38,9 @@ public:
 	void UnloadResources() override;
 	void InitializeGame(sf::Vector2u windowSize) override;
 
+	bool IsEqualizerActive() const { return m_EqualizerActive; }
+	void SetEqualizerActive(bool active) { m_EqualizerActive = active; }
+
 	// Private helper methods for internal logic
 private:
 	// Helper methods for grid rendering, input processing, tile toggling, and explosion updates
@@ -76,7 +79,8 @@ private:
 	void SpawnCircularExplosionByLevel(float level, bool resetSpawnTimer = true);
 
 	// Equalizer bar management: pre-allocated bars that are lit based on spectrum
-	void InitializeEqualizerBars(size_t bandCount);
+    // Initialize visualizer bars: visualCount = number of bars drawn; independent from spectrum band count
+	void InitializeEqualizerBars(size_t visualCount);
 	void UpdateEqualizerBars(const std::vector<float>& bands);
 	void HideEqualizerBars();
 
@@ -88,8 +92,11 @@ private:
 	float m_eqRelease = 0.12f; // how quickly display falls to new value (0..1)
 	// Display values for each preallocated bar (smoothed)
 	std::vector<float> m_eqDisplayValues;
-	// Explicit equalizer display toggle separate from spawn system enable
-	bool m_showEqualizer = false;
+	// Number of visual bars (can be larger than spectrum band count)
+	int m_visualBarCount = 10;
+
+	bool m_EqualizerActive =
+		false; // Whether the equalizer bars should be active and visible
 
 	// File dialog state
 	bool m_showLoadDialog = false;

@@ -350,6 +350,9 @@
     <ClInclude Include="DebugStack.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="CLayer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="GameEngine+.rc">

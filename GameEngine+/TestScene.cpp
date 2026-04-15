@@ -281,8 +281,10 @@ void TestScene::UpdateExplosions() {
 				entity->Destroy();
 			} else {
 				m_explosionCount++; // Increment explosion count for active explosions that have not yet expired
-				float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
-				int newAlpha = static_cast<int>(80 * (1.0f - fadeProgress));
+                float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
+				// Use a higher base alpha so explosions remain more visible as they expand.
+				const int maxAlpha = 220; // match CExplosion default alpha
+				int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));
 
 				auto shape = entity->GetComponent<CShape>();
 				if (shape) {

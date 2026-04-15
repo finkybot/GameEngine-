@@ -12,6 +12,7 @@
 #include "MusicSystem.h"
 #include "Systems/SpawnSystem.h"
 #include "CRectangle.h"
+#include "CLayer.h"
 #include <memory>
 #include <cmath>
 #include <imgui/imgui.h>
@@ -56,7 +57,7 @@ void MusicVisualizerScene::SpawnAudioReactiveExplosion(bool resetSpawnTimer) {
 
 // Create or resize a fixed pool of equalizer bar entities. They will be reused and their alpha/color
 // will be updated each frame based on the provided spectrum bands in UpdateEqualizerBars.
-void MusicVisualizerScene::InitializeEqualizerBars(size_t bandCount) {
+void MusicVisualizerScene::InitializeEqualizerBars(size_t visualCount) {
 	// Remove existing equalizer bars if bandCount changed
 	std::vector<Entity*> toRemove;
 	for (auto& e : m_entityManager.getEntities()) {
@@ -73,7 +74,7 @@ void MusicVisualizerScene::InitializeEqualizerBars(size_t bandCount) {
 	float width = static_cast<float>(m_window.getSize().x);
 	float margin = 40.0f;
 	float usable = width - margin * 2.0f;
-	size_t n = (bandCount > 0) ? bandCount : 10;
+    size_t n = (visualCount > 0) ? visualCount : 10;
 	float barWidth = usable / static_cast<float>(n);
 	float windowHeight = static_cast<float>(m_window.getSize().y);
 
@@ -89,6 +90,8 @@ void MusicVisualizerScene::InitializeEqualizerBars(size_t bandCount) {
 		// start with a low alpha so bars are visible even before first update
 		rect->SetColor(128.0f + 127.0f * (i / static_cast<float>(n)), 128.0f, 200.0f, 80);
         be->AddComponentPtr<CShape>(std::move(rect));
+        // Prefer CLayer component for render layer; add it so systems can query layer cheaply
+		be->AddComponent<CLayer>(CLayer::Layer::Foreground);
 		be->AddComponent<CTransform>(Vec2(bx, by), Vec2::Zero);
 	}
     m_entityManager.ProcessPending();
@@ -97,6 +100,7 @@ void MusicVisualizerScene::InitializeEqualizerBars(size_t bandCount) {
 	m_eqDisplayValues.resize(n, 0.0f);
 }
 
+// Set all equalizer bars to invisible by shrinking and setting alpha to 0. Called when music stops or visualizer is toggled off.
 void MusicVisualizerScene::HideEqualizerBars() {
 	auto& pool = m_entityManager.getEntities(EntityType::Equalizer);
 	for (Entity* e : pool) {
@@ -175,7 +179,9 @@ void MusicVisualizerScene::UpdateEqualizerBars(const std::vector<float>& bands) 
 			if (alpha < 40) alpha = 40; // ensure minimum visibility
 			rectShape->SetColor(128.0f + 127.0f * (i / static_cast<float>(m)), 128.0f + 127.0f * level, 200.0f, alpha);
 		}
-		xf->m_position = Vec2(bx, by);
+        xf->m_position = Vec2(bx, by);
+        // ensure visualizer entities remain in Mid layer so background/scene elements appear behind them
+		m_entityManager.SetEntityLayer(e, Entity::Layer::Mid);
 	}
     (void)0; // diagnostics removed
 }
@@ -299,19 +305,21 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			m_spawnSystem->SetEnabled(spawnEnabled);
 	}
 
-	// Explicit equalizer overlay toggle (separate from spawn system enable)
-	if (ImGui::Checkbox("Show Equalizer Overlay", &m_showEqualizer)) {
-		if (m_showEqualizer && m_musicEntity) {
-			if (auto ms = m_entityManager.GetMusicSystem()) {
-				auto& pool = m_entityManager.getEntities(EntityType::Equalizer);
-				if (pool.empty()) {
-					size_t bands = ms->GetSpectrumBandCount();
-					if (bands == 0) bands = 8;
-					InitializeEqualizerBars(bands);
+	// Single toggle to activate/deactivate the equalizer overlay
+	if (ImGui::Checkbox("Equalizer Active", &m_EqualizerActive)) {
+		if (m_EqualizerActive) {
+			// Ensure equalizer pool exists
+			if (m_musicEntity) {
+				if (auto ms = m_entityManager.GetMusicSystem()) {
+					auto& pool = m_entityManager.getEntities(EntityType::Equalizer);
+					if (pool.empty()) {
+						size_t bands = ms->GetSpectrumBandCount();
+						if (bands == 0) bands = 8;
+						InitializeEqualizerBars(static_cast<size_t>(m_visualBarCount));
+					}
 				}
 			}
 		} else {
-			// hide when toggled off
 			HideEqualizerBars();
 		}
 	}
@@ -371,16 +379,22 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 		ImGui::Separator();
        ImGui::Text("Spawners: %d", (int)m_spawnSystem->GetConfigs().size());
 
-		// Equalizer controls: allow changing band count and show active pool size
+        // Equalizer visual controls: visual bar count is independent from spectrum band count
 		if (auto ms = m_entityManager.GetMusicSystem()) {
-			int bands = static_cast<int>(ms->GetSpectrumBandCount());
-			if (ImGui::InputInt("Equalizer Bands", &bands)) {
-				if (bands < 1) bands = 1;
-				if (bands > 128) bands = 128;
-				ms->SetSpectrumBandCount(bands);
-				// recreate pool to match requested band count
-				InitializeEqualizerBars(static_cast<size_t>(bands));
+			// show current spectrum band count (read-only informational)
+			int spectrumBands = static_cast<int>(ms->GetSpectrumBandCount());
+			ImGui::Text("Spectrum Bands: %d", spectrumBands);
+
+			int visualBars = m_visualBarCount;
+			if (ImGui::InputInt("Visual Bars", &visualBars)) {
+				if (visualBars < 1) visualBars = 1;
+				if (visualBars > 256) visualBars = 256;
+				if (visualBars != m_visualBarCount) {
+					m_visualBarCount = visualBars;
+					InitializeEqualizerBars(static_cast<size_t>(m_visualBarCount));
+				}
 			}
+
 			// Show how many equalizer bar entities are currently active
 			auto& pool = m_entityManager.getEntities(EntityType::Equalizer);
 			ImGui::Text("Active Equalizer Bars: %d", (int)pool.size());
@@ -419,7 +433,7 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 		// EQ settings (if music system present)
 		if (auto ms = m_entityManager.GetMusicSystem()) {
 			int bands = static_cast<int>(ms->GetSpectrumBandCount());
-			if (ImGui::SliderInt("EQ Bands", &bands, 5, 32)) {
+			if (ImGui::SliderInt("EQ Bands", &bands, 5, 10)) {
 				ms->SetSpectrumBandCount(bands);
 			}
 			float smooth = ms->GetSpectrumSmoothing();
@@ -434,12 +448,18 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			spawnConfigs[0].type = Spawn::Type::Continuous;
 			spawnConfigs[0].rate = 12.0f; // reasonable default
 			spawnConfigs[0].spawnRadius = 300.0f;
+          // create visual pool using configured visual bar count and activate equalizer
+			InitializeEqualizerBars(static_cast<size_t>(m_visualBarCount));
 			m_musicStatus = "Equalizer activated on spawner 0";
+			m_EqualizerActive = true;
+			//SetEqualizerActive(true);
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Disable Equalizer")) {
 			spawnConfigs[0].pattern = Spawn::Pattern::Random;
 			m_musicStatus = "Equalizer disabled";
+            m_EqualizerActive = false;
+			HideEqualizerBars();
 		}
 		ImGui::TextWrapped("Tip: Use 'EQ Bands' to control number of columns and 'Rate' to control update frequency.\nClick Activate Equalizer to map bands to spawned columns.");
 	} else {
@@ -494,6 +514,7 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 				musicCmp->state = CMusic::State::Playing;
 				std::cout << "[MusicVisualizer] Play pressed for entity "
 						  << (m_musicEntity ? m_musicEntity->GetId() : 0) << std::endl;
+				
 				// If the track has ended and looping is disabled, request a restart next update
 				if (auto musicSys = m_entityManager.GetMusicSystem()) {
 					float pos = musicSys->GetPlayingOffset(m_musicEntity->GetId());
@@ -559,12 +580,14 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 
 			// On drag start, if music is playing, pause it and remember to resume on drag end. On drag end, if we paused for the drag, resume playback.
 			if (sliderActive && !m_playheadActive) {
+				
 				// Drag just started - record playing state and pause (I want to stop the sound sample from playing while dragging the playhead, as it
 				// will likely repeat the same sample over and over (sounds like game crashes!!!! anyone)
 				if (auto cm = m_musicEntity->GetComponent<CMusic>()) {
 					m_wasPlayingBeforeSeek =
 						(cm->state == CMusic::State::Playing); // record the music playing state before seek
-					// if it was playing, pause it while dragging the playhead to prevent repeated sound samples during seek (which sound like ass)
+
+					// If it was playing, pause it while dragging the playhead to prevent repeated sound samples during seek (which sound like ass)
 					if (m_wasPlayingBeforeSeek) {
 						cm->state = CMusic::State::Paused;
 						if (auto musicSys = m_entityManager.GetMusicSystem())
@@ -632,6 +655,7 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 			normCur = m_currentDir;
 		}
 
+		// Refresh the directory listing if we haven't done so for the current directory yet, or if the current directory has changed since the last refresh
 		if (entries.empty() || lastRefreshedDir != normCur) {
 			if (!RefreshDirectoryListing(normCur, entries, refreshError, skippedCount, showNonAudio)) {
 				// on failure entries will be empty and refreshError contains the message
@@ -683,12 +707,15 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 		if (ImGui::InputText("Search", searchBuf, sizeof(searchBuf))) {
 			/* user typed, we'll filter display */
 		}
+
+		// Clear search button to reset the search filter and show all files again
 		ImGui::PopItemWidth();
 		ImGui::SameLine();
 		if (ImGui::Button("Clear")) {
 			searchBuf[0] = '\0';
 		}
 
+		// Display the current folder path. Provide an "Up" button to navigate to the parent directory, which updates the current directory and refreshes the listing. Also provide a "Refresh" button to manually refresh the directory listing in case of external changes.
 		ImGui::Text("Current folder: %s", m_currentDir.string().c_str());
 		if (ImGui::Button("Up") && m_currentDir.has_parent_path()) {
 			m_currentDir = m_currentDir.parent_path();
@@ -1063,6 +1090,7 @@ void MusicVisualizerScene::Update(float deltaTime) {
 		float levelForSpawn = 0.0f;
 		if (m_musicEntity) {
 			if (auto ms = m_entityManager.GetMusicSystem()) {
+				
 				// If UI requested a restart (Play pressed after track end), seek to start before processing
 				if (m_requestRestart) {
 					ms->Seek(m_musicEntity->GetId(), 0.0f);
@@ -1071,8 +1099,10 @@ void MusicVisualizerScene::Update(float deltaTime) {
 				ms->Process();
                levelForSpawn = ms->GetLevel(m_musicEntity->GetId());
                 // Update equalizer bars from latest spectrum (if enabled and available)
-				if (m_spawnSystem && m_spawnSystem->IsEnabled()) {
+				if (m_spawnSystem && m_spawnSystem->IsEnabled() && IsEqualizerActive()) {
 					std::vector<float> bands;
+
+					// Try to get per-band spectrum data; if not available, fall back to overall level for all bars
 					if (ms->GetSpectrum(m_musicEntity->GetId(), bands)) {
 						UpdateEqualizerBars(bands);
 					} else {
@@ -1202,10 +1232,10 @@ void MusicVisualizerScene::LoadMusicFromPath(const std::string& path) {
 		ms->Process();
 	m_musicStatus = std::string("Loaded: ") + path;
 
-	// Initialize equalizer bars when loading music so we have pre-allocated bar entities
+    // Initialize equalizer bars when loading music so we have pre-allocated bar entities
 	if (auto ms2 = m_entityManager.GetMusicSystem()) {
-		size_t bands = ms2->GetSpectrumBandCount();
-		InitializeEqualizerBars(bands);
+		// Create visual pool using current visual bar count (independent of spectrum bands)
+		InitializeEqualizerBars(static_cast<size_t>(m_visualBarCount));
 	}
 }
 
@@ -1228,8 +1258,9 @@ void MusicVisualizerScene::UpdateExplosions() {
 				entity->Destroy();
 			} else {
 				++m_explosionCount;
-				float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
-				int newAlpha = static_cast<int>(80 * (1.0f - fadeProgress));
+                float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
+				const int maxAlpha = 220;
+				int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));
 
 				auto shape = entity->GetComponent<CShape>();
 

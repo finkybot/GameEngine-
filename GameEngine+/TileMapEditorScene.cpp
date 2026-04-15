@@ -788,8 +788,10 @@ void TileMapEditorScene::UpdateExplosions() {
 				entity->Destroy();
 			} else {
 				++m_explosionCount;
-				float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
-				int newAlpha = static_cast<int>(80 * (1.0f - fadeProgress));
+                float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
+				// Increase explosion alpha for better visibility
+				const int maxAlpha = 220;
+				int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));
 
 				auto shape = entity->GetComponent<CShape>();
 				if (shape) {

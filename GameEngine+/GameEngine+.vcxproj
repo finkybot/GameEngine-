@@ -189,6 +189,7 @@
     <ClInclude Include="AssetManager.h" />
     <ClInclude Include="CCircle.h" />
     <ClInclude Include="CExplosion.h" />
+    <ClInclude Include="CLayer.h" />
     <ClInclude Include="CMusic.h" />
     <ClInclude Include="CName.h" />
     <ClInclude Include="Component.h" />

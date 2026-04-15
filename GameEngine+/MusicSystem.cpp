@@ -29,7 +29,6 @@ void MusicSystem::StopAllMusic() {
 }
 
 bool MusicSystem::GetSpectrum(size_t entityId, std::vector<float>& outSpectrum) const {
-    LogStack("GetSpectrum-enter");
 	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	auto it = m_spectra.find(entityId);
 	if (it == m_spectra.end()) return false;

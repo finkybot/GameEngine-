@@ -10,22 +10,52 @@
 #include <cmath>
 #include <cstring>
 #include <unordered_set>
+#include <complex>
+#include <algorithm>
+#include <vector>
 
 MusicSystem::MusicSystem(EntityManager& entityManager) : m_entityManager(entityManager) {}
+
+// Simple in-place radix-2 Cooley-Tukey FFT (complex)
+static void fft_inplace(std::vector<std::complex<float>>& a) {
+	const size_t n = a.size();
+	if (n <= 1) return;
+	// bit-reverse permutation
+	size_t j = 0;
+	for (size_t i = 1; i < n; ++i) {
+		size_t bit = n >> 1;
+		for (; j & bit; bit >>= 1) j ^= bit;
+		j ^= bit;
+		if (i < j) std::swap(a[i], a[j]);
+	}
+	// FFT
+	for (size_t len = 2; len <= n; len <<= 1) {
+		float angle = -2.0f * 3.14159265358979323846f / static_cast<float>(len);
+		std::complex<float> wlen(std::cos(angle), std::sin(angle));
+		for (size_t i = 0; i < n; i += len) {
+			std::complex<float> w(1.0f, 0.0f);
+			for (size_t j = 0; j < len/2; ++j) {
+				std::complex<float> u = a[i + j];
+				std::complex<float> v = a[i + j + len/2] * w;
+				a[i + j] = u + v;
+				a[i + j + len/2] = u - v;
+				w *= wlen;
+			}
+		}
+	}
+}
 
 void MusicSystem::StopAllMusic() {
 	for (auto& p : m_activeMusic) {
 		if (p.second)
 			p.second->stop();
 	}
-
 	m_activeMusic.clear();
 	{
-    std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+		std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 		m_buffers.clear();
 		m_levels.clear();
 	}
-
 }
 
 bool MusicSystem::GetSpectrum(size_t entityId, std::vector<float>& outSpectrum) const {
@@ -65,6 +95,30 @@ void MusicSystem::SetSpectrumSmoothing(float smoothing) {
 float MusicSystem::GetSpectrumSmoothing() const {
             std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	return m_spectrumSmoothing;
+}
+
+void MusicSystem::SetUseFFT(bool useFFT) {
+	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+	m_useFFT = useFFT;
+}
+
+bool MusicSystem::GetUseFFT() const {
+	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+	return m_useFFT;
+}
+
+void MusicSystem::SetFFTSize(int size) {
+	if (size <= 0) return;
+	// ensure power of two
+	int p = 1;
+	while (p < size) p <<= 1;
+	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+	m_fftSize = p;
+}
+
+int MusicSystem::GetFFTSize() const {
+	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+	return m_fftSize;
 }
 
 
@@ -248,8 +302,94 @@ void MusicSystem::Process() {
         std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 		m_levels[id] = static_cast<float>(mean);
 
-		// --- Goertzel-based band analysis (simple n-band equalizer) ---
-		// Prepare mono window of samples (per-channel aggregation)
+   // --- Band analysis: FFT-based (preferred) or fallback Goertzel ---
+	std::vector<float> mags;
+	mags.resize((size_t)m_eqBandCount);
+	if (m_useFFT && m_fftSize > 0) {
+		int N = m_fftSize;
+		// prepare mono buffer of size N centered at playhead
+		std::vector<float> mono;
+		mono.resize((size_t)N);
+		long long centerSample = static_cast<long long>(seconds * static_cast<float>(sampleRate));
+		long long startSample = centerSample - static_cast<long long>(N / 2);
+		for (int i = 0; i < N; ++i) {
+			long long sidx = startSample + i;
+			if (sidx < 0 || static_cast<size_t>(sidx) >= static_cast<size_t>(totalSamples / channels)) {
+				mono[i] = 0.0f;
+				continue;
+			}
+			size_t base = static_cast<size_t>(sidx) * channels;
+			float acc = 0.0f;
+			for (unsigned int c = 0; c < channels; ++c) {
+				acc += static_cast<float>(samples[base + c]) / 32768.0f;
+			}
+			mono[i] = acc / static_cast<float>(channels);
+		}
+		// window (Hann)
+		for (int i = 0; i < N; ++i) {
+			float w = 0.5f * (1.0f - cosf(2.0f * 3.14159265358979323846f * static_cast<float>(i) / static_cast<float>(N)));
+			mono[i] *= w;
+		}
+		// complex buffer
+		std::vector<std::complex<float>> a;
+		a.resize((size_t)N);
+		for (int i = 0; i < N; ++i) a[i] = std::complex<float>(mono[i], 0.0f);
+		fft_inplace(a);
+		int half = N/2;
+		std::vector<float> magsBins((size_t)half + 1);
+		for (int k = 0; k <= half; ++k) {
+			float mag = std::abs(a[k]) / static_cast<float>(N);
+			magsBins[k] = mag;
+		}
+		float nyq = static_cast<float>(sampleRate) * 0.5f;
+		float dbFloor = -80.0f;
+		// map bands using log spacing between 20Hz and nyquist
+		float minF = 20.0f;
+		if (nyq <= minF) minF = 1.0f;
+		for (int b = 0; b < m_eqBandCount; ++b) {
+			float lowF, highF;
+			if (m_eqBandCount == 1) {
+				lowF = minF; highF = nyq;
+			} else {
+				float L = log10f(minF);
+				float H = log10f(nyq);
+				float lb = L + (H - L) * (static_cast<float>(b) / static_cast<float>(m_eqBandCount));
+				float hb = L + (H - L) * (static_cast<float>(b + 1) / static_cast<float>(m_eqBandCount));
+				lowF = powf(10.0f, lb);
+				highF = powf(10.0f, hb);
+			}
+          int count = 0;
+			double sum = 0.0;
+			for (int k = 0; k <= half; ++k) {
+				float freq = static_cast<float>(k) * static_cast<float>(sampleRate) / static_cast<float>(N);
+				// include upper boundary to avoid gaps between adjacent bands
+				if (freq >= lowF && freq <= highF) {
+					sum += magsBins[k];
+					count++;
+				}
+			}
+			float avg = 0.0f;
+			if (count > 0) {
+				avg = static_cast<float>(sum / static_cast<double>(count));
+			} else {
+				// No FFT bins fell into this band's range (can happen for very narrow bands or low FFT resolution)
+				// Fallback: sample nearest FFT bin at the band's center frequency
+				float centerF = sqrtf(lowF * highF);
+				int k = static_cast<int>(centerF * static_cast<float>(N) / static_cast<float>(sampleRate) + 0.5f);
+				if (k < 0) k = 0;
+				if (k > half) k = half;
+				avg = magsBins[k];
+			}
+			// convert to dB and normalize
+			float db = 20.0f * log10f(std::max(avg, 1e-20f));
+			float v = (db - dbFloor) / (-dbFloor);
+			if (!std::isfinite(v)) v = 0.0f;
+			if (v < 0.0f) v = 0.0f;
+			if (v > 1.0f) v = 1.0f;
+			mags[b] = v;
+		}
+	} else {
+		// fallback: existing Goertzel-based approach (keep previous behavior)
 		const size_t N = windowPerChannel; // number of samples per channel
 		std::vector<float> mono;
 		mono.reserve(N);
@@ -279,8 +419,6 @@ void MusicSystem::Process() {
 		}
 
 		// Compute Goertzel per band
-		std::vector<float> mags;
-		mags.resize((size_t)m_eqBandCount);
 		for (int b = 0; b < m_eqBandCount; ++b) {
 			float freq = (b < (int)m_eqCenterFreqs.size()) ? m_eqCenterFreqs[b] : (1000.0f * (b + 1));
 			if (freq <= 0.0f || freq >= static_cast<float>(sampleRate) * 0.5f) {
@@ -301,25 +439,25 @@ void MusicSystem::Process() {
 			float magnitude = sqrtf(power) / static_cast<float>(N);
 			mags[b] = magnitude;
 		}
-
-		// Normalize magnitudes and apply smoothing
+		// normalize
 		float maxv = 1e-9f;
 		for (float v : mags) if (v > maxv) maxv = v;
 		if (maxv > 0.0f) {
 			for (float &v : mags) v = v / maxv;
 		}
+	}
 
-		// Store into m_spectra with smoothing
-		{
-            std::lock_guard<std::recursive_mutex> lk2(m_levelsMutex);
-			auto &store = m_spectra[id];
-			if ((int)store.size() != m_eqBandCount) store.assign(m_eqBandCount, 0.0f);
-			for (int b = 0; b < m_eqBandCount; ++b) {
-				float prev = store[b];
-				float nv = mags[b];
-				store[b] = prev * m_spectrumSmoothing + nv * (1.0f - m_spectrumSmoothing);
-			}
+	// Store into m_spectra with smoothing
+	{
+		std::lock_guard<std::recursive_mutex> lk2(m_levelsMutex);
+		auto &store = m_spectra[id];
+		if ((int)store.size() != m_eqBandCount) store.assign(m_eqBandCount, 0.0f);
+		for (int b = 0; b < m_eqBandCount; ++b) {
+			float prev = store[b];
+			float nv = mags[b];
+			store[b] = prev * m_spectrumSmoothing + nv * (1.0f - m_spectrumSmoothing);
 		}
+	}
 	}
 }
 

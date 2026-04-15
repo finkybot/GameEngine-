@@ -60,6 +60,12 @@ public:
 	void SetSpectrumSmoothing(float smoothing);
 	float GetSpectrumSmoothing() const;
 
+	// FFT-based analysis options
+	void SetUseFFT(bool useFFT);
+	bool GetUseFFT() const;
+	void SetFFTSize(int size);
+	int GetFFTSize() const;
+
 private:
 	// Latest measured audio levels (RMS) per entity id
 	std::unordered_map<size_t, float> m_levels;
@@ -80,4 +86,7 @@ private:
 	int m_eqBandCount = 10; // default 10-band equalizer
 	float m_spectrumSmoothing = 0.65f; // smoothing alpha (0..1) where higher is smoother
 	std::vector<float> m_eqCenterFreqs; // center frequencies for bands (initialized on demand)
+    // FFT options
+	bool m_useFFT = false; // default: keep legacy Goertzel unless enabled
+	int m_fftSize = 2048;  // FFT size to use when m_useFFT is true
 };

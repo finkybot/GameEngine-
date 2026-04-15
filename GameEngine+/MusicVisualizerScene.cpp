@@ -78,6 +78,7 @@ void MusicVisualizerScene::InitializeEqualizerBars(size_t visualCount) {
 	float barWidth = usable / static_cast<float>(n);
 	float windowHeight = static_cast<float>(m_window.getSize().y);
 
+	// Create 'n' bars evenly spaced across the bottom of the window, with some margin on the sides. Bars start with a small height and low alpha so they are visible even before the first update.
     for (size_t i = 0; i < n; ++i) {
 		Entity* be = m_entityManager.addEntity(EntityType::Equalizer);
 		if (!be) continue;
@@ -87,10 +88,12 @@ void MusicVisualizerScene::InitializeEqualizerBars(size_t visualCount) {
 		float bx = cx - bwidth * 0.5f;
 		float by = windowHeight - 20.0f - bheight;
         auto rect = std::unique_ptr<CRectangle>(new CRectangle(bwidth, bheight));
+		
 		// start with a low alpha so bars are visible even before first update
 		rect->SetColor(128.0f + 127.0f * (i / static_cast<float>(n)), 128.0f, 200.0f, 80);
         be->AddComponentPtr<CShape>(std::move(rect));
-        // Prefer CLayer component for render layer; add it so systems can query layer cheaply
+        
+		// Prefer CLayer component for render layer; add it so systems can query layer cheaply
 		be->AddComponent<CLayer>(CLayer::Layer::Foreground);
 		be->AddComponent<CTransform>(Vec2(bx, by), Vec2::Zero);
 	}
@@ -129,12 +132,14 @@ void MusicVisualizerScene::UpdateEqualizerBars(const std::vector<float>& bands) 
 	float barWidth = usable / static_cast<float>(m);
 	float windowHeight = static_cast<float>(m_window.getSize().y);
 
+	// Map spectrum bands to visualizer bars. If there are more bars than bands, some bars will be empty. If there are more bands than bars, multiple bands will be averaged/interpolated for each bar.
     for (size_t i = 0; i < m; ++i) {
 		float level = 0.0f;
-        if (n > 0) {
-			// map bar index to spectrum index by scaling to avoid many bars mapping to last band
+        
+		// map bar index to spectrum index by scaling to avoid many bars mapping to last band
+		// interpolate between nearest bands for smoother distribution
+		if (n > 0) {
 			float srcPos = (static_cast<float>(i) + 0.5f) * (static_cast<float>(n) / static_cast<float>(m));
-			// interpolate between nearest bands for smoother distribution
 			int idx0 = static_cast<int>(std::floor(srcPos));
 			int idx1 = idx0 + 1;
 			float frac = srcPos - static_cast<float>(idx0);
@@ -148,21 +153,24 @@ void MusicVisualizerScene::UpdateEqualizerBars(const std::vector<float>& bands) 
 			if (!std::isfinite(v1)) v1 = 0.0f;
 			level = v0 * (1.0f - frac) + v1 * frac;
 		}
+
+		// level is expected to be in 0.0 - 1.0 range based on MusicSystem's spectrum processing
 		Entity* e = ents[i];
 		if (!e) continue;
 		auto shape = e->GetComponent<CShape>();
 		auto xf = e->GetComponent<CTransform>();
 		if (!shape || !xf) continue;
         float bwidth = barWidth * (1.0f - m_eqBarGap);
+
 		// scale bar height to configured fraction of the window for better visibility
         // apply per-bar smoothing (attack/release)
 		if (i >= m_eqDisplayValues.size()) m_eqDisplayValues.resize(m, 0.0f);
 		float displayed = m_eqDisplayValues[i];
-		if (level > displayed) {
-			// attack - rise quickly
+
+		if (level > displayed) /* attack - rise quickly */ { 
 			displayed = displayed * (1.0f - m_eqAttack) + level * m_eqAttack;
-		} else {
-			// release - fall slowly
+		} else /* release - fall slowly */ {
+			
 			displayed = displayed * (1.0f - m_eqRelease) + level * m_eqRelease;
 		}
 		m_eqDisplayValues[i] = displayed;
@@ -171,6 +179,7 @@ void MusicVisualizerScene::UpdateEqualizerBars(const std::vector<float>& bands) 
 		float cx = margin + (static_cast<float>(i) + 0.5f) * barWidth;
 		float bx = cx - bwidth * 0.5f;
 		float by = windowHeight - 20.0f - bheight;
+		
 		// Update rectangle size and color/alpha
         // Attempt to resize rectangle shape and update color
         if (auto rectShape = dynamic_cast<CRectangle*>(shape)) {
@@ -209,6 +218,7 @@ void MusicVisualizerScene::SpawnCircularExplosionByLevel(float level, bool reset
 	int ar = 128 + static_cast<int>(127.0f * std::sin(a + 0.0f));
 	int ag = 128 + static_cast<int>(127.0f * std::sin(a + 2.0f));
 	int ab = 128 + static_cast<int>(127.0f * std::sin(a + 4.0f));
+	
 	// scale color brightness by level (0..1) where level=0 => 0.5 brightness, level=1 => 1.0 brightness
 	float brightness = 0.5f + 0.5f * level;
 	auto clamp8 = [](int v) {
@@ -218,6 +228,8 @@ void MusicVisualizerScene::SpawnCircularExplosionByLevel(float level, bool reset
 			return 255;
 		return v;
 	};
+
+	// Apply brightness scaling and clamp to valid color range
 	int rr = clamp8(static_cast<int>(ar * brightness));
 	int gg = clamp8(static_cast<int>(ag * brightness));
 	int bb = clamp8(static_cast<int>(ab * brightness));
@@ -240,6 +252,7 @@ void MusicVisualizerScene::SpawnCircularExplosionByLevel(float level, bool reset
 	if (m_circularAngle > 3.14159265f * 2.0f)
 		m_circularAngle -= 3.14159265f * 2.0f;
 
+	// Commit spawn immediately so it appears in the same frame
 	m_entityManager.ProcessPending();
 	if (resetSpawnTimer)
 		m_spawnTimer = 0.0f;
@@ -280,6 +293,7 @@ void MusicVisualizerScene::SpawnCircularExplosion(bool resetSpawnTimer) {
 	if (m_circularAngle > 3.14159265f * 2.0f)
 		m_circularAngle -= 3.14159265f * 2.0f;
 
+	// Commit spawn immediately so it appears in the same frame
 	m_entityManager.ProcessPending();
 	if (resetSpawnTimer)
 		m_spawnTimer = 0.0f;
@@ -291,12 +305,19 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 		return;
 
 	// Position the Audio Reactive window in the bottom-right corner with a fixed size
-	ImVec2 winSize(340, 400);
+	ImVec2 winSize(340, 500);
 	ImVec2 pos((float)m_window.getSize().x - winSize.x - 10.0f, (float)m_window.getSize().y - winSize.y - 10.0f);
+    
+	// Set next window position and size with ImGuiCond_Always to ensure it stays in the corner and doesn't get moved by user
 	ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
 	ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
+	
+	// allow semi-transparent background for this overlay window
+	ImGui::SetNextWindowBgAlpha(0.55f);
 	ImGui::Begin("Audio Reactive", nullptr,
 				 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+	// make contents scrollable if they overflow
+	ImGui::BeginChild("AudioReactiveScroll", ImVec2(0, 0), false, ImGuiWindowFlags_None);
 
     // Enable/disable spawn system
 	bool spawnEnabled = m_spawnSystem ? m_spawnSystem->IsEnabled() : false;
@@ -306,10 +327,9 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 	}
 
 	// Single toggle to activate/deactivate the equalizer overlay
-	if (ImGui::Checkbox("Equalizer Active", &m_EqualizerActive)) {
+	if (ImGui::Checkbox("Equalizer Active", &m_EqualizerActive)) /* Toggle equalizer overlay */ {
 		if (m_EqualizerActive) {
-			// Ensure equalizer pool exists
-			if (m_musicEntity) {
+			if (m_musicEntity) /* Ensure equalizer pool exists */ {
 				if (auto ms = m_entityManager.GetMusicSystem()) {
 					auto& pool = m_entityManager.getEntities(EntityType::Equalizer);
 					if (pool.empty()) {
@@ -319,7 +339,7 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 					}
 				}
 			}
-		} else {
+		} else /* release - fall slowly */ {
 			HideEqualizerBars();
 		}
 	}
@@ -369,10 +389,14 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 		bool needsRotation = (pat == Spawn::Pattern::Circular || pat == Spawn::Pattern::LevelScaledCircular ||
 							  pat == Spawn::Pattern::Spiral || pat == Spawn::Pattern::Figure8 ||
 							  pat == Spawn::Pattern::MultiRing || pat == Spawn::Pattern::Helix);
+
+		// Show rotation speed control if the selected pattern involves rotation. This allows users to adjust how fast the circular/spiral patterns rotate around the center, which can create different visual effects and better sync with the music.
 		if (needsRotation)
 			ImGui::SliderFloat("Rotation Speed", &spawnConfigs[0].circularSpeed, 0.01f, 1.0f, "%.2f");
+		// Show spiral expansion control if Spiral pattern is selected. This controls how quickly the spiral expands outward with each spawn, allowing for tighter or looser spirals based on user preference.
 		if (pat == Spawn::Pattern::Spiral)
 			ImGui::SliderFloat("Spiral Expansion", &spawnConfigs[0].spiralExpansion, 0.1f, 20.0f, "%.1f");
+		// Show ring count control if MultiRing pattern is selected. This allows users to choose how many concentric rings of spawns are created, which can create more complex and visually interesting patterns that still react to the music.
 		if (pat == Spawn::Pattern::MultiRing)
 			ImGui::SliderInt("Ring Count", &spawnConfigs[0].ringCount, 2, 8);
 
@@ -385,6 +409,8 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			int spectrumBands = static_cast<int>(ms->GetSpectrumBandCount());
 			ImGui::Text("Spectrum Bands: %d", spectrumBands);
 
+			// Allow user to configure how many visual bars to display in the equalizer overlay. This controls how many entities are spawned for the equalizer visualization and how spectrum bands are mapped to them. 
+			// It can be more or less than the actual spectrum band count for creative visual effects.
 			int visualBars = m_visualBarCount;
 			if (ImGui::InputInt("Visual Bars", &visualBars)) {
 				if (visualBars < 1) visualBars = 1;
@@ -411,6 +437,8 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 				m_musicStatus = "Save failed: " + error;
 			}
 		}
+
+		// Load buttons for default and custom presets. Default preset is read-only and can be used as a fallback or starting point, while custom preset allows users to save their own configurations.
 		ImGui::SameLine();
 		if (ImGui::Button("Load Default")) {
 			std::string error;
@@ -420,6 +448,8 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 				m_musicStatus = "Load failed: " + error;
 			}
 		}
+
+		// Custom preset load allows users to persist their own configurations across sessions. It will overwrite the current spawn system configuration with the one loaded from the file, so users can experiment and then save if they like the changes.
 		ImGui::SameLine();
 		if (ImGui::Button("Load Custom")) {
 			std::string error;
@@ -430,16 +460,35 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			}
 		}
 
-		// EQ settings (if music system present)
+        // Spectrum / EQ settings (if music system present)
 		if (auto ms = m_entityManager.GetMusicSystem()) {
+			// FFT enable/disable
+			bool useFFT = ms->GetUseFFT();
+			if (ImGui::Checkbox("Use FFT Analysis", &useFFT)) {
+				ms->SetUseFFT(useFFT);
+			}
+
+			// FFT size (power of two enforced by setter)
+			int fftSize = ms->GetFFTSize();
+			if (ImGui::InputInt("FFT Size", &fftSize)) {
+				if (fftSize < 16) fftSize = 16;
+				if (fftSize > 16384) fftSize = 16384;
+				ms->SetFFTSize(fftSize);
+			}
+
+			// Spectrum band count (visual mapping)
 			int bands = static_cast<int>(ms->GetSpectrumBandCount());
-			if (ImGui::SliderInt("EQ Bands", &bands, 5, 10)) {
+			if (ImGui::SliderInt("Spectrum Bands", &bands, 8, 128)) {
 				ms->SetSpectrumBandCount(bands);
 			}
+
+			// Smoothing
 			float smooth = ms->GetSpectrumSmoothing();
-			if (ImGui::SliderFloat("EQ Smoothing", &smooth, 0.0f, 0.95f, "%.2f")) {
+			if (ImGui::SliderFloat("Spectrum Smoothing", &smooth, 0.0f, 0.95f, "%.2f")) {
 				ms->SetSpectrumSmoothing(smooth);
 			}
+
+			ImGui::Text("FFT: %s  Size: %d", ms->GetUseFFT() ? "On" : "Off", ms->GetFFTSize());
 		}
 
 		// Quick actions for Equalizer
@@ -452,8 +501,10 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			InitializeEqualizerBars(static_cast<size_t>(m_visualBarCount));
 			m_musicStatus = "Equalizer activated on spawner 0";
 			m_EqualizerActive = true;
-			//SetEqualizerActive(true);
 		}
+
+		// Deactivate equalizer by switching back to a default random pattern and hiding bars. This allows users to easily toggle the visualizer on and off without 
+		// losing their spawn configuration settings, as they can switch back to the Equalizer pattern to reactivate it with the same parameters.
 		ImGui::SameLine();
 		if (ImGui::Button("Disable Equalizer")) {
 			spawnConfigs[0].pattern = Spawn::Pattern::Random;
@@ -461,7 +512,6 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
             m_EqualizerActive = false;
 			HideEqualizerBars();
 		}
-		ImGui::TextWrapped("Tip: Use 'EQ Bands' to control number of columns and 'Rate' to control update frequency.\nClick Activate Equalizer to map bands to spawned columns.");
 	} else {
 		ImGui::TextUnformatted("No spawners configured.");
 	}
@@ -476,10 +526,12 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			hasBuffer = ms->HasAnalysisBuffer(m_musicEntity->GetId());
 		}
 	}
-	ImGui::Text("Level: %.4f", level);
+    ImGui::Text("Level: %.4f", level);
 	ImGui::SameLine();
 	ImGui::TextUnformatted(hasBuffer ? "(analyzing)" : "(no analysis)");
 
+	// end scrollable child and window
+	ImGui::EndChild();
 	ImGui::End();
 }
 
@@ -1099,7 +1151,7 @@ void MusicVisualizerScene::Update(float deltaTime) {
 				ms->Process();
                levelForSpawn = ms->GetLevel(m_musicEntity->GetId());
                 // Update equalizer bars from latest spectrum (if enabled and available)
-				if (m_spawnSystem && m_spawnSystem->IsEnabled() && IsEqualizerActive()) {
+			   if (m_spawnSystem && m_spawnSystem->IsEnabled() && m_EqualizerActive) {
 					std::vector<float> bands;
 
 					// Try to get per-band spectrum data; if not available, fall back to overall level for all bars
@@ -1251,12 +1303,17 @@ void MusicVisualizerScene::ToggleTileAt(int tx, int ty, bool setSolid) {}
 void MusicVisualizerScene::UpdateExplosions() {
 	m_explosionCount = 0;
 	auto now = std::chrono::high_resolution_clock::now();
+
+	// Iterate through all entities and process those that are explosions
 	for (auto& entity : m_entityManager.getEntities()) {
 		if (entity->GetType() == EntityType::Explosion) {
-			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->m_creationTime);
-			if (elapsed.count() > 2900) {
+			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+				now - entity->m_creationTime); // Calculate how long the explosion has been alive in milliseconds
+
+			// If the explosion has been alive for more than 2900 milliseconds, destroy it to remove it from the scene
+			if (elapsed.count() >2900) {
 				entity->Destroy();
-			} else {
+			} else { // Otherwise, update its visual properties to create a fading effect as it ages
 				++m_explosionCount;
                 float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
 				const int maxAlpha = 220;
@@ -1264,6 +1321,8 @@ void MusicVisualizerScene::UpdateExplosions() {
 
 				auto shape = entity->GetComponent<CShape>();
 
+
+				// If the entity has a CShape component and it is an explosion shape, update its radius and color to create the visual effect. We increase the radius slightly to create a nice expansion effect,
 				if (shape) {
 					if (auto* explosion = dynamic_cast<CExplosion*>(shape)) {
 						float radiusDifference = explosion->GetRadius();

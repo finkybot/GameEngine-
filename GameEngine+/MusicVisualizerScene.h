@@ -38,8 +38,8 @@ public:
 	void UnloadResources() override;
 	void InitializeGame(sf::Vector2u windowSize) override;
 
-	bool IsEqualizerActive() const { return m_EqualizerActive; }
-	void SetEqualizerActive(bool active) { m_EqualizerActive = active; }
+	//bool IsEqualizerActive() const { return m_EqualizerActive; }
+	//void SetEqualizerActive(bool active) { m_EqualizerActive = active; }
 
 	// Private helper methods for internal logic
 private:

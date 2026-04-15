@@ -3,18 +3,16 @@
 #include "Vec2.h"
 #include "Component.h"
 
-// CTransform component - stores position and velocity data for an entity. This is a pure data component used by the PhysicsSystem to update entity positions based on their velocities. 
+// CTransform component - stores position and velocity data for an entity. This is a pure data component used by the PhysicsSystem to update entity positions based on their velocities.
 // It allows for separation of concerns by keeping movement-related data in a dedicated component, making it easier to manage and update entity transformations in the game.
-class CTransform : public Component
-{
+class CTransform : public Component {
 	// ***** Public Member Variables (ECS pure data component) *****
 public:
-	Vec2 m_position = { 0, 0 };	// World position of the entity (units in pixels, with (0, 0) at the top-left corner of the window)
-	Vec2 m_velocity = { 0, 0 };	// Velocity of the entity (units in pixels per second, used by PhysicsSystem for movement)
+	Vec2 m_position = {
+		0, 0}; // World position of the entity (units in pixels, with (0, 0) at the top-left corner of the window)
+	Vec2 m_velocity = {0, 0}; // Velocity of the entity (units in pixels per second, used by PhysicsSystem for movement)
 
-	CTransform() {}																	// Default constructor initializes position and velocity to zero vectors
-	CTransform(const Vec2& pos, const Vec2& vel) : m_position(pos), m_velocity(vel) {};	// Constructor with initial position and velocity														
+	CTransform() {} // Default constructor initializes position and velocity to zero vectors
+	CTransform(const Vec2& pos, const Vec2& vel)
+		: m_position(pos), m_velocity(vel) {}; // Constructor with initial position and velocity
 };
-
-
-

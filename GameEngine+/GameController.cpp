@@ -1,5 +1,4 @@
-// GameController.cpp 
-
+// GameController.cpp
 
 // Includes.
 #include "GameController.h"
@@ -8,96 +7,74 @@
 #include <optional>
 
 // Method definitions.
-GameController::GameController(): m_MouseMovedAction(nullptr){}
+GameController::GameController() : m_MouseMovedAction(nullptr) {}
 
-void GameController::AddInputActionForKey(const ButtonAction& buttionAction)
-{
+void GameController::AddInputActionForKey(const ButtonAction& buttionAction) {
 	m_ButtonActions.push_back(buttionAction);
 }
 
-void GameController::ClearAll()
-{
+void GameController::ClearAll() {
 	m_ButtonActions.clear();
 }
 
-InputAction GameController::GetActionForKey(InputKey key)
-{
-	for (const auto& buttonAction: m_ButtonActions)
-	{
-		if (key == buttonAction.key)
-		{
+InputAction GameController::GetActionForKey(InputKey key) {
+	for (const auto& buttonAction : m_ButtonActions) {
+		if (key == buttonAction.key) {
 			return buttonAction.action;
 		}
 	}
 	return InputAction();
 }
 
-bool GameController::IsPressed(InputState state)
-{
+bool GameController::IsPressed(InputState state) {
 	return state != 0;
 }
 
-bool GameController::IsReleased(InputState state)
-{
+bool GameController::IsReleased(InputState state) {
 	return state == 0;
 }
 
-
-
-InputKey GameController::ActionKey()
-{
-	return sf::Keyboard::Key::F;  // Add ::Key:: to access the enum member
+InputKey GameController::ActionKey() {
+	return sf::Keyboard::Key::F; // Add ::Key:: to access the enum member
 }
 
-InputKey GameController::CancelKey()
-{
-	return sf::Keyboard::Key::Delete;	
+InputKey GameController::CancelKey() {
+	return sf::Keyboard::Key::Delete;
 }
 
-InputKey GameController::LeftKey()
-{
+InputKey GameController::LeftKey() {
 	return sf::Keyboard::Key::A;
 }
 
-InputKey GameController::RightKey()
-{
+InputKey GameController::RightKey() {
 	return sf::Keyboard::Key::D;
 }
 
-InputKey GameController::UpKey()
-{
+InputKey GameController::UpKey() {
 	return sf::Keyboard::Key::W;
 }
 
-InputKey GameController::DownKey()
-{
+InputKey GameController::DownKey() {
 	return sf::Keyboard::Key::S;
 }
 
-MouseInputAction GameController::GetActionForMouseButton(MouseButton button)
-{
-	for (const auto& buttonAction : m_MouseButtonActions)
-	{
-		if (button == buttonAction.mouseButton)
-		{
+MouseInputAction GameController::GetActionForMouseButton(MouseButton button) {
+	for (const auto& buttonAction : m_MouseButtonActions) {
+		if (button == buttonAction.mouseButton) {
 			return buttonAction.mouseInputAction;
 		}
 	}
 	return MouseInputAction();
 }
 
-
-void GameController::AddMouseButtonAction(const MouseButtonAction& mouseButtonAction)
-{
+void GameController::AddMouseButtonAction(const MouseButtonAction& mouseButtonAction) {
 	m_MouseButtonActions.push_back(mouseButtonAction);
 }
 
-MouseButton GameController::LeftMouseButton()
-{
-    return sf::Mouse::Button::Left;
+MouseButton GameController::LeftMouseButton() {
+	return sf::Mouse::Button::Left;
 }
 
-MouseButton GameController::RightMouseButton()
-{
-    return sf::Mouse::Button::Right;
+MouseButton GameController::RightMouseButton() {
+	return sf::Mouse::Button::Right;
 }

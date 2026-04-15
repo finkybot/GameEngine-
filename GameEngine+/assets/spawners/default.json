@@ -1,0 +1,22 @@
+{
+  "spawners": [
+    {
+      "id": "default",
+      "enabled": true,
+      "type": "Continuous",
+      "pattern": "LevelScaledCircular",
+      "threshold": 0.0050,
+      "rate": 8.0000,
+      "burstCount": 6,
+      "probability": 1.0000,
+      "shape": "circle",
+      "sizeMin": 8.0000,
+      "sizeMax": 32.0000,
+      "lifetime": 2.5000,
+      "spawnRadius": 200.0000,
+      "circularSpeed": 0.1500,
+      "spiralExpansion": 3.0000,
+      "ringCount": 3
+    }
+  ]
+}

@@ -10,29 +10,35 @@
 
 #include <string>
 
-class CRectangle : public CShape
-{
-    sf::RectangleShape m_rectangle;
+class CRectangle : public CShape {
+	sf::RectangleShape m_rectangle;
+
 protected:
-    void ApplyPosition(float x, float y) override;
+	void ApplyPosition(float x, float y) override;
+
 public:
-    CRectangle();
-    CRectangle(float x, float y);
+	CRectangle();
+	CRectangle(float x, float y);
 
-    Vec2 GetCentrePoint() const override;
+	// Set explicit size (width, height) for the rectangle
+	void SetSize(float width, float height);
 
-    float GetHeight() const override { return m_rectangle.getSize().y; }
-    float GetMidLength() const override { return m_midLength; }
-    float GetRadius() const override { return m_rectangle.getSize().x; }
-    float GetWidth() const override { return m_rectangle.getSize().x; }
+	Vec2 GetCentrePoint() const override;
 
-    sf::Color GetColor() const { return m_rectangle.getFillColor(); }       // Get the current fill color of the rectangle shape as an SFML Color object
-    sf::Shape& GetShape()  override { return m_rectangle; }					// Get a reference to the underlying SFML shape (used for drawing and collision detection)
+	float GetHeight() const override { return m_rectangle.getSize().y; }
+	float GetMidLength() const override { return m_midLength; }
+	float GetRadius() const override { return m_rectangle.getSize().x; }
+	float GetWidth() const override { return m_rectangle.getSize().x; }
 
-    void SetColor(float r, float g, float b, int alpha);                    // Set the fill color of the circle shape using RGBA values (alpha is an integer in the range [0, 255])
-    void SetRadius(float radius) override { m_rectangle.setSize(sf::Vector2f(radius, radius)); }
+	sf::Color GetColor() const {
+		return m_rectangle.getFillColor();
+	} // Get the current fill color of the rectangle shape as an SFML Color object
+	sf::Shape& GetShape() override {
+		return m_rectangle;
+	} // Get a reference to the underlying SFML shape (used for drawing and collision detection)
 
+	void SetColor(
+		float r, float g, float b,
+		int alpha); // Set the fill color of the circle shape using RGBA values (alpha is an integer in the range [0, 255])
+	void SetRadius(float radius) override { m_rectangle.setSize(sf::Vector2f(radius, radius)); }
 };
-
-
-

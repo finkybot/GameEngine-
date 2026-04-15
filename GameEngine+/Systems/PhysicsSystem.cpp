@@ -11,38 +11,36 @@
 #include <vector>
 #include "../CStatic.h"
 
-void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float windowWidth, float windowHeight)
-{
+void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float windowWidth,
+						   float windowHeight) {
 	// Parallel execution: process each entity's physics independently
 	std::for_each(std::execution::par, entities.begin(), entities.end(),
-		[this, deltaTime, windowWidth, windowHeight](const std::unique_ptr<Entity>& entity)
-		{
-			if (!entity->IsAlive())
-				return;
+				  [this, deltaTime, windowWidth, windowHeight](const std::unique_ptr<Entity>& entity) {
+					  if (!entity->IsAlive())
+						  return;
 
-			SlowEntity(entity.get(), 0.9992f); // Apply a global slow factor to simulate friction (can be adjusted or made dynamic)
-			MoveEntity(entity.get(), deltaTime, windowWidth, windowHeight);
-		});
+					  SlowEntity(
+						  entity.get(),
+						  0.9992f); // Apply a global slow factor to simulate friction (can be adjusted or made dynamic)
+					  MoveEntity(entity.get(), deltaTime, windowWidth, windowHeight);
+				  });
 }
 
-void PhysicsSystem::SlowEntity(Entity* entity, float slowFactor) const
-{
+void PhysicsSystem::SlowEntity(Entity* entity, float slowFactor) const {
 	// If entity is marked static, skip slowing
 	if (entity->HasComponent<CStatic>())
 		return;
 	// Prefer transform component as authoritative velocity source
 	auto transform = entity->GetComponent<CTransform>();
 	auto shape = entity->GetComponent<CShape>();
-	if (transform)
-	{
+	if (transform) {
 		transform->m_velocity.x *= slowFactor;
 		transform->m_velocity.y *= slowFactor;
 	}
 }
 
-void PhysicsSystem::MoveEntity(Entity* entity, float deltaTime, float windowWidth, float windowHeight) const
-{
-    // If entity is marked static, skip movement
+void PhysicsSystem::MoveEntity(Entity* entity, float deltaTime, float windowWidth, float windowHeight) const {
+	// If entity is marked static, skip movement
 	if (entity->HasComponent<CStatic>())
 		return;
 
@@ -50,8 +48,7 @@ void PhysicsSystem::MoveEntity(Entity* entity, float deltaTime, float windowWidt
 	auto transform = entity->GetComponent<CTransform>();
 	auto shape = entity->GetComponent<CShape>();
 
-	if (transform)
-	{
+	if (transform) {
 		// Update transform position
 		transform->m_position.x += transform->m_velocity.x * deltaTime;
 		transform->m_position.y += transform->m_velocity.y * deltaTime;
@@ -61,28 +58,24 @@ void PhysicsSystem::MoveEntity(Entity* entity, float deltaTime, float windowWidt
 	HandleBoundaryCollision(entity, windowWidth, windowHeight);
 }
 
-void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, float windowHeight) const
-{
+void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, float windowHeight) const {
 	auto shape = entity->GetComponent<CShape>();
-	if (!shape) return;
+	if (!shape)
+		return;
 
 	auto transform = entity->GetComponent<CTransform>();
-	if (!transform) return;
+	if (!transform)
+		return;
 
 	Vec2 position = transform->m_position;
 	float radius = entity->GetRadius();
 
 	// Despawn entities that go off the of the screen, allowing a 100-unit buffer for them to fully exit before despawning. This prevents entities from bouncing back and forth at the edges and allows for a more natural flow of entities across the screen.
-	if (position.GetX() + radius < -101.0f || position.GetX() - radius > windowWidth + 101.0f || position.GetY() + radius < -101.0f || position.GetY() - radius > windowHeight + 101.0f)
-	{
+	if (position.GetX() + radius < -101.0f || position.GetX() - radius > windowWidth + 101.0f ||
+		position.GetY() + radius < -101.0f || position.GetY() - radius > windowHeight + 101.0f) {
 		entity->Destroy();
 		return;
 	}
-
-
-
-
-
 
 	// Consider the entity's bounding circle
 	//float left = position.GetX() - radius;

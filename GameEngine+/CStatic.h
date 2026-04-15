@@ -2,9 +2,8 @@
 #pragma once
 #include "Component.h"
 
-class CStatic : public Component
-{
+class CStatic : public Component {
 public:
-    CStatic() = default;
-    ~CStatic() override = default;
+	CStatic() = default;
+	~CStatic() override = default;
 };

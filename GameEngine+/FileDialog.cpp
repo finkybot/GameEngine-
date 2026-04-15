@@ -8,178 +8,181 @@
 #include <memory>
 #include <algorithm>
 
-
-// Helper functions to convert between UTF-8 and wide strings using Windows API. This is necessary because the Windows file dialog APIs expect wide strings, 
+// Helper functions to convert between UTF-8 and wide strings using Windows API. This is necessary because the Windows file dialog APIs expect wide strings,
 // but we want to use UTF-8 in our application for better cross-platform compatibility and ease of use with std::string.
-static std::string WideToUtf8(const std::wstring& w)
-{
-	if (w.empty()) return {}; // guard against empty input to avoid unnecessary API calls
+static std::string WideToUtf8(const std::wstring& w) {
+	if (w.empty())
+		return {}; // guard against empty input to avoid unnecessary API calls
 
-    int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), NULL, 0, NULL, NULL);
-    std::string strTo(sizeNeeded, 0);
-    WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), &strTo[0], sizeNeeded, NULL, NULL);
-    return strTo;
+	int sizeNeeded = WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), NULL, 0, NULL, NULL);
+	std::string strTo(sizeNeeded, 0);
+	WideCharToMultiByte(CP_UTF8, 0, w.c_str(), (int)w.size(), &strTo[0], sizeNeeded, NULL, NULL);
+	return strTo;
 }
-
 
 // Convert a UTF-8 encoded std::string to a wide string (std::wstring) using the Windows API. This is necessary for passing strings to Windows functions that expect wide strings, such as the file dialog APIs.
-static std::wstring Utf8ToWide(const std::string& s)
-{
-	if (s.empty()) return {}; // guard against empty input to avoid unnecessary API calls
+static std::wstring Utf8ToWide(const std::string& s) {
+	if (s.empty())
+		return {}; // guard against empty input to avoid unnecessary API calls
 
-    int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), NULL, 0);
-    std::wstring w(sizeNeeded, 0);
-    MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), &w[0], sizeNeeded);
-    return w;
+	int sizeNeeded = MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), NULL, 0);
+	std::wstring w(sizeNeeded, 0);
+	MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), &w[0], sizeNeeded);
+	return w;
 }
 
-
-// Show an open file dialog with the specified filter and initial directory. This function forwards to the owner-aware implementation using the active window as the owner, 
+// Show an open file dialog with the specified filter and initial directory. This function forwards to the owner-aware implementation using the active window as the owner,
 // which helps ensure the dialog appears on top of the game window, especially if it's fullscreen.
-std::optional<std::string> ShowOpenFileDialog(const std::string& filter, const std::string& initialDir)
-{
-    // forward to owner-aware implementation using the active window as owner
-    return ShowOpenFileDialogWithOwner(GetActiveWindow(), filter, initialDir);
+std::optional<std::string> ShowOpenFileDialog(const std::string& filter, const std::string& initialDir) {
+	// forward to owner-aware implementation using the active window as owner
+	return ShowOpenFileDialogWithOwner(GetActiveWindow(), filter, initialDir);
 }
-
 
 // Show a save file dialog with the specified filter, default file name, and initial directory. This function forwards to the owner-aware implementation using the active window as the owner,
-std::optional<std::string> ShowSaveFileDialog(const std::string& filter, const std::string& defaultFileName, const std::string& initialDir)
-{
-    return ShowSaveFileDialogWithOwner(GetActiveWindow(), filter, defaultFileName, initialDir);
+std::optional<std::string> ShowSaveFileDialog(const std::string& filter, const std::string& defaultFileName,
+											  const std::string& initialDir) {
+	return ShowSaveFileDialogWithOwner(GetActiveWindow(), filter, defaultFileName, initialDir);
 }
 
-
-// Show an open file dialog with the specified owner window handle, filter, and initial directory. This implementation uses the Win32 API to display a native file dialog, and attempts to ensure 
-// it appears on top of the specified owner window (or the active window if no owner is provided) by temporarily minimizing the owner while the dialog is open. The function returns the selected 
+// Show an open file dialog with the specified owner window handle, filter, and initial directory. This implementation uses the Win32 API to display a native file dialog, and attempts to ensure
+// it appears on top of the specified owner window (or the active window if no owner is provided) by temporarily minimizing the owner while the dialog is open. The function returns the selected
 // file path as a UTF-8 string, or std::nullopt if the user cancels or an error occurs.
-std::optional<std::string> ShowOpenFileDialogWithOwner(void* ownerHandle, const std::string& filter, const std::string& initialDir)
-{
-	// initialize the OPENFILENAME structure, and zero it out to ensure all fields are set to default values. 
-    // This structure is used to configure the file dialog and receive the user's selection.
+std::optional<std::string> ShowOpenFileDialogWithOwner(void* ownerHandle, const std::string& filter,
+													   const std::string& initialDir) {
+	// initialize the OPENFILENAME structure, and zero it out to ensure all fields are set to default values.
+	// This structure is used to configure the file dialog and receive the user's selection.
 	OPENFILENAMEW ofn;
 	ZeroMemory(&ofn, sizeof(ofn));
 
 	// Create a buffer to receive the selected file path. The Windows API expects a wide character buffer, so we use wchar_t and set the maximum size to MAX_PATH, which is a common limit for file paths on Windows.
-    wchar_t szFile[MAX_PATH] = {0};
+	wchar_t szFile[MAX_PATH] = {0};
 
 	// Set the size of the OPENFILENAME structure, which is required by the API to ensure it knows which version of the structure we're using and how much memory it can safely access.
-	// Then find the window handle to use as the owner of the dialog. If an owner handle is provided, we use that; otherwise, 
-    // we attempt to find the SFML window by its title as a fallback. This helps ensure the dialog appears on top of the game window, especially if it's fullscreen.
-    ofn.lStructSize = sizeof(ofn);
-    HWND hwnd = static_cast<HWND>(ownerHandle);
-    
-    // fallback: try to find the SFML window by title if no owner provided
-    if (!hwnd) {
-        hwnd = FindWindowW(NULL, L"SFML Game Engine");
-    }
-    
-    // bring owner to foreground to ensure dialog appears on top
-    if (hwnd) {
-        SetForegroundWindow(hwnd);
-        BringWindowToTop(hwnd);
-    }
+	// Then find the window handle to use as the owner of the dialog. If an owner handle is provided, we use that; otherwise,
+	// we attempt to find the SFML window by its title as a fallback. This helps ensure the dialog appears on top of the game window, especially if it's fullscreen.
+	ofn.lStructSize = sizeof(ofn);
+	HWND hwnd = static_cast<HWND>(ownerHandle);
+
+	// fallback: try to find the SFML window by title if no owner provided
+	if (!hwnd) {
+		hwnd = FindWindowW(NULL, L"SFML Game Engine");
+	}
+
+	// bring owner to foreground to ensure dialog appears on top
+	if (hwnd) {
+		SetForegroundWindow(hwnd);
+		BringWindowToTop(hwnd);
+	}
 
 	// Set the owner window handle in the OPENFILENAME structure, which helps ensure the dialog is model and appears on top of owner window
-	// then convert the filter string from UTF-8 to wide string format, and set it in the structure. The filter string should format as 
-    // "Description\0*.ext\0", where each pair of description and filter is separated by a null character, and the entire string is double-null
+	// then convert the filter string from UTF-8 to wide string format, and set it in the structure. The filter string should format as
+	// "Description\0*.ext\0", where each pair of description and filter is separated by a null character, and the entire string is double-null
 	// terminated. Then set the file buffer and its size, and if an initial directory is provided, convert it to wide string and set it as well.
-    ofn.hwndOwner = hwnd;
-    std::wstring wfilter = Utf8ToWide(filter);
-    // Ensure double-null termination for filter as required by GetOpenFileNameW
-    if (wfilter.empty() || wfilter.back() != L'\0') wfilter.push_back(L'\0');
-    wfilter.push_back(L'\0');
-    ofn.lpstrFilter = wfilter.c_str();
-    ofn.lpstrFile = szFile;
-	ofn.nMaxFile = MAX_PATH; // set the maximum size of the file buffer to prevent buffer overflows. The API will not write more than this number of characters to the buffer, including the null terminator.
-    
-	// If an initial directory is provided, convert it to a wide string and set it in the OPENFILENAME structure. This will cause the file dialog to open 
-    // in that directory by default, which can improve user experience by reducing the need for navigation.
-    if (!initialDir.empty()) {
-        std::wstring wdir = Utf8ToWide(initialDir);
-        ofn.lpstrInitialDir = wdir.c_str();
-    }
+	ofn.hwndOwner = hwnd;
+	std::wstring wfilter = Utf8ToWide(filter);
+	// Ensure double-null termination for filter as required by GetOpenFileNameW
+	if (wfilter.empty() || wfilter.back() != L'\0')
+		wfilter.push_back(L'\0');
+	wfilter.push_back(L'\0');
+	ofn.lpstrFilter = wfilter.c_str();
+	ofn.lpstrFile = szFile;
+	ofn.nMaxFile =
+		MAX_PATH; // set the maximum size of the file buffer to prevent buffer overflows. The API will not write more than this number of characters to the buffer, including the null terminator.
 
-	// Set flags to ensure the dialog behaves as expected. OFN_PATHMUSTEXIST requires the user to select an existing path, OFN_FILEMUSTEXIST requires the user to select an existing file, 
-    // and OFN_NOCHANGEDIR prevents the dialog from changing the current working directory of the application, which can help avoid issues with relative paths after the dialog is closed.
-    ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+	// If an initial directory is provided, convert it to a wide string and set it in the OPENFILENAME structure. This will cause the file dialog to open
+	// in that directory by default, which can improve user experience by reducing the need for navigation.
+	if (!initialDir.empty()) {
+		std::wstring wdir = Utf8ToWide(initialDir);
+		ofn.lpstrInitialDir = wdir.c_str();
+	}
 
-    // If we have an owner window, disable it while the dialog is open so input goes to the dialog.
-    // Do not minimize the owner window (prevents the app being hidden when dialogs open).
-    BOOL result = FALSE; // set result as false by default, and only set to true if the user successfully selects a file. This allows us to return std::nullopt if the user cancels or an error occurs.
-    if (hwnd) {
-        // disable input while dialog is open
-        EnableWindow(hwnd, FALSE);
-    }
+	// Set flags to ensure the dialog behaves as expected. OFN_PATHMUSTEXIST requires the user to select an existing path, OFN_FILEMUSTEXIST requires the user to select an existing file,
+	// and OFN_NOCHANGEDIR prevents the dialog from changing the current working directory of the application, which can help avoid issues with relative paths after the dialog is closed.
+	ofn.Flags = OFN_PATHMUSTEXIST | OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+
+	// If we have an owner window, disable it while the dialog is open so input goes to the dialog.
+	// Do not minimize the owner window (prevents the app being hidden when dialogs open).
+	BOOL result =
+		FALSE; // set result as false by default, and only set to true if the user successfully selects a file. This allows us to return std::nullopt if the user cancels or an error occurs.
+	if (hwnd) {
+		// disable input while dialog is open
+		EnableWindow(hwnd, FALSE);
+	}
 
 	// Show the open file dialog. This call will block until the user selects a file or cancels the dialog. The result will be nonzero if the user selects a file, and zero if they cancel or an error occurs.
-	// Then restore the owner window and re-enable input after the dialog is closed, to ensure the game window is usable again. Finally, if the user selected a file, convert the wide string file path back 
-    // to UTF-8 and return it; otherwise, return std::nullopt.
-    result = GetOpenFileNameW(&ofn);
-    if (hwnd) {
-        // re-enable owner window and bring to foreground
-        EnableWindow(hwnd, TRUE);
-        SetForegroundWindow(hwnd);
-    }
+	// Then restore the owner window and re-enable input after the dialog is closed, to ensure the game window is usable again. Finally, if the user selected a file, convert the wide string file path back
+	// to UTF-8 and return it; otherwise, return std::nullopt.
+	result = GetOpenFileNameW(&ofn);
+	if (hwnd) {
+		// re-enable owner window and bring to foreground
+		EnableWindow(hwnd, TRUE);
+		SetForegroundWindow(hwnd);
+	}
 
 	// If the user successfully selected a file, convert the wide string file path to UTF-8 and return it. If the user canceled the dialog or an error occurred, return std::nullopt.
-    if (result) {
-        return WideToUtf8(szFile);
-    }
+	if (result) {
+		return WideToUtf8(szFile);
+	}
 	return std::nullopt; // nothing selected or error occurred
 }
 
-
-// Show a save file dialog with the specified owner window handle, filter, default file name, and initial directory. This implementation uses the Win32 API to display 
+// Show a save file dialog with the specified owner window handle, filter, default file name, and initial directory. This implementation uses the Win32 API to display
 // a native file dialog, and attempts to ensure
-std::optional<std::string> ShowSaveFileDialogWithOwner(void* ownerHandle, const std::string& filter, const std::string& defaultFileName, const std::string& initialDir)
-{
-    OPENFILENAMEW ofn;
-    ZeroMemory(&ofn, sizeof(ofn));
-    wchar_t szFile[MAX_PATH] = {0};
-    std::wstring wdef = Utf8ToWide(defaultFileName);
-    wcsncpy_s(szFile, wdef.c_str(), _TRUNCATE);
-    ofn.lStructSize = sizeof(ofn);
-    HWND hwnd = static_cast<HWND>(ownerHandle);
-    if (!hwnd) {
-        hwnd = FindWindowW(NULL, L"SFML Game Engine");
-    }
-    if (hwnd) {
-        SetForegroundWindow(hwnd);
-        BringWindowToTop(hwnd);
-    }
-    ofn.hwndOwner = hwnd;
-    std::wstring wfilter = Utf8ToWide(filter);
-    if (wfilter.empty() || wfilter.back() != L'\0') wfilter.push_back(L'\0');
-    wfilter.push_back(L'\0');
-    ofn.lpstrFilter = wfilter.c_str();
-    ofn.lpstrFile = szFile;
-    ofn.nMaxFile = MAX_PATH;
-    if (!initialDir.empty()) {
-        std::wstring wdir = Utf8ToWide(initialDir);
-        ofn.lpstrInitialDir = wdir.c_str();
-    }
-	ofn.Flags = OFN_OVERWRITEPROMPT | OFN_NOCHANGEDIR; // OFN_OVERWRITEPROMPT will cause the dialog to prompt the user if they select an existing file, which is standard behavior for save dialogs. OFN_NOCHANGEDIR prevents the dialog from changing the current working directory of the application, which can help avoid issues with relative paths after the dialog is closed.
+std::optional<std::string> ShowSaveFileDialogWithOwner(void* ownerHandle, const std::string& filter,
+													   const std::string& defaultFileName,
+													   const std::string& initialDir) {
+	OPENFILENAMEW ofn;
+	ZeroMemory(&ofn, sizeof(ofn));
+	wchar_t szFile[MAX_PATH] = {0};
+	std::wstring wdef = Utf8ToWide(defaultFileName);
+	wcsncpy_s(szFile, wdef.c_str(), _TRUNCATE);
+	ofn.lStructSize = sizeof(ofn);
+	HWND hwnd = static_cast<HWND>(ownerHandle);
+	if (!hwnd) {
+		hwnd = FindWindowW(NULL, L"SFML Game Engine");
+	}
+	if (hwnd) {
+		SetForegroundWindow(hwnd);
+		BringWindowToTop(hwnd);
+	}
+	ofn.hwndOwner = hwnd;
+	std::wstring wfilter = Utf8ToWide(filter);
+	if (wfilter.empty() || wfilter.back() != L'\0')
+		wfilter.push_back(L'\0');
+	wfilter.push_back(L'\0');
+	ofn.lpstrFilter = wfilter.c_str();
+	ofn.lpstrFile = szFile;
+	ofn.nMaxFile = MAX_PATH;
+	if (!initialDir.empty()) {
+		std::wstring wdir = Utf8ToWide(initialDir);
+		ofn.lpstrInitialDir = wdir.c_str();
+	}
+	ofn.Flags =
+		OFN_OVERWRITEPROMPT |
+		OFN_NOCHANGEDIR; // OFN_OVERWRITEPROMPT will cause the dialog to prompt the user if they select an existing file, which is standard behavior for save dialogs. OFN_NOCHANGEDIR prevents the dialog from changing the current working directory of the application, which can help avoid issues with relative paths after the dialog is closed.
 
-    // If we have an owner window, disable it while the dialog is open so input goes to the dialog.
-    BOOL result = FALSE;
-    if (hwnd) {
-        EnableWindow(hwnd, FALSE);
-    }
-    result = GetSaveFileNameW(&ofn);
-    if (hwnd) {
-        EnableWindow(hwnd, TRUE);
-        SetForegroundWindow(hwnd);
-    }
-    if (result) {
-        return WideToUtf8(szFile);
-    }
-    return std::nullopt;
+	// If we have an owner window, disable it while the dialog is open so input goes to the dialog.
+	BOOL result = FALSE;
+	if (hwnd) {
+		EnableWindow(hwnd, FALSE);
+	}
+	result = GetSaveFileNameW(&ofn);
+	if (hwnd) {
+		EnableWindow(hwnd, TRUE);
+		SetForegroundWindow(hwnd);
+	}
+	if (result) {
+		return WideToUtf8(szFile);
+	}
+	return std::nullopt;
 }
-
 
 #else
 // Stubs for non-Windows platforms
-std::optional<std::string> ShowOpenFileDialog(const std::string&, const std::string&) { return std::nullopt; }
-std::optional<std::string> ShowSaveFileDialog(const std::string&, const std::string&, const std::string&) { return std::nullopt; }
+std::optional<std::string> ShowOpenFileDialog(const std::string&, const std::string&) {
+	return std::nullopt;
+}
+std::optional<std::string> ShowSaveFileDialog(const std::string&, const std::string&, const std::string&) {
+	return std::nullopt;
+}
 #endif

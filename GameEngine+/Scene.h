@@ -14,8 +14,7 @@ class GameEngine;
 class EntityManager;
 
 // Base class for scenes. Scenes receive injected references to engine + entity manager.
-class Scene
-{
+class Scene {
 public:
 	virtual ~Scene() = default;
 
@@ -43,16 +42,16 @@ public:
 	Scene(const Scene&) = delete;
 	Scene& operator=(const Scene&) = delete;
 
-    // Scene holds a non-owning reference to the engine's EntityManager
+	// Scene holds a non-owning reference to the engine's EntityManager
 	EntityManager& m_entityManager;
 
 	// Helper to access the injected entity manager (already a reference)
 	EntityManager& GetEntityManager() { return m_entityManager; }
 
 protected:
-    // Construction contract: derived scenes must initialize these references
+	// Construction contract: derived scenes must initialize these references
 	Scene(GameEngine& gameEngine, EntityManager& entityManager);
-	
+
 	GameController m_GameController;
 
 	// injected references (Scene does not own these)

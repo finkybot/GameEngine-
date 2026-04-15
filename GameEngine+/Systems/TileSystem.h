@@ -4,12 +4,11 @@
 #include "../EntityManager.h"
 
 // TileSystem: processes entities with CTileMap and creates static collider entities
-class TileSystem
-{
+class TileSystem {
 public:
-    explicit TileSystem(EntityManager* manager) : m_entityManager(manager) {}
-    void Process();
+	explicit TileSystem(EntityManager* manager) : m_entityManager(manager) {}
+	void Process();
 
 private:
-    EntityManager* m_entityManager;
+	EntityManager* m_entityManager;
 };

@@ -1297,7 +1297,7 @@ void MusicVisualizerScene::LoadMusicFromPath(const std::string& path) {
 void MusicVisualizerScene::ToggleTileAt(int tx, int ty, bool setSolid) {}
 
 // Update explosions: This function will iterate through all entities in the scene and look for those that are of type Explosion. For each explosion entity, we will check how long
-// it has been since it was created, and if it has been more than 2900 milliseconds, we will destroy the entity to remove it from the scene. If it is still within the lifespan,
+// it has been since it was created, and if it has been more than 1200 milliseconds, we will destroy the entity to remove it from the scene. If it is still within the lifespan,
 // we will update its visual properties to create a fading effect as it ages. This includes increasing its radius slightly and reducing its alpha transparency over time to create
 // a nice visual effect for the music-reactive explosions.
 void MusicVisualizerScene::UpdateExplosions() {
@@ -1310,13 +1310,13 @@ void MusicVisualizerScene::UpdateExplosions() {
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
 				now - entity->m_creationTime); // Calculate how long the explosion has been alive in milliseconds
 
-			// If the explosion has been alive for more than 2900 milliseconds, destroy it to remove it from the scene
-			if (elapsed.count() >2900) {
+			// If the explosion has been alive for more than 1200 milliseconds, destroy it to remove it from the scene
+			if (elapsed.count() >1200) {
 				entity->Destroy();
 			} else { // Otherwise, update its visual properties to create a fading effect as it ages
 				++m_explosionCount;
-                float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
-				const int maxAlpha = 220;
+                float fadeProgress = static_cast<float>(elapsed.count()) / 1200.0f;
+				const int maxAlpha = 60;
 				int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));
 
 				auto shape = entity->GetComponent<CShape>();

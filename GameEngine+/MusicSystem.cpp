@@ -13,37 +13,91 @@
 #include <complex>
 #include <algorithm>
 #include <vector>
+#include "../third_party/kissfft/kiss_fft.h"
 
-MusicSystem::MusicSystem(EntityManager& entityManager) : m_entityManager(entityManager) {}
+// Provide simple kiss_fft implementation inline so it is compiled into the binary
+extern "C" {
+// internal radix-2 FFT used by the kissfft shim (keep it simple stupid, no optimizations or precomputation, just the basic algorithm)
+static void ks_internal_fft(kiss_fft_cpx* data, int size) {
+	// require power of two size, but we won't enforce it here since the config allocator will round up to the next power of two. Just do the best we can with the given size and ignore any extra samples if not a power of two
+	if (size <= 1) return;
+	
+	// bit reverse
+	int i, j = 0;
+	for (i = 1; i < size; ++i) { // start at 1 since bit reverse of 0 is 0 and we can skip that swap
+		int bit = size >> 1;
 
-// Simple in-place radix-2 Cooley-Tukey FFT (complex)
-static void fft_inplace(std::vector<std::complex<float>>& a) {
-	const size_t n = a.size();
-	if (n <= 1) return;
-	// bit-reverse permutation
-	size_t j = 0;
-	for (size_t i = 1; i < n; ++i) {
-		size_t bit = n >> 1;
+		// This bit reversal code is a common pattern in radix-2 FFT implementations. It effectively computes the bit-reversed index for each position i and swaps the elements accordingly. 
+		// The inner loop shifts the bit variable right until it finds a bit that is not set in j, at which point it toggles that bit in j. 
+		// This process generates the correct bit-reversed indices for the FFT algorithm.
 		for (; j & bit; bit >>= 1) j ^= bit;
 		j ^= bit;
-		if (i < j) std::swap(a[i], a[j]);
+		if (i < j) {
+			kiss_fft_cpx tmp = data[i];
+			data[i] = data[j];
+			data[j] = tmp; // swap
+		}
 	}
-	// FFT
-	for (size_t len = 2; len <= n; len <<= 1) {
-		float angle = -2.0f * 3.14159265358979323846f / static_cast<float>(len);
-		std::complex<float> wlen(std::cos(angle), std::sin(angle));
-		for (size_t i = 0; i < n; i += len) {
-			std::complex<float> w(1.0f, 0.0f);
-			for (size_t j = 0; j < len/2; ++j) {
-				std::complex<float> u = a[i + j];
-				std::complex<float> v = a[i + j + len/2] * w;
-				a[i + j] = u + v;
-				a[i + j + len/2] = u - v;
-				w *= wlen;
+	// Cooley-Tukey radix-2 FFT (find those soviet nuke tests)
+	for (int len = 2; len <= size; len <<= 1) { // len is the size of the sub-FFTs we are combining at this stage
+		float angle = -2.0f * 3.14159265358979323846f / (float)len;
+		float cosv = cosf(angle);
+		float sinv = sinf(angle);
+		for (i = 0; i < size; i += len) {
+			float wr = 1.0f, wi = 0.0f;
+			for (j = 0; j < len/2; ++j) {
+				float ur = data[i+j].r;
+				float ui = data[i+j].i;
+				float vr = data[i+j+len/2].r * wr - data[i+j+len/2].i * wi;
+				float vi = data[i+j+len/2].r * wi + data[i+j+len/2].i * wr;
+				data[i+j].r = ur + vr;
+				data[i+j].i = ui + vi;
+				data[i+j+len/2].r = ur - vr;
+				data[i+j+len/2].i = ui - vi;
+				float nwr = wr * cosv - wi * sinv;
+				float nwi = wr * sinv + wi * cosv;
+				wr = nwr; wi = nwi;
 			}
 		}
 	}
 }
+
+// Simple kiss_fft shim implementation that uses the internal_fft function above. We ignore the mem and lenmem parameters since we are just using malloc/free for simplicity. The config struct just holds the FFT size and direction, 
+// and the actual FFT is performed in-place on the input buffer which is copied from fin to a temporary buffer to avoid modifying the input. The output is then copied back to fout.
+kiss_fft_cfg* kiss_fft_alloc(int nfft, int inverse_fft, void* mem, size_t* lenmem) {
+	(void)mem; (void)lenmem;
+	if (nfft <= 0) return NULL;
+	int p = 1; while (p < nfft) p <<= 1;
+	kiss_fft_cfg* cfg = (kiss_fft_cfg*)malloc(sizeof(kiss_fft_cfg));
+	if (!cfg) return NULL;
+	cfg->nfft = p;
+	cfg->inverse = inverse_fft ? 1 : 0;
+	return cfg;
+}
+
+// Free the config struct allocated by kiss_fft_alloc
+void kiss_fft_free(kiss_fft_cfg* cfg) {
+	if (cfg) free(cfg);
+}
+
+// Perform the FFT using the internal_fft function. We copy the input to a temporary buffer, perform the FFT in-place, and then copy the result to the output buffer. We also zero-pad the input if it is smaller than the FFT size.
+void kiss_fft(const kiss_fft_cfg* cfg, const kiss_fft_cpx* fin, kiss_fft_cpx* fout) {
+	if (!cfg || !fin || !fout) return;
+	int n = cfg->nfft;
+	kiss_fft_cpx* buf = (kiss_fft_cpx*)malloc(sizeof(kiss_fft_cpx) * n);
+	if (!buf) return;
+	for (int i = 0; i < n; ++i) {
+		if (i < cfg->nfft) buf[i] = fin[i]; else { buf[i].r = 0.0f; buf[i].i = 0.0f; }
+	}
+	ks_internal_fft(buf, n);
+	for (int i = 0; i < n; ++i) fout[i] = buf[i];
+	free(buf);
+}
+} // extern "C"
+
+MusicSystem::MusicSystem(EntityManager& entityManager) : m_entityManager(entityManager) {}
+
+// Use kissfft shim in third_party/kissfft for FFT
 
 void MusicSystem::StopAllMusic() {
 	for (auto& p : m_activeMusic) {
@@ -330,16 +384,33 @@ void MusicSystem::Process() {
 			float w = 0.5f * (1.0f - cosf(2.0f * 3.14159265358979323846f * static_cast<float>(i) / static_cast<float>(N)));
 			mono[i] *= w;
 		}
-		// complex buffer
-		std::vector<std::complex<float>> a;
-		a.resize((size_t)N);
-		for (int i = 0; i < N; ++i) a[i] = std::complex<float>(mono[i], 0.0f);
-		fft_inplace(a);
-		int half = N/2;
-		std::vector<float> magsBins((size_t)half + 1);
-		for (int k = 0; k <= half; ++k) {
-			float mag = std::abs(a[k]) / static_cast<float>(N);
-			magsBins[k] = mag;
+        // perform FFT using kissfft shim
+		int fftN = N;
+		int half = 0;
+		std::vector<float> magsBins;
+		kiss_fft_cfg* cfg = kiss_fft_alloc(N, 0, NULL, NULL);
+		if (cfg) {
+			int nfft = cfg->nfft;
+			std::vector<kiss_fft_cpx> fin(nfft);
+			std::vector<kiss_fft_cpx> fout(nfft);
+			for (int i = 0; i < nfft; ++i) {
+				if (i < N) { fin[i].r = mono[i]; fin[i].i = 0.0f; }
+				else { fin[i].r = 0.0f; fin[i].i = 0.0f; }
+			}
+			kiss_fft(cfg, fin.data(), fout.data());
+			kiss_fft_free(cfg);
+			fftN = nfft;
+			half = fftN / 2;
+			magsBins.assign((size_t)half + 1, 0.0f);
+			for (int k = 0; k <= half; ++k) {
+				float mag = sqrtf(fout[k].r * fout[k].r + fout[k].i * fout[k].i) / static_cast<float>(fftN);
+				magsBins[k] = mag;
+			}
+		} else {
+			// allocation failed - fallback to zeros
+			fftN = N;
+			half = fftN / 2;
+			magsBins.assign((size_t)half + 1, 0.0f);
 		}
 		float nyq = static_cast<float>(sampleRate) * 0.5f;
 		float dbFloor = -80.0f;
@@ -360,8 +431,8 @@ void MusicSystem::Process() {
 			}
           int count = 0;
 			double sum = 0.0;
-			for (int k = 0; k <= half; ++k) {
-				float freq = static_cast<float>(k) * static_cast<float>(sampleRate) / static_cast<float>(N);
+            for (int k = 0; k <= half; ++k) {
+				float freq = static_cast<float>(k) * static_cast<float>(sampleRate) / static_cast<float>(fftN);
 				// include upper boundary to avoid gaps between adjacent bands
 				if (freq >= lowF && freq <= highF) {
 					sum += magsBins[k];
@@ -374,8 +445,8 @@ void MusicSystem::Process() {
 			} else {
 				// No FFT bins fell into this band's range (can happen for very narrow bands or low FFT resolution)
 				// Fallback: sample nearest FFT bin at the band's center frequency
-				float centerF = sqrtf(lowF * highF);
-				int k = static_cast<int>(centerF * static_cast<float>(N) / static_cast<float>(sampleRate) + 0.5f);
+                float centerF = sqrtf(lowF * highF);
+				int k = static_cast<int>(centerF * static_cast<float>(fftN) / static_cast<float>(sampleRate) + 0.5f);
 				if (k < 0) k = 0;
 				if (k > half) k = half;
 				avg = magsBins[k];

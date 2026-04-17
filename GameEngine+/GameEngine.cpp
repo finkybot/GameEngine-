@@ -73,8 +73,13 @@ void GameEngine::Run() {
 			 std::make_shared<TileMapEditorScene>(*this, m_window, *m_entityManager)); // Adding TileMapEditor
 	AddScene("MusicVisualizer",
 			 std::make_shared<MusicVisualizerScene>(*this, m_window, *m_entityManager)); // Adding MusicVisualizer
+	
 	//ChangeScene("TestScene");
-	ChangeScene("MusicVisualizer");
+	//ChangeScene("TileMapScene");
+	//ChangeScene("TileMapEditor");
+	ChangeScene("MusicVisualizer");	
+	
+	
 	m_currentScene->InitializeGame(m_windowSize);
 
 	// FontManager already bound to engine-owned EntityManager in constructor

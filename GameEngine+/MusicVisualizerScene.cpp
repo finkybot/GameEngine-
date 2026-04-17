@@ -412,7 +412,7 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			// Allow user to configure how many visual bars to display in the equalizer overlay. This controls how many entities are spawned for the equalizer visualization and how spectrum bands are mapped to them. 
 			// It can be more or less than the actual spectrum band count for creative visual effects.
 			int visualBars = m_visualBarCount;
-			if (ImGui::InputInt("Visual Bars", &visualBars)) {
+			if (ImGui::SliderInt("Visual Bars", &visualBars, 10, 256)) {
 				if (visualBars < 1) visualBars = 1;
 				if (visualBars > 256) visualBars = 256;
 				if (visualBars != m_visualBarCount) {

@@ -7,7 +7,11 @@
 #include "../FontManager.h"
 #include "../CTexture.h"
 #include "../GameEngine.h"
+#include "../TextureAtlas.h"
 #include <SFML/Graphics/Sprite.hpp>
+#include <SFML/Graphics/VertexArray.hpp>
+#include <SFML/Graphics/RenderStates.hpp>
+#include <unordered_map>
 
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/Text.hpp>
@@ -32,62 +36,61 @@ void RenderSystem::RenderAll(const std::vector<std::unique_ptr<Entity>>& entitie
 }
 
 void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const {
-	// Prefer texture component when present
+	if (!entity)
+		return;
+
+	// Immediate textured fallback: reuse a single sprite to avoid per-tile allocations.
 	if (auto tex = entity->GetComponent<CTexture>()) {
-		if (!tex->visible)
-			return;
-		auto transform = entity->GetComponent<CTransform>();
-		if (!transform)
-			return;
-		// Lookup atlas texture via engine's TextureManager
-		auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(tex->atlasKey);
-		if (atlasOpt.has_value()) {
-			auto atlasPtr = *atlasOpt; // shared_ptr<TextureAtlas>
-			if (atlasPtr) {
-				auto texPtr = atlasPtr->GetTexture();
-				auto rectOpt = atlasPtr->GetSfFloatRectForTile((size_t)tex->tileIndex);
-				if (texPtr && rectOpt.has_value()) {
-					sf::Sprite sprite(*texPtr);
-					sf::FloatRect fr = *rectOpt;
-					// Use sf::FloatRect's position/size members (SFML variant in this project)
-					// Construct IntRect from position and size vectors (SFML Rect constructor overload)
-					sprite.setTextureRect(sf::IntRect(sf::Vector2i((int)fr.position.x, (int)fr.position.y),
-													  sf::Vector2i((int)fr.size.x, (int)fr.size.y)));
-					// setPosition in SFML 3 takes a Vector2f
-					sprite.setPosition(sf::Vector2f(transform->m_position.x, transform->m_position.y));
-					// If this entity has a shape with size larger than a single atlas tile (merged rectangle),
-					// tile the sprite rather than scaling it to avoid stretching across adjacent tiles.
-					// If the texture component specified an explicit area (merged rectangle), tile the atlas
-					// across that area instead of scaling a single sprite.
-					if (auto texComp = entity->GetComponent<CTexture>()) {
-						if (texComp->areaW > 0.0f && texComp->areaH > 0.0f) {
-							int atlasW = atlasPtr->TileWidth();
-							int atlasH = atlasPtr->TileHeight();
-							if (atlasW > 0 && atlasH > 0) {
-								int tilesX = static_cast<int>(std::round(texComp->areaW / static_cast<float>(atlasW)));
-								int tilesY = static_cast<int>(std::round(texComp->areaH / static_cast<float>(atlasH)));
-								for (int ty = 0; ty < tilesY; ++ty) {
-									for (int tx = 0; tx < tilesX; ++tx) {
-										sf::Sprite tileSprite(*texPtr);
-										tileSprite.setTextureRect(
-											sf::IntRect(sf::Vector2i((int)fr.position.x, (int)fr.position.y),
-														sf::Vector2i((int)fr.size.x, (int)fr.size.y)));
-										tileSprite.setPosition(sf::Vector2f(transform->m_position.x + tx * atlasW,
-																			transform->m_position.y + ty * atlasH));
-										window.draw(tileSprite);
-									}
-								}
-								return;
+		if (tex->visible) {
+			auto transform = entity->GetComponent<CTransform>();
+			if (transform) {
+				auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(tex->atlasKey);
+				if (atlasOpt.has_value()) {
+					auto atlasPtr = *atlasOpt;
+					if (atlasPtr) {
+						auto texPtr = atlasPtr->GetTexture();
+						auto rectOpt = atlasPtr->GetSfFloatRectForTile((size_t)tex->tileIndex);
+                        if (texPtr && rectOpt.has_value()) {
+							static std::unique_ptr<sf::Sprite> sprite;
+							static const sf::Texture* lastTex = nullptr;
+							if (!sprite || lastTex != texPtr.get()) {
+								sprite = std::make_unique<sf::Sprite>(*texPtr);
+								lastTex = texPtr.get();
 							}
+
+							sf::FloatRect fr = *rectOpt;
+							sprite->setTextureRect(sf::IntRect(sf::Vector2i((int)fr.position.x, (int)fr.position.y),
+															   sf::Vector2i((int)fr.size.x, (int)fr.size.y)));
+							sprite->setPosition(sf::Vector2f(transform->m_position.x, transform->m_position.y));
+
+							// Tiled area: draw repeated sprites using the reused sprite
+							if (tex->areaW > 0.0f && tex->areaH > 0.0f) {
+								int atlasW = atlasPtr->TileWidth();
+								int atlasH = atlasPtr->TileHeight();
+								if (atlasW > 0 && atlasH > 0) {
+									int tilesX = static_cast<int>(std::round(tex->areaW / static_cast<float>(atlasW)));
+									int tilesY = static_cast<int>(std::round(tex->areaH / static_cast<float>(atlasH)));
+									for (int ty = 0; ty < tilesY; ++ty) {
+										for (int tx = 0; tx < tilesX; ++tx) {
+											sprite->setPosition(sf::Vector2f(transform->m_position.x + tx * atlasW,
+																			  transform->m_position.y + ty * atlasH));
+											window.draw(*sprite);
+										}
+									}
+									return;
+								}
+							}
+
+							window.draw(*sprite);
+							return;
 						}
 					}
-					window.draw(sprite);
-					return;
 				}
 			}
 		}
 	}
 
+	// Fallback: render shape component if present
 	if (auto shape = entity->GetComponent<CShape>()) {
 		auto transform = entity->GetComponent<CTransform>();
 		if (transform) {
@@ -110,8 +113,106 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 		buckets[layerIdx].push_back(entity.get());
 	}
 	for (int layer = 0; layer <= 3; ++layer) {
+      // Batch textured entities by their atlas to reduce draw calls.
+		// Map key: raw TextureAtlas* pointer. Value: pair(shared_ptr<TextureAtlas>, vector<Entity*>)
+		std::unordered_map<void*, std::pair<std::shared_ptr<TextureAtlas>, std::vector<Entity*>>> batches;
 		for (Entity* e : buckets[layer]) {
+			// Attempt to categorize textured entities for batching. If any requirement fails, fall back to immediate render.
+			auto tex = e->GetComponent<CTexture>();
+			if (tex && tex->visible) {
+				auto transform = e->GetComponent<CTransform>();
+				if (!transform) {
+					// Can't render textured entity without transform - skip
+					continue;
+				}
+				auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(tex->atlasKey);
+				if (atlasOpt.has_value()) {
+					auto atlasPtr = *atlasOpt;
+					if (atlasPtr) {
+						auto texPtr = atlasPtr->GetTexture();
+						auto rectOpt = atlasPtr->GetSfFloatRectForTile((size_t)tex->tileIndex);
+						if (texPtr && rectOpt.has_value()) {
+							// Good candidate for batching
+							auto key = static_cast<void*>(atlasPtr.get());
+							auto &entry = batches[key];
+							if (!entry.first) entry.first = atlasPtr;
+							entry.second.push_back(e);
+							continue; // handled by batching later
+						}
+					}
+				}
+			}
+			// Not eligible for batching - render immediately (shapes or missing/invalid atlas)
 			RenderEntity(e, window);
+		}
+
+		// For each atlas batch, create a vertex array (triangles) and draw once using the atlas texture
+		for (auto &kv : batches) {
+			auto atlasPtr = kv.second.first;
+			auto &entitiesForAtlas = kv.second.second;
+			if (!atlasPtr) continue;
+			auto texPtr = atlasPtr->GetTexture();
+			if (!texPtr) continue;
+
+			sf::VertexArray va(sf::PrimitiveType::Triangles);
+			va.clear();
+
+			for (Entity* e : entitiesForAtlas) {
+				auto tex = e->GetComponent<CTexture>();
+				auto transform = e->GetComponent<CTransform>();
+				if (!tex || !transform) continue;
+				auto rectOpt = atlasPtr->GetSfFloatRectForTile((size_t)tex->tileIndex);
+				if (!rectOpt.has_value()) continue;
+				sf::FloatRect fr = *rectOpt;
+				// Determine tile area
+				if (tex->areaW > 0.0f && tex->areaH > 0.0f) {
+					int atlasW = atlasPtr->TileWidth();
+					int atlasH = atlasPtr->TileHeight();
+					if (atlasW <= 0 || atlasH <= 0) {
+						// fallback to single quad
+						float x = transform->m_position.x;
+						float y = transform->m_position.y;
+                        // add quad as two triangles
+						va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
+						va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y)));
+						va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
+						va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
+						va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
+						va.append(sf::Vertex(sf::Vector2f(x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y + fr.size.y)));
+						continue;
+					}
+                    int tilesX = static_cast<int>(std::round(tex->areaW / static_cast<float>(atlasW)));
+					int tilesY = static_cast<int>(std::round(tex->areaH / static_cast<float>(atlasH)));
+					for (int ty = 0; ty < tilesY; ++ty) {
+						for (int tx = 0; tx < tilesX; ++tx) {
+							float x = transform->m_position.x + tx * atlasW;
+							float y = transform->m_position.y + ty * atlasH;
+							// two triangles (v0,v1,v2) and (v0,v2,v3)
+							va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
+							va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y)));
+							va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
+							va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
+							va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
+							va.append(sf::Vertex(sf::Vector2f(x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y + fr.size.y)));
+						}
+					}
+				} else {
+					float x = transform->m_position.x;
+					float y = transform->m_position.y;
+					va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
+					va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y)));
+					va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
+					va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
+					va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
+					va.append(sf::Vertex(sf::Vector2f(x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y + fr.size.y)));
+				}
+				}
+
+			if (va.getVertexCount() > 0) {
+				sf::RenderStates states;
+				states.texture = texPtr.get();
+				window.draw(va, states);
+			}
 		}
 	}
 }

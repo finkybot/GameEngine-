@@ -8,6 +8,7 @@
 #include "CTexture.h"
 #include "CMusic.h"
 #include "CCircle.h"
+#include "CLayer.h" 
 #include "CExplosion.h"
 #include "MusicSystem.h"
 #include <imgui/imgui.h>
@@ -514,12 +515,16 @@ void TileMapEditorScene::Update(float deltaTime) {
 					float size = 6.0f + static_cast<float>(std::rand() % 36); // 6..41
 					// Use AddComponentPtr<CShape> so RenderSystem can find it via GetComponent<CShape>()
 					auto circle = std::make_unique<CExplosion>(size);
+					//auto layer = static_cast<int>(CLayer::Layer::Background) + 1; ; 
 					// random color
 					int r = 100 + (std::rand() % 156);
 					int g = 100 + (std::rand() % 156);
 					int b = 100 + (std::rand() % 156);
 					circle->SetColor((float)r, (float)g, (float)b, 220);
 					e->AddComponentPtr<CShape>(std::move(circle));
+					e->AddComponent<CLayer>(
+						CLayer::Layer::
+							Background); // ensure these spawn behind tiles but in front of background (if any)
 
 					// place near center of the screen with small random jitter so they are visible
 					float cx = static_cast<float>(m_window.getSize().x) * 0.5f;
@@ -784,13 +789,13 @@ void TileMapEditorScene::UpdateExplosions() {
 	for (auto& entity : m_entityManager.getEntities()) {
 		if (entity->GetType() == EntityType::Explosion) {
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->m_creationTime);
-			if (elapsed.count() > 2900) {
+			if (elapsed.count() > 1200) {
 				entity->Destroy();
 			} else {
 				++m_explosionCount;
-                float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
+                float fadeProgress = static_cast<float>(elapsed.count()) / 1200.0f;
 				// Increase explosion alpha for better visibility
-				const int maxAlpha = 220;
+				const int maxAlpha = 120;
 				int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));
 
 				auto shape = entity->GetComponent<CShape>();

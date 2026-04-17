@@ -1,0 +1,22 @@
+{
+  "spawners": [
+    {
+      "id": "default",
+      "enabled": true,
+      "type": "Burst",
+      "pattern": "MultiRing",
+      "threshold": 0.0333,
+      "rate": 0.1200,
+      "burstCount": 40,
+      "probability": 1.0000,
+      "shape": "circle",
+      "sizeMin": 4.0000,
+      "sizeMax": 16.0000,
+      "lifetime": 2.5000,
+      "spawnRadius": 68.0000,
+      "circularSpeed": 1.0000,
+      "spiralExpansion": 3.0000,
+      "ringCount": 8
+    }
+  ]
+}

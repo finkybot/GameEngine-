@@ -1,4 +1,4 @@
-// ****** ChunkManager.h Definition and Chunk stuct ******
+// ****** ChunkManager.h Definition and Chunk struct ******
 #pragma once
 #include <unordered_map>
 #include <list>
@@ -8,6 +8,10 @@
 
 #include "TileMap.h"
 #include <SFML/Graphics.hpp>
+
+// forward declarations to avoid include cycles
+class Entity;
+class EntityManager;
 
 // Chunk struct represents a section of the tile map, containing tile data and metadata for rendering and collision. 
 // Each chunk corresponds to a specific area of the game world and can be loaded/unloaded independently to optimize performance and memory usage.
@@ -20,6 +24,10 @@ struct Chunk {
 	
 	bool dirty = false;		// flag to indicate if the chunk has been modified and needs saving
 	bool readyForRendering = false; // flag to indicate if the chunk is ready to be rendered (e.g., after loading or generating
+	uint32_t editVersion = 0; // incremented on every in-memory edit; used to detect stale background loads
+
+	// Entities generated for this chunk's merged collision rectangles (Tile static entities)
+	std::vector<Entity*> generatedEntities;
 
 	std::vector<float> cpuVertexBuffer; // CPU-side vertex buffer for the chunk's tiles, used for rendering.
 	sf::VertexArray vertexArray; // GPU-friendly vertex array for fast rendering (built on main thread)
@@ -51,7 +59,10 @@ public:
 	void UpdateMainThread(); // Call this from the main thread to perform any necessary updates, such as processing dirty chunks or preparing vertex buffers for rendering.
 	void SaveAllChunks(); // Save all dirty chunks to disk in the specified directory. Each chunk will be saved as a separate file named "chunk_X_Y.dat" where X and Y are the chunk coordinates.
 
-	void SetBasePath(const std::string& basePath) { m_basePath = basePath; } // Set the base directory path where chunk files will be saved and loaded from.
+	void SetBasePath(const std::string& basePath); // Set the base directory path where chunk files will be saved and loaded from.
+
+	// Load all saved chunk files from disk into memory (called on startup)
+	void LoadAllSavedChunks();
 	void SetTilesetKey(const std::string& key) { m_tilesetKey = key; }
 	std::string GetTilesetKey() const { return m_tilesetKey; }
 	void SetMaxLoadedChunks(size_t maxChunks) {	m_maxLoadedChunks = maxChunks; } // Set the maximum number of chunks that can be loaded in memory at once. If the limit is exceeded, least recently used chunks will be unloaded.
@@ -63,7 +74,7 @@ public:
 private:
 	// Internal helper methods for loading, saving, and managing chunks
 	void EnqueueLoadChunk(int chunkX, int chunkY); // Enqueue a chunk to be loaded in the background thread. The chunk will be loaded from disk if it exists, or created with default tile data if it does not.
-	void FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> tileData); // Finalize the loading of a chunk by setting its tile data and marking it as ready for rendering. This should be called from the main thread after a chunk has been loaded in the background.
+	void FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> tileData, uint32_t versionAtEnqueue); // Finalize the loading of a chunk
 	void EvictIfNeeded(); // Evict least recently used chunks if the number of loaded chunks exceeds the maximum limit. This will unload chunks from memory but will save them to disk if they are dirty.
 
 	// Helper function to combine chunkX and chunkY into a single key for the chunks map
@@ -95,4 +106,8 @@ public:
 	void DrawChunks(sf::RenderWindow& window, const sf::View& view);
 	// Rebuild vertex arrays for all loaded chunks using the currently configured tileset key (if any).
 	void RebuildAllChunksFromTileset();
+
+	// Create merged rectangle entities for collisions from chunk tiles and register them with the EntityManager
+	void RegisterChunkColliders(EntityManager& em);
+	void UnregisterChunkColliders(EntityManager& em);
 };

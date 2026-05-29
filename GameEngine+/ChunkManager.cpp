@@ -13,11 +13,14 @@
 namespace fs = std::filesystem;
 
 #include "GameEngine.h"
+#include "CRectangle.h"
+#include "CStatic.h"
+#include "CTransform.h"
 
 
 // Static members for background loading; pending chunks are stored in a thread-safe queue and processed in the main thread
 static std::mutex s_pendingMutex; // Mutex to protect access to the pending chunks queue
-static std::vector<std::tuple<int, int, std::vector<int>>> s_pendingChunks; // Queue of chunks pending loading
+static std::vector<std::tuple<int, int, std::vector<int>, uint32_t>> s_pendingChunks; // Queue of chunks pending loading (cx, cy, tiles, editVersion at enqueue)
 
 
 // ****** ChunkManager Implementation ******
@@ -32,7 +35,41 @@ ChunkManager::ChunkManager(int chunkWidth, int chunkHeight, float tileSize) : m_
 			m_basePath.clear(); // Clear the base path to indicate it's invalid
 			}
 		}
+
+}
+
+void ChunkManager::LoadAllSavedChunks() {
+	if (m_basePath.empty()) return;
+	try {
+		for (auto &p : fs::directory_iterator(m_basePath)) {
+			if (!p.is_regular_file()) continue;
+			std::string fname = p.path().filename().string();
+			if (fname.rfind("chunk_", 0) != 0) continue;
+			// parse chunk_X_Y.dat
+			std::string body = fname.substr(6); // after "chunk_"
+			size_t us = body.find('_');
+			size_t dot = body.find('.');
+			if (us == std::string::npos || dot == std::string::npos) continue;
+			int cx = std::stoi(body.substr(0, us));
+			int cy = std::stoi(body.substr(us+1, dot - (us+1)));
+			EnqueueLoadChunk(cx, cy);
+		}
+	} catch(...) {}
+}
+
+void ChunkManager::SetBasePath(const std::string& basePath) {
+	m_basePath = basePath;
+	if (!m_basePath.empty()) {
+		try {
+			if (!fs::exists(m_basePath)) fs::create_directories(m_basePath);
+		} catch(...) { }
+		// ensure trailing separator so simple concatenation works
+		if (!m_basePath.empty()) {
+			char last = m_basePath.back();
+			if (last != '/' && last != '\\') m_basePath.push_back('/');
+		}
 	}
+}
 
 void ChunkManager::RebuildAllChunksFromTileset() {
 	std::lock_guard<std::mutex> lock(m_mutex);
@@ -91,7 +128,6 @@ void ChunkManager::RebuildAllChunksFromTileset() {
 			}
 		}
 	}
-
 }
 
 // DrawChunks - Renders the visible chunks to the provided SFML RenderWindow based on the current view. This method computes which chunks are visible within the view's AABB and draws them accordingly. 
@@ -235,6 +271,7 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue) {
 	if (prevValue != tileValue) { // Only mark the chunk as dirty if the tile value is actually changing to avoid unnecessary saves
 		chunk.tiles[index] = tileValue; // Update the tile value at the specified local coordinates within the chunk
 		chunk.dirty = true; // Mark the chunk as dirty since it has been modified and needs to be saved to disk later
+		chunk.editVersion++; // Increment version so any in-flight background loads are treated as stale
 
 		// Move the chunk to the front of the LRU list to mark it as recently used
 		m_lruList.remove(key); // Remove the chunk key from its current position in the LRU list
@@ -352,7 +389,7 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 // UpdateMainThread - This method should be called from the main thread to perform any necessary updates, such as processing dirty chunks or preparing vertex buffers for rendering.
 void ChunkManager::UpdateMainThread() {
 	// Process any chunks that have been loaded in the background thread and are pending finalization
-	std::vector<std::tuple<int, int, std::vector<int>>>	pendingChunksCopy; // Create a local copy of the pending chunks to minimize time spent holding the mutex lock
+	std::vector<std::tuple<int, int, std::vector<int>, uint32_t>> pendingChunksCopy;
 	{
 		std::lock_guard<std::mutex> lock(s_pendingMutex); // Lock the mutex to safely access the pending chunks queue
 		pendingChunksCopy = s_pendingChunks;			  // Copy the pending chunks to a local variable
@@ -361,8 +398,8 @@ void ChunkManager::UpdateMainThread() {
 	
 	// Finalize each loaded chunk by setting its tile data and marking it as ready for rendering. 
 	// This should be done in the main thread to ensure thread safety when modifying the chunks map and to prepare the chunk for rendering.
-	for (const auto& [chunkX, chunkY, tileData] : pendingChunksCopy) { // Loop through the copied list of pending chunks
-		FinalizeLoadedChunk(chunkX, chunkY,	tileData); // Finalize each loaded chunk by setting its tile data and marking it as ready for rendering
+	for (const auto& [chunkX, chunkY, tileData, version] : pendingChunksCopy) { // Loop through the copied list of pending chunks
+		FinalizeLoadedChunk(chunkX, chunkY, tileData, version);
 	}
 }
 
@@ -373,7 +410,9 @@ void ChunkManager::SaveAllChunks() {
 	for (auto& pr : m_chunks) {
 		Chunk& chunk = pr.second; // Get a reference to the current chunk in the loop
 		if (chunk.dirty) {		  // Only save chunks that are marked as dirty to avoid unnecessary disk writes
-			std::string filename = m_basePath + "chunk_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat"; // Construct the filename for the chunk based on its coordinates
+		std::filesystem::path p(m_basePath);
+		std::string name = std::string("chunk_") + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat";
+		std::string filename = (p / name).string(); // Construct the filename for the chunk based on its coordinates
 			std::ofstream outFile(filename, std::ios::binary); // Open a binary output file stream to save the chunk data
 			
 			if (outFile) {
@@ -390,56 +429,63 @@ void ChunkManager::SaveAllChunks() {
 
 // EnqueueLoadChunk - Enqueues a chunk to be loaded in the background thread. The chunk will be loaded from disk if it exists, or created with default tile data if it does not.
 void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY) {
+	// Capture the current editVersion of this chunk so FinalizeLoadedChunk can reject stale loads
+	uint32_t versionAtEnqueue = 0;
+	{
+		std::lock_guard<std::mutex> lk(m_mutex);
+		auto it = m_chunks.find(GetChunkKey(chunkX, chunkY));
+		if (it != m_chunks.end()) versionAtEnqueue = it->second.editVersion;
+	}
 	// Start a background thread to load the chunk data from disk. The chunk will be loaded from disk if it exists, or created with default tile data if it does not.
-	std::thread([chunkX, chunkY, this]() {
-		std::string filename = m_basePath + "chunk_" + std::to_string(chunkX) + "_" + std::to_string(chunkY) + ".dat"; // Construct the filename for the chunk based on its coordinates
+	std::thread([chunkX, chunkY, versionAtEnqueue, this]() {
+		std::filesystem::path p(m_basePath);
+		std::string name = std::string("chunk_") + std::to_string(chunkX) + "_" + std::to_string(chunkY) + ".dat";
+		std::string filename = (p / name).string(); // Construct the filename for the chunk based on its coordinates
 		std::vector<int> tileData(m_chunkWidth * m_chunkHeight,	0); // Create a vector to hold the tile data for the chunk, initialized with default values (0 = empty)
-		
-		if (fs::exists(filename)) {							  // Check if the chunk file exists on disk
-			std::ifstream inFile(filename, std::ios::binary); // Open a binary input file stream to read the chunk data
+
+		if (fs::exists(filename)) {
+			std::ifstream inFile(filename, std::ios::binary);
 			if (inFile) {
-				inFile.read(reinterpret_cast<char*>(tileData.data()), tileData.size() * sizeof(int)); // Read the chunk's tile data from the file into the tileData vector
+				inFile.read(reinterpret_cast<char*>(tileData.data()), tileData.size() * sizeof(int));
 			} else {
-				std::cerr << "Error loading chunk from file: " << filename << std::endl; // Log an error if the file could not be opened for reading
+				std::cerr << "ChunkManager: Error opening chunk file for reading: " << filename << std::endl;
 			}
 		}
-		// After loading the chunk data (or using default data if the file doesn't exist), add it to the pending chunks queue to be finalized in the main thread
+		// After loading the chunk data, add it to the pending queue with the version captured at enqueue time
 		{
-			std::lock_guard<std::mutex> lock(s_pendingMutex); // Lock the mutex to safely access the pending chunks queue
-			s_pendingChunks.emplace_back(chunkX, chunkY,tileData); // Add the loaded chunk data to the pending chunks queue for finalization in the main thread
+			std::lock_guard<std::mutex> lock(s_pendingMutex);
+			s_pendingChunks.emplace_back(chunkX, chunkY, tileData, versionAtEnqueue);
 		}
 	}).detach(); // Detach the thread to allow it to run independently without blocking the main thread
 }
 
 
-// FinalizeLoadedChunk - Finalizes the loading of a chunk by setting its tile data and marking it as ready for rendering. This should be called from the main thread after a chunk has been loaded in the background.
-void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> tileData) {
-	long long key = GetChunkKey(chunkX, chunkY); // Get the unique key for the chunk based on its coordinates
-	std::lock_guard<std::mutex> lock(m_mutex);	 // Lock the mutex to safely access the chunks map
-	auto itr = m_chunks.find(key);				 // Find the chunk in the loaded chunks map
-	
+// FinalizeLoadedChunk - Finalizes the loading of a chunk. Rejects the loaded data if the chunk was edited after the load was enqueued (version mismatch).
+void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> tileData, uint32_t versionAtEnqueue) {
+	long long key = GetChunkKey(chunkX, chunkY);
+	std::lock_guard<std::mutex> lock(m_mutex);
+	auto itr = m_chunks.find(key);
+
 	if (itr == m_chunks.end()) {
-		// This should not happen since we should have already ensured the chunk exists before enqueuing it for loading, but....
-		Chunk newChunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize); // Create a new chunk with default tile data
-		newChunk.tiles = std::move(tileData); // Set the new chunk's tile data to the loaded tile data using move semantics to avoid unnecessary copying
-		newChunk.readyForRendering = true; // Mark the new chunk as ready for rendering since it has been loaded and finalized
-		newChunk.dirty = false; // Mark the new chunk as clean since it has just been loaded and does not need to be saved to disk yet
-		
-		m_chunks.emplace(key,std::move(newChunk)); // Add the new chunk to the chunks map using move semantics to avoid unnecessary copying
-		m_lruList.push_front(key); // Add the new chunk to the front of the LRU list to mark it as recently used
-		return; 
+		// Chunk was evicted before we could finalize — discard the load
+		return;
 	}
 
-	Chunk& chunk = itr->second; // Get a reference to the found chunk
-	// Replace tiles and mark ready
-	if ((int)tileData.size() == chunk.width * chunk.height) {
-		chunk.tiles = std::move(tileData);
+	Chunk& chunk = itr->second;
+	// If the chunk's editVersion changed since the load was enqueued, the disk data is stale — skip overwriting
+	if (chunk.editVersion != versionAtEnqueue) {
+		// The chunk was edited after enqueue; keep current in-memory tiles and just mark ready for rendering
+		chunk.readyForRendering = true;
 	} else {
-		// If incoming data doesn't match, resize and fill zeros
-		chunk.tiles.assign(chunk.width * chunk.height, 0);
+		// Safe to apply loaded data
+		if ((int)tileData.size() == chunk.width * chunk.height) {
+			chunk.tiles = std::move(tileData);
+		} else {
+			chunk.tiles.assign(chunk.width * chunk.height, 0);
+		}
+		chunk.dirty = false;
+		chunk.readyForRendering = true;
 	}
-	chunk.readyForRendering = true;
-	chunk.dirty = false;
 	// Build GPU vertex array for this chunk on the main thread so rendering can be fast.
 	chunk.cpuVertexBuffer.clear();
 	chunk.vertexArray.clear();
@@ -502,6 +548,59 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> 
 	// touch LRU
 	m_lruList.remove(key);
 	m_lruList.push_front(key);
+
+	// register colliders for this chunk into the entity manager (merged rects)
+	try {
+		EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+		// create merged rects only for this chunk
+		// We'll create entities for contiguous runs of tiles with same value
+		Chunk& c = m_chunks[key];
+		// remove any previously generated entities for this chunk
+		for (Entity* ge : c.generatedEntities) {
+			if (ge) em.KillEntity(ge);
+		}
+		c.generatedEntities.clear();
+		// greedy merge inside chunk local coords
+		std::vector<char> used(c.width * c.height, 0);
+		for (int y = 0; y < c.height; ++y) {
+			for (int x = 0; x < c.width; ++x) {
+				int idx = y * c.width + x;
+				if (used[idx]) continue;
+				int val = c.tiles[idx];
+				if (val == 0) continue;
+				// expand width
+				int w = 1;
+				while (x + w < c.width && c.tiles[y * c.width + (x + w)] == val && !used[y * c.width + (x + w)]) ++w;
+				// expand height
+				int h = 1;
+				bool canExtend = true;
+				while (y + h < c.height && canExtend) {
+					for (int xi = 0; xi < w; ++xi) {
+						if (c.tiles[(y + h) * c.width + (x + xi)] != val || used[(y + h) * c.width + (x + xi)]) { canExtend = false; break; }
+					}
+					if (canExtend) ++h;
+				}
+				// mark used
+				for (int yy = 0; yy < h; ++yy) for (int xx = 0; xx < w; ++xx) used[(y + yy) * c.width + (x + xx)] = 1;
+				// create entity
+				float tileW = c.tileSize * w;
+				float tileH = c.tileSize * h;
+				float posX = (c.chunkX * c.width + x) * c.tileSize;
+				float posY = (c.chunkY * c.height + y) * c.tileSize;
+				Entity* ent = em.addEntity(EntityType::Tile);
+				if (ent) {
+					ent->AddComponent<CTransform>(Vec2(posX, posY), Vec2::Zero);
+					auto rect = std::make_unique<CRectangle>(tileW, tileH);
+					rect->SetColor(160.0f, 160.0f, 160.0f, 200);
+					ent->AddComponentPtr<CShape>(std::move(rect));
+					ent->AddComponent<CStatic>();
+					c.generatedEntities.push_back(ent);
+				}
+			}
+		}
+	} catch(...) {
+		// ignore errors registering colliders
+	}
 }
 
 
@@ -516,8 +615,9 @@ void ChunkManager::EvictIfNeeded() {
 			
 			// Save if dirty
 			if (chunk.dirty) {
-				std::string filename = m_basePath + "chunk_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat";
-				std::ofstream outFile(filename, std::ios::binary);
+			std::filesystem::path p(m_basePath);
+			std::string filename = (p / ("chunk_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
+			std::ofstream outFile(filename, std::ios::binary);
 				
 				if (outFile) { 
 					outFile.write(reinterpret_cast<const char*>(chunk.tiles.data()), chunk.tiles.size() * sizeof(int));
@@ -526,9 +626,29 @@ void ChunkManager::EvictIfNeeded() {
 				}
 			}
 
+			// Unregister any generated colliders for this chunk so entities are removed from the world
+			try {
+				EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+				for (Entity* ge : chunk.generatedEntities) {
+					if (ge) em.KillEntity(ge);
+				}
+			} catch(...) {}
+
 			// Erase chunk to free memory
 			m_chunks.erase(itr);
 		}
 		m_lruList.pop_back();
+	}
+}
+
+
+void ChunkManager::UnregisterChunkColliders(EntityManager& em) {
+	std::lock_guard<std::mutex> lock(m_mutex);
+	for (auto &pr : m_chunks) {
+		Chunk &c = pr.second;
+		for (Entity* ge : c.generatedEntities) {
+			if (ge) em.KillEntity(ge);
+		}
+		c.generatedEntities.clear();
 	}
 }

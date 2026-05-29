@@ -41,6 +41,17 @@ private:
 	int m_brushValue = 1;
 	int m_marginChunks = 1;
 
+	// camera pan state
+	bool m_panning = false;
+	sf::Vector2i m_panStart = sf::Vector2i(0,0);
+	Vec2 m_camPanStart = Vec2::Zero;
+
+	// last known camera position for console updates
+	Vec2 m_lastCameraPos = Vec2::Zero;
+
+	// previous middle mouse state for debug
+	bool m_prevMiddleDown = false;
+
 	// Tileset UI state
 	char m_tilesetKeyBuf[64] = "adventure";
 	char m_tilesetPathBuf[512] = "";

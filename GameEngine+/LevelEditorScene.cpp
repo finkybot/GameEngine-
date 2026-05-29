@@ -36,9 +36,29 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	cam->m_viewportHeight = (float)m_window.getSize().y;
 	cam->m_smoothness = 6.0f; // fairly snappy smoothing
 
+	// Ensure initial world area is larger than the screen so the user can pan around.
+	// Make the logical map area 3x the screen size centered on the camera.
+	{
+		float mapPxW = cam->m_viewportWidth * 3.0f;
+		float mapPxH = cam->m_viewportHeight * 3.0f;
+		int tx0 = (int)std::floor((cam->m_position.x - mapPxW * 0.5f) / m_tileSize);
+		int ty0 = (int)std::floor((cam->m_position.y - mapPxH * 0.5f) / m_tileSize);
+		int tx1 = (int)std::floor((cam->m_position.x + mapPxW * 0.5f) / m_tileSize);
+		int ty1 = (int)std::floor((cam->m_position.y + mapPxH * 0.5f) / m_tileSize);
+		m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, m_marginChunks);
+		// finalize any background loads immediately so chunks are ready
+		m_chunkManager.UpdateMainThread();
+		m_chunkManager.RebuildAllChunksFromTileset();
+	}
+
 	// set persistence path for chunks
 	m_chunkManager.SetBasePath("levels/chunks");
 	m_chunkManager.SetMaxLoadedChunks(256);
+	// Load any previously-saved chunk files so saved maps appear on startup
+	m_chunkManager.LoadAllSavedChunks();
+	// finalize any loads immediately
+	m_chunkManager.UpdateMainThread();
+	m_chunkManager.RebuildAllChunksFromTileset();
 	// set start folder to assets and do not auto-load any tileset at startup
 	std::error_code ec;
 	auto assetsPath = std::filesystem::current_path() / std::filesystem::path("assets");
@@ -95,17 +115,73 @@ void LevelEditorScene::Update(float deltaTime) {
 
 	// If ImGui is capturing the mouse or UI is hovered/active, do not modify the map
 	bool uiCapturing = ImGui::GetIO().WantCaptureMouse || ImGui::IsAnyItemActive() || ImGui::IsAnyItemHovered() || ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) || ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow);
+	// Camera panning with middle mouse
+	bool isMiddleDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle);
+	// debug: detect edge transitions of middle mouse to show events
+	if (isMiddleDown && !m_prevMiddleDown) {
+		std::cout << "Middle button pressed (edge)" << std::endl;
+	}
+	if (!isMiddleDown && m_prevMiddleDown) {
+		std::cout << "Middle button released (edge)" << std::endl;
+	}
+	m_prevMiddleDown = isMiddleDown;
+	bool wasPanning = m_panning;
+	// allow panning even if ImGui reports capture so middle-click drag still moves camera
+	if (isMiddleDown) {
+		if (!m_panning) {
+			m_panning = true;
+			m_panStart = mp;
+			// record current camera position
+			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+			if (camOpt) {
+				m_camPanStart = (*camOpt)->m_position;
+				std::cout << "Camera pan start pos=(" << m_camPanStart.x << "," << m_camPanStart.y << ")" << std::endl;
+			} else {
+				std::cout << "Camera pan start: no main camera found" << std::endl;
+			}
+		}
+	} else {
+		if (m_panning && !isMiddleDown) {
+			// panning ended
+			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+			if (camOpt) {
+				Vec2 endPos = (*camOpt)->m_position;
+				std::cout << "Camera pan ended at=(" << endPos.x << "," << endPos.y << ")" << std::endl;
+			} else {
+				std::cout << "Camera pan end: no main camera found" << std::endl;
+			}
+		}
+		m_panning = false;
+	}
+
+	// apply panning
+	if (m_panning) {
+		sf::Vector2i delta = mp - m_panStart;
+		// move camera opposite to mouse drag for natural panning
+		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+		if (camOpt) {
+			Vec2 newPos = m_camPanStart - Vec2((float)delta.x, (float)delta.y);
+			(*camOpt)->m_position = newPos;
+			// Also update the camera entity's transform so CameraSystem smoothing doesn't pull it back
+			if (m_cameraEntity) {
+				if (auto t = m_cameraEntity->GetComponent<CTransform>()) {
+					t->m_position = newPos;
+				}
+			}
+			// print only when camera position changed by more than 1 unit to reduce spam
+			if (std::abs(newPos.x - m_lastCameraPos.x) > 1.0f || std::abs(newPos.y - m_lastCameraPos.y) > 1.0f) {
+				std::cout << "Camera moved to=(" << newPos.x << "," << newPos.y << ") delta=(" << delta.x << "," << delta.y << ")" << std::endl;
+				m_lastCameraPos = newPos;
+			}
+		}
+	}
+
 	if (!uiCapturing) {
 		if (lmb && !m_prevLmb) {
 			m_chunkManager.SetTileAt(tileX, tileY, m_brushValue);
-			// debug logging removed
-			int stored = m_chunkManager.GetTileAt(tileX, tileY);
-			// debug logging removed
 		}
 		if (rmb && !m_prevRmb) {
 			m_chunkManager.SetTileAt(tileX, tileY, 0);
-			int stored2 = m_chunkManager.GetTileAt(tileX, tileY);
-			// debug logging removed
 		}
 	}
 	m_prevLmb = lmb;

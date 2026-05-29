@@ -64,7 +64,7 @@ public:
 	void SetMusicEntityId(size_t entityId) { m_musicEntityId = entityId; }
 
 	const std::vector<SpawnerConfig>& GetConfigs() const { return m_configs; }
-	std::vector<SpawnerConfig>& GetConfigsMutable() { return m_configs; }
+	std::vector<SpawnerConfig>& GetConfigsMutable() { return m_configs; } // no const please, we're mutable!
 
 	// Global enable/disable for entire system
 	void SetEnabled(bool enabled) { m_enabled = enabled; }

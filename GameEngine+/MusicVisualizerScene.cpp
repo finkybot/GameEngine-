@@ -1036,12 +1036,14 @@ bool MusicVisualizerScene::RefreshDirectoryListing(const std::filesystem::path& 
 // Constructor and destructor for the MusicVisualizerScene. The constructor takes references to the game engine, the render window, and the entity manager,
 // and initializes the base Scene class with the engine and entity manager. It also stores a reference to the render window for use in rendering the grid and other visuals.
 // The destructor is defaulted since we don't have any special cleanup needed for this scene at the moment.
-MusicVisualizerScene::MusicVisualizerScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
-	: Scene(engine, entityManager), m_window(win) {}
+MusicVisualizerScene::MusicVisualizerScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager): Scene(engine, entityManager), m_window(win) {}
+
+
 MusicVisualizerScene::~MusicVisualizerScene() {
 	delete m_spawnSystem;
 	m_spawnSystem = nullptr;
 }
+
 
 // Main update function for the scene. This will handle processing of music-reactive spawns (explosions) based on the current music level, as well as rendering the ImGui UI for music loading and playback controls.
 // We also get the current FPS from the engine's FPS counter to display in the UI. Additionally, we ensure that the current directory is initialized so that the file browser has a starting point when opened.
@@ -1186,14 +1188,17 @@ void MusicVisualizerScene::Update(float deltaTime) {
 	ProcessInput();
 }
 
+
 // For this scene, at the moment we will do all rendering in the ImGui UI, so the main Render function can be minimal or empty.
 // We will render the grid as part of the debug overlay, and the music-reactive visuals (explosions) are rendered via their
 // CShape components in the main render loop of the engine, so we don't need to do anything special here for them. but we could
 // always add more custom rendering here if we wanted to do something more unique for the music visualizer in the future.
 void MusicVisualizerScene::Render() {}
 
+
 // No specific actions for this scene, but we need to implement the pure virtual function from the base Scene class, so we can just leave these empty for now.
 void MusicVisualizerScene::DoAction() {}
+
 
 // Render the debug overlay, which in this case will just be the grid. We will set the view to the default view to ensure the grid is
 // aligned with the window coordinates, then draw the grid and restore the previous view.
@@ -1206,21 +1211,25 @@ void MusicVisualizerScene::RenderDebugOverlay() {
 	m_window.setView(prevView);
 }
 
+
 // Handle events specific to this scene. For now, we don't have any special event handling, but we need to implement the pure virtual function
 // from the base Scene class, so we can just leave these empty for now. I could process keypresses here but I think it makes more sense to do that in the ProcessInput function which is called from Update,
 // that way we can easily check for key states and implement things like "hold key to do something" which would be more difficult to do in an event-based system.
 void MusicVisualizerScene::HandleEvent(const std::optional<sf::Event>& event) {}
+
 
 // OnEnter and OnExit functions for scene transitions. For this music visualizer scene, we don't have any special setup or teardown needed when entering or exiting the scene,
 // so we can just leave these empty for now. However, if we wanted to add any special effects or reset certain state when entering or exiting the scene, these would be the places to do that.
 void MusicVisualizerScene::OnEnter() {}
 void MusicVisualizerScene::OnExit() {}
 
+
 // Guess what? LoadResources and UnloadResources functions. For this scene, we don't have any specific resources to load or unload, so we can just leave these empty for now.
 void MusicVisualizerScene::LoadResources() {
 	m_isLoaded = true;
 }
 void MusicVisualizerScene::UnloadResources() {}
+
 
 // Initialize the scene with the given window size. For the music visualizer, we will set up a tile map that covers the entire window, which we can use for visual effects or as a background grid.
 void MusicVisualizerScene::InitializeGame(sf::Vector2u windowSize) {
@@ -1229,6 +1238,7 @@ void MusicVisualizerScene::InitializeGame(sf::Vector2u windowSize) {
 	int rows = static_cast<int>(windowSize.y / static_cast<unsigned int>(tileSize)) + 2;
 	m_tileMap = TileMap(cols, rows, tileSize);
 }
+
 
 // Draw a grid based on the tile map. This will render a simple grid overlay on the window, which can help visualize the space and add a nice aesthetic for the music visualizer. We will draw rectangles
 // for each tile in the tile map, using a light color and some transparency for the outlines so it doesn't overpower the visuals. We also check if the tile map has valid dimensions before attempting to
@@ -1248,12 +1258,14 @@ void MusicVisualizerScene::DrawGrid() {
 	}
 }
 
+
 // Process user input for the scene. For the music visualizer, we will just check for the Escape key to allow the user to close the window and exit the application.
 void MusicVisualizerScene::ProcessInput() {
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
 		m_gameEngine.m_window.close();
 	}
 }
+
 
 // Load music from the given file path. This will create a new music entity with a CMusic component to play the selected music. If there is already a music entity, it will
 void MusicVisualizerScene::LoadMusicFromPath(const std::string& path) {
@@ -1291,10 +1303,12 @@ void MusicVisualizerScene::LoadMusicFromPath(const std::string& path) {
 	}
 }
 
+
 // Toggle the solidity of a tile at the given tile coordinates. For the music visualizer, we don't have any solid tiles or collision, so this function can be left empty for now. H
 // owever, if we wanted to add some interactive elements to the grid in the future, we could implement this function to toggle whether a tile is solid or not, which could affect
 // player movement or interactions with the environment. that would be a wierd addition, but for now we will just leave it as a placeholder.
 void MusicVisualizerScene::ToggleTileAt(int tx, int ty, bool setSolid) {}
+
 
 // Update explosions: This function will iterate through all entities in the scene and look for those that are of type Explosion. For each explosion entity, we will check how long
 // it has been since it was created, and if it has been more than 1200 milliseconds, we will destroy the entity to remove it from the scene. If it is still within the lifespan,

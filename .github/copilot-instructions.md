@@ -9,6 +9,11 @@
 - Plan to create a full sprite system and combine tilemaps with textures; ensure that rendering logic accommodates both sprites and tilemaps effectively.
 - Implement interactive audio-reactive shapes by spawning shape entities based on music amplitude/beat via ImGui in TileMapEditorScene. **(Note: Strip music playback and audio-reactive effects out of TileMapEditorScene and keep them only in MusicVisualizerScene.)** Start implementing/experimenting with graphical effects in MusicVisualizerScene.
 - Investigate the equalizer issue in MusicVisualizerScene where many bars show identical responses, likely due to MusicSystem providing only 10 spectrum bands. Consider increasing spectrum resolution and enhancing MusicSystem analysis.
+- Implement chunking in a new scene using a chunked tilemap design with a default chunk size of 32x32 tiles:
+  - Use ChunkManager/ChunkedTileMap and an LRU cache of loaded chunks.
+  - Load/save per-chunk JSON asynchronously; finalize render data on the main thread, mark dirty chunks, and save on eviction or explicit save.
+  - Do not store entity IDs in Chunk struct for now; omit entityIds until needed.
+  - Integrate this with TileMapEditorScene.
 
 ## Audio Integration
 - Prepare to implement audio (sound effects and music) integration into the GameEngine+ project.

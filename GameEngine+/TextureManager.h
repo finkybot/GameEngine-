@@ -20,6 +20,9 @@ public:
 	// Unload atlas
 	void UnloadAtlas(const std::string& key);
 
+	// Get list of loaded atlas keys
+	std::vector<std::string> GetAtlasKeys() const;
+
 private:
 	std::unordered_map<std::string, std::shared_ptr<TextureAtlas>> m_atlases;
 };

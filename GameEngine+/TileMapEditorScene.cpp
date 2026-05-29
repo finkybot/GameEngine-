@@ -1,3 +1,5 @@
+// TileMapEditorScene.cpp - implementation of the TileMapEditorScene class, which provides a simple UI for loading, editing, and saving tile maps using ImGui for the interface and integrating with the game engine's entity system for rendering and interaction.
+
 #include "TileMapEditorScene.h"
 #include "GameEngine.h"
 #include "EntityManager.h"
@@ -13,6 +15,7 @@
 #include "MusicSystem.h"
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
+
 // Internal context pointer used to safely check whether ImGui NewFrame() has been called
 #include <imgui/imgui_internal.h>
 #include <filesystem>

@@ -18,6 +18,9 @@ bool TextureAtlas::LoadFromFile(const std::string& filePath, int tileW, int tile
 		m_texture.reset();
 		return false;
 	}
+	// Ensure sampling state is appropriate for texture atlases
+	m_texture->setSmooth(false);
+	m_texture->setRepeated(false);
 
 	m_tileW = tileW;
 	m_tileH = tileH;

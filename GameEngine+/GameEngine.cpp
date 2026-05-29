@@ -11,6 +11,7 @@
 #include "TileMapScene.h"
 #include "TileMapEditorScene.h"
 #include "MusicVisualizerScene.h"
+#include "LevelEditorScene.h"
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 #include <cstdlib>
@@ -69,28 +70,33 @@ void GameEngine::Run() {
 	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
 	AddScene("TestScene", std::make_shared<TestScene>(*this, m_window, *m_entityManager));		 // Adding TestScene
 	AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, m_window, *m_entityManager)); // Adding TileMapScene
-	AddScene("TileMapEditor",
-			 std::make_shared<TileMapEditorScene>(*this, m_window, *m_entityManager)); // Adding TileMapEditor
-	AddScene("MusicVisualizer",
-			 std::make_shared<MusicVisualizerScene>(*this, m_window, *m_entityManager)); // Adding MusicVisualizer
+	AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, m_window, *m_entityManager)); // Adding TileMapEditor
+	AddScene("MusicVisualizer", std::make_shared<MusicVisualizerScene>(*this, m_window, *m_entityManager)); // Adding MusicVisualizer	
+	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, m_window, *m_entityManager)); // Adding LevelEditor
 	
 	//ChangeScene("TestScene");
 	//ChangeScene("TileMapScene");
 	//ChangeScene("TileMapEditor");
-	ChangeScene("MusicVisualizer");	
-	
-	
-	m_currentScene->InitializeGame(m_windowSize);
+	//ChangeScene("MusicVisualizer");
+	ChangeScene("LevelEditor");
 
-	// FontManager already bound to engine-owned EntityManager in constructor
-	m_InputController.SetGameController(m_currentScene->GetGameController());
+	// Initialize the chosen scene if it was found. ChangeScene() logs a warning when the scene
+	// name is not found; guard against a null current scene to avoid dereferencing a nullptr.
+	if (m_currentScene) {
+		m_currentScene->InitializeGame(m_windowSize);
 
-	m_InputController.Init(
-		[&running](uint32_t deltaT, InputState state) {
-			running = false;
-			std::cout << "Quitting" << std::endl;
-		},
-		&m_window); // The defined function will be called when we quit the game..
+		// FontManager already bound to engine-owned EntityManager in constructor
+		m_InputController.SetGameController(m_currentScene->GetGameController());
+
+		m_InputController.Init(
+			[&running](uint32_t deltaT, InputState state) {
+				running = false;
+				std::cout << "Quitting" << std::endl;
+			},
+			&m_window); // The defined function will be called when we quit the game..
+	} else {
+		std::cerr << "No current scene selected; skipping scene initialization." << std::endl;
+	}
 
 	/* Main Loop, game logic is handled in here once per frame */
 	while (m_window.isOpen()) {

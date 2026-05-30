@@ -1,5 +1,11 @@
+/////////////////////////////////
 // TileMapEditorScene.cpp - implementation of the TileMapEditorScene class, which provides a simple UI for loading, editing, and saving tile maps using ImGui for the interface and integrating with the game engine's entity system for rendering and interaction.
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Includes and forward declarations for the TileMapEditorScene implementation.
 #include "TileMapEditorScene.h"
 #include "GameEngine.h"
 #include "EntityManager.h"
@@ -19,14 +25,27 @@
 // Internal context pointer used to safely check whether ImGui NewFrame() has been called
 #include <imgui/imgui_internal.h>
 #include <filesystem>
+/////////////////////////////////
+ 
 
+/////////////////////////////////
 // Constructor - initializes the tile map editor scene with references to the game engine, render window, and entity manager
 TileMapEditorScene::TileMapEditorScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
 	: Scene(engine, entityManager), m_window(win) {}
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // Destructor - defaulted since we don't have any special cleanup logic, but we could add it if needed in the future
 TileMapEditorScene::~TileMapEditorScene() = default;
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Update - updates the game logic for the tile map editor scene, including handling explosions, updating the FPS counter, and rendering the ImGui toolbar for loading/saving tile maps. 
+// It also includes functionality for showing file dialogs and processing user input for editing the tile map.
 void TileMapEditorScene::Update(float deltaTime) {
 	// Update explosions (move/expand/fade) similar to TestScene behaviour so audio-reactive spawned explosions animate
 	UpdateExplosions();
@@ -316,7 +335,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 		// Tile entities textures panel
 		ImGui::Separator();
 		if (ImGui::CollapsingHeader("Tile Entities (Textures)")) {
-			auto& tileEntities = m_entityManager.getEntities(EntityType::Tile);
+			auto& tileEntities = m_entityManager.GetEntities(EntityType::Tile);
 			ImGui::BeginChild("tile_textures", ImVec2(0, 200), true);
 			int count = 0;
 			for (Entity* te : tileEntities) {
@@ -433,7 +452,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 			// otherwise create
 			else {
 				// Create an entity and attach a music component. Constructor: (path, volume, looped, playOnStart) and play....
-				Entity* musicEntity = m_entityManager.addEntity(EntityType::Default);
+				Entity* musicEntity = m_entityManager.AddEntity(EntityType::Default);
 				if (musicEntity) {
 					auto* musicComponent = musicEntity->AddComponent<CMusic>(found, 80.f, true, true);
 					musicComponent->state = CMusic::State::Playing;
@@ -465,7 +484,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 
 		// remember last created music entity so reactive spawner can query its level
 		if (!m_musicEntity) {
-			for (auto& up : m_entityManager.getEntities()) {
+			for (auto& up : m_entityManager.GetEntities()) {
 				if (up && up->HasComponent<CMusic>()) {
 					m_musicEntity = up.get();
 					break;
@@ -512,7 +531,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 		if (m_audioReactive && level > m_spawnThreshold) {
 			if (m_spawnTimer >= m_spawnCooldown) {
 				// spawn a circle near bottom-right area
-				Entity* e = m_entityManager.addEntity(EntityType::Explosion);
+				Entity* e = m_entityManager.AddEntity(EntityType::Explosion);
 				if (e) {
 					// random size
 					float size = 6.0f + static_cast<float>(std::rand() % 36); // 6..41
@@ -562,13 +581,24 @@ void TileMapEditorScene::Update(float deltaTime) {
 
 	// ImGui draw will be rendered centrally by the engine after scene rendering
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Render - renders the tile map editor scene, including any entities and debug overlays. The engine normally handles rendering centrally, but we can call EntityManager render here to ensure spawned entities are drawn while debugging.
 void TileMapEditorScene::Render() {
 	// Ensure entities are rendered for this scene. The engine normally drives rendering centrally
 	// but call EntityManager render here to guarantee spawned entities are drawn while debugging.
 	//m_entityManager.RenderShapes();
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// RenderDebugOverlay - renders debug overlays for the tile map editor scene, such as the grid and tile highlights. This is called by the engine after the main scene rendering, 
+// allowing us to draw on top of entities and ensure alignment with screen pixels for accurate tile editing.
 void TileMapEditorScene::RenderDebugOverlay() {
 	// Draw debug overlay using a view that maps world (0,0..window) to screen so tile coordinates align
 	sf::View prevView = m_window.getView();
@@ -593,9 +623,21 @@ void TileMapEditorScene::RenderDebugOverlay() {
 
 	m_window.setView(prevView);
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// DoAction - placeholder for any actions that need to be performed on the tile map editor scene, such as applying changes or triggering specific behaviors. 
+// Currently empty since we handle interactions directly in Update() and HandleEvent(), but this could be expanded in the future if needed.
 void TileMapEditorScene::DoAction() {}
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// HandleEvent - handles input events for the tile map editor scene, such as mouse clicks for toggling tiles and keyboard input for shortcuts. 
+// It also updates the mouse world position for accurate tile editing and ensures that ImGui interactions do not interfere with scene input.
 void TileMapEditorScene::HandleEvent(const std::optional<sf::Event>& event) {
 	// update mouse world pos
 	sf::Vector2i mp = sf::Mouse::getPosition(m_window);
@@ -638,14 +680,22 @@ void TileMapEditorScene::HandleEvent(const std::optional<sf::Event>& event) {
 		// keyboard handled in ProcessInput()
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// OnEnter, OnExit, LoadResources, UnloadResources - lifecycle methods for the tile map editor scene.
 void TileMapEditorScene::OnEnter() {}
 void TileMapEditorScene::OnExit() {}
-void TileMapEditorScene::LoadResources() {
-	m_isLoaded = true;
-}
+void TileMapEditorScene::LoadResources() {	m_isLoaded = true; }
 void TileMapEditorScene::UnloadResources() {}
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// InitializeGame - initializes the tile map editor scene by creating a default tile map based on the window size and setting up a CTileMap entity for rendering.
 void TileMapEditorScene::InitializeGame(sf::Vector2u windowSize) {
 	// create a default map sized to the window
 	const float tileSize = 32.0f;
@@ -654,7 +704,7 @@ void TileMapEditorScene::InitializeGame(sf::Vector2u windowSize) {
 	m_tileMap = TileMap(cols, rows, tileSize);
 
 	// Create a CTileMap entity so the engine's TileSystem can render map as entities
-	if (m_entityManager.getEntities().size() >= 0) {
+	if (m_entityManager.GetEntities().size() >= 0) {
 		if (m_tileMapEntity) {
 			m_entityManager.KillEntity(m_tileMapEntity);
 			m_tileMapEntity = nullptr;
@@ -697,7 +747,12 @@ void TileMapEditorScene::InitializeGame(sf::Vector2u windowSize) {
 	//}
 	// m_entityManager.Update(0.0f);
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// DrawGrid - draws the tile grid for the editor scene, including filled rectangles for solid tiles (if no texture atlas) and grid lines. This is called in RenderDebugOverlay() to ensure it is drawn on top of entities and aligned with screen pixels for accurate editing.
 void TileMapEditorScene::DrawGrid() {
 	if (m_tileMap.width <= 0 || m_tileMap.height <= 0)
 		return;
@@ -724,7 +779,12 @@ void TileMapEditorScene::DrawGrid() {
 		}
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// ProcessInput - handles real-time input for the tile map editor scene, such as keyboard shortcuts for saving and mouse clicks for toggling tiles. This is called in the Update() loop to ensure key presses are captured accurately.
 void TileMapEditorScene::ProcessInput() {
 	// handle keyboard shortcuts using real-time state (need to use in Update loop so keypress is captured)
 	bool ctrlS =
@@ -762,7 +822,13 @@ void TileMapEditorScene::ProcessInput() {
 	}
 	prevCtrlShiftS = ctrlShiftS;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// ToggleTileAt - toggles a tile at the specified tile coordinates (tx, ty) to be solid or empty based on the setSolid parameter. This updates the TileMap data and marks it as dirty for re-rendering. 
+// If a CTileMap entity is attached, it also updates the corresponding tile in the component and marks it dirty for the TileSystem to update the rendered entities.
 void TileMapEditorScene::ToggleTileAt(int tx, int ty, bool setSolid) {
 	if (!m_tileMap.InBounds(tx, ty))
 		return;
@@ -780,16 +846,22 @@ void TileMapEditorScene::ToggleTileAt(int tx, int ty, bool setSolid) {
 			m_entityManager.SetHasPendingTileMaps(true);
 			// Process tile system immediately so tile entities appear this frame
 			// m_entityManager.Update(0.0f);
-			std::cout << "Tile entities now: " << m_entityManager.getEntities(EntityType::Tile).size() << std::endl;
+			std::cout << "Tile entities now: " << m_entityManager.GetEntities(EntityType::Tile).size() << std::endl;
 		}
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// UpdateExplosions - updates explosion entities by checking their age and removing them after a certain duration. It also increases their radius and fades their color for a visual effect. 
+// This is called in the Update() loop to ensure explosions are updated in real-time.
 void TileMapEditorScene::UpdateExplosions() {
 	m_explosionCount = 0;
 	auto now = std::chrono::high_resolution_clock::now();
 
-	for (auto& entity : m_entityManager.getEntities()) {
+	for (auto& entity : m_entityManager.GetEntities()) {
 		if (entity->GetType() == EntityType::Explosion) {
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->m_creationTime);
 			if (elapsed.count() > 1200) {
@@ -818,3 +890,4 @@ void TileMapEditorScene::UpdateExplosions() {
 		}
 	}
 }
+/////////////////////////////////

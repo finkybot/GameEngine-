@@ -538,7 +538,7 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> 
 				float tileH = c.tileSize * h;
 				float posX = (c.chunkX * c.width + x) * c.tileSize;
 				float posY = (c.chunkY * c.height + y) * c.tileSize;
-				Entity* ent = em.addEntity(EntityType::Tile);
+				Entity* ent = em.AddEntity(EntityType::Tile);
 				if (ent) {
 					ent->AddComponent<CTransform>(Vec2(posX, posY), Vec2::Zero);
 					auto rect = std::make_unique<CRectangle>(tileW, tileH);

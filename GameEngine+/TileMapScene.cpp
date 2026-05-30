@@ -1,3 +1,11 @@
+/////////////////////////////////
+// TileMapScene.cpp - Implementation of the TileMapScene class, which is responsible for rendering a tile map and handling user input for raycasting and tile editing. The scene allows users to click and drag to perform raycasts against the tile map, visualize the results with debug lines and points, and toggle tile states with right-clicks. It also includes functionality for toggling visual debug overlays and handling keyboard input for scene management.
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes and forward declarations
 #include "TileMapScene.h"
 #include "GameEngine.h"
 #include "EntityManager.h"
@@ -12,27 +20,47 @@
 #include <SFML/Window/Event.hpp>
 #include "Entity.h"
 #include "CText.h"
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // Constructor - initializes the tile map scene with a reference to the game engine and the render window, and sets up the entity manager
 TileMapScene::TileMapScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
 	: Scene(engine, entityManager), m_window(win) {}
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // Destructor - defaulted since we don't have any special cleanup logic, but we could add it if needed in the future
 TileMapScene::~TileMapScene() = default;
+/////////////////////////////////
 
-// Process left control key state to enable/disable
+
+
+/////////////////////////////////
+// ProcessLeftCtrlKey - handles left control key state to enable/disable
 void TileMapScene::ProcessLeftCtrlKey(bool keyDown) {
 	m_leftCtrlKeyDown = keyDown;
 }
+/////////////////////////////////
 
-// Process debug toggle key (D) to show/hide visual debug overlays
+
+
+/////////////////////////////////
+// ProcessDebugToggle - handles debug toggle key (D) to show/hide visual debug overlays
 void TileMapScene::ProcessDebugToggle(bool debugToggle) {
 	if (debugToggle && !m_prevDebugKeyDown)
 		m_visualDebug = !m_visualDebug;
 	m_prevDebugKeyDown = debugToggle;
 }
+/////////////////////////////////
 
-// Helper to create a RaycastHit when ray starts inside a solid tile, since DDA will return no hit in this case
+
+
+/////////////////////////////////
+// ProcessMouseDragRaycast - Helper to create a RaycastHit when ray starts inside a solid tile, since DDA will return no hit in this case
 void TileMapScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouseWorld) {
 	// Handle mouse drag state transitions and perform raycast on release
 	if (leftMouseDown && !m_prevLmbMouseDown) {
@@ -150,8 +178,12 @@ void TileMapScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 
 	m_prevLmbMouseDown = leftMouseDown;
 }
+/////////////////////////////////
 
-// Process right mouse drag to toggle tiles. We will toggle the tile state at the current mouse position when the right mouse button is pressed, and we will also support dragging to toggle multiple tiles in a single drag.
+
+
+/////////////////////////////////
+// ProcessMouseRightDrag - handles right mouse drag to toggle tiles. We will toggle the tile state at the current mouse position when the right mouse button is pressed, and we will also support dragging to toggle multiple tiles in a single drag.
 // When the right mouse button is released, we will end the drag. This allows us to quickly edit the tilemap by clicking or dragging with the right mouse button to toggle tiles between solid and empty states.
 void TileMapScene::ProcessMouseRightDrag(bool& rightMouseDown, const Vec2& mouseWorld) {
 	Vec2 currentTile = Vec2(static_cast<int>(std::floor(mouseWorld.x / m_tileMap.tileSize)),
@@ -197,13 +229,22 @@ void TileMapScene::ProcessMouseRightDrag(bool& rightMouseDown, const Vec2& mouse
 
 	m_prevRmbMouseDown = rightMouseDown;
 }
+/////////////////////////////////
 
-// Process key input to close the window when any key is pressed
+
+
+/////////////////////////////////
+// ProcessEscapeKey - handles input to close the window when any key is pressed
 void TileMapScene::ProcessEscapeKey(bool keyDown) const {
 	if (keyDown)
 		m_gameEngine.m_window.close();
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// ProcessSaveKey - handles input to save the tilemap to a JSON file when left control + S is pressed. We will check if the left control key is currently down and if the S key is pressed, and if so, we will call the SaveToJSON method on the tilemap to save it to a file.
 void TileMapScene::ProcessSaveKey(bool keyDown) const {
 	if (keyDown && m_leftCtrlKeyDown) {
 		std::string filename = "assets//testmap.json";
@@ -215,8 +256,12 @@ void TileMapScene::ProcessSaveKey(bool keyDown) const {
 		}
 	}
 }
+/////////////////////////////////
 
-// Update method - handles events, updates the entity manager, and prepares debug visualization data for rendering
+
+
+/////////////////////////////////
+// Update - handles events, updates the entity manager, and prepares debug visualization data for rendering
 void TileMapScene::Update(float /*deltaTime*/) {
 	// Handle events (SFML 3.0: pollEvent returns std::optional<sf::Event>)
 	while (auto eventOpt = m_gameEngine.m_window.pollEvent()) {
@@ -232,8 +277,12 @@ void TileMapScene::Update(float /*deltaTime*/) {
 	// simple update: run entity manager update
 	//m_entityManager.Update(0.016f);
 }
+/////////////////////////////////
 
-// Render method - draws the tile grid and any debug visualization overlays
+
+
+/////////////////////////////////
+// Render - draws the tile grid and any debug visualization overlays
 void TileMapScene::Render() {
 	// draw tile grid (solid tiles)
 	DrawTileGrid();
@@ -246,9 +295,16 @@ void TileMapScene::Render() {
 	// Text is rendered by the RenderSystem during EntityManager::Update; no per-scene text draw here to avoid double-rendering.
 }
 
-// DoAction method - currently empty, but could be used for game logic that needs to run on a fixed timestep or in response to certain conditions
-void TileMapScene::DoAction() {}
 
+
+/////////////////////////////////
+// DoAction - currently empty, but could be used for game logic that needs to run on a fixed timestep or in response to certain conditions
+void TileMapScene::DoAction() {}
+/////////////////////////////////
+ 
+
+
+/////////////////////////////////
 // Draw the tile grid by iterating over the tile map and drawing a semi-transparent rectangle for each solid tile
 void TileMapScene::DrawTileGrid() {
 	if (m_tileMap.width <= 0 || m_tileMap.height <= 0)
@@ -265,8 +321,12 @@ void TileMapScene::DrawTileGrid() {
 		}
 	}
 }
+/////////////////////////////////
 
-// Draw debug lines for raycasts, using red color for visibility. Only draws if visual debug mode is enabled.
+
+
+/////////////////////////////////
+// DrawDebugLines - draws debug lines for raycasts, using red color for visibility. Only draws if visual debug mode is enabled.
 void TileMapScene::DrawDebugLines() {
 	if (!m_visualDebug)
 		return;
@@ -276,8 +336,12 @@ void TileMapScene::DrawDebugLines() {
 		m_window.draw(line, 2, sf::PrimitiveType::Lines);
 	}
 }
+/////////////////////////////////
 
-// Draw hit points as yellow circles, only if visual debug mode is enabled. This shows the final hit position after clamping to the ray length.
+
+
+/////////////////////////////////
+// DrawHitPoints - draws hit points as yellow circles, only if visual debug mode is enabled. This shows the final hit position after clamping to the ray length.
 void TileMapScene::DrawHitPoints() {
 	if (!m_visualDebug)
 		return;
@@ -289,8 +353,12 @@ void TileMapScene::DrawHitPoints() {
 		m_window.draw(dot);
 	}
 }
+/////////////////////////////////
 
-// Draw raw hit points (before clamping) as blue circles, only if visual debug mode is enabled. This can show the actual intersection point with the tile boundary, which may be outside the ray length if the ray starts inside a solid tile.
+
+
+/////////////////////////////////
+// DrawRawHitPoints - draws raw hit points (before clamping) as blue circles, only if visual debug mode is enabled. This can show the actual intersection point with the tile boundary, which may be outside the ray length if the ray starts inside a solid tile.
 void TileMapScene::DrawRawHitPoints() {
 	if (!m_visualDebug)
 		return;
@@ -302,8 +370,12 @@ void TileMapScene::DrawRawHitPoints() {
 		m_window.draw(dot);
 	}
 }
+/////////////////////////////////
 
-// Draw visited cells as semi-transparent blue rectangles, only if visual debug mode is enabled. This shows which cells have been visited during raycasting or other pathfinding operations.
+
+
+/////////////////////////////////
+// DrawVisitedCells - draws visited cells as semi-transparent blue rectangles, only if visual debug mode is enabled. This shows which cells have been visited during raycasting or other pathfinding operations.
 void TileMapScene::DrawVisitedCells() {
 	if (!m_visualDebug)
 		return;
@@ -320,8 +392,12 @@ void TileMapScene::DrawVisitedCells() {
 		m_window.draw(rect);
 	}
 }
+/////////////////////////////////
 
-// Draw a preview line during mouse drag to show the current ray segment being defined by the drag. This is drawn in green and only shown when the preview is active and visual debug mode is enabled.
+
+
+/////////////////////////////////
+// DrawPreviewLine - draws a preview line during mouse drag to show the current ray segment being defined by the drag. This is drawn in green and only shown when the preview is active and visual debug mode is enabled.
 void TileMapScene::DrawPreviewLine() {
 	if (!(m_previewActive && m_visualDebug))
 		return;
@@ -329,8 +405,12 @@ void TileMapScene::DrawPreviewLine() {
 						 sf::Vertex(sf::Vector2f(m_previewLine.second.x, m_previewLine.second.y), sf::Color::Green)};
 	m_window.draw(line, 2, sf::PrimitiveType::Lines);
 }
+/////////////////////////////////
 
-// HandleEvent now delegates to input helpers to keep logic centralized
+
+
+/////////////////////////////////
+// HandleEvent - now delegates to input helpers to keep logic centralized
 void TileMapScene::HandleEvent(const std::optional<sf::Event>& event) {
 	//(void)event;
 	// get mouse pixel coords then convert to world coords using the window's view
@@ -353,20 +433,40 @@ void TileMapScene::HandleEvent(const std::optional<sf::Event>& event) {
 	ProcessEscapeKey(escapeKeyDown);
 	ProcessSaveKey(saveKeyDown);
 }
+/////////////////////////////////
 
-// OnEnter method - currently empty, but could be used for setup logic that needs to run when the scene becomes active
+
+
+/////////////////////////////////
+// OnEnter - currently empty, but could be used for setup logic that needs to run when the scene becomes active
 void TileMapScene::OnEnter() {}
+/////////////////////////////////
 
-// OnExit method - currently empty, but could be used for cleanup logic that needs to run when the scene is no longer active
+
+
+/////////////////////////////////
+// OnExit - currently empty, but could be used for cleanup logic that needs to run when the scene is no longer active
 void TileMapScene::OnExit() {}
+/////////////////////////////////
 
-// LoadResources method - currently empty, but could be used to load textures, sounds, or other resources needed by the scene. In this example, we load the tile map in InitializeGame instead, but we could also move it here if we wanted to separate resource loading from game initialization.
+
+
+/////////////////////////////////
+// LoadResources - currently empty, but could be used to load textures, sounds, or other resources needed by the scene. In this example, we load the tile map in InitializeGame instead, but we could also move it here if we wanted to separate resource loading from game initialization.
 void TileMapScene::LoadResources() {}
+/////////////////////////////////
 
-// UnloadResources method - currently empty, but could be used to free textures, sounds, or other resources when the scene is unloaded
+
+
+/////////////////////////////////
+// UnloadResources - currently empty, but could be used to free textures, sounds, or other resources when the scene is unloaded
 void TileMapScene::UnloadResources() {}
+/////////////////////////////////
 
-// InitializeGame method - loads the tile map from a JSON file and creates a tile map entity in the entity manager. Errors are ignored or could be handled via UI, and there is no console output in this method.
+
+
+/////////////////////////////////
+// InitializeGame - loads the tile map from a JSON file and creates a tile map entity in the entity manager. Errors are ignored or could be handled via UI, and there is no console output in this method.
 void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	sf::Vector2u windowSize =
 		m_window.getSize(); // Get the actual window size for use in tile map loading and entity setup
@@ -386,14 +486,14 @@ void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 
 	// Create an entity and add a text component to it to display the scene name. This demonstrates how to create entities and add components in the entity manager.
 	// We load a font and set the text to "TileMapScene Demo" with a size of 20 and white color. If the font fails to load, we print an error message to the console.
-	Entity* fontEntity = m_entityManager.addEntity(EntityType::Default);
+	Entity* fontEntity = m_entityManager.AddEntity(EntityType::Default);
 
 	fontEntity->AddComponent<CTransform>(Vec2(50, 50), Vec2::Zero);
 	if (!fontEntity->AddComponent<CText>("RayCasting Demo, with TileMap \nUsing GameEngine+", sf::Color::Cyan,
 										 "regular", 60)) /* Handle error if needed */
 		std::cerr << "Error loading font for text entity" << std::endl;
 
-	Entity* instructionsEntity = m_entityManager.addEntity(EntityType::Default);
+	Entity* instructionsEntity = m_entityManager.AddEntity(EntityType::Default);
 
 	instructionsEntity->AddComponent<CTransform>(Vec2(50, windowSize.y - 150), Vec2::Zero);
 	if (!instructionsEntity->AddComponent<CText>("Left Click + Drag: Raycast\nRight Click + Drag: Toggle Tiles\nPress "
@@ -401,8 +501,12 @@ void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 												 sf::Color::Yellow, "thin", 20))
 		std::cerr << "Error loading font for instructions entity" << std::endl;
 }
+/////////////////////////////////
 
-// SpawnTestTileMap method - creates a simple test tile map with various platforms and obstacles for testing raycasting and visualization. This method is not currently called, but can be used to generate a procedural tile map instead of loading from JSON.
+
+
+/////////////////////////////////
+// SpawnTestTileMap - creates a simple test tile map with various platforms and obstacles for testing raycasting and visualization. This method is not currently called, but can be used to generate a procedural tile map instead of loading from JSON.
 void TileMapScene::SpawnTestTileMap() {
 	// Create a tilemap sized to at least cover the window so platforms span the screen
 	const float tileSize = 32.0f;
@@ -477,8 +581,12 @@ void TileMapScene::SpawnTestTileMap() {
 	m_tileMap = map;
 	m_entityManager.CreateTileMapEntity(map);
 }
+/////////////////////////////////
 
-// Helper: create a synthetic RaycastHit representing an immediate hit at the start cell
+
+
+/////////////////////////////////
+// MakeStartCellHit - create a synthetic RaycastHit representing an immediate hit at the start cell
 RaycastHit TileMapScene::MakeStartCellHit(int tileX, int tileY, const Vec2& origin) {
 	RaycastHit h;
 	if (tileX < 0 || tileY < 0)
@@ -493,8 +601,12 @@ RaycastHit TileMapScene::MakeStartCellHit(int tileX, int tileY, const Vec2& orig
 	h.distance = 0.0f;
 	return h;
 }
+/////////////////////////////////
 
-// Toggle a tile at the specified map cell coordinates (tx, ty). This method toggles the tile value between 0 and 1, updates the tile map in the entity manager, and marks it as dirty for rendering. This allows for interactive editing of the tile map by clicking on cells.
+
+
+/////////////////////////////////
+// ToggleTileAt - toggle a tile at the specified map cell coordinates (tx, ty). This method toggles the tile value between 0 and 1, updates the tile map in the entity manager, and marks it as dirty for rendering. This allows for interactive editing of the tile map by clicking on cells.
 void TileMapScene::ToggleTileAt(int tx, int ty) {
 	if (!m_tileMap.InBounds(tx, ty))
 		return;
@@ -508,7 +620,7 @@ void TileMapScene::ToggleTileAt(int tx, int ty) {
 		bool updated = false;
 
 		// Get the entities from the entity manager and look for one with a CTileMap component. If found, update its map reference and mark it dirty. We also remove any existing tile entities so that the TileSystem will recreate them based on the u
-		for (auto& up_entity : m_entityManager.getEntities()) {
+		for (auto& up_entity : m_entityManager.GetEntities()) {
 			Entity* entity = up_entity.get();
 			if (!entity)
 				continue;
@@ -525,7 +637,7 @@ void TileMapScene::ToggleTileAt(int tx, int ty) {
 		if (!updated) {
 			// Create a new CTileMap entity so TileSystem can process it on the next update
 			// mark existing tile entities for removal first
-			for (Entity* te : m_entityManager.getEntities(EntityType::Tile)) {
+			for (Entity* te : m_entityManager.GetEntities(EntityType::Tile)) {
 				if (te)
 					m_entityManager.KillEntity(te);
 			}
@@ -537,3 +649,4 @@ void TileMapScene::ToggleTileAt(int tx, int ty) {
 		// duplicates / stale visuals do not remain.
 	}
 }
+/////////////////////////////////

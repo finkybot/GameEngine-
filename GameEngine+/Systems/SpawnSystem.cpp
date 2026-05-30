@@ -433,7 +433,7 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 		return;
 
 	// Create a new explosion entity. In a full implementation, this could be extended to spawn different types of entities based on the config.
-	Entity* entity = m_entityManager->addEntity(EntityType::Explosion);
+	Entity* entity = m_entityManager->AddEntity(EntityType::Explosion);
 	if (!entity)
 		return; // Failed to create entity, exit early
 

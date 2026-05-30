@@ -79,7 +79,7 @@ void TestScene::Update(float deltaTime) {
 
 	// scene update logic
 	// Dynamic population control: maintain entities by spawning to replace dead ones
-	size_t currentEntityCount = m_entityManager.getEntities().size();
+	size_t currentEntityCount = m_entityManager.GetEntities().size();
 	if (currentEntityCount < targetEntityCount) {
 		// Spawn entities to maintain target population
 		// Spawn up to 4 entities per frame to replace those killed in collisions
@@ -121,15 +121,15 @@ void TestScene::Update(float deltaTime) {
 	UpdateExplosions();
 
 	m_entityManager.GetPhysicsSystem().Update(
-		m_entityManager.getEntities(), deltaTime, m_window.getSize().x,
+		m_entityManager.GetEntities(), deltaTime, m_window.getSize().x,
 		m_window.getSize().y); // Do physics and boundary collisions first for spatial hash accuracy.
 
 	m_entityManager.GetCollisionSystem().DetectAndResolve(
-		m_entityManager.getEntities(), m_entityManager.GetSpatialHash(),
+		m_entityManager.GetEntities(), m_entityManager.GetSpatialHash(),
 		deltaTime); // Then do collision detection and resolution, which may mark entities as dead and spawn explosions.
 
 	// Render ImGui UI (actual ImGui::Render called by GameEngine)
-	RenderGameInfoWindow(m_entityManager.getEntities().size(), m_entityManager.GetDeathCountThisFrame(),
+	RenderGameInfoWindow(m_entityManager.GetEntities().size(), m_entityManager.GetDeathCountThisFrame(),
 						 m_explosionCount);
 }
 /////////////////////////////////
@@ -270,7 +270,7 @@ void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 colo
 									EntityType::TeamRocket, EntityType::TeamMonkey};
 	EntityType type = (teamType < 5) ? teamTypes[teamType] : EntityType::TeamMonkey;
 
-	Entity* en = m_entityManager.addEntity(type);
+	Entity* en = m_entityManager.AddEntity(type);
 
 	en->AddComponent<CTransform>(position, velocity);
 	en->AddComponent<CName>();
@@ -359,7 +359,7 @@ void TestScene::UpdateExplosions() {
 	auto now = std::chrono::high_resolution_clock::now();
 	std::vector<size_t> expiredExplosions;
 
-	for (auto& entity :	m_entityManager.getEntities()) { // Iterate over all entities to find explosions and update their state based on elapsed time since creation
+	for (auto& entity :	m_entityManager.GetEntities()) { // Iterate over all entities to find explosions and update their state based on elapsed time since creation
 		if (entity->GetType() == EntityType::Explosion) {
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->m_creationTime);
 			if (elapsed.count() > 2900) {

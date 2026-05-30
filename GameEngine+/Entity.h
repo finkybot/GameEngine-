@@ -46,9 +46,12 @@ private:
 	/////////////////////////////////
 	// Public interface for entity manipulation and component management.
 public:
+
+	/////////////////////////////////
     // Rendering layer for the entity. Default to Mid so most entities draw in the main layer. Backward-compatible with new CLayer component: 
 	// if CLayer exists, renderer will prefer it; otherwise these accessors provide a fallback stored on the entity.
 	enum class Layer { Background = 0, Mid = 1, Foreground = 2, Overlay = 3 };
+	/////////////////////////////////
 
 
 

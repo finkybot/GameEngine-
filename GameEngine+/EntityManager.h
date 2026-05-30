@@ -1,17 +1,36 @@
-// ***** EntityManager.h - EntityManager class definition *****
+/////////////////////////////////
+// EntityManager.h - EntityManager class definition.
 #pragma once
+/////////////////////////////////
 
-// Forward Declarations
-class
-	TileSystem; // Forward declaration of TileSystem to avoid circular dependency with EntityManager, since EntityManager will have a unique_ptr to TileSystem and TileSystem will need to access EntityManager for managing tile entities. This allows us to use pointers to TileSystem in EntityManager without needing the full definition of TileSystem at this point, which helps to reduce compilation dependencies and improve build times.
-class MusicSystem; // forward declare MusicSystem
+
+
+/////////////////////////////////
+// Forward Declarations, Note I have includes and forward declarations in an unusual order here to minimize coupling and reduce compile times.
+class TileSystem; // Forward declaration of TileSystem.
+class MusicSystem; // Forward declaration of MusicSystem
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes for the EntityManager class.
 #include <array>
 #include "Entity.h"
-namespace sf {
-class RenderWindow;
-}
-class Entity;
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// More forward declarations; RenderWindow is used by EntityManager but we want to avoid including the full SFML header here if possible to reduce compile times. We can include it in the .cpp file instead since we only need a reference to it.
+// We also forward declare Entity since we use pointers to it in our containers, and we want to avoid including the full Entity header here to reduce compile times. The full definition of Entity will be needed in the .cpp file where we implement the methods that manipulate Entity objects.
+namespace sf {class RenderWindow;}
+class Entity;
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // Include necessary headers for SFML, standard library containers, and other components used by EntityManager
 #include <vector>
 #include <memory>
@@ -28,62 +47,154 @@ class Entity;
 #include "Systems/CollisionSystem.h"
 #include "Systems/RenderSystem.h"
 #include "CTileMap.h"
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // Type aliases (for convenience and readability)
 using EntityVector = std::vector<std::unique_ptr<Entity>>;
 using EntityMap = std::map<EntityType, std::vector<Entity*>>;
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// EntityManager class - responsible for managing all entities in the game, including creation, updating, rendering, and spatial organization. The EntityManager maintains a collection of active entities, 
+// a spatial hash grid for efficient spatial queries, and manages the main systems that operate on entities such as physics, collision detection, and rendering. It also provides an interface for adding 
+// and removing entities, as well as processing pending entities that have been added but not yet integrated into the main entity list.
 class EntityManager {
+	/////////////////////////////////
+	// Public interface for the EntityManager class
 public:
+	/////////////////////////////////
+	// Constructor and destructor for the EntityManager class.
 	explicit EntityManager(sf::RenderWindow& window, float cellSize = 32.0f);
 	~EntityManager();
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Public methods for updating and rendering entities, as well as adding and removing entities from the manager. The Update method will handle 
+	// updating all systems and processing pending entities, while the Render methods will handle drawing entities to the screen.
 	void Update(float deltaTime = 1.0f / 60.0f);
 	void RenderShapes();
 	void RenderText();
 	void RenderAll(RenderSystem::RenderMode mode = RenderSystem::RenderMode::ShapesThenText);
+	/////////////////////////////////
 
-	Entity* addEntity(EntityType type);
+
+
+	/////////////////////////////////
+	// Methods for adding and removing entities, as well as accessing the list of entities and the spatial hash grid. The AddEntity method creates a 
+	// new entity of the specified type and adds it to the manager, while the KillEntity method marks an entity for removal.
+	Entity* AddEntity(EntityType type);
 	void KillEntity(Entity* entity);
+	/////////////////////////////////
 
-	EntityVector& getEntities();
-	std::vector<Entity*>& getEntities(EntityType type);
 
+
+	/////////////////////////////////
+	// Accessor methods for retrieving the list of entities and the spatial hash grid, as well as getting and setting the death count for the current frame. The GetEntities method returns a reference to the vector of 
+	// active entities, while the overloaded GetEntities method returns a vector of pointers to entities of a specific type. The GetSpatialHash method returns a reference to the spatial hash grid used for spatial queries. 
+	EntityVector& GetEntities();
+	std::vector<Entity*>& GetEntities(EntityType type);
 	SpatialHashGrid<Entity>& GetSpatialHash();
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Accessor methods GetDeathCountThisFrame and SetDeathCountThisFrame for tracking the number of entities that have been marked as dead during the current frame. This can be used for debugging, performance monitoring, or gameplay mechanics that depend on entity deaths.
 	int GetDeathCountThisFrame() const { return m_deathCountThisFrame; }
 	void SetDeathCountThisFrame(int count) { m_deathCountThisFrame = count; }
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Accessor methods for the main systems managed by the EntityManager, including the PhysicsSystem, CollisionSystem, RenderSystem, and MusicSystem. These methods provide access to the systems for updating and rendering entities, as well as managing music playback.
 	PhysicsSystem GetPhysicsSystem() { return m_physicsSystem; }
 	CollisionSystem GetCollisionSystem() { return m_collisionSystem; }
-	RenderSystem& GetRenderSystem() { return m_renderSystem; }
+	RenderSystem& GetRenderSystem() { return m_renderSystem; }	
+	MusicSystem* GetMusicSystem() { return m_musicSystem.get(); } // Accessor for MusicSystem (may be nullptr)
+	/////////////////////////////////
 
-	// Accessor for MusicSystem (may be nullptr)
-	class MusicSystem* GetMusicSystem() { return m_musicSystem.get(); }
 
+
+	/////////////////////////////////
+	// Methods for adding a tile map to the entity manager. The AddTileMapAsEntities method takes a TileMap and creates individual entities for each solid tile, while the CreateTileMapEntity method 
+	// creates a single CTileMap entity that can be processed by the TileSystem. These methods provide flexibility in how tile maps are represented and managed within the entity system.
 	void AddTileMapAsEntities(const TileMap& map, int tileValueToTreatAsSolid = 1);
-	Entity* CreateTileMapEntity(
-		const TileMap& map); // Preferred: create a CTileMap entity which will be processed by TileSystem
+	Entity* CreateTileMapEntity(const TileMap& map); // Preferred: create a CTileMap entity which will be processed by TileSystem
+	/////////////////////////////////
 
-	void SetHasPendingTileMaps(bool v) {
-		m_hasPendingTileMaps = v;
-	} // When creating/updating CTileMap components set this flag so TileSystem knows work is pending
+
+
+	/////////////////////////////////
+	// Methods for managing pending tile maps. The SetHasPendingTileMaps method sets a flag indicating that there are pending tile maps that need to be processed, while the HasPendingTileMaps method checks the status of this flag.
+	void SetHasPendingTileMaps(bool v) { m_hasPendingTileMaps = v; }
 	bool HasPendingTileMaps() const { return m_hasPendingTileMaps; }
+	/////////////////////////////////
+	 
+	 
+	
+	/////////////////////////////////
 	// Commit pending entities without running full Update(). This moves entities from the add-queue into the active list so systems can see them.
 	void ProcessPending();
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Debug: validate internal container integrity (only enabled in debug builds)
 	void ValidateIntegrity() const;
+	/////////////////////////////////
+	
+
+
+	/////////////////////////////////
 	// Layer buckets access for RenderSystem (incremental maintenance)
 	std::array<std::vector<Entity*>, 4>& GetLayerBuckets() { return m_layerBuckets; }
+	/////////////////////////////////
+	 
+	
+
+	/////////////////////////////////
 	// Helper to set an entity's layer (moves between buckets)
 	void SetEntityLayer(Entity* e, Entity::Layer layer);
+	/////////////////////////////////
 
+
+
+	//////////////////////////////////
+	// Private helper methods
 private:
+	/////////////////////////////////
+	// AddPendingEntities - move entities from the pending add queue into the main entity list and spatial hash, and update the entity map by type. This method is called during the Update process to integrate newly added entities into the main systems.
 	void AddPendingEntities();
-	void RemoveDeadEntities();
-	void UpdateSpatialHashAndRender();
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// RemoveDeadEntities - remove entities that have been marked as dead from the main entity list and spatial hash, and update the entity map by type. This method is called during the Update process to clean up entities that are no longer active.
+	void RemoveDeadEntities();
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// UpdateSpatialHashAndRender - update the spatial hash grid with the current positions of all entities, and prepare the layer buckets for rendering. This method is called during the 
+	// Update process to ensure that the spatial hash is accurate for collision detection and that entities are organized into their respective rendering layers.
+	void UpdateSpatialHashAndRender();
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Private member variables.
 private:
 	SpatialHashGrid<Entity> m_spatialHash;
 	EntityVector m_entities;
@@ -99,8 +210,20 @@ private:
 	std::unique_ptr<TileSystem> m_tileSystem;
 	std::unique_ptr<MusicSystem> m_musicSystem; // system owning runtime sf::Music objects
 	bool m_hasPendingTileMaps = true;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
     // Incremental layer buckets for fast rendering
 	std::array<std::vector<Entity*>, 4> m_layerBuckets;
+	/////////////////////////////////
+	 
+	 
+	
+	/////////////////////////////////
     // Thread id that owns this EntityManager (captured at construction). Used to detect cross-thread access in debug builds.
 	std::thread::id m_ownerThreadId;
+	/////////////////////////////////
 };
+/////////////////////////////////

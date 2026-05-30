@@ -134,7 +134,7 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 		Vec2 explosionPosition = collisionPoint - Vec2(explosionRadius, explosionRadius);
 		//m_entityManager->addEntity(EntityType::Explosion, explosionRadius, blendedColor, explosionPosition, explosionVelocity, 200);
 
-		Entity* en = m_entityManager->addEntity(EntityType::Explosion);
+		Entity* en = m_entityManager->AddEntity(EntityType::Explosion);
 
 		// Set transform for explosion so UpdateExplosions can use creation time and transform
 		en->AddComponent<CTransform>(explosionPosition, explosionVelocity);

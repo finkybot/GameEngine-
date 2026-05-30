@@ -1,4 +1,11 @@
+/////////////////////////////////
 // GameEngine.cpp - Implementation of the GameEngine class, responsible for managing the game loop, scenes, and rendering using SFML
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes and forward declarations for the GameEngine implementation.
 #include "GameEngine.h"
 #include "FontManager.h"
 #include <SFML/System/Vector2.hpp>
@@ -15,7 +22,11 @@
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 #include <cstdlib>
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 GameEngine::GameEngine() {
 	// Setup the SFML window as borderless (fullscreen-windowed) to avoid exclusive fullscreen quirks
 	m_windowSize = sf::VideoMode::getDesktopMode().size;
@@ -40,13 +51,28 @@ GameEngine::GameEngine() {
 		// continue without ImGui but scenes must tolerate absence
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Destructor - cleans up resources and shuts down the game engine, including ImGui-SFML shutdown and clearing scenes
 GameEngine::~GameEngine() {}
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// AddScene - Adds a new scene to the game engine with the given name and scene instance, allowing for dynamic scene management. The scene is stored in a map of scene names to scene instances, enabling easy retrieval and switching between scenes during the game loop.
 void GameEngine::AddScene(const std::string& sceneName, std::shared_ptr<Scene> scene) {
 	m_scenes[sceneName] = scene;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions. The method checks if the specified scene exists in the scenes map and sets it as the current active scene, enabling the game loop to update and render the new scene. If the scene name is not found, a warning is logged.
 void GameEngine::ChangeScene(const std::string& sceneName) {
 	auto it = m_scenes.find(sceneName);
 	if (it != m_scenes.end()) {
@@ -55,14 +81,26 @@ void GameEngine::ChangeScene(const std::string& sceneName) {
 		std::cerr << "Scene '" << sceneName << "' not found!" << std::endl;
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// RemoveScene - Removes a scene from the game engine by its name, allowing for cleanup and resource management of scenes that are no longer needed. The method checks if the 
+// specified scene exists in the scenes map and removes it, freeing up resources associated with that scene and ensuring it is no longer updated or rendered in the game loop.
 void GameEngine::RemoveScene(const std::string& sceneName) {
 	auto it = m_scenes.find(sceneName);
 	if (it != m_scenes.end()) {
 		m_scenes.erase(it);
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Run - Starts the main game loop, handling scene initialization, event processing, updating, and rendering. The method sets up the initial scene, initializes it, and enters a loop that continues until the window is closed. 
+// Within the loop, it processes events, updates the current scene with a fixed delta time, and renders the scene to the window.
 void GameEngine::Run() {
 	// Setup Event Handler.
 	bool running = true; // Create a Boolean variable to manage the engine running state
@@ -104,7 +142,13 @@ void GameEngine::Run() {
 			0.016f); // Update the scene with a fixed delta time (16ms for ~60 FPS), I can calculate actual delta time using the deltaClock for variable time steps
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Update - Updates the current scene and game state based on the elapsed time since the last frame, allowing for time-based updates and game logic processing. The method calculates the delta time using the SFML clock and calls 
+// the update method of the current active scene, enabling smooth and consistent updates regardless of frame rate variations. It also handles event polling and forwarding to ImGui and the current scene, as well as rendering the scene and ImGui.
 void GameEngine::Update(float deltaTime) {
 	// Handle events and input before updating the scene.
 	while (m_window.isOpen()) {
@@ -162,3 +206,4 @@ void GameEngine::Update(float deltaTime) {
 		m_window.display();
 	}
 }
+/////////////////////////////////

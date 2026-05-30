@@ -1,7 +1,19 @@
-// ***** EntityType.h - EntityType enum class definition *****
-#pragma once
+/////////////////////////////////
+// EntityType.h
+/////////////////////////////////
 
-// EntityType.h (Defines the EntityType enum class representing different types of entities in the game, such as teams and explosions.)
+
+
+/////////////////////////////////
+// Includes???????
+#pragma once
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// EntityType enum defines the various types of entities that can exist in the game. This includes different teams, explosions, tile maps, and 
+// a default type for generic entities. The enum values are explicitly assigned for clarity and potential use in serialization or debugging.
 enum class EntityType {
 	TeamEagle = 0,
 	TeamHawk = 1,
@@ -15,7 +27,11 @@ enum class EntityType {
 	Default = 8,
 	Equalizer = 9
 };
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // Utility function to convert EntityType enum values to human-readable strings for debugging and logging purposes.
 inline const char* EntityTypeToString(EntityType type) {
 	switch (type) {
@@ -41,3 +57,4 @@ inline const char* EntityTypeToString(EntityType type) {
 		return "Unknown";
 	}
 }
+/////////////////////////////////

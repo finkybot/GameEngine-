@@ -6,7 +6,7 @@
 
 void TileSystem::Process() {
 	// Iterate all entities and find ones with CTileMap that haven't been processed yet
-	for (auto& up : m_entityManager->getEntities()) {
+	for (auto& up : m_entityManager->GetEntities()) {
 		Entity* e = up.get();
 		if (!e->IsAlive())
 			continue;
@@ -18,7 +18,7 @@ void TileSystem::Process() {
 			continue;
 
 		// Remove any existing generated tile entities so TileSystem can recreate them from the updated map
-		for (Entity* te : m_entityManager->getEntities(EntityType::Tile)) {
+		for (Entity* te : m_entityManager->GetEntities(EntityType::Tile)) {
 			if (te)
 				m_entityManager->KillEntity(te);
 		}
@@ -64,7 +64,7 @@ void TileSystem::Process() {
 				float posX = x * map.tileSize;
 				float posY = y * map.tileSize;
 
-				Entity* tileEntity = m_entityManager->addEntity(EntityType::Tile);
+				Entity* tileEntity = m_entityManager->AddEntity(EntityType::Tile);
 				if (tileEntity) {
 					tileEntity->AddComponent<CTransform>(Vec2(posX, posY), Vec2(0.0f, 0.0f));
 					bool textureAttached = false;

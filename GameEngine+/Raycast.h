@@ -1,4 +1,11 @@
+/////////////////////////////////
 // Raycast.h - DDA raycasting for tilemaps and ray vs AABB utilities
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes
 #pragma once
 
 #include "Vec2.h"
@@ -13,29 +20,41 @@
 #include <string>
 #include <iomanip>
 #include "Utils.h"
-// TileMap is referenced here via TileMap.h included below by caller when needed
+// Note - TileMap is referenced here via TileMap.h included below by caller when needed
+/////////////////////////////////
 
-// Debug helpers to optionally collect visited cells when performing raycasts.
+
+
+/////////////////////////////////
+// Namespace for raycast utilities and debug helpers. This namespace contains functions and data related to performing raycasts against tilemaps, as well as optional debug features for collecting visited cells during raycasting.
 namespace RaycastDebug {
-inline bool collectVisited = false;
-inline std::vector<std::pair<int, int>> lastVisited;
-inline void EnableVisited(bool enable) {
-	// Force debug collection off. Ignore requests to enable it at runtime.
-	(void)enable;
-	collectVisited = false;
-	lastVisited.clear();
+	inline bool collectVisited = false;
+	inline std::vector<std::pair<int, int>> lastVisited;
+	
+	inline void EnableVisited(bool enable) {
+		// Force debug collection off. Ignore requests to enable it at runtime.
+		(void)enable;
+		collectVisited = false;
+		lastVisited.clear();
+	}
+	inline const std::vector<std::pair<int, int>>& GetLastVisited() {
+		return lastVisited;
+	}
 }
-inline const std::vector<std::pair<int, int>>& GetLastVisited() {
-	return lastVisited;
-}
-} // namespace RaycastDebug
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // TileMap is defined in TileMap.h - include it for use in raycast utilities
 #include "TileMap.h"
+/////////////////////////////////
 
-// JSON save/load for TileMap moved to Utils.* to centralize parsing utilities.
 
-// Raycast result
+
+/////////////////////////////////
+// RaycastHit struct - Represents the result of a raycast against a tilemap, including whether a hit occurred, the tile coordinates of the hit, the world space position and normal of the hit, the distance along the ray to the hit, and the value of the tile that was hit. 
+// This struct provides a convenient way to encapsulate all relevant information about a raycast hit for use in game logic and rendering.
 struct RaycastHit {
 	bool hit = false;	   // did we hit a solid tile?
 	int tileX = -1;		   // tile coordinates of hit tile
@@ -45,9 +64,13 @@ struct RaycastHit {
 	float distance = 0.0f; // distance along ray (world units)
 	int tileValue = 0;	   // value of tile hit
 };
+/////////////////////////////////
 
-// Ray vs Axis Aligned Bounding Box (AABB) using slab method. rectMin and rectMax are world coordinates of AABB.
-// dir must be normalized. Returns true and fills out outT if hit at positive t <= maxDistance.
+
+
+/////////////////////////////////
+// RayIntersectsAABB - A function to check for intersection between a ray and an axis-aligned bounding box (AABB) using the slab method. The function takes the origin and direction of the ray, the minimum and maximum corners of the AABB, and outputs the distance 
+// to the hit point if an intersection occurs. Ray vs Axis Aligned Bounding Box (AABB) using slab method. rectMin and rectMax are world coordinates of AABB. dir must be normalized. Returns true and fills out outT if hit at positive t <= maxDistance.
 inline bool RayIntersectsAABB(const Vec2& origin, const Vec2& dir, const Vec2& rectMin, const Vec2& rectMax,
 							  float& outDistance, float maxDistance = FLT_MAX) {
 	// Set up a few things, first define a small epsilon for handling floating-point precision when checking for parallel rays.Next initialize tmin and tmax
@@ -135,9 +158,12 @@ inline bool RayIntersectsAABB(const Vec2& origin, const Vec2& dir, const Vec2& r
 		return false;
 	return true;
 }
+/////////////////////////////////
 
-// Helper functions
-// Normalize a direction vector and return its length. Returns false if the vector is too small to normalize.
+
+
+/////////////////////////////////
+// NormalizeDir - A helper function to normalize a direction vector and return its length. This function takes a Vec2 representing the direction, and outputs the normalized direction components (outDx, outDy) and the original length of the vector (outLen).
 static inline bool NormalizeDir(const Vec2& d, double& outDx, double& outDy, double& outLen) {
 	const double EPS_SMALL = 1e-12;
 	outDx = d.x;
@@ -149,7 +175,11 @@ static inline bool NormalizeDir(const Vec2& d, double& outDx, double& outDy, dou
 	outDy /= outLen;
 	return true;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // Calculate the initial t value for the ray to reach the next vertical or horizontal grid line based on the ray direction and origin.
 static inline double CalcInitialT(double dd, int mapC, double originC, double tileSize) {
 	const double EPS_SMALL = 1e-12;
@@ -159,23 +189,35 @@ static inline double CalcInitialT(double dd, int mapC, double originC, double ti
 		return (((mapC + 1) * tileSize) - originC) / dd;
 	return (originC - (mapC * tileSize)) / -dd;
 }
+/////////////////////////////////
 
-// Calculate the t delta for stepping from one grid line to the next in the DDA algorithm, which is tileSize divided by the absolute value of the ray direction component.
+
+
+/////////////////////////////////
+// CalcTDelta - Calculate the t delta for stepping from one grid line to the next in the DDA algorithm, which is tileSize divided by the absolute value of the ray direction component.
 static inline double CalcTDelta(double dd, double tileSize) {
 	const double EPS_SMALL = 1e-12;
 	return (std::fabs(dd) < EPS_SMALL) ? std::numeric_limits<double>::infinity() : (tileSize / std::fabs(dd));
 }
+/////////////////////////////////
 
-// Check if a ray intersects the AABB of a tile at (hx, hy) in the tilemap. Returns true and fills outHitDist if hit within maxDist.
+
+
+/////////////////////////////////
+// IntersectAABB_Ray - Check if a ray intersects the AABB of a tile at (hx, hy) in the tilemap. Returns true and fills outHitDist if hit within maxDist.
 static inline bool IntersectAABB_Ray(const Vec2& origin, double ndx, double ndy, const TileMap& map, int hx, int hy,
 									 float maxDist, float& outHitDist) {
 	return RayIntersectsAABB(origin, Vec2(static_cast<float>(ndx), static_cast<float>(ndy)),
 							 Vec2(hx * map.tileSize, hy * map.tileSize),
 							 Vec2((hx + 1) * map.tileSize, (hy + 1) * map.tileSize), outHitDist, maxDist);
 }
+/////////////////////////////////
 
-// DDA raycasting for tilemaps. Returns RaycastHit with hit info if we hit a solid tile, or default RaycastHit with hit=false if no hit.
-// The ray is defined by an origin and a direction vector. The direction vector should ideally be normalized for consistent results,
+
+
+/////////////////////////////////
+// RaycastTilemapDDA - Perform DDA raycasting against a tilemap. This function implements the Digital Differential Analyzer (DDA) algorithm to efficiently traverse the grid of tiles in the tilemap along the path of the ray defined by the origin and direction.
+// The function returns RaycastHit with hit info if we hit a solid tile, or default RaycastHit with hit=false if no hit. The ray is defined by an origin and a direction vector. The direction vector should ideally be normalized for consistent results,
 // but the function can handle non-normalized directions as well.
 inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const TileMap& map, float maxDistance,
 									bool ignoreStartingCell = false,
@@ -392,6 +434,8 @@ inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const T
 		}
 	}
 
+	// If we exit the loop without finding a hit, we can optionally check the end point of the ray at maxDistance to see if it hits a solid tile. 
+	// This can help ensure we report hits at the max distance limit even if the ray passes very close to a tile boundary at that point.
 	const double endWorldX = origin.x + dxN * maxDistance;
 	const double endWorldY = origin.y + dyN * maxDistance;
 	const int endMapX = static_cast<int>(std::floor(endWorldX / map.tileSize));
@@ -425,3 +469,4 @@ inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const T
 
 	return result;
 }
+/////////////////////////////////

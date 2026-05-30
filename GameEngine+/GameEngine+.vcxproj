@@ -229,7 +229,6 @@
     <ClInclude Include="Includes.h" />
     <ClInclude Include="InputAction.h" />
     <ClInclude Include="InputController.h" />
-    <ClInclude Include="LevelEditor.h" />
     <ClInclude Include="LevelEditorScene.h" />
     <ClInclude Include="MusicSystem.h" />
     <ClInclude Include="MusicVisualizerScene.h" />

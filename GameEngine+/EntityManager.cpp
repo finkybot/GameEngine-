@@ -38,7 +38,7 @@ EntityManager::~EntityManager() {
 }
 
 Entity* EntityManager::CreateTileMapEntity(const TileMap& map) {
-	Entity* e = addEntity(EntityType::TileMap);
+	Entity* e = AddEntity(EntityType::TileMap);
 	if (!e)
 		return nullptr;
 
@@ -218,7 +218,7 @@ void EntityManager::AddTileMapAsEntities(const TileMap& map, int tileValueToTrea
 			float posX = x * map.tileSize;
 			float posY = y * map.tileSize;
 
-			Entity* e = addEntity(EntityType::TileMap);
+			Entity* e = AddEntity(EntityType::TileMap);
 			if (e) {
 				// When creating tile entities through AddTileMapAsEntities we mark them as static colliders.
 				e->AddComponent<CTransform>(Vec2(posX, posY), Vec2(0.0f, 0.0f));
@@ -301,7 +301,7 @@ void EntityManager::ProcessPending() {
 	// Do not run systems or rebuild spatial hash - caller may request full Update later in the frame.
 }
 
-Entity* EntityManager::addEntity(EntityType type) {
+Entity* EntityManager::AddEntity(EntityType type) {
 	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++));
 	entity->m_creationTime = std::chrono::high_resolution_clock::
 		now(); // Track creation time for entity (currently used for explosions but could be useful for other time-based logic in the future)
@@ -318,11 +318,11 @@ void EntityManager::KillEntity(Entity* entity) {
 	SetDeathCountThisFrame(GetDeathCountThisFrame() + 1);
 }
 
-EntityVector& EntityManager::getEntities() {
+EntityVector& EntityManager::GetEntities() {
 	return m_entities;
 }
 
-std::vector<Entity*>& EntityManager::getEntities(EntityType type) {
+std::vector<Entity*>& EntityManager::GetEntities(EntityType type) {
 	return m_entityMap[type];
 }
 

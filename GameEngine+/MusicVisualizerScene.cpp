@@ -24,7 +24,7 @@
 // Spawn a single audio-reactive explosion entity with random size, color, and position.
 // Called when audio level exceeds threshold and cooldown has elapsed.
 void MusicVisualizerScene::SpawnAudioReactiveExplosion(bool resetSpawnTimer) {
-	Entity* spawnedEntity = m_entityManager.addEntity(EntityType::Explosion);
+	Entity* spawnedEntity = m_entityManager.AddEntity(EntityType::Explosion);
 	if (!spawnedEntity)
 		return;
 
@@ -60,7 +60,7 @@ void MusicVisualizerScene::SpawnAudioReactiveExplosion(bool resetSpawnTimer) {
 void MusicVisualizerScene::InitializeEqualizerBars(size_t visualCount) {
 	// Remove existing equalizer bars if bandCount changed
 	std::vector<Entity*> toRemove;
-	for (auto& e : m_entityManager.getEntities()) {
+	for (auto& e : m_entityManager.GetEntities()) {
 		if (e->GetType() == EntityType::Equalizer) {
 			toRemove.push_back(e.get());
 		}
@@ -80,7 +80,7 @@ void MusicVisualizerScene::InitializeEqualizerBars(size_t visualCount) {
 
 	// Create 'n' bars evenly spaced across the bottom of the window, with some margin on the sides. Bars start with a small height and low alpha so they are visible even before the first update.
     for (size_t i = 0; i < n; ++i) {
-		Entity* be = m_entityManager.addEntity(EntityType::Equalizer);
+		Entity* be = m_entityManager.AddEntity(EntityType::Equalizer);
 		if (!be) continue;
 		float cx = margin + (static_cast<float>(i) + 0.5f) * barWidth;
 		float bwidth = barWidth * 0.9f;
@@ -105,7 +105,7 @@ void MusicVisualizerScene::InitializeEqualizerBars(size_t visualCount) {
 
 // Set all equalizer bars to invisible by shrinking and setting alpha to 0. Called when music stops or visualizer is toggled off.
 void MusicVisualizerScene::HideEqualizerBars() {
-	auto& pool = m_entityManager.getEntities(EntityType::Equalizer);
+	auto& pool = m_entityManager.GetEntities(EntityType::Equalizer);
 	for (Entity* e : pool) {
 		if (!e) continue;
 		if (auto shape = e->GetComponent<CShape>()) {
@@ -121,7 +121,7 @@ void MusicVisualizerScene::HideEqualizerBars() {
 // Update pre-allocated equalizer bars based on spectrum bands
 void MusicVisualizerScene::UpdateEqualizerBars(const std::vector<float>& bands) {
     // allow empty bands to clear/fade bars
-	auto& ents = m_entityManager.getEntities(EntityType::Equalizer);
+	auto& ents = m_entityManager.GetEntities(EntityType::Equalizer);
 	size_t n = bands.size();
 	size_t m = ents.size();
 	if (m == 0) return;
@@ -197,7 +197,7 @@ void MusicVisualizerScene::UpdateEqualizerBars(const std::vector<float>& bands) 
 
 // Similar to SpawnCircularExplosion but size scales with the provided music level (0.0 - 1.0 expected range)
 void MusicVisualizerScene::SpawnCircularExplosionByLevel(float level, bool resetSpawnTimer) {
-	Entity* spawnedEntity = m_entityManager.addEntity(EntityType::Explosion);
+	Entity* spawnedEntity = m_entityManager.AddEntity(EntityType::Explosion);
 	if (!spawnedEntity)
 		return;
 
@@ -261,7 +261,7 @@ void MusicVisualizerScene::SpawnCircularExplosionByLevel(float level, bool reset
 // Spawn explosions in a deterministic circular pattern around screen center.
 // Each spawn advances the angle by m_circularSpeed and places the explosion on the circle of radius m_circularRadius.
 void MusicVisualizerScene::SpawnCircularExplosion(bool resetSpawnTimer) {
-	Entity* spawnedEntity = m_entityManager.addEntity(EntityType::Explosion);
+	Entity* spawnedEntity = m_entityManager.AddEntity(EntityType::Explosion);
 	if (!spawnedEntity)
 		return;
 
@@ -331,7 +331,7 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 		if (m_EqualizerActive) {
 			if (m_musicEntity) /* Ensure equalizer pool exists */ {
 				if (auto ms = m_entityManager.GetMusicSystem()) {
-					auto& pool = m_entityManager.getEntities(EntityType::Equalizer);
+					auto& pool = m_entityManager.GetEntities(EntityType::Equalizer);
 					if (pool.empty()) {
 						size_t bands = ms->GetSpectrumBandCount();
 						if (bands == 0) bands = 8;
@@ -422,7 +422,7 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			}
 
 			// Show how many equalizer bar entities are currently active
-			auto& pool = m_entityManager.getEntities(EntityType::Equalizer);
+			auto& pool = m_entityManager.GetEntities(EntityType::Equalizer);
 			ImGui::Text("Active Equalizer Bars: %d", (int)pool.size());
 		}
 
@@ -880,7 +880,7 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 					}
 
 					// create a new music entity with a CMusic component for the selected file
-					Entity* musicEntity = m_entityManager.addEntity(EntityType::Default);
+					Entity* musicEntity = m_entityManager.AddEntity(EntityType::Default);
 					// add the componenent and music if we have an entity
 					if (musicEntity) {
 						LoadMusicFromPath(sel);
@@ -903,7 +903,7 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 				m_entityManager.Update(0.0f);
 				m_musicEntity = nullptr;
 			}
-			Entity* musicEntity = m_entityManager.addEntity(EntityType::Default);
+			Entity* musicEntity = m_entityManager.AddEntity(EntityType::Default);
 
 			// add the componenent and music if we have an entity bla bla bla, same as the double-click handler (might be better to refactor this into a helper function)
 			if (musicEntity) {
@@ -1162,7 +1162,7 @@ void MusicVisualizerScene::Update(float deltaTime) {
 					} else {
 						// No per-band spectrum available; fall back to overall level so bars still react
 						float lvl = ms->GetLevel(m_musicEntity->GetId());
-						auto& pool = m_entityManager.getEntities(EntityType::Equalizer);
+						auto& pool = m_entityManager.GetEntities(EntityType::Equalizer);
 						size_t poolSize = pool.size();
 						if (poolSize == 0) poolSize = ms->GetSpectrumBandCount();
 						if (poolSize == 0) poolSize = 8;
@@ -1276,7 +1276,7 @@ void MusicVisualizerScene::LoadMusicFromPath(const std::string& path) {
 		m_entityManager.Update(0.0f);
 		m_musicEntity = nullptr;
 	}
-	Entity* musicEntity = m_entityManager.addEntity(EntityType::Default);
+	Entity* musicEntity = m_entityManager.AddEntity(EntityType::Default);
 
 	// Guard: No entity created, return early
 	if (!musicEntity)
@@ -1319,7 +1319,7 @@ void MusicVisualizerScene::UpdateExplosions() {
 	auto now = std::chrono::high_resolution_clock::now();
 
 	// Iterate through all entities and process those that are explosions
-	for (auto& entity : m_entityManager.getEntities()) {
+	for (auto& entity : m_entityManager.GetEntities()) {
 		if (entity->GetType() == EntityType::Explosion) {
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
 				now - entity->m_creationTime); // Calculate how long the explosion has been alive in milliseconds

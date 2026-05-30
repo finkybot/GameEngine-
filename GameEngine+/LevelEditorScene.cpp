@@ -43,7 +43,7 @@ LevelEditorScene::~LevelEditorScene() {
 // maximum number of loaded chunks allowed in memory at once. This setup allows the level editor to manage the camera view and efficiently load and save chunks of the level as needed.
 void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	// create camera entity
-	m_cameraEntity = GetEntityManager().addEntity(EntityType::Default);
+	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Default);
 	m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
 	auto cam = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
 	cam->m_isMainCamera = true;

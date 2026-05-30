@@ -388,7 +388,7 @@ float Clamp(float val, float min, float max) {
 	return val;
 }
 
-const char* readFile(const char* filePath) {
+const char* ReadFile(const char* filePath) {
 	FILE* file = nullptr;
 	fopen_s(&file, filePath, "r");
 

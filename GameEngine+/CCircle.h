@@ -1,4 +1,11 @@
-// ***** CCircle.h - Header file for CCircle class, Component for circle shapes *****
+/////////////////////////////////
+// CCircle.h - header file for the CCircle component in the GameEngine+ project
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Include guards and necessary headers for the CCircle component. We include the base CShape component, SFML graphics headers for shapes and rendering, and a custom Vec2 class for 2D vector operations.
 #pragma once
 #include "CShape.h"
 #include <SFML/Graphics/Shape.hpp>
@@ -8,43 +15,96 @@
 #include <SFML/System/Vector2.hpp>
 #include <string>
 #include "Vec2.h"
+/////////////////////////////////
+ 
 
-// / CCircle component - represents a circle shape with properties and methods for drawing, movement, and collision handling
+
+/////////////////////////////////
+// CCircle component - represents a circle shape with properties and methods for drawing, movement, and collision handling
 class CCircle : public CShape {
+	/////////////////////////////////
+	// Public data members for CCircle
 public:
 	sf::CircleShape m_circle; // SFML CircleShape object representing the visual circle shape
+	/////////////////////////////////
+	 
+	
 
-	//  ***** Protected member variables for shape-specific properties *****
+	/////////////////////////////////
+	// Protected method to apply position to the underlying SFML shape.
 protected:
 	void ApplyPosition(float x, float y) override { m_circle.setPosition(sf::Vector2f(x, y)); }
+	/////////////////////////////////
 
-	//  ***** Public methods for shape manipulation and rendering *****
+
+
+	/////////////////////////////////
+	// Public methods for shape manipulation and rendering
 public:
+	/////////////////////////////////
+	// Constructors for the CCircle component. The default constructor initializes the circle with default properties, while the constructor with a size parameter initializes the circle with a specified radius.
 	CCircle();			 // Default constructor - initializes the circle with default properties
 	CCircle(float size); // Constructor with size parameter - initializes the circle with a specified radius
+	/////////////////////////////////
 
-	float GetHeight() const override {
-		return m_circle.getRadius() * 2.f;
-	} // Get the height (diameter) of the circle, which is twice the radius
-	float GetMidLength() const override {
-		return m_midLength;
-	} // Get the mid-length property, which for a circle is equivalent to the radius
-	float GetRadius() const override { return m_circle.getRadius(); } // Get the radius of the circle shape
-	float GetWidth() const override {
-		return m_circle.getRadius() * 2.f;
-	} // Get the width (diameter) of the circle, which is twice the radius
 
-	sf::Color GetColor() const {
-		return m_circle.getFillColor();
-	} // Get the current fill color of the circle shape as an SFML Color object
+
+	/////////////////////////////////
+	// GetHeight - returns the height of the circle shape, which is equivalent to the diameter (twice the radius).
+	float GetHeight() const override {	return m_circle.getRadius() * 2.f; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// GetMidLength - returns the mid-length property of the circle shape, which is equivalent to the radius.
+	// where the mid-length is defined as the distance from the center to the edge of the shape.
+	float GetMidLength() const override { return m_midLength; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// GetRadius - returns the radius of the circle shape.
+	float GetRadius() const override { return m_circle.getRadius(); }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// GetWidth - returns the width of the circle shape, which is equivalent to the diameter (twice the radius). 
+	float GetWidth() const override { return m_circle.getRadius() * 2.f;}
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// GetColor - returns the current fill color of the circle shape as an SFML Color object.
+	sf::Color GetColor() const { return m_circle.getFillColor(); }
 	sf::Shape& GetShape() override {
 		return m_circle;
-	} // Get a reference to the underlying SFML shape (used for drawing and collision detection)
-	Vec2 GetCentrePoint() const
-		override; // Get the center point of the circle shape, which is the position plus the radius in both x and y directions
+	}
+	/////////////////////////////////
 
-	void SetColor(
-		float r, float g, float b,
-		int alpha); // Set the fill color of the circle shape using RGBA values (alpha is an integer in the range [0, 255])
-	void SetRadius(float radius) override { m_circle.setRadius(radius); } // Set the radius of the circle shape
+
+
+	/////////////////////////////////
+	// GetCentrePoint - returns the center point of the circle shape as a Vec2 object. The center point is calculated as the position of the circle plus the radius in both x and y directions, since SFML circles are positioned at their top-left corner.
+	Vec2 GetCentrePoint() const	override;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// SetColor - sets the fill color of the circle shape using RGBA values. The r, g, and b parameters are floats representing the red, green, and blue components of the color (in the range [0.0f, 255.0f]), while the alpha parameter is an integer representing the opacity (in the range [0, 255]).
+	void SetColor(float r, float g, float b, int alpha);
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// SetRadius - sets the radius of the circle shape. This method updates the radius of the underlying SFML CircleShape object, which in turn affects the size and position of the circle when drawn.
+	void SetRadius(float radius) override { m_circle.setRadius(radius); }
+	/////////////////////////////////
 };
+/////////////////////////////////

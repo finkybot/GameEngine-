@@ -1,18 +1,45 @@
-// ***** AssetManager.h - Header file for AssetManager class *****
+/////////////////////////////////
+// AssetManager.h
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes and necessary headers for the AssetManager class.
 #pragma once
 #include <filesystem>
 #include <iostream>
 #include <vector>
 #include <string>
+/////////////////////////////////
 
-namespace fs = std::filesystem; // Namespace for standard template filesystem
 
+
+/////////////////////////////////
+// Namespace alias for filesystem to simplify code and improve readability when working with file paths and directories in the AssetManager class.
+namespace fs = std::filesystem;
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 /// AssetManager class responsible for loading and managing game assets such as textures, sounds, etc.
 class AssetManager {
+	/////////////////////////////////
+	// Public interface for the AssetManager class
 public:
-	// Enforce explicit construction of AssetManager
+	/////////////////////////////////
+	// Constructor for the AssetManager class. Initializes the asset manager with a specified root path where assets are stored. This root path will be 
+	// used as the base directory for loading assets, allowing for organized asset management and easy retrieval of assets based on their relative paths within the root directory.
+	// Enforced to be explicit to prevent accidental implicit conversions from string literals, which could lead to unintended behavior when creating an AssetManager instance.
 	explicit AssetManager(const std::string& rootPath) : root(rootPath) {}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// ListAssets - lists all assets in a specified subdirectory with a given file extension. This method recursively searches through the specified subdirectory within the root directory and 
+	// collects paths of all files that match the specified extension, allowing for easy retrieval of assets based on their type (e.g., ".png" for textures, ".wav" for sounds) and organization within the asset directory structure.
 	std::vector<fs::path> listAssets(const std::string& subDir, const std::string& ext) const {
 		std::vector<fs::path> assets; // Vector to hold the paths of the assets found
 		fs::path dir = root / subDir; // Construct the full path to the subdirectory containing the assets
@@ -31,7 +58,16 @@ public:
 		}
 		return assets;
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Private member variable/s for the AssetManager class
 private:
+	/////////////////////////////////
+	// Root path for asset storage. This is the base directory where all assets are stored, and it will be used as a prefix for all asset loading operations.
 	fs::path root;
+	/////////////////////////////////
 };
+/////////////////////////////////

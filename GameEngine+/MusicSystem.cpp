@@ -239,7 +239,7 @@ void MusicSystem::Update(float deltaSeconds) {}
 void MusicSystem::Process() {
 	// Clean up active music instances for entities that no longer have a CMusic component
 	std::unordered_set<size_t> liveIds;
-	for (const auto& entity : m_entityManager.getEntities()) {
+	for (const auto& entity : m_entityManager.GetEntities()) {
 		if (entity->HasComponent<CMusic>())
 			liveIds.insert(entity->GetId());
 	}
@@ -261,7 +261,7 @@ void MusicSystem::Process() {
 	}
 
 	// Process all entities with a CMusic component
-	for (const auto& entity : m_entityManager.getEntities()) {
+	for (const auto& entity : m_entityManager.GetEntities()) {
 		if (!entity->HasComponent<CMusic>())
 			continue;
 

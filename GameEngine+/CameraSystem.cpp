@@ -1,22 +1,48 @@
+/////////////////////////////////
+// CameraSystem.cpp
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes and namespace aliases for the CameraSystem implementation. We include necessary headers for the camera system, entity management, and random number generation for camera shake effects.
 #include "CameraSystem.h"
 #include "Entity.h"
 #include <unordered_map>
 #include <random>
+/////////////////////////////////
 
+
+
+
+/////////////////////////////////
+// Struct to hold shake data for each camera. This includes the base position of the camera before shaking, the magnitude of the shake effect, and the remaining duration of the shake effect.
 struct ShakeData {
 	Vec2 basePosition;
 	float magnitude = 0.0f;
 	float duration = 0.0f;
 };
+/////////////////////////////////
 
+
+
+
+/////////////////////////////////
 // Static map to track shake data for each camera. This allows us to store the original position, magnitude, and duration of the shake effect for each camera that is currently shaking.
 static std::unordered_map<CCamera*, ShakeData> s_shakeDataMap;
+/////////////////////////////////
+ 
+ 
 
- // Random number generator for shake offsets, why mt19937? (I don't fucking know but AI recommended it, saying it's a good general-purpose RNG with better randomness quality than rand()).
+/////////////////////////////////
+// Random number generator for shake offsets, why mt19937? (I don't fucking know but AI recommended it, saying it's a good general-purpose RNG with better randomness quality than rand()).
 static std::mt19937 s_rng(std::random_device{}());
+/////////////////////////////////
 
 
-// Update method for the CameraSystem, called once per frame. This is where we will process camera shake effects and update camera positions based on their target entities.
+
+/////////////////////////////////
+// Update method for the CameraSystem. This method is called every frame and is responsible for updating the position of active cameras based on their shake effects and smooth following behavior.
 void CameraSystem::Update(float deltaTime, EntityManager& entityManager) {
 	// Update camera shake timers and smoothing for active cameras
 	for (auto& uniquePtr : entityManager.getEntities()) {

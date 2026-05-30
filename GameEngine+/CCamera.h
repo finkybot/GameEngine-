@@ -1,8 +1,20 @@
-// ****** Camera.h ******
+/////////////////////////////////
+// CCamera.h
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes and forward declarations for the CCamera component. We include necessary headers for component handling and 2D vector math.
 #pragma once
 #include "Component.h"
 #include "Vec2.h"
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// CCamera component - represents a camera in the game world, with properties for position, zoom, rotation, viewport size, and camera shake effects.
 class CCamera : public Component {
 public:
 	CCamera() = default;
@@ -22,3 +34,4 @@ public:
 
 	float m_smoothness = 0.1f; // Smoothness factor for camera movement (0.0 = instant, higher values = smoother)
 };
+/////////////////////////////////

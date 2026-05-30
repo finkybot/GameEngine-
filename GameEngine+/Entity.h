@@ -1,4 +1,11 @@
-// ***** Entity.h - Entity class definition *****
+/////////////////////////////////
+// ***** Entity.h
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes and forward declarations for the Entity class. We include necessary headers for string manipulation, memory management, component handling, and various component types used in the game.
 #pragma once
 #include <string>
 #include <memory>
@@ -11,9 +18,15 @@
 #include "CLayer.h"
 #include "Vec2.h"
 #include "EntityType.h"
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // Entity class - represents a game object with a unique ID, type, and a collection of components.
 class Entity {
+	/////////////////////////////////
+	// Private members and friend declaration. Only the EntityManager can create and manage entities, so the constructor is private and EntityManager is declared as a friend class.
 private:
 	friend class EntityManager; // Only EntityManager can create and manage entities, so constructor is private.
 
@@ -26,31 +39,52 @@ private:
 
     // Private constructor, only callable by EntityManager
 	Entity(EntityType type, size_t id);
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Public interface for entity manipulation and component management.
 public:
-    // Rendering layer for the entity. Default to Mid so most entities draw in the main layer.
-	// Backward-compatible with new CLayer component: if CLayer exists, renderer will prefer it;
-	// otherwise these accessors provide a fallback stored on the entity.
+    // Rendering layer for the entity. Default to Mid so most entities draw in the main layer. Backward-compatible with new CLayer component: 
+	// if CLayer exists, renderer will prefer it; otherwise these accessors provide a fallback stored on the entity.
 	enum class Layer { Background = 0, Mid = 1, Foreground = 2, Overlay = 3 };
 
-    // Layer accessors for rendering ordering (component-first, fallback to entity-level)
+
+
+	/////////////////////////////////
+	// Get the rendering layer for the entity. If a CLayer component exists, its layer will be returned; otherwise, the layer stored at the entity level will be returned for backward compatibility.
 	Layer GetLayer() const {
 		if (auto cl = GetComponent<CLayer>()) {
 			return static_cast<Layer>(cl->m_layer);
 		}
 		return m_layer;
 	}
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Set the rendering layer for the entity. If a CLayer component exists, it will be updated; otherwise, the layer will be stored at the entity level for backward compatibility.
 	void SetLayer(Layer layer) {
 		if (auto cl = GetComponent<CLayer>()) {
 			cl->m_layer = static_cast<CLayer::Layer>(layer);
 		}
 		m_layer = layer;
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Public member variable to track the creation time of the entity, used for time-based logic such as explosion lifespan
 	std::chrono::high_resolution_clock::time_point m_creationTime;
 	size_t GetId() const { return m_id; }
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Template method to add a component of type T to the entity, forwarding any constructor arguments. Returns a pointer to the added component for convenience.
 	template <typename T, typename... Args>
 	T* AddComponent(Args&&... args) {
@@ -60,7 +94,11 @@ public:
 		m_components[std::type_index(typeid(T))] = std::move(comp);
 		return ptr;
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Template method to add a component of type T to the entity using a unique_ptr. This allows for more complex component construction outside of the entity. Returns a pointer to the added component for convenience.
 	template <typename T>
 	T* AddComponentPtr(std::unique_ptr<T> comp) {
@@ -69,7 +107,11 @@ public:
 		m_components[std::type_index(typeid(T))] = std::move(comp);
 		return ptr;
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Template method to get a pointer to a component of type T. Returns nullptr if the component does not exist on the entity.
 	template <typename T>
 	T* GetComponent() {
@@ -80,7 +122,11 @@ public:
 		}
 		return nullptr;
 	}
+	/////////////////////////////////
+	
 
+
+	/////////////////////////////////
 	// Const version of GetComponent to allow access to components on const entities. Returns nullptr if the component does not exist on the entity.
 	template <typename T>
 	const T* GetComponent() const {
@@ -91,21 +137,33 @@ public:
 		}
 		return nullptr;
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Template method to check if the entity has a component of type T. Returns true if the component exists, false otherwise.
 	template <typename T>
 	bool HasComponent() const {
 		static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
 		return m_components.find(std::type_index(typeid(T))) != m_components.end();
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Template method to remove a component of type T from the entity. If the component does not exist, this method does nothing.
 	template <typename T>
 	void RemoveComponent() {
 		static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
 		m_components.erase(std::type_index(typeid(T)));
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Convenience methods to get specific components commonly used in the game. These methods return nullptr if the component does not exist on the entity.
 	CShape* GetShape() { return GetComponent<CShape>(); }			  // Get the CShape component of the entity
 	CTransform* GetTransform() { return GetComponent<CTransform>(); } // Get the CTransform component of the entity
@@ -115,64 +173,106 @@ public:
 	void SetType(EntityType type) { m_type = type; } // Set the type of the entity
 	bool IsAlive() const;							 // Check if the entity is alive (not marked for destruction)
 	void Destroy();									 // Mark the entity for destruction
+	/////////////////////////////////
+	
 
+
+	/////////////////////////////////
 	// Convenience methods to get properties from the CShape component if it exists, or return default values if the component is not present.
 	inline Vec2 GetCentrePoint() const {
 		auto shape = GetComponent<CShape>();
 		return shape ? shape->GetCentrePoint() : Vec2::Zero;
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Get the mid-length property from the CShape component, which is used for collision detection and quadtree inclusion (I dont use the quadtree anymore).
 	inline float GetMidLength() const {
 		auto shape = GetComponent<CShape>();
 		return shape ? shape->GetMidLength() : 0.0f;
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Get the width of the bounding box from the CShape component, or return 0 if the component does not exist.
 	inline float GetWidth() const {
 		auto shape = GetComponent<CShape>();
 		return shape ? shape->GetWidth() : 0.0f;
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Get the height of the bounding box from the CShape component, or return 0 if the component does not exist.
 	inline float GetHeight() const {
 		auto shape = GetComponent<CShape>();
 		return shape ? shape->GetHeight() : 0.0f;
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Get the position from the CTransform component, or return a reference to a default zero vector if the component does not exist.
 	inline const Vec2& GetPosition() const noexcept {
 		auto transform = GetComponent<CTransform>();
 		if (transform)
 			return transform->m_position;
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Get the radius from the CShape component, or return 0 if the component does not exist.
 	inline float GetRadius() const {
 		auto shape = GetComponent<CShape>();
 		return shape ? shape->GetRadius() : 0.0f;
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Get the center point of the shape from the CShape component, or return a zero vector if the component does not exist.
 	static inline Vec2 GetCentre(Entity& e) { return e.GetCentrePoint(); }
+	/////////////////////////////////
+	
 
+
+	/////////////////////////////////
 	// Set the mid-length property on the CShape component if it exists
 	void SetMidLength(float length) {
 		auto shape = GetComponent<CShape>();
 		if (shape)
 			shape->SetMidLength(length);
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Bucket metadata for incremental per-layer rendering maintenance
-	// bucket id: which layer bucket the entity is in (-1 = none)
-	int GetBucketId() const { return m_bucketId; }
-	int GetBucketPos() const { return m_bucketPos; }
-	void SetBucketInfo(int bucketId, int bucketPos) { m_bucketId = bucketId; m_bucketPos = bucketPos; }
+	int GetBucketId() const { return m_bucketId; } // Get the bucket ID for the entity, which indicates which layer bucket it belongs to for rendering optimization. Returns -1 if the entity is not currently in a bucket.
+	int GetBucketPos() const { return m_bucketPos; } // Get the position of the entity within its bucket. Returns -1 if the entity is not currently in a bucket.
+	void SetBucketInfo(int bucketId, int bucketPos) { m_bucketId = bucketId; m_bucketPos = bucketPos; } // Set the bucket information for the entity, indicating which layer bucket it belongs to and its position within that bucket. This is used for incremental rendering maintenance to optimize drawing performance.
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Private member variables and methods for internal state management. These are not accessible outside of the Entity class and are used to manage the entity's rendering layer and bucket metadata for rendering optimization.
 private:
 	// Backing field for render layer (default Mid)
 	Layer m_layer = Layer::Mid;
     // per-entity bucket metadata for EntityManager layer buckets
 	int m_bucketId = -1;
 	int m_bucketPos = -1;
+	/////////////////////////////////
 };
+/////////////////////////////////

@@ -1,5 +1,9 @@
-// ChunkManager.cpp - Implementation of the ChunkManager class for managing tile-based chunks in a game world. This class handles loading, saving, and managing chunks of tiles, including background loading and eviction of least recently used chunks when memory limits are exceeded.
+/////////////////////////////////
+// ChunkManager.cpp - Implementation of the ChunkManager class for managing tile-based chunks in a game world. This class handles loading, saving, and managing chunks of tiles, 
+// including background loading and eviction of least recently used chunks when memory limits are exceeded.
 
+/////////////////////////////////
+// Includes and namespace aliases for the ChunkManager implementation. We include necessary headers for file I/O, threading, synchronization, and SFML graphics.
 #include "ChunkManager.h"
 #include <algorithm>
 #include <cmath>
@@ -16,13 +20,19 @@ namespace fs = std::filesystem;
 #include "CRectangle.h"
 #include "CStatic.h"
 #include "CTransform.h"
+/////////////////////////////////
 
 
+
+/////////////////////////////////
 // Static members for background loading; pending chunks are stored in a thread-safe queue and processed in the main thread
 static std::mutex s_pendingMutex; // Mutex to protect access to the pending chunks queue
 static std::vector<std::tuple<int, int, std::vector<int>, uint32_t>> s_pendingChunks; // Queue of chunks pending loading (cx, cy, tiles, editVersion at enqueue)
+/////////////////////////////////
 
 
+
+/////////////////////////////////
 // ****** ChunkManager Implementation ******
 // Constructor - initializes the ChunkManager with specified chunk dimensions and tile size. Default values are provided for convenience.
 ChunkManager::ChunkManager(int chunkWidth, int chunkHeight, float tileSize) : m_chunkWidth(chunkWidth), m_chunkHeight(chunkHeight), m_tileSize(tileSize) {
@@ -37,7 +47,13 @@ ChunkManager::ChunkManager(int chunkWidth, int chunkHeight, float tileSize) : m_
 		}
 
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// LoadAllSavedChunks - Scans the base directory for saved chunk files and enqueues them for loading in the background thread. 
+// Each chunk file is expected to be named in the format "chunk_X_Y.dat" where X and Y are the chunk coordinates.
 void ChunkManager::LoadAllSavedChunks() {
 	if (m_basePath.empty()) return;
 	try {
@@ -56,7 +72,13 @@ void ChunkManager::LoadAllSavedChunks() {
 		}
 	} catch(...) {}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// SetBasePath - Sets the base directory path where chunk files will be saved and loaded from. This method ensures that the directory exists and is writable, creating it if necessary. 
+// The base path is used as a prefix for all chunk file operations, allowing for organized storage of chunk data on disk.
 void ChunkManager::SetBasePath(const std::string& basePath) {
 	m_basePath = basePath;
 	if (!m_basePath.empty()) {
@@ -70,329 +92,297 @@ void ChunkManager::SetBasePath(const std::string& basePath) {
 		}
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// RebuildAllChunksFromTileset - Rebuilds the vertex arrays for all loaded chunks using the current tileset atlas. This is called when the tileset changes to update the visual representation of all chunks.
 void ChunkManager::RebuildAllChunksFromTileset() {
+	// Fetch atlas once outside the per-chunk loop
+	std::shared_ptr<TextureAtlas> atlasPtr;
+	if (!m_tilesetKey.empty()) {
+		auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
+		if (atlasOpt.has_value() && *atlasOpt) atlasPtr = *atlasOpt;
+	}
+
 	std::lock_guard<std::mutex> lock(m_mutex);
-	for (auto &pr : m_chunks) {
-		auto &chunk = pr.second;
-		chunk.vertexArray.clear();
-		chunk.vertexArray.setPrimitiveType(sf::PrimitiveType::Triangles);
-		chunk.vertexTexture.reset();
-		std::shared_ptr<TextureAtlas> atlasPtr;
-		if (!m_tilesetKey.empty()) {
-			auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
-			if (atlasOpt.has_value() && *atlasOpt) {
-				atlasPtr = *atlasOpt;
-				chunk.vertexTexture = atlasPtr->GetTexture();
+	for (auto& pr : m_chunks) {
+		BuildChunkVertexArray(pr.second, atlasPtr);
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// BuildChunkVertexArray - Builds the sf::VertexArray for a chunk from its tile data. Called from RebuildAllChunksFromTileset, FinalizeLoadedChunk, and SetTileAt.
+// Pass a nullptr atlas to use the solid-colour fallback.
+void ChunkManager::BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<TextureAtlas>& atlas) {
+	chunk.vertexArray.clear();
+	chunk.vertexArray.setPrimitiveType(sf::PrimitiveType::Triangles);
+	chunk.vertexTexture.reset();
+	if (atlas) chunk.vertexTexture = atlas->GetTexture();
+
+	const float ts = chunk.tileSize;
+	const int baseX = chunk.chunkX * chunk.width;
+	const int baseY = chunk.chunkY * chunk.height;
+	// pre-reserve: worst case every tile is solid (6 vertices per tile)
+	chunk.vertexArray.resize(0); // clear without dealloc
+
+	for (int y = 0; y < chunk.height; ++y) {
+		for (int x = 0; x < chunk.width; ++x) {
+			int v = chunk.tiles[y * chunk.width + x];
+			if (v == 0) continue;
+			const float px = (baseX + x) * ts;
+			const float py = (baseY + y) * ts;
+
+			bool usedTexture = false;
+			sf::Vector2f uv00, uv11;
+			if (atlas) {
+				auto rectOpt = atlas->GetSfFloatRectForTile((size_t)(v - 1));
+				if (rectOpt.has_value()) {
+					const sf::FloatRect& fr = *rectOpt;
+					uv00 = { fr.position.x, fr.position.y };
+					uv11 = { fr.position.x + fr.size.x, fr.position.y + fr.size.y };
+					usedTexture = true;
+				}
 			}
-		// no debug logging
-		}
-		for (int y = 0; y < chunk.height; ++y) {
-			for (int x = 0; x < chunk.width; ++x) {
-				int v = chunk.tiles[y * chunk.width + x];
-				if (v == 0) continue;
-				float px = (chunk.chunkX * chunk.width + x) * chunk.tileSize;
-				float py = (chunk.chunkY * chunk.height + y) * chunk.tileSize;
-				bool usedTexture = false;
-				sf::Vector2f uv00(0.f, 0.f), uv11(0.f, 0.f);
-				if (atlasPtr) {
-					// map stored tile value (1-based) to atlas 0-based index
-					size_t atlasIdx = (size_t)(v - 1);
-					auto rectOpt = atlasPtr->GetSfFloatRectForTile(atlasIdx);
-					if (rectOpt.has_value()) {
-						sf::FloatRect fr = *rectOpt;
-						uv00 = sf::Vector2f(fr.position.x, fr.position.y);
-						uv11 = sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y);
-						usedTexture = true;
-					}
-				}
-				if (usedTexture && chunk.vertexTexture) {
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px, py), sf::Color::White, uv00));
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px + chunk.tileSize, py), sf::Color::White, sf::Vector2f(uv11.x, uv00.y)));
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px + chunk.tileSize, py + chunk.tileSize), sf::Color::White, uv11));
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px, py), sf::Color::White, uv00));
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px + chunk.tileSize, py + chunk.tileSize), sf::Color::White, uv11));
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px, py + chunk.tileSize), sf::Color::White, sf::Vector2f(uv00.x, uv11.y)));
-				} else {
-					sf::Vertex vv0(sf::Vector2f(px, py), sf::Color(120, 120, 120, 200));
-					sf::Vertex vv1(sf::Vector2f(px + chunk.tileSize, py), sf::Color(120, 120, 120, 200));
-					sf::Vertex vv2(sf::Vector2f(px + chunk.tileSize, py + chunk.tileSize), sf::Color(120, 120, 120, 200));
-					sf::Vertex vv3(sf::Vector2f(px, py + chunk.tileSize), sf::Color(120, 120, 120, 200));
-					chunk.vertexArray.append(vv0);
-					chunk.vertexArray.append(vv1);
-					chunk.vertexArray.append(vv2);
-					chunk.vertexArray.append(vv0);
-					chunk.vertexArray.append(vv2);
-					chunk.vertexArray.append(vv3);
-				}
+
+			if (usedTexture && chunk.vertexTexture) {
+				chunk.vertexArray.append({ {px,      py      }, sf::Color::White, uv00 });
+				chunk.vertexArray.append({ {px + ts, py      }, sf::Color::White, {uv11.x, uv00.y} });
+				chunk.vertexArray.append({ {px + ts, py + ts }, sf::Color::White, uv11 });
+				chunk.vertexArray.append({ {px,      py      }, sf::Color::White, uv00 });
+				chunk.vertexArray.append({ {px + ts, py + ts }, sf::Color::White, uv11 });
+				chunk.vertexArray.append({ {px,      py + ts }, sf::Color::White, {uv00.x, uv11.y} });
+			} else {
+				constexpr sf::Color fallback(120, 120, 120, 200);
+				chunk.vertexArray.append({ {px,      py      }, fallback });
+				chunk.vertexArray.append({ {px + ts, py      }, fallback });
+				chunk.vertexArray.append({ {px + ts, py + ts }, fallback });
+				chunk.vertexArray.append({ {px,      py      }, fallback });
+				chunk.vertexArray.append({ {px + ts, py + ts }, fallback });
+				chunk.vertexArray.append({ {px,      py + ts }, fallback });
 			}
 		}
 	}
 }
+/////////////////////////////////
 
-// DrawChunks - Renders the visible chunks to the provided SFML RenderWindow based on the current view. This method computes which chunks are visible within the view's AABB and draws them accordingly. 
-// Chunks that are not ready for rendering will be drawn with a semi-transparent overlay to indicate they are still loading.
+
+
+/////////////////////////////////
+// DrawChunks - Renders visible chunks. Copies only a lightweight draw-info struct (no tiles vector) to minimise lock time.
 void ChunkManager::DrawChunks(sf::RenderWindow& window, const sf::View& view) {
-	// Compute view AABB
-	sf::Vector2f viewCenter = view.getCenter();
-	sf::Vector2f viewSize = view.getSize();
-	float vleft = viewCenter.x - viewSize.x * 0.5f;
-	float vtop = viewCenter.y - viewSize.y * 0.5f;
-	float vright = vleft + viewSize.x;
-	float vbottom = vtop + viewSize.y;
+	const sf::Vector2f viewCenter = view.getCenter();
+	const sf::Vector2f viewSize   = view.getSize();
+	const float vleft   = viewCenter.x - viewSize.x * 0.5f;
+	const float vtop    = viewCenter.y - viewSize.y * 0.5f;
+	const float vright  = vleft + viewSize.x;
+	const float vbottom = vtop  + viewSize.y;
 
-	// Collect visible chunks under lock (copy them so we don't hold lock while drawing)
-	std::vector<Chunk> visibleCopies;
+	struct DrawInfo {
+		sf::VertexArray              vertexArray;
+		std::shared_ptr<sf::Texture> vertexTexture;
+		bool readyForRendering = false;
+		int  chunkX = 0, chunkY = 0, width = 0, height = 0;
+		float tileSize = 32.f;
+	};
+	std::vector<DrawInfo> visible;
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
+		visible.reserve(32);
 		for (const auto& pr : m_chunks) {
 			const Chunk& c = pr.second;
 			if (c.width <= 0 || c.height <= 0) continue;
-			if ((int)c.tiles.size() < c.width * c.height) continue;
-			float cx = (float)(c.chunkX * c.width) * c.tileSize;
-			float cy = (float)(c.chunkY * c.height) * c.tileSize;
-			float cright = cx + (float)c.width * c.tileSize;
-			float cbottom = cy + (float)c.height * c.tileSize;
-			// AABB overlap test (half-open)
-			if (!(cright <= vleft || cx >= vright || cbottom <= vtop || cy >= vbottom)) {
-				visibleCopies.push_back(c);
-			}
+			const float cx      = (float)(c.chunkX * c.width)  * c.tileSize;
+			const float cy      = (float)(c.chunkY * c.height) * c.tileSize;
+			const float cright  = cx + (float)c.width  * c.tileSize;
+			const float cbottom = cy + (float)c.height * c.tileSize;
+			if (cright <= vleft || cx >= vright || cbottom <= vtop || cy >= vbottom) continue;
+			DrawInfo di;
+			di.vertexArray       = c.vertexArray;
+			di.vertexTexture     = c.vertexTexture;
+			di.readyForRendering = c.readyForRendering;
+			di.chunkX = c.chunkX; di.chunkY = c.chunkY;
+			di.width  = c.width;  di.height = c.height;
+			di.tileSize = c.tileSize;
+			visible.push_back(std::move(di));
 		}
 	}
 
-	// Draw copied chunks
-	for (const Chunk& c : visibleCopies) {
-		float wx = (float)(c.chunkX * c.width) * c.tileSize;
-		float wy = (float)(c.chunkY * c.height) * c.tileSize;
-		if (!c.readyForRendering) {
-			sf::RectangleShape r(sf::Vector2f((float)c.width * c.tileSize, (float)c.height * c.tileSize));
-			r.setPosition(sf::Vector2f(wx, wy));
+	for (const DrawInfo& d : visible) {
+		const float wx = (float)(d.chunkX * d.width)  * d.tileSize;
+		const float wy = (float)(d.chunkY * d.height) * d.tileSize;
+		if (!d.readyForRendering) {
+			sf::RectangleShape r(sf::Vector2f((float)d.width * d.tileSize, (float)d.height * d.tileSize));
+			r.setPosition({wx, wy});
 			r.setFillColor(sf::Color(60, 60, 60, 80));
 			window.draw(r);
 			continue;
 		}
-		// If vertexArray is populated, draw it directly. vertexArray contains absolute positions.
-		if (c.vertexArray.getVertexCount() > 0) {
+		if (d.vertexArray.getVertexCount() > 0) {
 			sf::RenderStates states;
-			if (c.vertexTexture) states.texture = c.vertexTexture.get();
-			window.draw(c.vertexArray, states);
-		} else {
-			// Fallback: draw per-tile rects
-			for (int y = 0; y < c.height; ++y) {
-				for (int x = 0; x < c.width; ++x) {
-					int v = c.tiles[y * c.width + x];
-					if (v == 0) continue;
-					sf::RectangleShape r(sf::Vector2f(c.tileSize, c.tileSize));
-					r.setPosition(sf::Vector2f((float)(c.chunkX * c.width + x) * c.tileSize, (float)(c.chunkY * c.height + y) * c.tileSize));
-					r.setFillColor(sf::Color(120, 120, 120, 200));
-					window.draw(r);
-				}
-			}
+			if (d.vertexTexture) states.texture = d.vertexTexture.get();
+			window.draw(d.vertexArray, states);
 		}
 	}
 }
+/////////////////////////////////
 
 
+
+/////////////////////////////////
 // Destructor - currently does not have any special cleanup logic, but we could add it if needed in the future (e.g., to save dirty chunks before exiting)
 ChunkManager::~ChunkManager() { 
 	SaveAllChunks(); // Ensure all dirty chunks are saved to disk when the ChunkManager is destroyed to prevent data loss.
 	std::lock_guard<std::mutex> lock(s_pendingMutex); // Lock the mutex to safely clear the pending chunks queue
 	s_pendingChunks.clear();						  // Clear the pending chunks queue to free memory	
 }
+/////////////////////////////////
 
 
+
+/////////////////////////////////
 // GetTileAt - Retrieves the tile value at the specified tile coordinates (tileX, tileY). If the corresponding chunk is not loaded, it will be enqueued for loading in the background thread. 
 // Returns 0 if the chunk is not loaded or if the tile coordinates are out of bounds within the chunk.
 int ChunkManager::GetTileAt(int tileX, int tileY) {
-	int chunkX = std::floor(tileX / static_cast<float>(m_chunkWidth)); // Calculate the chunk X coordinate based on the tile X coordinate and chunk width
-	int chunkY = std::floor(tileY / static_cast<float>(m_chunkHeight)); // Calculate the chunk Y coordinate based on the tile Y coordinate and chunk height
+	const int chunkX = FloorDiv(tileX, m_chunkWidth);
+	const int chunkY = FloorDiv(tileY, m_chunkHeight);
+	const int localX = tileX - chunkX * m_chunkWidth;
+	const int localY = tileY - chunkY * m_chunkHeight;
+	const long long key = GetChunkKey(chunkX, chunkY);
 
-	int localX = tileX - chunkX * m_chunkWidth; // Calculate the local X coordinate within the chunk
-	int localY = tileY - chunkY * m_chunkHeight; // Calculate the local Y coordinate within the chunk
-
-	long long key = GetChunkKey(chunkX, chunkY); // Get the unique key for the chunk based on its coordinates
-	
-	std::lock_guard<std::mutex> lock(m_mutex); // Lock the mutex to safely access the chunks map
-
-	auto itr = m_chunks.find(key); // Attempt to find the chunk in the loaded chunks map
-	if (itr == m_chunks.end()) {
-		EnqueueLoadChunk(chunkX, chunkY); // If the chunk is not found, enqueue it to be loaded in the background thread
-		return 0; // Chunk not found, return default value
-	}
-
-	Chunk& chunk = itr->second; // Get a reference to the found chunk
-	// Check if the local tile coordinates are within the bounds of the chunk
-	if (localX >= 0 && localX < chunk.width && localY >= 0 && localY < chunk.height) {
-		return chunk.tiles[localY * chunk.width + localX]; // Return the tile value at the specified local coordinates within the chunk
-	}
-
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		auto itr = m_chunks.find(key);
+		if (itr != m_chunks.end()) {
+			const Chunk& chunk = itr->second;
+			if (localX >= 0 && localX < chunk.width && localY >= 0 && localY < chunk.height)
+				return chunk.tiles[localY * chunk.width + localX];
+			return 0;
+		}
+	} // release lock before enqueue to avoid re-entrancy / deadlock
+	EnqueueLoadChunk(chunkX, chunkY);
 	return 0;
 }
+/////////////////////////////////
 
 
+
+/////////////////////////////////
 // SetTileAt - Sets the tile value at the specified tile coordinates (tileX, tileY) to the given tileValue. 
 // If the corresponding chunk is not loaded, it will be enqueued for loading in the background thread.
 int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue) {
-	int chunkX = std::floor(tileX / static_cast<float>(m_chunkWidth)); // Calculate the chunk X coordinate based on the tile X coordinate and chunk width
-	int chunkY = std::floor(tileY / static_cast<float>(m_chunkHeight)); // Calculate the chunk Y coordinate based on the tile Y coordinate and chunk height
+	const int chunkX = FloorDiv(tileX, m_chunkWidth);
+	const int chunkY = FloorDiv(tileY, m_chunkHeight);
+	const int localX = tileX - chunkX * m_chunkWidth;
+	const int localY = tileY - chunkY * m_chunkHeight;
+	const long long key = GetChunkKey(chunkX, chunkY);
 
-	int localX = tileX - chunkX * m_chunkWidth; // Calculate the local X coordinate within the chunk
-	int localY = tileY - chunkY * m_chunkHeight; // Calculate the local Y coordinate within the chunk
+	std::lock_guard<std::mutex> lock(m_mutex);
 
-	long long key = GetChunkKey(chunkX, chunkY); // Get the unique key for the chunk based on its coordinates
-
-	{
-		// Lock the mutex to safely access the chunks map
-		std::lock_guard<std::mutex> lock(m_mutex);
-		if (m_chunks.find(key) == m_chunks.end()) {
-			// create placeholder chunk if it doesn't exist
-			m_chunks.emplace(
-				key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight,
-						   m_tileSize)); // Create a new chunk with default tile data and add it to the chunks map
-			m_lruList.push_front(key);	 // Add the new chunk to the front of the LRU list to mark it as recently used
-			EnqueueLoadChunk(chunkX, chunkY); // If the chunk is not found, enqueue it to be loaded in the background thread
-		}
+	// Create placeholder chunk on first paint
+	auto [itr, inserted] = m_chunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize));
+	if (inserted) {
+		m_lruList.push_front(key);
+		m_lruIndex[key] = m_lruList.begin();
+		EnqueueLoadChunk(chunkX, chunkY);
 	}
 
-	std::lock_guard<std::mutex> lock(m_mutex); // Lock the mutex again to safely access the chunk after ensuring it exists
-	auto itr = m_chunks.find(key); // Find the chunk in the loaded chunks map
-	if (itr == m_chunks.end()) {
-		return 0; // This should not happen since we just ensured the chunk exists, but return default value if it does
-	}
+	Chunk& chunk = itr->second;
+	if (localX < 0 || localX >= chunk.width || localY < 0 || localY >= chunk.height) return 0;
 
-	Chunk& chunk = itr->second; // Get a reference to the found chunk
-	if (localX < 0 || localX >= chunk.width || localY < 0 || localY >= chunk.height) {
-		return 0; // Local tile coordinates are out of bounds within the chunk, return default value
-	}
+	const int index     = localY * chunk.width + localX;
+	const int prevValue = chunk.tiles[index];
+	if (prevValue == tileValue) return prevValue;
 
-	int index = localY * chunk.width + localX; // Calculate the index in the chunk's tile data vector based on local coordinates
-	int prevValue = chunk.tiles[index];  // Store the previous tile value before updating it
+	chunk.tiles[index] = tileValue;
+	chunk.dirty        = true;
+	chunk.editVersion++;
 
-	if (prevValue != tileValue) { // Only mark the chunk as dirty if the tile value is actually changing to avoid unnecessary saves
-		chunk.tiles[index] = tileValue; // Update the tile value at the specified local coordinates within the chunk
-		chunk.dirty = true; // Mark the chunk as dirty since it has been modified and needs to be saved to disk later
-		chunk.editVersion++; // Increment version so any in-flight background loads are treated as stale
+	// O(1) LRU touch via iterator index
+	auto lruIt = m_lruIndex.find(key);
+	if (lruIt != m_lruIndex.end()) m_lruList.erase(lruIt->second);
+	m_lruList.push_front(key);
+	m_lruIndex[key] = m_lruList.begin();
 
-		// Move the chunk to the front of the LRU list to mark it as recently used
-		m_lruList.remove(key); // Remove the chunk key from its current position in the LRU list
-		m_lruList.push_front(key); // Add the chunk key to the front of the LRU list to mark it as recently used
-
-		// Rebuild vertex array for this chunk immediately so changes are visible on next draw
-		chunk.vertexArray.clear();
-		chunk.vertexArray.setPrimitiveType(sf::PrimitiveType::Triangles);
-		chunk.vertexTexture.reset();
-	// Try to acquire atlas by configured key; if no key configured, fall back to the first loaded atlas
+	// Rebuild vertex array
 	std::shared_ptr<TextureAtlas> atlasPtr;
 	if (!m_tilesetKey.empty()) {
 		auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
-		if (atlasOpt.has_value() && *atlasOpt) {
-			atlasPtr = *atlasOpt;
-			chunk.vertexTexture = atlasPtr->GetTexture();
-			if (chunk.vertexTexture) std::cout << "  chunk about to use texture for key='" << m_tilesetKey << "'\n";
-		}
-	} else {
-		// no key; try first available atlas
-		auto keys = GameEngine::GetInstance().GetTextureManager().GetAtlasKeys();
-		if (!keys.empty()) {
-			auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(keys[0]);
-			if (atlasOpt.has_value() && *atlasOpt) {
-				atlasPtr = *atlasOpt;
-				chunk.vertexTexture = atlasPtr->GetTexture();
-				if (chunk.vertexTexture) std::cout << "  chunk about to use texture for first-available key='" << keys[0] << "'\n";
-			}
-		}
+		if (atlasOpt.has_value() && *atlasOpt) atlasPtr = *atlasOpt;
 	}
-		for (int yy = 0; yy < chunk.height; ++yy) {
-			for (int xx = 0; xx < chunk.width; ++xx) {
-				int tv = chunk.tiles[yy * chunk.width + xx];
-				if (tv == 0) continue;
-				float px = (chunk.chunkX * chunk.width + xx) * chunk.tileSize;
-				float py = (chunk.chunkY * chunk.height + yy) * chunk.tileSize;
-				bool usedTexture = false;
-				sf::Vector2f uv00(0.f, 0.f), uv11(0.f, 0.f);
-				if (atlasPtr) {
-				// map stored tile value (1-based) to atlas 0-based index
-				size_t atlasIdx = (size_t)(tv - 1);
-				auto rectOpt = atlasPtr->GetSfFloatRectForTile(atlasIdx);
-				if (rectOpt.has_value()) {
-						sf::FloatRect fr = *rectOpt;
-						uv00 = sf::Vector2f(fr.position.x, fr.position.y);
-						uv11 = sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y);
-						usedTexture = true;
-					}
-				}
-				if (usedTexture && chunk.vertexTexture) {
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px, py), sf::Color::White, uv00));
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px + chunk.tileSize, py), sf::Color::White, sf::Vector2f(uv11.x, uv00.y)));
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px + chunk.tileSize, py + chunk.tileSize), sf::Color::White, uv11));
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px, py), sf::Color::White, uv00));
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px + chunk.tileSize, py + chunk.tileSize), sf::Color::White, uv11));
-					chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px, py + chunk.tileSize), sf::Color::White, sf::Vector2f(uv00.x, uv11.y)));
-				} else {
-					sf::Vertex vv0(sf::Vector2f(px, py), sf::Color(120, 120, 120, 200));
-					sf::Vertex vv1(sf::Vector2f(px + chunk.tileSize, py), sf::Color(120, 120, 120, 200));
-					sf::Vertex vv2(sf::Vector2f(px + chunk.tileSize, py + chunk.tileSize), sf::Color(120, 120, 120, 200));
-					sf::Vertex vv3(sf::Vector2f(px, py + chunk.tileSize), sf::Color(120, 120, 120, 200));
-					chunk.vertexArray.append(vv0);
-					chunk.vertexArray.append(vv1);
-					chunk.vertexArray.append(vv2);
-					chunk.vertexArray.append(vv0);
-					chunk.vertexArray.append(vv2);
-					chunk.vertexArray.append(vv3);
-				}
+	BuildChunkVertexArray(chunk, atlasPtr);
+
+	// Immediately persist to disk
+	if (!m_basePath.empty()) {
+		try {
+			std::string filename = (fs::path(m_basePath) / ("chunk_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
+			std::ofstream outFile(filename, std::ios::binary);
+			if (outFile) {
+				outFile.write(reinterpret_cast<const char*>(chunk.tiles.data()), chunk.tiles.size() * sizeof(int));
+				chunk.dirty = false;
+			} else {
+				std::cerr << "ChunkManager: failed to save chunk " << filename << "\n";
 			}
-		}
+		} catch (...) {}
 	}
+	return prevValue;
 }
+/////////////////////////////////
 
 
+
+/////////////////////////////////
 // EnsureChunksInTileRect - Ensures that all chunks that intersect the specified tile rectangle (tileX0, tileY0, tileX1, tileY1) are loaded and ready for rendering. 
 // The marginChunks parameter specifies how many additional chunks to load around the edges of the rectangle to ensure smooth rendering when the player moves.
 void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, int tileY1, int marginChunks) {
-	// normalize the tile rectangle coordinates to ensure tileX0 <= tileX1 and tileY0 <= tileY1
-	if (tileX0 > tileX1) std::swap(tileX0, tileX1); // Swap tileX0 and tileX1 if they are in the wrong order to ensure tileX0 is the minimum X coordinate
-	if (tileY0 > tileY1) std::swap(tileY0, tileY1); // Swap tileY0 and tileY1 if they are in the wrong order to ensure tileY0 is the minimum Y coordinate
+	if (tileX0 > tileX1) std::swap(tileX0, tileX1);
+	if (tileY0 > tileY1) std::swap(tileY0, tileY1);
 
-	int chunkX0 = FloorDiv(tileX0, m_chunkWidth) -	marginChunks; // Calculate the minimum chunk X coordinate that intersects the tile rectangle, including margin chunks
-	int chunkY0 = FloorDiv(tileY0, m_chunkHeight) -	marginChunks; // Calculate the minimum chunk Y coordinate that intersects the tile rectangle, including margin chunks
-	int chunkX1 = FloorDiv(tileX1, m_chunkWidth) + marginChunks; // Calculate the maximum chunk X coordinate that intersects the tile rectangle, including margin chunks
-	int chunkY1 = FloorDiv(tileY1, m_chunkHeight) + marginChunks; // Calculate the maximum chunk Y coordinate that intersects the tile rectangle, including margin chunks
+	const int cX0 = FloorDiv(tileX0, m_chunkWidth)  - marginChunks;
+	const int cY0 = FloorDiv(tileY0, m_chunkHeight) - marginChunks;
+	const int cX1 = FloorDiv(tileX1, m_chunkWidth)  + marginChunks;
+	const int cY1 = FloorDiv(tileY1, m_chunkHeight) + marginChunks;
 
-	for (int chunkY = chunkY0; chunkY <= chunkY1; ++chunkY) { // Loop through the range of chunk Y coordinates that intersect the tile rectangle
-		for (int chunkX = chunkX0; chunkX <= chunkX1;
-			 ++chunkX) { // Loop through the range of chunk X coordinates that intersect the tile rectangle
-			long long key =	GetChunkKey(chunkX, chunkY); // Get the unique key for the current chunk based on its coordinates
+	for (int cy = cY0; cy <= cY1; ++cy) {
+		for (int cx = cX0; cx <= cX1; ++cx) {
+			const long long key = GetChunkKey(cx, cy);
+			bool needLoad = false;
 			{
-				std::lock_guard<std::mutex> lock(m_mutex); // Lock the mutex to safely access the chunks map
+				std::lock_guard<std::mutex> lock(m_mutex);
 				if (m_chunks.find(key) != m_chunks.end()) {
-					// Move the chunk to the front of the LRU list to mark it as recently used since it's needed for rendering
-					m_lruList.remove(key); // Remove the chunk key from its current position in the LRU list
-					m_lruList.push_front(
-						key); // Add the chunk key to the front of the LRU list to mark it as recently used
-					continue; // Chunk is already loaded, move to the next chunk
+					// O(1) LRU touch
+					auto lruIt = m_lruIndex.find(key);
+					if (lruIt != m_lruIndex.end()) m_lruList.erase(lruIt->second);
+					m_lruList.push_front(key);
+					m_lruIndex[key] = m_lruList.begin();
+					continue;
 				}
-
-				// Chunk is not loaded, enqueue it to be loaded in the background thread
-				m_chunks.emplace(
-					key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight,
-							   m_tileSize)); // Create a new chunk with default tile data and add it to the chunks map
-				m_lruList.push_front(key); // Add the new chunk to the front of the LRU list to mark it as recently used
+				m_chunks.emplace(key, Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize));
+				m_lruList.push_front(key);
+				m_lruIndex[key] = m_lruList.begin();
+				needLoad = true;
 			}
-
-			// start background load for the specific chunk we just inserted
-			EnqueueLoadChunk(chunkX, chunkY);
+			if (needLoad) EnqueueLoadChunk(cx, cy);
 		}
 	}
 }
+/////////////////////////////////
 
 
+
+/////////////////////////////////
 // UpdateMainThread - This method should be called from the main thread to perform any necessary updates, such as processing dirty chunks or preparing vertex buffers for rendering.
 void ChunkManager::UpdateMainThread() {
-	// Process any chunks that have been loaded in the background thread and are pending finalization
+	// Process any chunks that have been loaded in the background thread and are pending finalization. We copy the pending chunks to a local variable while holding the mutex, 
+	// then release the mutex before processing to minimize lock time and allow the background thread to continue loading new chunks without waiting for finalization to complete.
 	std::vector<std::tuple<int, int, std::vector<int>, uint32_t>> pendingChunksCopy;
 	{
 		std::lock_guard<std::mutex> lock(s_pendingMutex); // Lock the mutex to safely access the pending chunks queue
-		pendingChunksCopy = s_pendingChunks;			  // Copy the pending chunks to a local variable
+		pendingChunksCopy = s_pendingChunks; // Copy the pending chunks to a local variable
 		s_pendingChunks.clear(); // Clear the original pending chunks queue to free memory and allow new chunks to be added by the background thread
 	}
 	
@@ -402,8 +392,11 @@ void ChunkManager::UpdateMainThread() {
 		FinalizeLoadedChunk(chunkX, chunkY, tileData, version);
 	}
 }
+/////////////////////////////////
 
 
+
+/////////////////////////////////
 // SaveAllChunks - Saves all dirty chunks to disk in the specified directory. Each chunk will be saved as a separate file named "chunk_X_Y.dat" where X and Y are the chunk coordinates.
 void ChunkManager::SaveAllChunks() {
 	std::lock_guard<std::mutex> lock(m_mutex); // Lock the mutex to safely access the chunks map
@@ -416,17 +409,19 @@ void ChunkManager::SaveAllChunks() {
 			std::ofstream outFile(filename, std::ios::binary); // Open a binary output file stream to save the chunk data
 			
 			if (outFile) {
-				outFile.write(reinterpret_cast<const char*>(chunk.tiles.data()), chunk.tiles.size() * sizeof(int)); // Write the chunk's tile data to the file
-				chunk.dirty = false; // Mark the chunk as clean since it has been saved to disk
-				std::cout << "Saved chunk to file: " << filename  << std::endl; // Log a message indicating that the chunk was successfully saved
+				outFile.write(reinterpret_cast<const char*>(chunk.tiles.data()), chunk.tiles.size() * sizeof(int));
+				chunk.dirty = false;
 			} else {
 				std::cerr << "Error saving chunk to file: " << filename << std::endl; // Log an error if the file could not be opened for writing
 			}
 		}
 	}
 }
+/////////////////////////////////
 
 
+
+/////////////////////////////////
 // EnqueueLoadChunk - Enqueues a chunk to be loaded in the background thread. The chunk will be loaded from disk if it exists, or created with default tile data if it does not.
 void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY) {
 	// Capture the current editVersion of this chunk so FinalizeLoadedChunk can reject stale loads
@@ -458,8 +453,11 @@ void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY) {
 		}
 	}).detach(); // Detach the thread to allow it to run independently without blocking the main thread
 }
+/////////////////////////////////
 
 
+
+/////////////////////////////////
 // FinalizeLoadedChunk - Finalizes the loading of a chunk. Rejects the loaded data if the chunk was edited after the load was enqueued (version mismatch).
 void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> tileData, uint32_t versionAtEnqueue) {
 	long long key = GetChunkKey(chunkX, chunkY);
@@ -486,70 +484,23 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> 
 		chunk.dirty = false;
 		chunk.readyForRendering = true;
 	}
-	// Build GPU vertex array for this chunk on the main thread so rendering can be fast.
+	// Build GPU vertex array on the main thread
 	chunk.cpuVertexBuffer.clear();
-	chunk.vertexArray.clear();
-	chunk.vertexArray.setPrimitiveType(sf::PrimitiveType::Triangles);
-	chunk.vertexTexture.reset();
-	// If tileset key is configured, try to acquire the texture and atlas pointer
 	std::shared_ptr<TextureAtlas> atlasPtr;
 	if (!m_tilesetKey.empty()) {
 		auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
-		if (atlasOpt.has_value() && *atlasOpt) {
-			atlasPtr = *atlasOpt;
-			chunk.vertexTexture = atlasPtr->GetTexture();
-		}
+		if (atlasOpt.has_value() && *atlasOpt) atlasPtr = *atlasOpt;
 	}
-	for (int y = 0; y < chunk.height; ++y) {
-		for (int x = 0; x < chunk.width; ++x) {
-			int v = chunk.tiles[y * chunk.width + x];
-			if (v == 0) continue;
-			float px = (chunk.chunkX * chunk.width + x) * chunk.tileSize;
-			float py = (chunk.chunkY * chunk.height + y) * chunk.tileSize;
-			// create two triangles for the quad (v0,v1,v2) and (v0,v2,v3)
-			bool usedTexture = false;
-			sf::Vector2f uv00(0.f, 0.f), uv11(0.f, 0.f);
-			if (atlasPtr) {
-					// map stored tile value (1-based) to atlas 0-based index
-					size_t atlasIdx = (size_t)(v - 1);
-					auto rectOpt = atlasPtr->GetSfFloatRectForTile(atlasIdx);
-				if (rectOpt.has_value()) {
-					sf::FloatRect fr = *rectOpt;
-					// Texture atlas FloatRect uses position/size members
-					uv00 = sf::Vector2f(fr.position.x, fr.position.y);
-					uv11 = sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y);
-					usedTexture = true;
-				}
-			}
-
-			if (usedTexture && chunk.vertexTexture) {
-				// textured vertices (texcoords in pixels)
-				chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px, py), sf::Color::White, uv00));
-				chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px + chunk.tileSize, py), sf::Color::White, sf::Vector2f(uv11.x, uv00.y)));
-				chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px + chunk.tileSize, py + chunk.tileSize), sf::Color::White, uv11));
-				chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px, py), sf::Color::White, uv00));
-				chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px + chunk.tileSize, py + chunk.tileSize), sf::Color::White, uv11));
-				chunk.vertexArray.append(sf::Vertex(sf::Vector2f(px, py + chunk.tileSize), sf::Color::White, sf::Vector2f(uv00.x, uv11.y)));
-			} else {
-				// colored fallback
-				sf::Vertex vv0(sf::Vector2f(px, py), sf::Color(120, 120, 120, 200));
-				sf::Vertex vv1(sf::Vector2f(px + chunk.tileSize, py), sf::Color(120, 120, 120, 200));
-				sf::Vertex vv2(sf::Vector2f(px + chunk.tileSize, py + chunk.tileSize), sf::Color(120, 120, 120, 200));
-				sf::Vertex vv3(sf::Vector2f(px, py + chunk.tileSize), sf::Color(120, 120, 120, 200));
-				chunk.vertexArray.append(vv0);
-				chunk.vertexArray.append(vv1);
-				chunk.vertexArray.append(vv2);
-				chunk.vertexArray.append(vv0);
-				chunk.vertexArray.append(vv2);
-				chunk.vertexArray.append(vv3);
-			}
-		}
+	BuildChunkVertexArray(chunk, atlasPtr);
+	// O(1) LRU touch
+	{
+		auto lruIt = m_lruIndex.find(key);
+		if (lruIt != m_lruIndex.end()) m_lruList.erase(lruIt->second);
 	}
-	// touch LRU
-	m_lruList.remove(key);
 	m_lruList.push_front(key);
+	m_lruIndex[key] = m_lruList.begin();
 
-	// register colliders for this chunk into the entity manager (merged rects)
+	// register colliders
 	try {
 		EntityManager& em = GameEngine::GetInstance().GetEntityManager();
 		// create merged rects only for this chunk
@@ -602,8 +553,11 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> 
 		// ignore errors registering colliders
 	}
 }
+/////////////////////////////////
 
 
+
+/////////////////////////////////
 // EvictIfNeeded - Evicts least recently used chunks if the number of loaded chunks exceeds the maximum limit. This will unload chunks from memory but will save them to disk if they are dirty.
 void ChunkManager::EvictIfNeeded() {
 	std::lock_guard<std::mutex> lock(m_mutex);
@@ -619,29 +573,40 @@ void ChunkManager::EvictIfNeeded() {
 			std::string filename = (p / ("chunk_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
 			std::ofstream outFile(filename, std::ios::binary);
 				
-				if (outFile) { 
-					outFile.write(reinterpret_cast<const char*>(chunk.tiles.data()), chunk.tiles.size() * sizeof(int));
-				} else {
-					std::cerr << "Error saving chunk to file during eviction: " << filename << std::endl;
-				}
-			}
+						if (outFile) {
+							outFile.write(reinterpret_cast<const char*>(chunk.tiles.data()), chunk.tiles.size() * sizeof(int));
+						} else {
+							std::cerr << "ChunkManager: eviction save failed: " << filename << "\n";
+						}
+					}
 
-			// Unregister any generated colliders for this chunk so entities are removed from the world
-			try {
-				EntityManager& em = GameEngine::GetInstance().GetEntityManager();
-				for (Entity* ge : chunk.generatedEntities) {
-					if (ge) em.KillEntity(ge);
-				}
-			} catch(...) {}
+					try {
+						EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+						for (Entity* ge : chunk.generatedEntities) {
+							if (ge) em.KillEntity(ge);
+						}
+					} catch(...) {}
 
-			// Erase chunk to free memory
-			m_chunks.erase(itr);
-		}
-		m_lruList.pop_back();
-	}
+					m_chunks.erase(itr);
+				}
+				m_lruIndex.erase(key);
+				m_lruList.pop_back();
+				}
 }
+/////////////////////////////////
 
 
+
+/////////////////////////////////
+// RegisterChunkColliders - Registers the collider entities generated for all chunks. This should be called after loading chunks to ensure that the colliders are present in the game world for physics and collision detection.
+void ChunkManager::RegisterChunkColliders(EntityManager& em) {}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// UnregisterChunkColliders - Unregisters the collider entities generated for all chunks. 
+// This should be called when the chunk data changes or when chunks are evicted to ensure that outdated colliders are removed from the game world.
 void ChunkManager::UnregisterChunkColliders(EntityManager& em) {
 	std::lock_guard<std::mutex> lock(m_mutex);
 	for (auto &pr : m_chunks) {
@@ -652,3 +617,4 @@ void ChunkManager::UnregisterChunkColliders(EntityManager& em) {
 		c.generatedEntities.clear();
 	}
 }
+/////////////////////////////////

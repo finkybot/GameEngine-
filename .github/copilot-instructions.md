@@ -14,6 +14,7 @@
   - Load/save per-chunk JSON asynchronously; finalize render data on the main thread, mark dirty chunks, and save on eviction or explicit save.
   - Do not store entity IDs in Chunk struct for now; omit entityIds until needed.
   - Integrate this with TileMapEditorScene.
+- Edit the editor cursor and provide different sf::Cursor instances (or custom sprite cursors) for different editor modes (paint, erase, move, pan, selection). Keep cursor objects alive as members and switch via window.setMouseCursor().
 
 ## Audio Integration
 - Prepare to implement audio (sound effects and music) integration into the GameEngine+ project.

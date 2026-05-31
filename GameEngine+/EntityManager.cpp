@@ -425,6 +425,7 @@ void EntityManager::KillEntity(Entity* entity) {
 	entity->Destroy();
 	SetDeathCountThisFrame(GetDeathCountThisFrame() + 1);
 }
+/////////////////////////////////
 
 
 

@@ -94,6 +94,7 @@ public:
 	/////////////////////////////////
 	// Load all saved chunk files from disk into memory (called on startup)
 	void LoadAllSavedChunks();
+	void ClearAllLoadedChunks();
 
 	// Scan saved chunk filenames on disk and return the bounding box of all saved chunks in world pixels.
 	// Returns false if no saved chunks exist. Does not load tile data.

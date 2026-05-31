@@ -12,10 +12,13 @@
 #include <iostream>
 #include <thread>
 #include <SFML/Graphics/RectangleShape.hpp>
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // Namespace alias for filesystem
 namespace fs = std::filesystem;
-
 #include "GameEngine.h"
 #include "CRectangle.h"
 #include "CStatic.h"
@@ -48,6 +51,26 @@ ChunkManager::ChunkManager(int chunkWidth, int chunkHeight, float tileSize) : m_
 
 }
 /////////////////////////////////
+
+
+
+// ClearAllLoadedChunks - remove all loaded chunks from memory without saving; used when switching levels
+void ChunkManager::ClearAllLoadedChunks() {
+	std::lock_guard<std::mutex> lk(m_mutex);
+	// kill generated colliders safely
+	try {
+		EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+		for (auto &pr : m_chunks) {
+			Chunk &c = pr.second;
+			for (Entity* ge : c.generatedEntities) if (ge) em.SafeKillEntity(ge);
+			c.generatedEntities.clear();
+		}
+	} catch(...) {}
+	m_chunks.clear();
+	m_lruIndex.clear();
+	m_lruList.clear();
+}
+///////////////////////////////
 
 
 
@@ -193,7 +216,8 @@ void ChunkManager::BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<Tex
 				chunk.vertexArray.append({ {px + ts, py + ts }, sf::Color::White, uv11 });
 				chunk.vertexArray.append({ {px,      py + ts }, sf::Color::White, {uv00.x, uv11.y} });
 			} else {
-				constexpr sf::Color fallback(120, 120, 120, 200);
+				// Fallback color for tiles without texture: make fully transparent so cleared tiles show through
+				constexpr sf::Color fallback(120, 120, 120, 0);
 				chunk.vertexArray.append({ {px,      py      }, fallback });
 				chunk.vertexArray.append({ {px + ts, py      }, fallback });
 				chunk.vertexArray.append({ {px + ts, py + ts }, fallback });
@@ -256,17 +280,23 @@ void ChunkManager::DrawChunks(sf::RenderWindow& window, const sf::View& view) {
 		const float wx = (float)(d.chunkX * d.width)  * d.tileSize;
 		const float wy = (float)(d.chunkY * d.height) * d.tileSize;
 		if (!d.readyForRendering) {
-			sf::RectangleShape r(sf::Vector2f((float)d.width * d.tileSize, (float)d.height * d.tileSize));
-			r.setPosition({wx, wy});
-			r.setFillColor(sf::Color(60, 60, 60, 80));
-			window.draw(r);
+			// placeholder for non-ready chunks: make fully transparent so empty areas are visible
+			// (previously drew a semi-opaque grey rectangle here)
+			// sf::RectangleShape r(sf::Vector2f((float)d.width * d.tileSize, (float)d.height * d.tileSize));
+			// r.setPosition({wx, wy});
+			// r.setFillColor(sf::Color(60, 60, 60, 80));
+			// window.draw(r);
 			continue;
 		}
 		if (d.vertexArray.getVertexCount() > 0) {
 			sf::RenderStates states;
 			if (d.vertexTexture) states.texture = d.vertexTexture.get();
+			// Ensure alpha blending is used so texture transparency is visible
+			states.blendMode = sf::BlendAlpha;
 			window.draw(d.vertexArray, states);
 		}
+		// Optional diagnostics: draw a faint overlay for chunks that have no texture or are all-zero
+		// (controlled from LevelEditorScene debug UI)
 	}
 }
 /////////////////////////////////
@@ -336,12 +366,9 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue) {
 
 	const int index     = localY * chunk.width + localX;
 	const int prevValue = chunk.tiles[index];
-	// If this chunk was just inserted as a placeholder (we created it because it wasn't loaded)
-	// then still apply the requested change even if the placeholder value matches the requested value.
-	// This handles erasing areas of maps saved on disk: the placeholder starts as zeros and an erase
-	// should overwrite the on-disk non-zero tiles once the background load finalizes.
-	// Always process clears (tileValue == 0) even if prevValue is already 0 — the chunk may be an
-	// unfinalized placeholder whose real on-disk tiles are non-zero. Bumping editVersion here ensures
+
+	// If this chunk was just inserted as a placeholder (we created it because it wasn't loaded) then still apply the requested change even if the placeholder value matches the requested value. This handles erasing areas of maps saved on disk: the placeholder starts as zeros 
+	// and an erase should overwrite the on-disk non-zero tiles once the background load finalizes. Always process clears (tileValue == 0) even if prevValue is already 0 — the chunk may be an unfinalized placeholder whose real on-disk tiles are non-zero. Bumping editVersion here ensures
 	// FinalizeLoadedChunk rejects the stale background load and keeps the cleared in-memory state.
 	if (prevValue == tileValue && !inserted && tileValue != 0) return prevValue;
 

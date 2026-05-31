@@ -37,6 +37,19 @@ bool TextureAtlas::LoadFromFile(const std::string& filePath, int tileW, int tile
 	m_texture->setSmooth(false);
 	m_texture->setRepeated(false);
 
+	// Detect whether image has any transparent pixels (alpha < 255)
+	m_hasAlpha = false;
+	const unsigned char* pixels = img.getPixelsPtr();
+	if (pixels) {
+		unsigned int width = img.getSize().x;
+		unsigned int height = img.getSize().y;
+		// each pixel has 4 components (RGBA)
+		for (unsigned int i = 0; i < width * height; ++i) {
+			const unsigned char a = pixels[i * 4 + 3];
+			if (a != 255) { m_hasAlpha = true; break; }
+		}
+	}
+
 	// Slice the image into tiles based on the specified tile width and height. Store the tile rectangles in the m_rects vector.
 	m_tileW = tileW;
 	m_tileH = tileH;

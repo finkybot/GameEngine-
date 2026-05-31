@@ -16,6 +16,8 @@
 #include <imgui/backends/imgui-SFML.h>
 #include <imgui/imgui_internal.h>
 #include <filesystem>
+#include <mutex>
+namespace fs = std::filesystem;
 /////////////////////////////////
 
 
@@ -26,6 +28,69 @@ LevelEditorScene::LevelEditorScene(GameEngine& engine, sf::RenderWindow& win, En
 	: Scene(engine, em), m_window(win), m_chunkManager(32, 32, 32.0f) {
 }
 /////////////////////////////////
+
+// RefreshAvailableLevels - scan "levels" directory for subfolders and populate m_availableLevels
+void LevelEditorScene::RefreshAvailableLevels() {
+	m_availableLevels.clear();
+	std::error_code ec;
+	fs::path base = fs::path("levels");
+	if (!fs::exists(base, ec)) return;
+	for (auto it = fs::directory_iterator(base); it != fs::directory_iterator(); ++it) {
+		try {
+			auto &p = *it;
+			if (!p.is_directory()) continue;
+			m_availableLevels.push_back(p.path().filename().string());
+		} catch(...) { continue; }
+	}
+}
+
+// SwitchToLevel - change the working level folder. Saves current chunks, sets new base path, and reloads chunks for that level.
+void LevelEditorScene::SwitchToLevel(const std::string& name) {
+	// Save current and clear loaded chunks
+	m_chunkManager.SaveAllChunks();
+	m_chunkManager.ClearAllLoadedChunks();
+	m_currentLevelName = name;
+	m_levelSelected = !m_currentLevelName.empty();
+	// Update chunk manager path
+	if (m_currentLevelName.empty()) {
+		m_chunkManager.SetBasePath("levels/chunks");
+	} else {
+		m_chunkManager.SetBasePath((fs::path("levels") / m_currentLevelName / "chunks").string());
+	}
+	// Ensure directory exists
+	try {
+		if (m_currentLevelName.empty()) fs::create_directories(fs::path("levels") / "chunks");
+		else fs::create_directories(fs::path("levels") / m_currentLevelName / "chunks");
+	} catch(...) {}
+	// Keep m_currentDir unchanged so tileset browser still points at assets/user folder.
+	fs::path chunkPath = (m_currentLevelName.empty()) ? (fs::path("levels") / "chunks") : (fs::path("levels") / m_currentLevelName / "chunks");
+	std::cout << "SwitchToLevel: '" << name << "' basePath='" << chunkPath.string() << "'\n";
+	// Count chunk files for diagnostics
+	int fileCount = 0;
+	try {
+		for (auto it = fs::directory_iterator(chunkPath); it != fs::directory_iterator(); ++it) {
+			try {
+				auto &e = *it;
+				if (!e.is_regular_file()) continue;
+				std::string fn = e.path().filename().string();
+				if (fn.rfind("chunk_", 0) == 0) ++fileCount;
+			} catch(...) { continue; }
+		}
+	} catch(...) { fileCount = 0; }
+	m_exportMessage = std::string("Loading level '") + name + "' - found " + std::to_string(fileCount) + " chunk files in " + chunkPath.string();
+	// Load level chunks
+	m_chunkManager.LoadAllSavedChunks();
+	m_chunkManager.UpdateMainThread();
+	m_chunkManager.RebuildAllChunksFromTileset();
+	// After loading, refresh bounds and report
+	RefreshMapBounds();
+	float dMinX, dMinY, dMaxX, dMaxY;
+	if (m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
+		m_exportMessage += "; bounds set.";
+	} else {
+		m_exportMessage += "; no saved chunks (empty level).";
+	}
+}
 
 
 
@@ -88,7 +153,14 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	}
 
 	// set persistence path for chunks
-	m_chunkManager.SetBasePath("levels/chunks");
+	// Default path points inside the current level folder. If no level selected, do not set a writable path and prevent editing.
+	if (!m_levelSelected) {
+		// use a dummy path that won't be written to until a level is selected
+		m_chunkManager.SetBasePath("");
+	} else {
+		if (m_currentLevelName.empty()) m_chunkManager.SetBasePath("levels/chunks");
+		else m_chunkManager.SetBasePath((fs::path("levels") / m_currentLevelName / "chunks").string());
+	}
 	m_chunkManager.SetMaxLoadedChunks(256);
 	// Load any previously-saved chunk files so saved maps appear on startup
 	m_chunkManager.LoadAllSavedChunks();
@@ -209,19 +281,22 @@ void LevelEditorScene::Update(float deltaTime) {
 	// finalize any background-loaded chunks
 	m_chunkManager.UpdateMainThread();
 
-	// Editing input: paint/erase on mouse click
+	// determine which tile the mouse is over in world coordinates.
 	sf::Vector2i mousePos = sf::Mouse::getPosition(m_window);
 	sf::Vector2f world = m_window.mapPixelToCoords(mousePos, m_window.getView());
 	int tileX = (int)std::floor(world.x / m_tileSize);
 	int tileY = (int)std::floor(world.y / m_tileSize);
 
+	// Check and record mouse buttons and keyboard state
 	bool lmb = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
 	bool rmb = sf::Mouse::isButtonPressed(sf::Mouse::Button::Right);
 
-	// If ImGui is capturing the mouse or UI is hovered/active, do not modify the map
+	// If ImGui is capturing the mouse or UI is hovered/active, do not modify the map, allows us to interact with the UI without accidentally editing level or moving the camera.
 	bool uiCapturing = ImGui::GetIO().WantCaptureMouse || ImGui::IsAnyItemActive() || ImGui::IsAnyItemHovered() || ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) || ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow);
 
-	// Tile pick: press D while hovering a tile to pick its texture into the brush
+	// Tile pick: press D while hovering a tile to pick its texture into the brush I will change this to a button selection and eye dropper tool later.
+	// If D key is pressed and was not pressed in the previous frame (edge) and UI is not capturing, get the tile value at the current mouse position. If the tile value is greater than 0 (we have loaded or created a level), set the selected tile index and brush value to that 
+	// tile's value, allowing the user to pick a tile from the level and use it for painting.
 	bool dKey = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
 	if (dKey && !m_prevDKey && !uiCapturing) {
 		int val = m_chunkManager.GetTileAt(tileX, tileY);
@@ -232,18 +307,10 @@ void LevelEditorScene::Update(float deltaTime) {
 			std::cout << "Picked tile at (" << tileX << "," << tileY << ") value=" << val << " -> selectedIndex=" << m_selectedTileIndex << std::endl;
 		}
 	}
-	// Camera panning with middle mouse
-	bool isMiddleDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle);
-	// debug: detect edge transitions of middle mouse to show events
-	//if (isMiddleDown && !m_prevMiddleDown) {
-	//	// suppressed debug log
-	//}
 
-	//// remember D key state for edge detection
-	//m_prevDKey = dKey;
-	//if (!isMiddleDown && m_prevMiddleDown) {
-	//	// suppressed debug log
-	//}
+	// Camera panning with the middle mouse button; if we press the middle mouse button and it wasn't pressed in the previous frame, then start the panning process. Begin by recording the initial mouse 'start' position and camera position.
+	// When the middle mouse button is released, end the panning process.
+	bool isMiddleDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle);
 	m_prevMiddleDown = isMiddleDown;
 	bool wasPanning = m_panning;
 	// allow panning even if ImGui reports capture so middle-click drag still moves camera
@@ -273,7 +340,8 @@ void LevelEditorScene::Update(float deltaTime) {
 		m_panning = false;
 	}
 
-	// apply panning
+	// If we are currently panning, calculate the delta from the initial mouse position and move the camera in the opposite direction of the mouse drag for a natural panning feel. We also clamp the camera's new position within the bounds of the map to prevent panning into empty space. 
+	// Finally, we update the camera entity's transform to ensure that any smoothing logic in the CameraSystem does not pull it back to a previous position.
 	if (m_panning) {
 		sf::Vector2i delta = mousePos - m_panStart;
 		// move camera opposite to mouse drag for natural panning
@@ -309,19 +377,24 @@ void LevelEditorScene::Update(float deltaTime) {
 		}
 	}
 
-	// Handle mouse input for painting or erasing tiles; check we are off the UI before modifying the map
-	// m_inputReady gates all painting until every button has been physically released at least once
+	// Handle mouse input for painting or erasing tiles; check we are off the UI before modifying the map m_inputReady gates all painting until every button has been physically released at least once
 	// after the scene was entered — this prevents the click that opened the scene from painting.
 	if (!m_inputReady) {
 		if (!lmb && !rmb) m_inputReady = true;
 	}
 
+	// If the UI is not capturing the mouse and input is ready, handle tile painting/erasing based on mouse button states. This includes starting a selection on button down, updating the selection rectangle while dragging, and applying the 
+	// brush value to all tiles within the selected area on button release. The selection is defined in pixel coordinates and converted to world coordinates and then tile coordinates for editing the level.
 	if (!uiCapturing && m_inputReady) {
 		// start selection on left-button down (edge)
 		if (lmb && !m_prevLmb) {
-			m_lmbSelecting = true;
-			m_selectLmbStartPx = mousePos;
-			m_selectLmbEndPx = mousePos;
+			if (m_levelSelected) {
+				m_lmbSelecting = true;
+				m_selectLmbStartPx = mousePos;
+				m_selectLmbEndPx = mousePos;
+			} else {
+				m_exportMessage = "Select or create a level before editing.";
+			}
 		}
 		// update drag end while holding
 		if (m_lmbSelecting && lmb) {
@@ -338,30 +411,38 @@ void LevelEditorScene::Update(float deltaTime) {
 			int ty0 = (int)std::floor(std::min(w0.y, w1.y) / m_tileSize);
 			int tx1 = (int)std::floor(std::max(w0.x, w1.x) / m_tileSize);
 			int ty1 = (int)std::floor(std::max(w0.y, w1.y) / m_tileSize);
-		// clamp loop if you want (optional)
-		// Safety: avoid processing excessively large selections that could hang the editor.
-		const int maxSelectionTiles = 1024 * 1024; // 1M tiles
-		long long selW = (long long)tx1 - (long long)tx0 + 1;
-		long long selH = (long long)ty1 - (long long)ty0 + 1;
-		if (selW <= 0 || selH <= 0) { /* nothing */; }
-		else if (selW * selH > maxSelectionTiles) {
-			std::cerr << "Selection too large (" << selW*selH << " tiles) - operation ignored" << std::endl;
-		} else {
-			for (int ty = ty0; ty <= ty1; ++ty) {
-				for (int tx = tx0; tx <= tx1; ++tx) {
-					m_chunkManager.SetTileAt(tx, ty, m_brushValue); // paint selection
+			// clamp loop if you want (optional)
+			// Safety: avoid processing excessively large selections that could hang the editor.
+			const int maxSelectionTiles = 1024 * 1024; // 1M tiles
+			long long selW = (long long)tx1 - (long long)tx0 + 1;
+			long long selH = (long long)ty1 - (long long)ty0 + 1;
+			if (selW <= 0 || selH <= 0) { /* nothing */; }
+			else if (selW * selH > maxSelectionTiles) {
+				std::cerr << "Selection too large (" << selW*selH << " tiles) - operation ignored" << std::endl;
+			} else {
+				if (!m_levelSelected) {
+					m_exportMessage = "Select or create a level before editing.";
+				} else {
+					for (int ty = ty0; ty <= ty1; ++ty) {
+						for (int tx = tx0; tx <= tx1; ++tx) {
+							m_chunkManager.SetTileAt(tx, ty, m_brushValue); // paint selection
+						}
+					}
+					// Refresh fixed bounds from disk (covers both expand on paint and shrink on erase)
+					RefreshMapBounds();
 				}
 			}
-			// Refresh fixed bounds from disk (covers both expand on paint and shrink on erase)
-			RefreshMapBounds();
-		}
 		}
 
 		// start selection on right-button down (edge)
 		if (rmb && !m_prevRmb) {
-			m_rmbSelecting = true;
-			m_selectRmbStartPx = mousePos;
-			m_selectRmbEndPx = mousePos;
+			if (m_levelSelected) {
+				m_rmbSelecting = true;
+				m_selectRmbStartPx = mousePos;
+				m_selectRmbEndPx = mousePos;
+			} else {
+				m_exportMessage = "Select or create a level before editing.";
+			}
 		}
 		// update drag end while holding
 		if (m_rmbSelecting && rmb) {
@@ -378,22 +459,25 @@ void LevelEditorScene::Update(float deltaTime) {
 			int ty0 = (int)std::floor(std::min(w0.y, w1.y) / m_tileSize);
 			int tx1 = (int)std::floor(std::max(w0.x, w1.x) / m_tileSize);
 			int ty1 = (int)std::floor(std::max(w0.y, w1.y) / m_tileSize);
-		// Safety: avoid processing excessively large selections that could hang the editor.
-		const int maxSelectionTiles = 1024 * 1024; // 1M tiles
-		long long selW2 = (long long)tx1 - (long long)tx0 + 1;
-		long long selH2 = (long long)ty1 - (long long)ty0 + 1;
-		if (selW2 <= 0 || selH2 <= 0) { /* nothing */; }
-		else if (selW2 * selH2 > maxSelectionTiles) {
-			std::cerr << "Selection too large (" << selW2*selH2 << " tiles) - operation ignored" << std::endl;
-		} else {
-			for (int ty = ty0; ty <= ty1; ++ty) {
-				for (int tx = tx0; tx <= tx1; ++tx) {
-					m_chunkManager.SetTileAt(tx, ty, 0); // erase selection
+			
+			// Safety: avoid processing excessively large selections that could hang the editor.
+			const int maxSelectionTiles = 1024 * 1024; // 1M tiles
+			long long selW2 = (long long)tx1 - (long long)tx0 + 1;
+			long long selH2 = (long long)ty1 - (long long)ty0 + 1;
+			
+			if (selW2 <= 0 || selH2 <= 0) { /* nothing */; }
+			else if (selW2 * selH2 > maxSelectionTiles) {
+				std::cerr << "Selection too large (" << selW2*selH2 << " tiles) - operation ignored" << std::endl;
+			} else {
+				for (int ty = ty0; ty <= ty1; ++ty) {
+					for (int tx = tx0; tx <= tx1; ++tx) {
+						m_chunkManager.SetTileAt(tx, ty, 0); // erase selection
+					}
 				}
-			}
+			
 			// Recompute bounds from disk since erasing may shrink the map
 			RefreshMapBounds();
-		}
+			}
 		}
 	}
 	m_prevLmb = lmb;
@@ -408,8 +492,58 @@ void LevelEditorScene::Update(float deltaTime) {
 /////////////////////////////////
 // Render - Render the level editor scene. This will be called every frame by the game engine after Update. In this function, we will render the loaded chunks of the level based on the current camera view.
 void LevelEditorScene::Render() {
+	// Draw a checkerboard background so transparent tiles show a clear pattern
+	{
+		const float checkSize = m_tileSize; // use tile size for checker size
+		sf::View view = m_window.getView();
+		sf::Vector2f center = view.getCenter();
+		sf::Vector2f size = view.getSize();
+		float left = center.x - size.x * 0.5f;
+		float top  = center.y - size.y * 0.5f;
+		int x0 = (int)std::floor(left / checkSize) - 1;
+		int y0 = (int)std::floor(top  / checkSize) - 1;
+		int x1 = (int)std::ceil((left + size.x) / checkSize) + 1;
+		int y1 = (int)std::ceil((top  + size.y) / checkSize) + 1;
+		sf::RectangleShape cell(sf::Vector2f(checkSize, checkSize));
+		for (int y = y0; y <= y1; ++y) {
+			for (int x = x0; x <= x1; ++x) {
+				bool even = ((x + y) % 2) == 0;
+				cell.setPosition(sf::Vector2f(x * checkSize, y * checkSize));
+				cell.setFillColor(even ? sf::Color(34, 34, 34) : sf::Color(18, 18, 18));
+				cell.setOutlineThickness(0.0f);
+				m_window.draw(cell);
+			}
+		}
+	}
+
 	// Delegate drawing of visible chunks to the ChunkManager which performs culling and draws without holding the internal lock
 	m_chunkManager.DrawChunks(m_window, m_window.getView());
+
+	// Optional chunk diagnostics overlay: show per-chunk outline indicating whether chunk contains tiles and/or a texture
+	if (m_showChunkDiagnostics) {
+		std::lock_guard<std::mutex> lg(m_chunkManager.GetMutex());
+		for (const auto &pr : m_chunkManager.GetChunks()) {
+			const Chunk &c = pr.second;
+			const float wx = (float)(c.chunkX * c.width)  * c.tileSize;
+			const float wy = (float)(c.chunkY * c.height) * c.tileSize;
+			const float w = (float)c.width * c.tileSize;
+			const float h = (float)c.height * c.tileSize;
+			bool any = false;
+			for (int t : c.tiles) { if (t != 0) { any = true; break; } }
+			sf::RectangleShape r(sf::Vector2f(w, h));
+			r.setPosition(sf::Vector2f(wx, wy));
+			r.setFillColor(sf::Color::Transparent);
+			if (!any) {
+				r.setOutlineColor(sf::Color(200, 0, 0, 180)); // red = empty
+			} else if (c.vertexTexture) {
+				r.setOutlineColor(sf::Color(0, 200, 0, 180)); // green = has tiles + texture
+			} else {
+				r.setOutlineColor(sf::Color(200, 200, 0, 180)); // yellow = has tiles but no texture
+			}
+			r.setOutlineThickness(2.0f);
+			m_window.draw(r);
+		}
+	}
 
 	// Draw selection rectangle in world space while dragging (left or right button)
 	if (m_lmbSelecting || m_rmbSelecting) {
@@ -467,10 +601,19 @@ void LevelEditorScene::Render() {
 			std::lock_guard<std::mutex> lg(m_chunkManager.GetMutex());
 			chunkCount = (int)m_chunkManager.GetChunks().size();
 		}
+		// Place the bounds/debug window at the bottom-right on first show
+		{
+			ImGuiIO& io = ImGui::GetIO();
+			float margin = 10.0f;
+			float approxW = 320.0f;
+			float approxH = 140.0f;
+			ImGui::SetNextWindowPos(ImVec2(std::max(0.0f, io.DisplaySize.x - approxW - margin), std::max(0.0f, io.DisplaySize.y - approxH - margin)), ImGuiCond_Once);
+		}
 		ImGui::Begin("Bounds Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 		ImGui::Text("Loaded chunks: %d  haveBounds: %s", chunkCount, m_haveBounds ? "yes" : "no");
 		ImGui::Text("m_mapMin=(%.1f, %.1f)", m_mapMin.x, m_mapMin.y);
 		ImGui::Text("m_mapMax=(%.1f, %.1f)", m_mapMax.x, m_mapMax.y);
+		ImGui::Checkbox("Show Chunk Diagnostics", &m_showChunkDiagnostics);
 		if (camOpt) {
 			CCamera* cam = *camOpt;
 			float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
@@ -483,13 +626,25 @@ void LevelEditorScene::Render() {
 			}
 		}
 		ImGui::End();
+
+	// Render the separate Level Manager window
+	RenderLevelManagerWindow();
 	}
 
-	// Mirror TileMapEditor tileset panel
-	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
+	// Mirror TileMapEditor tileset panel - place near bottom-left so it doesn't overlap other windows
+	{
+		ImGuiIO& io = ImGui::GetIO();
+		float margin = 10.0f;
+		float winH = io.DisplaySize.y;
+		// approximate window height for the tileset panel, position so bottom aligns with margin
+		float approxHeight = 420.0f;
+		ImGui::SetNextWindowPos(ImVec2(10, std::max(margin, winH - approxHeight - margin)), ImGuiCond_Once);
+	}
 	ImGui::SetNextWindowBgAlpha(0.35f);
 	// Allow the tileset window to be movable by giving it a title bar; keep auto-resize
 	ImGui::Begin("Tileset Browser", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
+
+	// Level management moved to dedicated window
 
 	// Fetch atlas once for UI usage (preview + brush). Declared here so later preview code can use it.
 	auto atlasOpt = m_gameEngine.GetTextureManager().GetAtlas(std::string(m_tilesetKeyBuf));
@@ -499,6 +654,8 @@ void LevelEditorScene::Render() {
 	ImGui::Text("Current Brush");
 	if (atlasOpt.has_value() && atlasOpt.value() && m_brushValue > 0) {
 		auto atlas = atlasOpt.value();
+		// Show whether the atlas image contains any transparent pixels
+		ImGui::Text("Atlas has alpha: %s", atlas->HasAlpha() ? "yes" : "no");
 		auto tex = atlas->GetTexture();
 		if (tex) {
 			int tw = atlas->TileWidth();
@@ -516,7 +673,6 @@ void LevelEditorScene::Render() {
 	} else {
 		ImGui::Text("(no brush)");
 	}
-
 
 	// Small diagnostics: FPS + camera position
 	{
@@ -658,17 +814,17 @@ void LevelEditorScene::Render() {
 		}
 	}
 
-// Preview loaded atlas tiles if available
-ImGui::Separator();
-// atlasOpt was fetched above once for UI usage
-if (atlasOpt.has_value() && atlasOpt.value()) {
-	auto atlas = atlasOpt.value();
-	std::shared_ptr<sf::Texture> tex = atlas->GetTexture();
-	if (tex) {
-		int tw = atlas->TileWidth();
-		int th = atlas->TileHeight();
-		int cols = (int)(tex->getSize().x / tw);
-		int rows = (int)(tex->getSize().y / th);
+	// Preview loaded atlas tiles if available
+	ImGui::Separator();
+	// atlasOpt was fetched above once for UI usage
+	if (atlasOpt.has_value() && atlasOpt.value()) {
+		auto atlas = atlasOpt.value();
+		std::shared_ptr<sf::Texture> tex = atlas->GetTexture();
+		if (tex) {
+			int tw = atlas->TileWidth();
+			int th = atlas->TileHeight();
+			int cols = (int)(tex->getSize().x / tw);
+			int rows = (int)(tex->getSize().y / th);
 			ImGui::Text("Preview: %d x %d tiles", cols, rows);
 			ImGui::BeginChild("atlas_preview", ImVec2(0, 200), true);
 			for (int r = 0; r < rows; ++r) {
@@ -695,6 +851,71 @@ if (atlasOpt.has_value() && atlasOpt.value()) {
 		}
 	}
 
+
+	ImGui::End();
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Separate Level Manager window so selection/creation/deletion is distinct from Tileset browser
+void LevelEditorScene::RenderLevelManagerWindow() {
+	// Level manager near top-left (avoid overlapping tileset browser)
+	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
+	ImGui::SetNextWindowBgAlpha(0.35f);
+	if (!ImGui::Begin("Level Manager", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { ImGui::End(); return; }
+
+	if (ImGui::Button("Refresh Levels")) RefreshAvailableLevels();
+	ImGui::SameLine();
+	ImGui::InputText("New Level Name", m_levelNameBuf, sizeof(m_levelNameBuf));
+	ImGui::SameLine();
+	if (ImGui::Button("Create Level")) {
+		std::string name = std::string(m_levelNameBuf);
+		if (!name.empty()) {
+			try { fs::create_directories(fs::path("levels") / name / "chunks"); } catch(...) {}
+			RefreshAvailableLevels();
+		}
+	}
+
+	ImGui::Separator();
+	if (m_availableLevels.empty()) RefreshAvailableLevels();
+	for (size_t i = 0; i < m_availableLevels.size(); ++i) {
+		bool sel = (int)i == m_selectedLevelIndex;
+		if (ImGui::Selectable(m_availableLevels[i].c_str(), sel)) m_selectedLevelIndex = (int)i;
+	}
+
+	if (m_selectedLevelIndex >= 0 && m_selectedLevelIndex < (int)m_availableLevels.size()) {
+		if (ImGui::Button("Switch To")) SwitchToLevel(m_availableLevels[m_selectedLevelIndex]);
+		ImGui::SameLine();
+		if (ImGui::Button("Export Level")) {
+			std::string name = m_availableLevels[m_selectedLevelIndex];
+			fs::path src = fs::path("levels") / name;
+			fs::path dst = fs::path("levels") / (name + "_export");
+			try { fs::remove_all(dst); fs::copy(src, dst, fs::copy_options::recursive | fs::copy_options::overwrite_existing); m_exportMessage = std::string("Exported to ") + dst.string(); } catch(...) { m_exportMessage = "Export failed"; }
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("Delete Level")) { m_pendingDeleteName = m_availableLevels[m_selectedLevelIndex]; ImGui::OpenPopup("Confirm Delete"); }
+	}
+
+	if (ImGui::BeginPopupModal("Confirm Delete", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+		ImGui::Text("Delete level '%s' and all its data?", m_pendingDeleteName.c_str());
+		if (ImGui::Button("Yes")) {
+			if (!m_pendingDeleteName.empty()) {
+				if (m_currentLevelName == m_pendingDeleteName) SwitchToLevel("");
+				try { fs::remove_all(fs::path("levels") / m_pendingDeleteName); } catch(...) {}
+				RefreshAvailableLevels();
+				m_selectedLevelIndex = -1;
+			}
+			m_pendingDeleteName.clear();
+			ImGui::CloseCurrentPopup();
+		}
+		ImGui::SameLine();
+		if (ImGui::Button("No")) { m_pendingDeleteName.clear(); ImGui::CloseCurrentPopup(); }
+		ImGui::EndPopup();
+	}
+
+	if (!m_exportMessage.empty()) ImGui::TextUnformatted(m_exportMessage.c_str());
 
 	ImGui::End();
 }

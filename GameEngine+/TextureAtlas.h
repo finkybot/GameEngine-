@@ -111,6 +111,12 @@ private:
 	// Tile dimensions (width and height) used for slicing the texture into tiles. These values are set when loading the texture and are used to calculate the tile regions in the atlas.
 	int m_tileW = 0;
 	int m_tileH = 0;
+
+	// whether the loaded image contains any transparent pixels
+	bool m_hasAlpha = false;
+
+	// Query whether atlas image contains alpha
+	public: bool HasAlpha() const { return m_hasAlpha; }
 	/////////////////////////////////
 };
 /////////////////////////////////

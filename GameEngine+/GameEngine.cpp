@@ -187,8 +187,10 @@ void GameEngine::Run() {
 void GameEngine::Update(float deltaTime) {
 	// Handle events and input before updating the scene.
 	while (m_window.isOpen()) {
-		// Clear the window at the start of each frame
-		m_window.clear();
+		// Clear the window at the start of each frame. Use an explicit clear color so
+		// fully transparent tiles in the editor reveal the intended background instead
+		// of an unintended grey fallback.
+		m_window.clear(sf::Color::Transparent);
 
 		// Restart delta clock and update ImGui once per frame
 		sf::Time frameTime = m_deltaClock.restart();

@@ -15,6 +15,7 @@
 #include <atomic>
 #include <mutex>
 #include <string>
+#include <vector>
 /////////////////////////////////
 
 
@@ -58,6 +59,7 @@ private:
 	void ApplyMainCameraView(); //  Apply the main camera's view to the render window before rendering the world. This method will retrieve the main camera's position and viewport settings, and set the SFML view accordingly so that the rendered chunks are displayed in the correct position and scale on the screen.
 	void ProcessInput(); // Process user input for camera controls (e.g., panning) and tile editing (e.g., painting/erasing tiles). This method will handle mouse input for painting tiles based on the current brush value, as well as middle mouse dragging for panning the camera. It will also take into account whether ImGui is capturing the mouse to avoid modifying the map when interacting with the UI.
 	void RefreshMapBounds(); // Recompute m_mapMin/m_mapMax/m_haveBounds from saved chunk files on disk. Called after any paint or erase operation so bounds grow with new tiles and shrink when tiles are removed.
+	void RenderLevelManagerWindow();
 	/////////////////////////////////
 
 
@@ -190,6 +192,34 @@ private:
 	// file browser state for tileset selection
 	std::filesystem::path m_currentDir;
 	char m_loadFilenameBuffer[512] = "";
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Debugging options
+	bool m_showChunkDiagnostics = false;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Level management
+	char m_levelNameBuf[128] = ""; // input for new level name
+	std::vector<std::string> m_availableLevels; // discovered level folders under "levels"
+	int m_selectedLevelIndex = -1;
+	std::string m_currentLevelName; // empty = default working folder
+	bool m_levelSelected = false;
+	std::string m_pendingDeleteName;
+	std::string m_exportMessage;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Helper methods for level management UI
+	void RefreshAvailableLevels();
+	void SwitchToLevel(const std::string& name);
 	/////////////////////////////////
 };
 /////////////////////////////////

@@ -1,16 +1,33 @@
+/////////////////////////////////
 // FontManager.cpp
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes
 #include "FontManager.h"
 
 #include <filesystem>
 #include <iostream>
+/////////////////////////////////
+ 
 
+
+/////////////////////////////////
 // Implementation of FontManager methods. This class is responsible for loading, retrieving, and unloading fonts in a thread-safe manner using a mutex to protect access to the internal font map.
 
 // Loads a font from the specified file path and associates it with the given name. If the font is successfully loaded,
 // it will be stored in the manager for future retrieval. If the font cannot be loaded, an empty optional will be returned.
 // Note:    Making the method thread-safe by locking the mutex when accessing the font map.
 // Note:    SFML 3.0 changed the way fonts are loaded, so we need to create a shared pointer to a font and call openFromFile (loadFromFile in previous versions) on it to load the font data.
-//          If the font loads successfully, we store it in the map and return true. If it fails to load, we return false.
+//          If the font loads successfully, we store it in the map and return true. If it fails to load, we return false. (I have moved to SFML 3.1.0, if required, code will be updated accordingly)
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// LoadFont - loads a font from a specified file path and associates it with a given name. If the font is successfully loaded, it will be stored in the manager and can be retrieved later using the name.
 bool FontManager::LoadFont(const std::string& name, const std::string& filePath) {
 	// Lock the mutex to ensure thread safety when accessing the font map.
 	std::lock_guard<std::mutex> lock(m_mutex);
@@ -38,8 +55,12 @@ bool FontManager::LoadFont(const std::string& name, const std::string& filePath)
 	std::cerr << "Failed to load font: " << filePath << std::endl;
 	return false;
 }
+/////////////////////////////////
 
-// Retrieves a font by name. If the font is already loaded, it will return a shared pointer to the font. If the font is not found, it will return an empty optional.
+
+
+/////////////////////////////////
+// GetFont - retrieves a font by name. If the font is already loaded, it will return a shared pointer to the font. If the font is not found, it will return an empty optional, allowing the caller to handle the case where the requested font is not available.
 // Note:    Making the method thread-safe by locking the mutex when accessing the font map.
 std::optional<std::shared_ptr<sf::Font>> FontManager::GetFont(const std::string& name) const {
 	// Lock the mutex to ensure thread safety when accessing the font map.
@@ -52,10 +73,13 @@ std::optional<std::shared_ptr<sf::Font>> FontManager::GetFont(const std::string&
 	}
 	return std::nullopt; // I like these optionals
 }
+/////////////////////////////////
 
-// Unloads a font by name. If the font is currently loaded, it will be removed from the manager and its resources will be freed. If the font is not found, this method will do nothing.
-// Note:    Guess what??? Making the method thread-safe by locking the mutex when accessing the font map. We simply erase the font from the map if it exists,
-//			which will free its resources if there are no other shared pointers referencing it.
+
+
+/////////////////////////////////
+// UnloadFont - unloads a font by name. If the font is currently loaded, it will be removed from the manager and its resources will be freed. If the font is not found, this method will do nothing.
+// Note:    Guess what??? Making the method thread-safe by locking the mutex when accessing the font map. We simply erase the font from the map if it exists, which will free its resources if there are no other shared pointers referencing it.
 void FontManager::UnloadFont(const std::string& name) {
 	// Lock the mutex to ensure thread safety when accessing the font map.
 	std::lock_guard<std::mutex> lock(m_mutex);
@@ -63,3 +87,4 @@ void FontManager::UnloadFont(const std::string& name) {
 	// Erase the font from the map if it exists. If the font is not found, this will do nothing.
 	m_fonts.erase(name);
 }
+/////////////////////////////////

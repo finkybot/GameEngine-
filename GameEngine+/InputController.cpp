@@ -1,18 +1,39 @@
-// InputController.cpp - Implementation of the InputController class, responsible for handling user input events using SFML. The class manages a reference to the current GameController, which defines the mapping of input actions to game logic. The Update method polls for SFML events and triggers the appropriate actions based on user input, such as key presses, mouse movements, and window events.
+/////////////////////////////////
+// InputController.cpp - Implementation of the InputController class, responsible for handling user input events using SFML. The class manages a reference to the current GameController, which defines the mapping of input actions to game logic. 
+// The Update method polls for SFML events and triggers the appropriate actions based on user input, such as key presses, mouse movements, and window events.
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // Includes.
 #include "InputController.h"
 #include <SFML/Window/Event.hpp>
 #include <iostream> // Add this line for std::cout and std::endl
+/////////////////////////////////
 
-// Method definitions.
+
+
+/////////////////////////////////
+// Constructor for the InputController class. Initializes member variables to default values, preparing the input controller for handling user input events.
 InputController::InputController() : m_CurrentController(nullptr), m_Quit(nullptr) {}
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Init - initializes the input controller with a quit action callback and a reference to the SFML render window. This method sets up the necessary state for the input controller to handle quit events and poll for input events from the specified window.
 void InputController::Init(InputAction quitAction, sf::RenderWindow* window) {
 	m_Quit = quitAction;
 	m_window = window;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Update - updates the input controller by polling for SFML events and triggering the appropriate actions based on user input, such as key presses, mouse movements, and window events. 
+// It takes the delta time since the last update as a parameter for potential use in input handling logic (e.g., for timing-based input actions).
 void InputController::Update(uint32_t deltaT) {
 	while (const std::optional<sf::Event> event = m_window->pollEvent()) {
 		// Handle window close event (SFML equivalent of SDL_QUIT)
@@ -93,7 +114,13 @@ void InputController::Update(uint32_t deltaT) {
 		}
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// SetGameController - sets the current GameController reference for this input controller, allowing it to access the input action mappings defined in the GameController and trigger the appropriate actions based on user input events.
 void InputController::SetGameController(GameController* controller) {
 	m_CurrentController = controller;
 }
+/////////////////////////////////

@@ -72,12 +72,12 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(ProjectDir);C:\Libraries\SFML-3.0.0\include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Libraries\SFML-3.0.0\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir);C:\Libraries\SFML-3.1.0\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Libraries\SFML-3.1.0\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(ProjectDir);C:\Libraries\SFML-3.0.0\include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Libraries\SFML-3.0.0\lib;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir);C:\Libraries\SFML-3.1.0\include;$(IncludePath)</IncludePath>
+    <LibraryPath>C:\Libraries\SFML-3.1.0\lib;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -115,12 +115,13 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <RuntimeLibrary>MultiThreaded</RuntimeLibrary>
+      <AdditionalIncludeDirectories>C:\Libraries\SFML-3.1.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>sfml-graphics.lib;sfml-window.lib;sfml-system.lib;sfml-audio.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Libraries\SFML-3.0.0\lib</AdditionalLibraryDirectories>
+      <AdditionalDependencies>sfml-graphics-d.lib;sfml-window-d.lib;sfml-system-d.lib;sfml-audio-d.lib;opengl32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\Libraries\SFML-3.1.0\lib</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -133,6 +134,7 @@
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp23</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
+      <AdditionalIncludeDirectories>C:\Libraries\SFML-3.1.0\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -140,7 +142,7 @@
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>sfml-graphics.lib;sfml-window.lib;sfml-system.lib;sfml-audio.lib;sfml-network.lib;opengl32.lib;freetype.lib;winmm.lib;gdi32.lib;flac.lib;vorbisenc.lib;vorbisfile.lib;vorbis.lib;ogg.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>C:\Libraries\SFML-3.0.0\lib</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>C:\Libraries\SFML-3.1.0\lib</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -163,7 +165,6 @@
     <ClCompile Include="GameEngine.cpp" />
     <ClCompile Include="ImageManagementSystem.cpp" />
     <ClCompile Include="imgui\backends\imgui_impl_dx9.cpp" />
-    <ClCompile Include="imgui\backends\imgui_impl_win32.cpp" />
     <ClCompile Include="imgui\backends\imgui-SFML.cpp" />
     <ClCompile Include="imgui\imgui.cpp" />
     <ClCompile Include="imgui\imgui_demo.cpp" />
@@ -173,6 +174,7 @@
     <ClCompile Include="InputController.cpp" />
     <ClCompile Include="LevelEditorScene.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="MainMenuScene.cpp" />
     <ClCompile Include="MusicSystem.cpp" />
     <ClCompile Include="MusicVisualizerScene.cpp" />
     <ClCompile Include="Scene.cpp" />
@@ -230,6 +232,7 @@
     <ClInclude Include="InputAction.h" />
     <ClInclude Include="InputController.h" />
     <ClInclude Include="LevelEditorScene.h" />
+    <ClInclude Include="MainMenuScene.h" />
     <ClInclude Include="MusicSystem.h" />
     <ClInclude Include="MusicVisualizerScene.h" />
     <ClInclude Include="QuadTree.h" />

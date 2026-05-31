@@ -472,7 +472,7 @@ void LevelEditorScene::Render() {
 					std::string id = std::string("tile_") + std::to_string(idx);
 					// highlight selected tile
 					sf::Color bg = (idx == m_selectedTileIndex) ? sf::Color(100, 150, 255) : sf::Color::Transparent;
-					if (ImGui::ImageButton(id.c_str(), spr, ImVec2((float)tw, (float)th), bg, sf::Color::White)) {
+					if (ImGui::ImageButton(id.c_str(), spr, sf::Vector2f((float)tw, (float)th), bg, sf::Color::White)) {
 						m_selectedTileIndex = idx;
 						m_brushValue = idx + 1; // Tile values are 1-based
 					}
@@ -531,7 +531,7 @@ void LevelEditorScene::ApplyMainCameraView() {
 // Process user input for the level editor scene. This function checks for specific key presses (e.g., Escape to close the window) and can be expanded in the future to handle additional input for camera movement, zooming, or other editing actions.
 void LevelEditorScene::ProcessInput() {
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
-		m_gameEngine.m_window.close();
+		m_gameEngine.ChangeScene("MainMenu");
 	}
 }
 /////////////////////////////////

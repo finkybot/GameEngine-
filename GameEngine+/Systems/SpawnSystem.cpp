@@ -1,3 +1,12 @@
+/////////////////////////////////
+// SpawnSystem.cpp - Implementation of the SpawnSystem class, responsible for managing the spawning of entities based on configurable patterns and triggers. This system allows for dynamic and flexible spawning behavior that can be easily configured through JSON files or 
+// programmatically at runtime. The SpawnSystem interacts with the EntityManager to create new entities and can utilize the SFML RenderWindow for certain spawn patterns that require screen dimensions.
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes
 #include "SpawnSystem.h"
 #include "EntityManager.h"
 #include "Entity.h"
@@ -12,10 +21,19 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Namespace alias for convenience
 using namespace Spawn;
+/////////////////////////////////
 
-// Helper function to convert HSV color to RGB. H is in [0,360], S and V are in [0,1]. Output RGB are in [0,255].
+
+
+/////////////////////////////////
+// HSVtoRGB - Helper function to convert HSV color values to RGB. This function takes hue (H) in the range [0, 360], saturation (S) and value (V) in the range [0, 1], and outputs the corresponding RGB values in the range [0, 255].
 static void HSVtoRGB(float h, float s, float v, int& r, int& g, int& b) {
 	float c = v * s;
 	float x = c * (1.0f - fabsf(fmodf(h / 60.0f, 2.0f) - 1.0f));
@@ -50,11 +68,20 @@ static void HSVtoRGB(float h, float s, float v, int& r, int& g, int& b) {
 	g = static_cast<int>((gf + m) * 255.0f);
 	b = static_cast<int>((bf + m) * 255.0f);
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// SpawnSystem implementation
 SpawnSystem::SpawnSystem(EntityManager* em, sf::RenderWindow* window) : m_entityManager(em), m_window(window) {}
 SpawnSystem::~SpawnSystem() {}
+/////////////////////////////////
 
-// Load a default spawner config for testing/demo purposes
+
+
+/////////////////////////////////
+// LoadDefault - Loads a default spawner configuration for testing and demonstration purposes. This method clears any existing configurations and adds a single spawner with predefined settings that can be easily triggered during gameplay.
 void SpawnSystem::LoadDefault() {
 	m_configs.clear();
 	SpawnerConfig spawnerConfig;
@@ -73,8 +100,13 @@ void SpawnSystem::LoadDefault() {
 	spawnerConfig.ringCount = 3;
 	m_configs.push_back(spawnerConfig);
 }
+/////////////////////////////////
 
-// Load spawner configs from a JSON file
+
+
+/////////////////////////////////
+// LoadFromFile - Loads spawner configurations from a JSON file. This method reads the specified JSON file, parses the spawner configurations, and populates the internal list of spawner configs. It returns true if loading is successful, 
+// or false if an error occurs, with an error message provided in outError.
 bool SpawnSystem::LoadFromFile(const std::filesystem::path& path, std::string& outError) {
 	std::ifstream file(path);
 	if (!file.is_open()) {
@@ -275,8 +307,13 @@ bool SpawnSystem::LoadFromFile(const std::filesystem::path& path, std::string& o
 	std::cout << "SpawnSystem: Loaded " << m_configs.size() << " spawner(s) from " << path.string() << std::endl;
 	return true;
 }
+/////////////////////////////////
 
-// Save spawner configs to a JSON file
+
+
+/////////////////////////////////
+// SaveToFile - Saves the current spawner configurations to a JSON file. This method serializes the internal list of spawner configs into a JSON format and writes it to the specified file path. It returns true if saving is successful, or false if an error occurs, 
+// with an error message provided in outError.
 bool SpawnSystem::SaveToFile(const std::filesystem::path& path, std::string& outError) const {
 	std::ofstream file(path);
 	if (!file.is_open()) {
@@ -361,13 +398,21 @@ bool SpawnSystem::SaveToFile(const std::filesystem::path& path, std::string& out
 	std::cout << "SpawnSystem: Saved " << m_configs.size() << " spawner(s) to " << path.string() << std::endl;
 	return true;
 }
+/////////////////////////////////
 
-// Add a new spawner config at runtime
+
+
+/////////////////////////////////
+// AddConfig - Adds a new spawner configuration to the spawn system. This method takes a SpawnerConfig object as input and appends it to the internal list of spawner configurations, allowing it to be managed and updated during the spawn system's update loop.
 void SpawnSystem::AddConfig(const SpawnerConfig& cfg) {
 	m_configs.push_back(cfg);
 }
+/////////////////////////////////
 
-// Update a specific spawner's config by id. Returns true if found and updated, false if not found.
+
+
+/////////////////////////////////
+// UpdateConfig - Updates a specific spawner's configuration by id. Returns true if found and updated, false if not found.
 bool SpawnSystem::UpdateConfig(const std::string& id, const SpawnerConfig& cfg) {
 	for (auto& config : m_configs) {
 		if (config.id == id) {
@@ -377,8 +422,12 @@ bool SpawnSystem::UpdateConfig(const std::string& id, const SpawnerConfig& cfg) 
 	}
 	return false;
 }
+/////////////////////////////////
 
-// Main update loop for the spawn system. This should be called every frame with the delta time and current level (0.0 to 1.0) to manage spawning logic based on the configured spawners.
+
+
+/////////////////////////////////
+// Update - Main update loop for the spawn system. This method should be called every frame with the delta time (time since last frame) and the current level (a value between 0.0 and 1.0 representing game progression) to manage spawning logic based on the configured spawners.
 void SpawnSystem::Update(float deltaTime, float level) {
 	if (!m_enabled)
 		return; // Global enable/disable check
@@ -424,9 +473,13 @@ void SpawnSystem::Update(float deltaTime, float level) {
 		}
 	}
 }
+/////////////////////////////////
 
-// Core function to spawn an entity based on the provided spawner config and current level.
-// Determines spawn position, velocity, size, color, and other properties based on the spawner's pattern and level scaling.
+
+
+/////////////////////////////////
+// SpawnEntity - Core function to spawn an entity based on the provided spawner config and current level. This method determines the spawn position, velocity, size, color, and other properties of the entity based on the spawner's pattern and level scaling. 
+// It interacts with the EntityManager to create new entities and set their components accordingly.
 void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 	// Probability check to determine if this spawn should occur based on the configured probability
 	if (!m_entityManager)
@@ -654,3 +707,4 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
     // Defer processing of pending entities to the main EntityManager update to
 	// avoid possible re-entrancy and ensure all systems run in the expected order.
 }
+/////////////////////////////////

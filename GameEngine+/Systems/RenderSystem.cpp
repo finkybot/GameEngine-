@@ -1,4 +1,11 @@
+/////////////////////////////////
 // RenderSystem.cpp
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes
 #include "RenderSystem.h"
 #include "../Entity.h"
 #include "../CShape.h"
@@ -16,14 +23,25 @@
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/Text.hpp>
 #include <SFML/Graphics/Font.hpp>
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// RenderAliveEntities - Renders all alive entities to the provided SFML render window. This method iterates through the list of entities, checks if they are alive, and draws their shapes and text components if present. It serves as the main entry point 
+// for rendering entities in the game loop.
 void RenderSystem::RenderAliveEntities(const std::vector<std::unique_ptr<Entity>>& entities, sf::RenderWindow& window) {
 	// Backwards-compatible: render shapes then text if configured.
 	RenderShapes(entities, window);
 	if (m_fontManager)
 		RenderText(entities, window);
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// RenderAll - A convenience method that renders all entities with a single call. The mode parameter controls whether to render only shapes, render shapes followed by text, or render shapes now and defer text rendering until after overlays are rendered.
 void RenderSystem::RenderAll(const std::vector<std::unique_ptr<Entity>>& entities, sf::RenderWindow& window,
 							 RenderSystem::RenderMode mode) {
 	// Always render shapes
@@ -34,7 +52,13 @@ void RenderSystem::RenderAll(const std::vector<std::unique_ptr<Entity>>& entitie
 	}
 	// ShapesThenTextAfterOverlays intentionally does not render text here so caller can draw overlays first
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// RenderEntity - Renders a single entity to the provided SFML render window. This method checks for the presence of a CTexture component and attempts to render it using the associated texture atlas. If the entity has an area specified in the CTexture component, 
+// it will draw repeated sprites to fill that area. If any of the requirements for textured rendering are not met, it falls back to rendering a shape component if present.
 void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const {
 	if (!entity)
 		return;
@@ -99,7 +123,13 @@ void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const 
 		window.draw(shape->GetShape());
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// RenderShapes - Render only shapes for all alive entities. This method iterates through the entities, checks if they are alive, and renders their shape components if present. It organizes rendering by layers to ensure correct draw order and attempts to batch textured 
+// entities by their atlas to reduce draw calls.
 void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& entities, sf::RenderWindow& window) {
 	// Render in logical layers: Background -> Mid -> Foreground -> Overlay
     // Build per-layer buckets to avoid querying GetLayer() frequently in tight loop
@@ -216,7 +246,12 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 		}
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// RenderText - Render only text for all alive entities. This method iterates through the entities, checks if they are alive, and renders their text components if present and visible. It relies on the presence of a FontManager to resolve fonts for rendering text.
 void RenderSystem::RenderText(const std::vector<std::unique_ptr<Entity>>& entities, sf::RenderWindow& window) const {
 	if (!m_fontManager)
 		return;
@@ -226,11 +261,13 @@ void RenderSystem::RenderText(const std::vector<std::unique_ptr<Entity>>& entiti
 		RenderTextEntity(entity.get(), window);
 	}
 }
+/////////////////////////////////
 
-// RenderTextEntity: isolated text rendering logic.
-// - Looks up CText component
-// - Acquires the font from FontManager (optional shared_ptr wrapped in std::optional)
-// - Builds an sf::Text, applies alignment, position and color, then draws to the window.
+
+
+/////////////////////////////////
+// RenderTextEntity - Renders the text component of a single entity if present and visible. This method checks for the presence of a CText component, resolves the font using the FontManager, and constructs an sf::Text object to render the text. 
+// It also handles text alignment and positioning based on the entity's transform and text offset.
 void RenderSystem::RenderTextEntity(Entity* entity, sf::RenderWindow& window) const {
 	//Guard clause: if no CText component or if text is not visible, skip rendering.
 	if (!entity)
@@ -281,3 +318,4 @@ void RenderSystem::RenderTextEntity(Entity* entity, sf::RenderWindow& window) co
 
 	window.draw(sfTxt);
 }
+/////////////////////////////////

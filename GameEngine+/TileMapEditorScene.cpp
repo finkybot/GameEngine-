@@ -801,7 +801,7 @@ void TileMapEditorScene::ProcessInput() {
 	m_prevCtrlS = ctrlS;
 
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
-		m_gameEngine.m_window.close();
+		m_gameEngine.ChangeScene("MainMenu");
 	}
 
 	// show save dialog on Ctrl+Shift+S (for interactive save-as)

@@ -1,3 +1,11 @@
+/////////////////////////////////
+// FileDialog.cpp
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes. We include the FileDialog.h header to implement the file dialog functions declared in that header. The implementation will use platform-specific APIs to show native file dialogs on Windows, and stubs for other platforms
 #include "FileDialog.h"
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -7,9 +15,13 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+/////////////////////////////////
 
-// Helper functions to convert between UTF-8 and wide strings using Windows API. This is necessary because the Windows file dialog APIs expect wide strings,
-// but we want to use UTF-8 in our application for better cross-platform compatibility and ease of use with std::string.
+
+
+/////////////////////////////////
+// WideToUtf8 and Utf8ToWide - These helper functions convert between wide strings (std::wstring) and UTF-8 encoded strings (std::string) using the Windows API. The Windows file dialog APIs expect wide strings, but we want to use UTF-8 in 
+// our application for better cross-platform compatibility and ease of use with std::string.
 static std::string WideToUtf8(const std::wstring& w) {
 	if (w.empty())
 		return {}; // guard against empty input to avoid unnecessary API calls
@@ -20,7 +32,6 @@ static std::string WideToUtf8(const std::wstring& w) {
 	return strTo;
 }
 
-// Convert a UTF-8 encoded std::string to a wide string (std::wstring) using the Windows API. This is necessary for passing strings to Windows functions that expect wide strings, such as the file dialog APIs.
 static std::wstring Utf8ToWide(const std::string& s) {
 	if (s.empty())
 		return {}; // guard against empty input to avoid unnecessary API calls
@@ -30,23 +41,35 @@ static std::wstring Utf8ToWide(const std::string& s) {
 	MultiByteToWideChar(CP_UTF8, 0, s.c_str(), (int)s.size(), &w[0], sizeNeeded);
 	return w;
 }
+/////////////////////////////////
 
-// Show an open file dialog with the specified filter and initial directory. This function forwards to the owner-aware implementation using the active window as the owner,
-// which helps ensure the dialog appears on top of the game window, especially if it's fullscreen.
+
+
+/////////////////////////////////
+// ShowFolderPickerDialog - Shows a folder picker dialog and returns the selected folder path as a UTF-8 string. This implementation uses the Windows API to display a native folder picker dialog, and attempts to ensure it appears on top of the active window by temporarily 
+// minimizing the active window while the dialog is open.
 std::optional<std::string> ShowOpenFileDialog(const std::string& filter, const std::string& initialDir) {
 	// forward to owner-aware implementation using the active window as owner
 	return ShowOpenFileDialogWithOwner(GetActiveWindow(), filter, initialDir);
 }
+/////////////////////////////////
 
-// Show a save file dialog with the specified filter, default file name, and initial directory. This function forwards to the owner-aware implementation using the active window as the owner,
+
+
+/////////////////////////////////
+// ShowSaveFileDalog - Shows a save file dialog and returns the selected file path as a UTF-8 string. This implementation uses the Windows API to display a native save file dialog, and attempts to ensure it appears on top of the active window by temporarily 
+// minimizing the active window while the dialog is open.
 std::optional<std::string> ShowSaveFileDialog(const std::string& filter, const std::string& defaultFileName,
 											  const std::string& initialDir) {
 	return ShowSaveFileDialogWithOwner(GetActiveWindow(), filter, defaultFileName, initialDir);
 }
+/////////////////////////////////
 
-// Show an open file dialog with the specified owner window handle, filter, and initial directory. This implementation uses the Win32 API to display a native file dialog, and attempts to ensure
-// it appears on top of the specified owner window (or the active window if no owner is provided) by temporarily minimizing the owner while the dialog is open. The function returns the selected
-// file path as a UTF-8 string, or std::nullopt if the user cancels or an error occurs.
+
+
+/////////////////////////////////
+// ShowOpenFileDialogWithOwner - Shows an open file dialog with the specified owner window handle, filter, and initial directory. This implementation uses the Windows API to display a native file dialog, and attempts to ensure it appears on top of the specified 
+// owner window (or the active window if no owner is provided) by temporarily minimizing the owner while the dialog is open. The function returns the selected file path as a UTF-8 string, or std::nullopt if the user cancels or an error occurs.
 std::optional<std::string> ShowOpenFileDialogWithOwner(void* ownerHandle, const std::string& filter,
 													   const std::string& initialDir) {
 	// initialize the OPENFILENAME structure, and zero it out to ensure all fields are set to default values.
@@ -125,9 +148,12 @@ std::optional<std::string> ShowOpenFileDialogWithOwner(void* ownerHandle, const 
 	}
 	return std::nullopt; // nothing selected or error occurred
 }
+/////////////////////////////////
 
-// Show a save file dialog with the specified owner window handle, filter, default file name, and initial directory. This implementation uses the Win32 API to display
-// a native file dialog, and attempts to ensure
+
+
+/////////////////////////////////
+// ShowOpenFileDialogWithOwner - Shows a save file dialog with the specified owner window handle, filter, default file name, and initial directory. This implementation uses the Win32 API to display
 std::optional<std::string> ShowSaveFileDialogWithOwner(void* ownerHandle, const std::string& filter,
 													   const std::string& defaultFileName,
 													   const std::string& initialDir) {
@@ -176,9 +202,14 @@ std::optional<std::string> ShowSaveFileDialogWithOwner(void* ownerHandle, const 
 	}
 	return std::nullopt;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Stubs for non-Windows platforms. If the code is compiled on a non-Windows platform, we provide stub implementations of the file dialog functions that simply return std::nullopt, indicating that no file was selected. This allows the application to compile and run on other platforms without errors, while gracefully handling 
+// the lack of native file dialog support.
 #else
-// Stubs for non-Windows platforms
 std::optional<std::string> ShowOpenFileDialog(const std::string&, const std::string&) {
 	return std::nullopt;
 }
@@ -186,3 +217,4 @@ std::optional<std::string> ShowSaveFileDialog(const std::string&, const std::str
 	return std::nullopt;
 }
 #endif
+/////////////////////////////////

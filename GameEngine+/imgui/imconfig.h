@@ -49,7 +49,9 @@
 //#define IMGUI_DISABLE_FILE_FUNCTIONS                      // Don't implement ImFileOpen/ImFileClose/ImFileRead/ImFileWrite and ImFileHandle at all (replace them with dummies)
 //#define IMGUI_DISABLE_DEFAULT_FILE_FUNCTIONS              // Don't implement ImFileOpen/ImFileClose/ImFileRead/ImFileWrite and ImFileHandle so you can implement them yourself if you don't want to link with fopen/fclose/fread/fwrite. This will also disable the LogToTTY() function.
 //#define IMGUI_DISABLE_DEFAULT_ALLOCATORS                  // Don't implement default allocators calling malloc()/free() to avoid linking with them. You will need to call ImGui::SetAllocatorFunctions().
-//#define IMGUI_DISABLE_DEFAULT_FONT                        // Disable default embedded font (ProggyClean.ttf), remove ~9.5 KB from output binary. AddFontDefault() will assert.
+//#define IMGUI_DISABLE_DEFAULT_FONT                        // Disable default embedded fonts (ProggyClean + ProggyForever). Remove ~9 KB + ~14 KB from output binary. AddFontDefaultXXX() functions will assert.
+//#define IMGUI_DISABLE_DEFAULT_FONT_BITMAP                 // Disable default embedded bitmap font (ProggyClean). Remove ~9 KB from output binary. AddFontDefaultBitmap() will assert.
+//#define IMGUI_DISABLE_DEFAULT_FONT_VECTOR                 // Disable default embedded vector font (ProggyForever), Remove ~14 KB from output binary. AddFontDefaultVector() will assert.
 //#define IMGUI_DISABLE_SSE                                 // Disable use of SSE intrinsics even if available
 
 //---- Enable Test Engine / Automation features.
@@ -145,37 +147,3 @@ namespace ImGui
     void MyFunction(const char* name, MyMatrix44* mtx);
 }
 */
-
-
-#include <SFML/Graphics/Color.hpp>
-#include <SFML/System/Vector2.hpp>
-
-#include <cstdint>
-
-#include "backends/imgui-SFML_export.h"
-
-#define IM_VEC2_CLASS_EXTRA                                          \
-    template <typename T>                                            \
-    ImVec2(const sf::Vector2<T>& v)                                  \
-    {                                                                \
-        x = static_cast<float>(v.x);                                 \
-        y = static_cast<float>(v.y);                                 \
-    }                                                                \
-                                                                     \
-    template <typename T>                                            \
-    operator sf::Vector2<T>() const                                  \
-    {                                                                \
-        return sf::Vector2<T>(static_cast<T>(x), static_cast<T>(y)); \
-    }
-
-#define IM_VEC4_CLASS_EXTRA                                                                     \
-    ImVec4(const sf::Color& c) : x(c.r / 255.f), y(c.g / 255.f), z(c.b / 255.f), w(c.a / 255.f) \
-    {                                                                                           \
-    }                                                                                           \
-    operator sf::Color() const                                                                  \
-    {                                                                                           \
-        return sf::Color(static_cast<std::uint8_t>(x * 255.f),                                  \
-                         static_cast<std::uint8_t>(y * 255.f),                                  \
-                         static_cast<std::uint8_t>(z * 255.f),                                  \
-                         static_cast<std::uint8_t>(w * 255.f));                                 \
-    }

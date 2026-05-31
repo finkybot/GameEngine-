@@ -19,6 +19,7 @@
 #include "TileMapEditorScene.h"
 #include "MusicVisualizerScene.h"
 #include "LevelEditorScene.h"
+#include "MainMenuScene.h"
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 #include <cstdlib>
@@ -41,6 +42,11 @@ GameEngine::GameEngine() {
 	// Create a single engine-wide EntityManager and bind shared resources
 	m_entityManager = std::make_unique<EntityManager>(m_window);
 	m_entityManager->GetRenderSystem().SetFontManager(&m_fontManager);
+
+	// Try to load a default font for in-engine text (used by MainMenu and CText). Expect file at assets/fonts/tech.ttf
+	if (!m_fontManager.LoadFont("default", "assets/fonts/tech.ttf")) {
+		std::cerr << "Warning: failed to load default font at assets/fonts/tech.ttf" << std::endl;
+	}
 
 	// Do not preload atlases automatically. Atlases should be loaded explicitly via the editor UI so users
 	// can choose which atlas to use at runtime.
@@ -72,11 +78,40 @@ void GameEngine::AddScene(const std::string& sceneName, std::shared_ptr<Scene> s
 
 
 /////////////////////////////////
+// GetSceneNames - Return a list of registered scene names (useful for UI like a main menu)
+std::vector<std::string> GameEngine::GetSceneNames() const {
+	std::vector<std::string> names;
+	for (auto const& p : m_scenes) names.push_back(p.first);
+	return names;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions. The method checks if the specified scene exists in the scenes map and sets it as the current active scene, enabling the game loop to update and render the new scene. If the scene name is not found, a warning is logged.
 void GameEngine::ChangeScene(const std::string& sceneName) {
 	auto it = m_scenes.find(sceneName);
 	if (it != m_scenes.end()) {
+		// notify previous scene it's exiting
+		if (m_currentScene) {
+			try { m_currentScene->OnExit(); } catch (...) {}
+		}
+
+		// Clear all entities from the previous scene before activating the new one
+		if (m_entityManager) m_entityManager->ClearAll();
+
 		m_currentScene = it->second;
+
+		// initialize the new scene so it has window size, input controller, and resources set up
+		if (m_currentScene) {
+			try {
+				m_currentScene->InitializeGame(m_windowSize);
+			} catch (...) {}
+			// update input controller to use the new scene's game controller
+			try { m_InputController.SetGameController(m_currentScene->GetGameController()); } catch (...) {}
+			try { m_currentScene->OnEnter(); } catch (...) {}
+		}
 	} else {
 		std::cerr << "Scene '" << sceneName << "' not found!" << std::endl;
 	}
@@ -106,17 +141,14 @@ void GameEngine::Run() {
 	bool running = true; // Create a Boolean variable to manage the engine running state
 
 	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
+	AddScene("MainMenu", std::make_shared<MainMenuScene>(*this, m_window, *m_entityManager));
 	AddScene("TestScene", std::make_shared<TestScene>(*this, m_window, *m_entityManager));		 // Adding TestScene
 	AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, m_window, *m_entityManager)); // Adding TileMapScene
 	AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, m_window, *m_entityManager)); // Adding TileMapEditor
 	AddScene("MusicVisualizer", std::make_shared<MusicVisualizerScene>(*this, m_window, *m_entityManager)); // Adding MusicVisualizer	
 	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, m_window, *m_entityManager)); // Adding LevelEditor
-	
-	//ChangeScene("TestScene");
-	//ChangeScene("TileMapScene");
-	//ChangeScene("TileMapEditor");
-	//ChangeScene("MusicVisualizer");
-	ChangeScene("LevelEditor");
+
+	ChangeScene("MainMenu");
 
 	// Initialize the chosen scene if it was found. ChangeScene() logs a warning when the scene
 	// name is not found; guard against a null current scene to avoid dereferencing a nullptr.
@@ -141,6 +173,9 @@ void GameEngine::Run() {
 		Update(
 			0.016f); // Update the scene with a fixed delta time (16ms for ~60 FPS), I can calculate actual delta time using the deltaClock for variable time steps
 	}
+
+	// Ensure window closes cleanly when Run exits
+	if (m_window.isOpen()) m_window.close();
 }
 /////////////////////////////////
 
@@ -169,6 +204,21 @@ void GameEngine::Update(float deltaTime) {
 			if (ImGui::GetCurrentContext())
 				ImGui::SFML::ProcessEvent(m_window, *eventOpt);
 
+			// Global Escape handling: intercept Escape before forwarding to the scene so scene-level handlers
+			// that close the window won't run. If Escape is pressed and we're not already on MainMenu, switch to it
+			if (eventOpt->is<sf::Event::KeyPressed>()) {
+				if (auto kp = eventOpt->getIf<sf::Event::KeyPressed>()) {
+					if (static_cast<sf::Keyboard::Key>(kp->code) == sf::Keyboard::Key::Escape) {
+						auto it = m_scenes.find("MainMenu");
+						if (it != m_scenes.end() && m_currentScene && m_currentScene != it->second) {
+							ChangeScene("MainMenu");
+							// consume the event (do not forward to the current scene)
+							continue;
+						}
+					}
+				}
+			}
+
 			if (m_currentScene)
 				m_currentScene->HandleEvent(eventOpt);
 			if (eventOpt->is<sf::Event::Closed>())
@@ -178,6 +228,18 @@ void GameEngine::Update(float deltaTime) {
 		// Update method will run  (carry out) these actions.
 		m_InputController.Update(deltaTime);
 
+		// Global keyboard poll: if Escape is held, switch back to MainMenu before any scene Update runs.
+		// This prevents scenes that poll sf::Keyboard::isKeyPressed(Escape) from closing the window directly.
+		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
+			auto it = m_scenes.find("MainMenu");
+			if (it != m_scenes.end() && m_currentScene && m_currentScene != it->second) {
+				ChangeScene("MainMenu");
+				// Reset input controller to new scene controller
+				m_InputController.SetGameController(m_currentScene->GetGameController());
+				// Skip running the previous scene's Update this frame
+				continue;
+			}
+		}
 		if (m_currentScene) {
 			// Let the scene update (handles ImGui update and input)
 			// Use the actual frame time measured above so scenes get accurate timing for FPS and logic.

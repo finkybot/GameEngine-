@@ -1,12 +1,25 @@
+/////////////////////////////////
+// TileMap.cpp
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes
 #include "TileMap.h"
 #include <fstream>
 #include <sstream>
 #include <iostream>
 #include <iomanip>
 #include <cctype>
+/////////////////////////////////
 
-// Minimal ad-hoc JSON helpers dedicated to TileMap serialization.
-static bool parse_json_int(const std::string& s, const std::string& key, int& out) {
+
+
+/////////////////////////////////
+// ParseJSONInt - A simple JSON parsing function that extracts an integer value associated with a specified key from a JSON-formatted string. The function searches for the key in the string, locates the corresponding value, and attempts to parse it as an integer, 
+// handling optional whitespace and negative signs.
+static bool ParseJSONInt(const std::string& s, const std::string& key, int& out) {
 	auto pos = s.find('"' + key + '"');
 	if (pos == std::string::npos)
 		return false;
@@ -33,8 +46,13 @@ static bool parse_json_int(const std::string& s, const std::string& key, int& ou
 	out = neg ? -val : val;
 	return true;
 }
+/////////////////////////////////
 
-static bool parse_json_double(const std::string& s, const std::string& key, double& out) {
+
+
+/////////////////////////////////
+// ParseJSONDouble - Similar to ParseJSONInt, this function extracts a double value associated with a specified key from a JSON-formatted string. It locates the key, finds the corresponding value, and attempts to parse it as a double using std::stod, while handling optional whitespace.
+static bool ParseJSONDouble(const std::string& s, const std::string& key, double& out) {
 	auto pos = s.find('"' + key + '"');
 	if (pos == std::string::npos)
 		return false;
@@ -52,8 +70,13 @@ static bool parse_json_double(const std::string& s, const std::string& key, doub
 		return false;
 	}
 }
+/////////////////////////////////
 
-static bool parse_json_string(const std::string& s, const std::string& key, std::string& out, size_t startPos = 0) {
+
+
+/////////////////////////////////
+// ParseJSONString - This function extracts a string value associated with a specified key from a JSON-formatted string. It searches for the key, locates the corresponding value, and attempts to parse it as a string by finding the enclosing double quotes and handling escaped characters.
+static bool ParseJSONString(const std::string& s, const std::string& key, std::string& out, size_t startPos = 0) {
 	auto pos = s.find('"' + key + '"', startPos);
 	if (pos == std::string::npos)
 		return false;
@@ -69,8 +92,14 @@ static bool parse_json_string(const std::string& s, const std::string& key, std:
 	out = s.substr(pos + 1, endq - (pos + 1));
 	return true;
 }
+/////////////////////////////////
 
-static bool parse_json_int_array_from_pos(const std::string& s, size_t startBracketPos, std::vector<int>& out,
+
+
+/////////////////////////////////
+// ParseJSONArrayFromPos - A helper function that parses an array of integers from a JSON-formatted string starting at a specified position. It checks for the opening bracket, iterates through the elements while handling whitespace and commas, 
+// and populates the output vector with the parsed integer values.
+static bool ParseJSONArrayFromPos(const std::string& s, size_t startBracketPos, std::vector<int>& out,
 										  size_t& outPos) {
 	if (startBracketPos >= s.size() || s[startBracketPos] != '[')
 		return false;
@@ -107,8 +136,14 @@ static bool parse_json_int_array_from_pos(const std::string& s, size_t startBrac
 	}
 	return false;
 }
+/////////////////////////////////
 
-static bool parse_json_int_array(const std::string& s, const std::string& key, std::vector<int>& out) {
+
+
+/////////////////////////////////
+// ParseJSONIntArray - This function combines the functionality of finding a key in a JSON-formatted string and parsing the associated array of integers. It locates the key, finds the opening bracket for the array, and then calls ParseJSONArrayFromPos to 
+// extract the integer values into the output vector.
+static bool ParseJSONIntArray(const std::string& s, const std::string& key, std::vector<int>& out) {
 	auto pos = s.find('"' + key + '"');
 	if (pos == std::string::npos)
 		return false;
@@ -148,8 +183,14 @@ static bool parse_json_int_array(const std::string& s, const std::string& key, s
 	}
 	return true;
 }
+/////////////////////////////////
 
-static bool parse_json_layers(const std::string& s, std::vector<TileMap::Layer>& out) {
+
+
+/////////////////////////////////
+// ParseJSONLayers - This function parses the "layers" array from a JSON-formatted string and populates a vector of TileMap::Layer objects. It locates the "layers" key, iterates through each layer object in the array, extracts the layer name and tile data, 
+// and adds the parsed layers to the output vector.
+static bool ParseJSONLayers(const std::string& s, std::vector<TileMap::Layer>& out) {
 	out.clear();
 	auto pos = s.find("\"layers\"");
 	if (pos == std::string::npos)
@@ -167,14 +208,14 @@ static bool parse_json_layers(const std::string& s, std::vector<TileMap::Layer>&
 			break;
 		TileMap::Layer layer;
 		std::string name;
-		if (parse_json_string(s, "name", name, objStart))
+		if (ParseJSONString(s, "name", name, objStart))
 			layer.name = name;
 		auto tilesPos = s.find("\"tiles\"", objStart);
 		if (tilesPos != std::string::npos && tilesPos < objEnd) {
 			auto bracket = s.find('[', tilesPos);
 			if (bracket != std::string::npos && bracket < objEnd) {
 				size_t after;
-				if (!parse_json_int_array_from_pos(s, bracket, layer.tiles, after))
+				if (!ParseJSONArrayFromPos(s, bracket, layer.tiles, after))
 					return false;
 			}
 		}
@@ -189,7 +230,13 @@ static bool parse_json_layers(const std::string& s, std::vector<TileMap::Layer>&
 	}
 	return !out.empty();
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// SaveToJSON - Saves the tile map data to a JSON file at the specified path. The method serializes the tile map's properties, including dimensions, tile size, tileset metadata, and layer information (if present), into a JSON format and writes it to the file. 
+// It returns true if saving is successful, or false if an error occurs, with an error message provided in outErr.
 bool TileMap::SaveToJSON(const std::string& path, std::string* outErr) const {
 	std::ofstream os(path, std::ios::binary);
 	if (!os) {
@@ -248,7 +295,12 @@ bool TileMap::SaveToJSON(const std::string& path, std::string* outErr) const {
 	os << "}\n";
 	return true;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// LoadFromJSON - Loads tile map data from a JSON file at the specified path. The method reads the file, parses the JSON content to extract the tile map's properties, including dimensions, tile size, tileset metadata, and layer information (if present), and constructs a TileMap object.
 std::optional<TileMap> TileMap::LoadFromJSON(const std::string& path, std::string* outErr) {
 	std::ifstream is(path, std::ios::binary);
 	if (!is) {
@@ -262,14 +314,14 @@ std::optional<TileMap> TileMap::LoadFromJSON(const std::string& path, std::strin
 
 	int w = 0, h = 0;
 	double ts = 0.0;
-	if (!parse_json_int(s, "width", w) || !parse_json_int(s, "height", h) || !parse_json_double(s, "tileSize", ts)) {
+	if (!ParseJSONInt(s, "width", w) || !ParseJSONInt(s, "height", h) || !ParseJSONDouble(s, "tileSize", ts)) {
 		if (outErr)
 			*outErr = "Failed to parse width/height/tileSize from JSON";
 		return std::nullopt;
 	}
 
 	std::vector<TileMap::Layer> parsedLayers;
-	if (parse_json_layers(s, parsedLayers)) {
+	if (ParseJSONLayers(s, parsedLayers)) {
 		if (!parsedLayers.empty()) {
 			if ((int)parsedLayers[0].tiles.size() != w * h) {
 				if (outErr)
@@ -279,11 +331,11 @@ std::optional<TileMap> TileMap::LoadFromJSON(const std::string& path, std::strin
 			TileMap map(w, h, static_cast<float>(ts));
 			map.tiles = std::move(parsedLayers[0].tiles);
 			map.layers = std::move(parsedLayers);
-			parse_json_string(s, "tilesetKey", map.tilesetKey);
-			parse_json_string(s, "tilesetImage", map.tilesetImage);
+			ParseJSONString(s, "tilesetKey", map.tilesetKey);
+			ParseJSONString(s, "tilesetImage", map.tilesetImage);
 			int tw = 0, th = 0;
-			parse_json_int(s, "tilesetTileW", tw);
-			parse_json_int(s, "tilesetTileH", th);
+			ParseJSONInt(s, "tilesetTileW", tw);
+			ParseJSONInt(s, "tilesetTileH", th);
 			map.tilesetTileW = tw;
 			map.tilesetTileH = th;
 			return map;
@@ -291,7 +343,7 @@ std::optional<TileMap> TileMap::LoadFromJSON(const std::string& path, std::strin
 	}
 
 	std::vector<int> tileArr;
-	if (!parse_json_int_array(s, "tiles", tileArr)) {
+	if (!ParseJSONIntArray(s, "tiles", tileArr)) {
 		if (outErr)
 			*outErr = "Failed to parse tiles array from JSON";
 		return std::nullopt;
@@ -303,12 +355,13 @@ std::optional<TileMap> TileMap::LoadFromJSON(const std::string& path, std::strin
 	}
 	TileMap map(w, h, static_cast<float>(ts));
 	map.tiles = std::move(tileArr);
-	parse_json_string(s, "tilesetKey", map.tilesetKey);
-	parse_json_string(s, "tilesetImage", map.tilesetImage);
+	ParseJSONString(s, "tilesetKey", map.tilesetKey);
+	ParseJSONString(s, "tilesetImage", map.tilesetImage);
 	int tw = 0, th = 0;
-	parse_json_int(s, "tilesetTileW", tw);
-	parse_json_int(s, "tilesetTileH", th);
+	ParseJSONInt(s, "tilesetTileW", tw);
+	ParseJSONInt(s, "tilesetTileH", th);
 	map.tilesetTileW = tw;
 	map.tilesetTileH = th;
 	return map;
 }
+/////////////////////////////////

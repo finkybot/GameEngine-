@@ -68,8 +68,10 @@ public:
 	/////////////////////////////////
 	// ProcessEscapeKey - checks if the escape key is pressed and closes the window if it is. This method is called from the HandleEvent method to allow for exiting the game when the escape key is pressed.
 	void ProcessEscapeKey(bool keyDown) const {
-		if (keyDown)
-			m_gameEngine.m_window.close();
+		if (keyDown) {
+			// Return to main menu instead of closing the window directly
+			m_gameEngine.ChangeScene("MainMenu");
+		}
 	}
 	/////////////////////////////////
 

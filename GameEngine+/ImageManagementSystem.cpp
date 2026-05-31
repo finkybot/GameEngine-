@@ -1,9 +1,22 @@
+/////////////////////////////////
 // ImageManagementSystem.cpp
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes
 #include "ImageManagementSystem.h"
 #include <iostream>
 #include <SFML/Graphics/Rect.hpp>
 #include <cmath>
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// LoadImage - Loads an image from the specified file path and returns it as an sf::Image object. It takes a string representing the file path of the image to load, attempts to load the image using SFML's loadFromFile method, and returns the loaded image. 
+// If loading fails, it logs an error message to the console and returns an empty sf::Image object.
 sf::Image ImageManagementSystem::LoadImage(const std::string& filePath) {
 	try {
 		sf::Image image;
@@ -16,7 +29,12 @@ sf::Image ImageManagementSystem::LoadImage(const std::string& filePath) {
 	}
 	return sf::Image();
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// CreateTileMap - Creates a tile map texture by slicing the provided image into smaller textures based on the specified tile dimensions. It takes the x and y coordinates of the top-left corner of the tile, the width and height of each tile, and the source image as parameters.
 std::vector<sf::Texture> ImageManagementSystem::CreateTileMap(int x, int y, int width, int height,
 															  const sf::Image& image) {
 	std::vector<sf::Texture> textures;
@@ -42,3 +60,4 @@ std::vector<sf::Texture> ImageManagementSystem::CreateTileMap(int x, int y, int 
 			  << std::endl;
 	return textures;
 }
+/////////////////////////////////

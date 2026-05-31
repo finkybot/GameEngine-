@@ -1,4 +1,12 @@
-// ***** CollisionSystem.cpp *****
+/////////////////////////////////
+// CollisionSystem.cpp - implementation of the CollisionSystem class, which is responsible for detecting and resolving collisions between entities in the game. This includes checking for collisions based on entity positions and radii, determining if entities are enemies or allies, 
+// and applying appropriate collision responses such as spawning explosions for enemy collisions or bouncing allied entities apart.
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes
 #include "CollisionSystem.h"
 #include "../Entity.h"
 #include "../CShape.h"
@@ -9,7 +17,12 @@
 #include "../CStatic.h"
 #include <algorithm>
 #include <cmath>
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// DetectAndResolve - detects and resolves collisions between entities. It iterates through the list of entities, queries the spatial hash for nearby entities, checks for actual collisions, and applies the appropriate collision response based on entity types.
 void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities,
 									   SpatialHashGrid<Entity>& spatialHash, float deltaTime) {
 	static std::vector<Entity*> nearbyEntities;
@@ -59,7 +72,12 @@ void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>
 		}
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// IsColliding - checks if two entities are colliding based on their positions and radii. It calculates the distance between the centers of the two entities and compares it to the sum of their radii to determine if a collision is occurring.
 bool CollisionSystem::IsColliding(const Entity* entity1, const Entity* entity2) const {
 	// Calculate the distance between the two circles' centres
 	Vec2 distanceVec = entity2->GetCentrePoint() - entity1->GetCentrePoint();
@@ -74,7 +92,12 @@ bool CollisionSystem::IsColliding(const Entity* entity1, const Entity* entity2) 
 	// If the distance squared is less than or equal to the sum of the radii squared, a collision has occurred
 	return distanceSquared <= radiusSumSquared;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// ResolveCollision - resolves a collision between two entities based on their types (enemies vs allies). If the entities are enemies (different tags), it spawns an explosion at the collision point, blends their colors for the explosion effect, and destroys both entities.
 int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 	// Check if entities are enemies (different tags) or allies (same tag)
 	if (AreEnemies(entity1, entity2)) {
@@ -157,7 +180,12 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 		return 0; // No entities destroyed
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// BounceEntities - applies an elastic collision response to bounce allied entities apart. It calculates the collision normal, relative velocity, and applies an impulse to update the velocities of both entities based
 void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const {
 	// Get the shape components to access velocity and position
 	auto shape1 = entity1->GetComponent<CShape>();
@@ -221,7 +249,13 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const {
 			Vec2(pos2.x + correction * unitNorm.x, pos2.y + correction * unitNorm.y);
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// AreEnemies - checks if two entities are enemies based on their types/tags. In this implementation, entities are considered enemies if they belong to different teams/types, which is determined by comparing their EntityType values.
 bool CollisionSystem::AreEnemies(const Entity* entity1, const Entity* entity2) const {
 	return entity1->GetType() != entity2->GetType(); // Entities are enemies if they belong to different teams/types
 }
+/////////////////////////////////

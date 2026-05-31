@@ -15,11 +15,11 @@
 
 
 /////////////////////////////////
-// sf::Music is used for streaming music playback, while sf::SoundBuffer is used for offline analysis of audio data (e.g., measuring levels, performing spectral analysis). The MusicSystem will manage sf::Music instances for active music tracks, and optionally load sf::SoundBuffer 
-// instances for entities that have CMusic components to enable analysis features without affecting playback performance; we'll use SFML SoundBuffer for offline analysis
+// sf::Music is used for streaming music playback, while sf::InputSoundFile is used for streaming analysis of audio data (e.g., measuring levels, performing spectral analysis). The MusicSystem will manage sf::Music instances for active music tracks, and optionally open sf::InputSoundFile 
+// instances for entities that have CMusic components to enable analysis features by reading only the required sample window each frame.
 namespace sf {
 	class Music;
-	class SoundBuffer;
+	class InputSoundFile;
 }
 /////////////////////////////////
 
@@ -29,6 +29,9 @@ namespace sf {
 // Further Includes
 #include <mutex>
 #include <vector>
+#include <thread>
+#include <condition_variable>
+#include <atomic>
 /////////////////////////////////
 
 
@@ -186,8 +189,8 @@ private:
 
 
 	/////////////////////////////////
-	// Map of entity ID to loaded sf::SoundBuffer for that entity's music track. This allows us to perform offline analysis (e.g., measuring levels, calculating spectra) on the music data without affecting playback performance, since sf::Music does not provide direct access to audio samples.
-	std::unordered_map<size_t, std::shared_ptr<sf::SoundBuffer>> m_buffers;
+	// Map of entity ID to open sf::InputSoundFile for that entity's music track. Allows streaming analysis by seeking to the playhead and reading a small window of samples each frame, avoiding the full in-memory decode that sf::SoundBuffer requires.
+	std::unordered_map<size_t, std::shared_ptr<sf::InputSoundFile>> m_buffers;
 	/////////////////////////////////
 
 
@@ -231,9 +234,32 @@ private:
 
 
 	/////////////////////////////////
-    // FFT options
+	// FFT options
 	bool m_useFFT = false; // default: keep legacy Goertzel unless enabled
 	int m_fftSize = 2048;  // FFT size to use when m_useFFT is true
+	/////////////////////////////////
+
+
+	/////////////////////////////////
+	// Background analysis thread: runs at ~30 Hz, performs seek/read/FFT/Goertzel without blocking the main thread.
+	std::thread m_analysisThread;
+	std::condition_variable m_analysisCv;
+	std::mutex m_analysisCvMutex;
+	std::atomic<bool> m_analysisStop{ false };
+	/////////////////////////////////
+
+
+	/////////////////////////////////
+	// Playhead snapshot written by Process() (main thread) and read by the analysis thread.
+	// Protected by m_playheadMutex to avoid tearing.
+	std::unordered_map<size_t, float> m_playheadSnapshot; // entityId -> seconds
+	std::mutex m_playheadMutex;
+	/////////////////////////////////
+
+
+	/////////////////////////////////
+	// Analysis thread entry point.
+	void AnalysisThreadFunc();
 	/////////////////////////////////
 };
 /////////////////////////////////

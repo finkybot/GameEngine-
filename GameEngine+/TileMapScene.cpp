@@ -236,8 +236,9 @@ void TileMapScene::ProcessMouseRightDrag(bool& rightMouseDown, const Vec2& mouse
 /////////////////////////////////
 // ProcessEscapeKey - handles input to close the window when any key is pressed
 void TileMapScene::ProcessEscapeKey(bool keyDown) const {
-	if (keyDown)
-		m_gameEngine.m_window.close();
+	if (keyDown) {
+		m_gameEngine.ChangeScene("MainMenu");
+	}
 }
 /////////////////////////////////
 
@@ -268,10 +269,14 @@ void TileMapScene::Update(float /*deltaTime*/) {
 		// ImGui::SFML::ProcessEvent(m_gameEngine.m_window, *eventOpt);
 
 		if (eventOpt->is<sf::Event::Closed>()) {
-			m_gameEngine.m_window.close();
+			m_gameEngine.m_window.close(); // window X button - always close
 		}
-
-		HandleEvent(eventOpt);
+		// Escape is handled globally by GameEngine before scenes run, so do NOT forward it here
+		if (!eventOpt->is<sf::Event::KeyPressed>() || [&]{
+				auto kp = eventOpt->getIf<sf::Event::KeyPressed>();
+				return !kp || static_cast<sf::Keyboard::Key>(kp->code) != sf::Keyboard::Key::Escape;
+			}())
+			HandleEvent(eventOpt);
 	}
 
 	// simple update: run entity manager update

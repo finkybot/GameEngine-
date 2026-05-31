@@ -1,5 +1,6 @@
 /////////////////////////////////
-// CRectangle.cpp
+// CRectangle.cpp - implementation of the CRectangle shape component class, which represents a rectangle shape in the game engine. Components in an ECS architecture are often just data holders, so this class primarily manages the properties of the 
+// rectangle shape and provides methods for setting its size, color, and position, as well as retrieving its properties for use in rendering and collision detection.
 /////////////////////////////////
 
 

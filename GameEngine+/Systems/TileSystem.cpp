@@ -1,9 +1,23 @@
+/////////////////////////////////
+// TileSystem.cpp
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes
 #include "TileSystem.h"
 #include "../CRectangle.h"
 #include "../CStatic.h"
 #include "../CTexture.h"
 #include "../GameEngine.h"
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Process - iterates through all entities with a CTileMap component, checks for solid tiles, and creates static collider entities for those tiles. This method serves as the main entry point for processing tile maps and generating colliders in the game loop. 
+// It uses a greedy rectangle merging algorithm to combine adjacent solid tiles into larger rectangles for more efficient collision handling.
 void TileSystem::Process() {
 	// Iterate all entities and find ones with CTileMap that haven't been processed yet
 	for (auto& up : m_entityManager->GetEntities()) {
@@ -110,3 +124,4 @@ void TileSystem::Process() {
 		tileComp->m_dirty = false;
 	}
 }
+/////////////////////////////////

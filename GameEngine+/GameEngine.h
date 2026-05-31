@@ -103,6 +103,13 @@ public:
 
 
 	/////////////////////////////////
+	// GetSceneNames - Return a list of registered scene names (useful for UI like a main menu)
+	std::vector<std::string> GetSceneNames() const;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Update - Updates the current scene and game state based on the elapsed time since the last frame, allowing for time-based updates and game logic processing. The method calculates the delta time using the SFML clock and calls the update method of the current active scene, enabling smooth and consistent updates regardless of frame rate variations.
 	void Update(float deltaTime);
 	/////////////////////////////////

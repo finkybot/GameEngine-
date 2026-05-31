@@ -71,10 +71,14 @@ void TestScene::Update(float deltaTime) {
 		ImGui::SFML::ProcessEvent(m_gameEngine.m_window, *eventOpt);
 
 		if (eventOpt->is<sf::Event::Closed>()) {
-			m_gameEngine.m_window.close();
+			m_gameEngine.m_window.close(); // window X button - always close
 		}
-
-		HandleEvent(eventOpt);
+		// Escape is handled globally by GameEngine before scenes run, so do NOT forward it here
+		if (!eventOpt->is<sf::Event::KeyPressed>() || [&]{
+				auto kp = eventOpt->getIf<sf::Event::KeyPressed>();
+				return !kp || static_cast<sf::Keyboard::Key>(kp->code) != sf::Keyboard::Key::Escape;
+			}())
+			HandleEvent(eventOpt);
 	}
 
 	// scene update logic
@@ -86,8 +90,11 @@ void TestScene::Update(float deltaTime) {
 		int entitiesToSpawn = std::min(4, targetEntityCount - static_cast<int>(currentEntityCount));
 
 		for (int i = 0; i < entitiesToSpawn; ++i) {
-			// Random team selection
-			unsigned int type = m_entityType(m_generator);
+
+			// Determine spawn direction first, then select team based on side
+			int direction = m_direction(m_generator);
+			// direction==1 => spawned just off the left edge (will move rightward)
+			unsigned int type = (direction == 1) ? 0u : 1u;
 
 			// Randomized leftward movement, no vertical component
 			float velocityX = std::uniform_real_distribution<float>(-1820.0f, -560.0f)(m_generator);
@@ -98,7 +105,7 @@ void TestScene::Update(float deltaTime) {
 			int b = m_blueVal(m_generator);
 			int a = m_alphaVal(m_generator);
 			float radius = m_radiusDistro(m_generator);
-			int direction = m_direction(m_generator);
+			// direction already sampled above
 
 			if (direction == 1) {			   // Move rightward
 				velocityX = velocityX * -1.0f; // Reverse velocity for rightward movement
@@ -225,7 +232,9 @@ void TestScene::InitializeGame(sf::Vector2u windowSize) {
 	m_direction = std::uniform_int_distribution<int>(0, 1);				// 2 movement directions: leftward or rightward
 
 	for (int i = 0; i < maxEntities; ++i) {
-		unsigned int type = m_entityType(generator);
+		// For bulk initialization, sample direction first then make left/right spawns use consistent teams
+		int direction = m_direction(generator);
+		unsigned int type = (direction == 1) ? 0u : 1u;
 
 		float spawnX, spawnY;
 
@@ -239,7 +248,6 @@ void TestScene::InitializeGame(sf::Vector2u windowSize) {
 		int a = m_alphaVal(generator);
 
 		float radius = m_radiusDistro(generator);
-		int direction = m_direction(generator);
 
 		if (direction == 1) {			   // Move rightward
 			velocityX = velocityX * -1.0f; // Reverse velocity for rightward movement

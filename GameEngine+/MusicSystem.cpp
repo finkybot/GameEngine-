@@ -1,4 +1,11 @@
+/////////////////////////////////
 // MusicSystem.cpp : Implementation of the MusicSystem class for music playback management.
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes
 #include "Entity.h"
 #include "MusicSystem.h"
 #include "EntityManager.h"
@@ -13,11 +20,45 @@
 #include <complex>
 #include <algorithm>
 #include <vector>
-#include "../third_party/kissfft/kiss_fft.h"
+#include <filesystem>
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Include kiss_fft implementation directly in the MusicSystem.cpp to avoid needing to link against an external library. This allows us to keep the music system self-contained and simplifies the build process, as we don't need to worry about linking against a separate FFT library.
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#endif
+#include "../third_party/kissfft/kiss_fft.h"
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// UtfToPath - Converts a UTF-8 encoded std::string to a std::filesystem::path, ensuring that Unicode characters are correctly handled on Windows. On Windows, we round-trip through a wide string (std::wstring) to ensure that the full Unicode path is preserved, 
+// as the Windows API expects wide strings for file paths.
+static std::filesystem::path Utf8ToPath(const std::string& utf8) {
+#ifdef _WIN32
+	// Round-trip through wstring so Windows sees the full Unicode path
+	int wlen = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, nullptr, 0);
+	std::wstring wide(static_cast<size_t>(wlen > 0 ? wlen : 0), L'\0');
+	if (wlen > 0) MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), -1, wide.data(), wlen);
+	return std::filesystem::path(wide);
+#else
+	return std::filesystem::u8path(utf8);
+#endif
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // Provide simple kiss_fft implementation inline so it is compiled into the binary
 extern "C" {
-// internal radix-2 FFT used by the kissfft shim (keep it simple stupid, no optimizations or precomputation, just the basic algorithm)
+/////////////////////////////////
+// ks_internal_fft - This function implements a simple radix-2 Cooley-Tukey FFT algorithm. It takes an array of complex numbers (kiss_fft_cpx) and its size, and performs the FFT in-place. The function first performs a bit-reversal permutation on the input data,
 static void ks_internal_fft(kiss_fft_cpx* data, int size) {
 	// require power of two size, but we won't enforce it here since the config allocator will round up to the next power of two. Just do the best we can with the given size and ignore any extra samples if not a power of two
 	if (size <= 1) return;
@@ -61,9 +102,12 @@ static void ks_internal_fft(kiss_fft_cpx* data, int size) {
 		}
 	}
 }
+/////////////////////////////////
 
-// Simple kiss_fft shim implementation that uses the internal_fft function above. We ignore the mem and lenmem parameters since we are just using malloc/free for simplicity. The config struct just holds the FFT size and direction, 
-// and the actual FFT is performed in-place on the input buffer which is copied from fin to a temporary buffer to avoid modifying the input. The output is then copied back to fout.
+
+
+/////////////////////////////////
+// kiss_fft_alloc - This function allocates and initializes a configuration structure for the FFT. It takes the desired FFT size (nfft), a flag indicating whether to perform an inverse FFT, and optional memory parameters which we ignore in this simple implementation.
 kiss_fft_cfg* kiss_fft_alloc(int nfft, int inverse_fft, void* mem, size_t* lenmem) {
 	(void)mem; (void)lenmem;
 	if (nfft <= 0) return NULL;
@@ -74,13 +118,21 @@ kiss_fft_cfg* kiss_fft_alloc(int nfft, int inverse_fft, void* mem, size_t* lenme
 	cfg->inverse = inverse_fft ? 1 : 0;
 	return cfg;
 }
+/////////////////////////////////
 
-// Free the config struct allocated by kiss_fft_alloc
+
+
+/////////////////////////////////
+// kiss_fft_free - This function frees the configuration structure allocated by kiss_fft_alloc. It simply checks if the pointer is not null and then frees the memory.
 void kiss_fft_free(kiss_fft_cfg* cfg) {
 	if (cfg) free(cfg);
 }
+/////////////////////////////////
 
-// Perform the FFT using the internal_fft function. We copy the input to a temporary buffer, perform the FFT in-place, and then copy the result to the output buffer. We also zero-pad the input if it is smaller than the FFT size.
+
+/////////////////////////////////
+// kiss_fft - This function performs the FFT using the provided configuration and input/output buffers. It first checks for null pointers, then allocates a temporary buffer to hold the input data. It copies the input data into the buffer, zero-padding if necessary, 
+// and then calls the internal FFT function to perform the transformation in-place. Finally, it copies the result to the output buffer and frees the temporary buffer.
 void kiss_fft(const kiss_fft_cfg* cfg, const kiss_fft_cpx* fin, kiss_fft_cpx* fout) {
 	if (!cfg || !fin || !fout) return;
 	int n = cfg->nfft;
@@ -93,13 +145,29 @@ void kiss_fft(const kiss_fft_cfg* cfg, const kiss_fft_cpx* fin, kiss_fft_cpx* fo
 	for (int i = 0; i < n; ++i) fout[i] = buf[i];
 	free(buf);
 }
+/////////////////////////////////
 } // extern "C"
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// MusicSystem implementation
 MusicSystem::MusicSystem(EntityManager& entityManager) : m_entityManager(entityManager) {}
+/////////////////////////////////
 
-// Use kissfft shim in third_party/kissfft for FFT
 
+
+/////////////////////////////////
+// StopAllMusic - This method is responsible for stopping all currently playing music tracks. It first signals the analysis thread to stop and waits for it to finish, ensuring that no analysis is running while we clear the active music state. Then, it iterates through all 
+// active music instances and calls their stop method, effectively halting playback. Finally, it clears the active music mapping and any associated analysis buffers and levels to reset the state of the MusicSystem.
 void MusicSystem::StopAllMusic() {
+	// Pause the analysis thread while we clear state
+	m_analysisStop.store(true);
+	m_analysisCv.notify_all();
+	if (m_analysisThread.joinable())
+		m_analysisThread.join();
+
 	for (auto& p : m_activeMusic) {
 		if (p.second)
 			p.second->stop();
@@ -111,7 +179,13 @@ void MusicSystem::StopAllMusic() {
 		m_levels.clear();
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// GetSpectrum - This method retrieves the latest computed spectrum data for a given entity ID. It locks the levels mutex to ensure thread safety while accessing the spectra mapping, then checks if there is an entry for 
+// the specified entity ID. If an entry exists, it copies the spectrum data to the output parameter and returns true; otherwise, it returns false to indicate that no spectrum data is available for that entity.
 bool MusicSystem::GetSpectrum(size_t entityId, std::vector<float>& outSpectrum) const {
 	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	auto it = m_spectra.find(entityId);
@@ -119,11 +193,23 @@ bool MusicSystem::GetSpectrum(size_t entityId, std::vector<float>& outSpectrum) 
 	outSpectrum = it->second;
 	return true;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// GetSpectrumBandCount - This method returns the number of frequency bands that are being analyzed in the spectrum. It simply returns the value of m_eqBandCount, which is the current number of bands configured for spectral analysis. 
+// This value can be used by callers to understand how many frequency bins are present in the spectrum data.
 size_t MusicSystem::GetSpectrumBandCount() const {
 	return static_cast<size_t>(m_eqBandCount);
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// SetSpectrumBandCount - This method sets the number of frequency bands to analyze in the spectrum. It takes an integer count as a parameter, which specifies how many bands should be used for spectral analysis. 
+// The method first checks if the count is positive; if not, it returns without making changes.
 void MusicSystem::SetSpectrumBandCount(int count) {
 	if (count <= 0) return;
     std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
@@ -138,29 +224,56 @@ void MusicSystem::SetSpectrumBandCount(int count) {
 		}
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// GetSpectrumBandCount - This method returns the current number of frequency bands that are being analyzed in the spectrum. It simply returns the value of m_eqBandCount, which is the current configuration for spectral analysis.
 void MusicSystem::SetSpectrumSmoothing(float smoothing) {
 	if (smoothing < 0.0f) smoothing = 0.0f;
 	if (smoothing > 0.99f) smoothing = 0.99f;
                         std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	m_spectrumSmoothing = smoothing;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// GetSpectrumSmoothing - This method returns the current smoothing factor applied to the spectrum data. The smoothing factor is a value between 0.0 and 0.99 that determines how much the spectrum values are smoothed over time, 
+// with higher values resulting in smoother but less responsive spectrum data.
 float MusicSystem::GetSpectrumSmoothing() const {
             std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	return m_spectrumSmoothing;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// SetUseFFT - This method enables or disables the use of FFT analysis for the music tracks. It takes a boolean parameter useFFT, which indicates whether FFT analysis should be used. The method locks the levels mutex to ensure thread 
+// safety while modifying the m_useFFT member variable, which controls whether FFT analysis is performed in the background thread.
 void MusicSystem::SetUseFFT(bool useFFT) {
 	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	m_useFFT = useFFT;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// GetUseFFT - This method returns whether FFT analysis is currently enabled for the music tracks. It locks the levels mutex to ensure thread safety while accessing the m_useFFT member variable, which indicates whether FFT analysis is being used.
 bool MusicSystem::GetUseFFT() const {
 	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	return m_useFFT;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// SetFFTSize - This method sets the size of the FFT to be used for spectral analysis. It takes an integer size as a parameter, which specifies the desired FFT size. The method first checks if the size is positive; if not, it returns without making changes.
 void MusicSystem::SetFFTSize(int size) {
 	if (size <= 0) return;
 	// ensure power of two
@@ -169,13 +282,23 @@ void MusicSystem::SetFFTSize(int size) {
 	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	m_fftSize = p;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// GetFFTSize - This method returns the current size of the FFT being used for spectral analysis. It locks the levels mutex to ensure thread safety while accessing the m_fftSize member variable, which holds the current FFT size configuration.
 int MusicSystem::GetFFTSize() const {
 	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	return m_fftSize;
 }
+/////////////////////////////////
 
 
+
+/////////////////////////////////
+// GetPlayingOffset - This method retrieves the current playback position (in seconds) for a given entity ID. It first checks if there is an active music instance for the specified entity ID; if not, it returns 0.0f. If an active music instance exists, 
+// it attempts to get the playing offset using the SFML Music API,
 float MusicSystem::GetPlayingOffset(size_t entityId) const {
 	auto it = m_activeMusic.find(entityId);
 	if (it == m_activeMusic.end() || !it->second)
@@ -186,7 +309,13 @@ float MusicSystem::GetPlayingOffset(size_t entityId) const {
 		return 0.0f;
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// GetDuration - This method retrieves the total duration (in seconds) of the music track associated with a given entity ID. It first checks if there is an active music instance for the specified entity ID; if not, it returns 0.0f. If an active music instance exists, 
+// it attempts to get the duration using the SFML Music API, and returns it in seconds. If any exceptions occur during this process, it catches them and returns 0.0f as a fallback.
 float MusicSystem::GetDuration(size_t entityId) const {
 	auto it = m_activeMusic.find(entityId);
 	if (it == m_activeMusic.end() || !it->second)
@@ -197,7 +326,12 @@ float MusicSystem::GetDuration(size_t entityId) const {
 		return 0.0f;
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Seek - This method seeks to a specific position (in seconds) in the music track associated with a given entity ID. It first checks if there is an active music instance for the specified entity ID; if not, it returns without doing anything. If an active music instance exists,
 void MusicSystem::Seek(size_t entityId, float seconds) {
 	auto it = m_activeMusic.find(entityId);
 	if (it == m_activeMusic.end() || !it->second)
@@ -206,8 +340,19 @@ void MusicSystem::Seek(size_t entityId, float seconds) {
 		it->second->setPlayingOffset(sf::seconds(seconds));
 	} catch (...) {}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Destructor - This method stops the analysis thread and cleans up all active music instances and associated resources.
 MusicSystem::~MusicSystem() {
+	// Stop the analysis thread first
+	m_analysisStop.store(true);
+	m_analysisCv.notify_all();
+	if (m_analysisThread.joinable())
+		m_analysisThread.join();
+
 	for (auto& pair : m_activeMusic) {
 		if (pair.second)
 			pair.second->stop();
@@ -218,7 +363,12 @@ MusicSystem::~MusicSystem() {
 		m_levels.clear();
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// GetLevel - This method retrieves the latest measured RMS level for a given entity ID. It locks the levels mutex to ensure thread safety while accessing the m_levels mapping, then checks if there is an entry for the specified entity ID. If an entry exists, it returns the RMS level;
 float MusicSystem::GetLevel(size_t entityId) const {
         std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	auto it = m_levels.find(entityId);
@@ -226,17 +376,39 @@ float MusicSystem::GetLevel(size_t entityId) const {
 		return 0.0f;
 	return it->second;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// HasAnalysisBuffer - This method checks if an analysis buffer (sf::SoundBuffer) is available for a given entity ID. It locks the levels mutex to ensure thread safety while accessing the m_buffers mapping, then checks if there is an entry for the specified entity ID. 
+// If an entry exists, it returns true; otherwise, it returns false.
 bool MusicSystem::HasAnalysisBuffer(size_t entityId) const {
         std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	return m_buffers.find(entityId) != m_buffers.end();
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// GetOrCreateMusic - This method retrieves the sf::Music instance associated with a given entity. If an instance already exists in the m_activeMusic mapping, it returns it. If not, it attempts to create a new sf::Music instance based on the file path 
+// specified in the CMusic component of the entity.
 void MusicSystem::Update(float deltaSeconds) {}
+/////////////////////////////////
 
-// Process is called every frame to update music playback and perform offline analysis
-// for each entity with a CMusic component.
+
+
+/////////////////////////////////
+// Process - This method is called every frame to update the music playback state and manage the analysis thread. It starts the analysis thread if it hasn't been started yet, cleans up active music instances for entities that no longer have a CMusic component, 
+// and processes all entities with a CMusic component to control playback and update playhead snapshots for analysis. Audio analysis runs on a background thread (AnalysisThreadFunc) at ~30 Hz.
 void MusicSystem::Process() {
+	// Start the analysis thread the first time Process() is called
+	if (!m_analysisThread.joinable()) {
+		m_analysisStop.store(false);
+		m_analysisThread = std::thread(&MusicSystem::AnalysisThreadFunc, this);
+	}
+
 	// Clean up active music instances for entities that no longer have a CMusic component
 	std::unordered_set<size_t> liveIds;
 	for (const auto& entity : m_entityManager.GetEntities()) {
@@ -303,235 +475,210 @@ void MusicSystem::Process() {
 			break;
 		}
 
-		// Offline analysis: compute short-window mean-square around current play position
-		size_t id = entity->GetId();
-		std::shared_ptr<sf::SoundBuffer> buf;
-		{
-            std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
-			auto itb = m_buffers.find(id);
-			if (itb != m_buffers.end())
-				buf = itb->second;
-		}
-
-		if (!buf)
-			continue;
-
+		// Snapshot the current playhead for the analysis thread
 		float seconds = 0.0f;
-		try {
-			seconds = music->getPlayingOffset().asSeconds();
-		} catch (...) {
-			seconds = 0.0f;
+		try { seconds = music->getPlayingOffset().asSeconds(); } catch (...) {}
+		{
+			std::lock_guard<std::mutex> lk(m_playheadMutex);
+			m_playheadSnapshot[entity->GetId()] = seconds;
 		}
-
-		unsigned int sampleRate = buf->getSampleRate();
-		unsigned int channels = buf->getChannelCount();
-		const short* samples = buf->getSamples();
-		size_t totalSamples = static_cast<size_t>(buf->getSampleCount());
-
-		size_t center = static_cast<size_t>(seconds * static_cast<float>(sampleRate)) * channels;
-		size_t windowPerChannel = 1024;
-		size_t windowSamples = windowPerChannel * channels;
-
-		if (windowSamples == 0 || !samples)
-			continue;
-
-		size_t start = (center > windowSamples / 2) ? (center - windowSamples / 2) : 0;
-		if (start + windowSamples > totalSamples) {
-			if (totalSamples > windowSamples)
-				start = totalSamples - windowSamples;
-			else
-				start = 0;
-		}
-
-		double sum = 0.0;
-		for (size_t i = 0; i < windowSamples && (start + i) < totalSamples; ++i) {
-			float v = static_cast<float>(samples[start + i]) / 32768.0f;
-			sum += static_cast<double>(v) * static_cast<double>(v);
-		}
-
-		double mean = 0.0;
-		if (windowSamples > 0)
-			mean = sum / static_cast<double>(windowSamples);
-
-        std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
-		m_levels[id] = static_cast<float>(mean);
-
-   // --- Band analysis: FFT-based (preferred) or fallback Goertzel ---
-	std::vector<float> mags;
-	mags.resize((size_t)m_eqBandCount);
-	if (m_useFFT && m_fftSize > 0) {
-		int N = m_fftSize;
-		// prepare mono buffer of size N centered at playhead
-		std::vector<float> mono;
-		mono.resize((size_t)N);
-		long long centerSample = static_cast<long long>(seconds * static_cast<float>(sampleRate));
-		long long startSample = centerSample - static_cast<long long>(N / 2);
-		for (int i = 0; i < N; ++i) {
-			long long sidx = startSample + i;
-			if (sidx < 0 || static_cast<size_t>(sidx) >= static_cast<size_t>(totalSamples / channels)) {
-				mono[i] = 0.0f;
-				continue;
-			}
-			size_t base = static_cast<size_t>(sidx) * channels;
-			float acc = 0.0f;
-			for (unsigned int c = 0; c < channels; ++c) {
-				acc += static_cast<float>(samples[base + c]) / 32768.0f;
-			}
-			mono[i] = acc / static_cast<float>(channels);
-		}
-		// window (Hann)
-		for (int i = 0; i < N; ++i) {
-			float w = 0.5f * (1.0f - cosf(2.0f * 3.14159265358979323846f * static_cast<float>(i) / static_cast<float>(N)));
-			mono[i] *= w;
-		}
-        // perform FFT using kissfft shim
-		int fftN = N;
-		int half = 0;
-		std::vector<float> magsBins;
-		kiss_fft_cfg* cfg = kiss_fft_alloc(N, 0, NULL, NULL);
-		if (cfg) {
-			int nfft = cfg->nfft;
-			std::vector<kiss_fft_cpx> fin(nfft);
-			std::vector<kiss_fft_cpx> fout(nfft);
-			for (int i = 0; i < nfft; ++i) {
-				if (i < N) { fin[i].r = mono[i]; fin[i].i = 0.0f; }
-				else { fin[i].r = 0.0f; fin[i].i = 0.0f; }
-			}
-			kiss_fft(cfg, fin.data(), fout.data());
-			kiss_fft_free(cfg);
-			fftN = nfft;
-			half = fftN / 2;
-			magsBins.assign((size_t)half + 1, 0.0f);
-			for (int k = 0; k <= half; ++k) {
-				float mag = sqrtf(fout[k].r * fout[k].r + fout[k].i * fout[k].i) / static_cast<float>(fftN);
-				magsBins[k] = mag;
-			}
-		} else {
-			// allocation failed - fallback to zeros
-			fftN = N;
-			half = fftN / 2;
-			magsBins.assign((size_t)half + 1, 0.0f);
-		}
-		float nyq = static_cast<float>(sampleRate) * 0.5f;
-		float dbFloor = -80.0f;
-		// map bands using log spacing between 20Hz and nyquist
-		float minF = 20.0f;
-		if (nyq <= minF) minF = 1.0f;
-		for (int b = 0; b < m_eqBandCount; ++b) {
-			float lowF, highF;
-			if (m_eqBandCount == 1) {
-				lowF = minF; highF = nyq;
-			} else {
-				float L = log10f(minF);
-				float H = log10f(nyq);
-				float lb = L + (H - L) * (static_cast<float>(b) / static_cast<float>(m_eqBandCount));
-				float hb = L + (H - L) * (static_cast<float>(b + 1) / static_cast<float>(m_eqBandCount));
-				lowF = powf(10.0f, lb);
-				highF = powf(10.0f, hb);
-			}
-          int count = 0;
-			double sum = 0.0;
-            for (int k = 0; k <= half; ++k) {
-				float freq = static_cast<float>(k) * static_cast<float>(sampleRate) / static_cast<float>(fftN);
-				// include upper boundary to avoid gaps between adjacent bands
-				if (freq >= lowF && freq <= highF) {
-					sum += magsBins[k];
-					count++;
-				}
-			}
-			float avg = 0.0f;
-			if (count > 0) {
-				avg = static_cast<float>(sum / static_cast<double>(count));
-			} else {
-				// No FFT bins fell into this band's range (can happen for very narrow bands or low FFT resolution)
-				// Fallback: sample nearest FFT bin at the band's center frequency
-                float centerF = sqrtf(lowF * highF);
-				int k = static_cast<int>(centerF * static_cast<float>(fftN) / static_cast<float>(sampleRate) + 0.5f);
-				if (k < 0) k = 0;
-				if (k > half) k = half;
-				avg = magsBins[k];
-			}
-			// convert to dB and normalize
-			float db = 20.0f * log10f(std::max(avg, 1e-20f));
-			float v = (db - dbFloor) / (-dbFloor);
-			if (!std::isfinite(v)) v = 0.0f;
-			if (v < 0.0f) v = 0.0f;
-			if (v > 1.0f) v = 1.0f;
-			mags[b] = v;
-		}
-	} else {
-		// fallback: existing Goertzel-based approach (keep previous behavior)
-		const size_t N = windowPerChannel; // number of samples per channel
-		std::vector<float> mono;
-		mono.reserve(N);
-		for (size_t i = 0; i < N; ++i) {
-			size_t idx = start + i * channels;
-			if (idx >= totalSamples) {
-				mono.push_back(0.0f);
-				continue;
-			}
-			float acc = 0.0f;
-			for (unsigned int c = 0; c < channels; ++c) {
-				acc += static_cast<float>(samples[idx + c]) / 32768.0f;
-			}
-			mono.push_back(acc / static_cast<float>(channels));
-		}
-
-		// Initialize default center freqs if needed
-		if (m_eqCenterFreqs.empty()) {
-			m_eqCenterFreqs = {31.0f, 62.0f, 125.0f, 250.0f, 500.0f, 1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f};
-		}
-
-		// Build windowed samples (Hann)
-		std::vector<float> windowed(N);
-		for (size_t n = 0; n < N; ++n) {
-			float w = 0.5f * (1.0f - cosf(2.0f * 3.14159265358979323846f * static_cast<float>(n) / static_cast<float>(N)));
-			windowed[n] = mono[n] * w;
-		}
-
-		// Compute Goertzel per band
-		for (int b = 0; b < m_eqBandCount; ++b) {
-			float freq = (b < (int)m_eqCenterFreqs.size()) ? m_eqCenterFreqs[b] : (1000.0f * (b + 1));
-			if (freq <= 0.0f || freq >= static_cast<float>(sampleRate) * 0.5f) {
-				mags[b] = 0.0f;
-				continue;
-			}
-			float omega = 2.0f * 3.14159265358979323846f * freq / static_cast<float>(sampleRate);
-			float coeff = 2.0f * cosf(omega);
-			float s_prev = 0.0f, s_prev2 = 0.0f;
-			for (size_t n = 0; n < N; ++n) {
-				float s = windowed[n] + coeff * s_prev - s_prev2;
-				s_prev2 = s_prev;
-				s_prev = s;
-			}
-			float real = s_prev - s_prev2 * cosf(omega);
-			float imag = s_prev2 * sinf(omega);
-			float power = real * real + imag * imag;
-			float magnitude = sqrtf(power) / static_cast<float>(N);
-			mags[b] = magnitude;
-		}
-		// normalize
-		float maxv = 1e-9f;
-		for (float v : mags) if (v > maxv) maxv = v;
-		if (maxv > 0.0f) {
-			for (float &v : mags) v = v / maxv;
-		}
-	}
-
-	// Store into m_spectra with smoothing
-	{
-		std::lock_guard<std::recursive_mutex> lk2(m_levelsMutex);
-		auto &store = m_spectra[id];
-		if ((int)store.size() != m_eqBandCount) store.assign(m_eqBandCount, 0.0f);
-		for (int b = 0; b < m_eqBandCount; ++b) {
-			float prev = store[b];
-			float nv = mags[b];
-			store[b] = prev * m_spectrumSmoothing + nv * (1.0f - m_spectrumSmoothing);
-		}
-	}
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// AnalysisThreadFunc - runs on a dedicated thread at ~30 Hz. Reads playhead snapshots written by Process(), seeks/reads from InputSoundFile, performs FFT or Goertzel analysis, and stores results in m_levels / m_spectra.
+void MusicSystem::AnalysisThreadFunc() {
+	using namespace std::chrono_literals;
+	while (!m_analysisStop.load(std::memory_order_relaxed)) {
+		// Wait up to ~33 ms (~30 Hz) for a wake signal or timeout
+		{
+			std::unique_lock<std::mutex> lk(m_analysisCvMutex);
+			m_analysisCv.wait_for(lk, 33ms);
+		}
+		if (m_analysisStop.load(std::memory_order_relaxed))
+			break;
+
+		// Snapshot the buffers and playhead map under their respective locks
+		std::unordered_map<size_t, std::shared_ptr<sf::InputSoundFile>> bufSnap;
+		{
+			std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+			bufSnap = m_buffers;
+		}
+		std::unordered_map<size_t, float> playheadSnap;
+		{
+			std::lock_guard<std::mutex> lk(m_playheadMutex);
+			playheadSnap = m_playheadSnapshot;
+		}
+
+		// Read config under the levels mutex
+		int eqBandCount;
+		float spectrumSmoothing;
+		bool useFFT;
+		int fftSize;
+		std::vector<float> eqCenterFreqs;
+		{
+			std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+			eqBandCount = m_eqBandCount;
+			spectrumSmoothing = m_spectrumSmoothing;
+			useFFT = m_useFFT;
+			fftSize = m_fftSize;
+			eqCenterFreqs = m_eqCenterFreqs;
+		}
+
+		for (auto& [id, soundFile] : bufSnap) {
+			if (!soundFile) continue;
+			auto pit = playheadSnap.find(id);
+			if (pit == playheadSnap.end()) continue;
+			float seconds = pit->second;
+
+			unsigned int sampleRate = soundFile->getSampleRate();
+			unsigned int channels = soundFile->getChannelCount();
+			size_t totalSamples = static_cast<size_t>(soundFile->getSampleCount());
+
+			const size_t windowPerChannel = 1024;
+			size_t windowSamples = windowPerChannel * channels;
+			if (windowSamples == 0 || sampleRate == 0 || channels == 0) continue;
+
+			// Compute analysis window around playhead
+			size_t center = static_cast<size_t>(seconds * static_cast<float>(sampleRate)) * channels;
+			size_t start = (center > windowSamples / 2) ? (center - windowSamples / 2) : 0;
+			if (totalSamples > 0 && start + windowSamples > totalSamples)
+				start = totalSamples > windowSamples ? totalSamples - windowSamples : 0;
+
+			std::vector<short> sampleBuf(windowSamples, 0);
+			soundFile->seek(start);
+			size_t readCount = soundFile->read(sampleBuf.data(), windowSamples);
+			const short* samples = sampleBuf.data();
+
+			// RMS level
+			double rmsSum = 0.0;
+			for (size_t i = 0; i < readCount; ++i) {
+				float v = static_cast<float>(samples[i]) / 32768.0f;
+				rmsSum += static_cast<double>(v) * static_cast<double>(v);
+			}
+			float level = readCount > 0 ? static_cast<float>(rmsSum / static_cast<double>(readCount)) : 0.0f;
+
+			// Band analysis
+			std::vector<float> mags(static_cast<size_t>(eqBandCount), 0.0f);
+
+			if (useFFT && fftSize > 0) {
+				int N = fftSize;
+				std::vector<float> mono(static_cast<size_t>(N), 0.0f);
+				long long centerSample = static_cast<long long>(seconds * static_cast<float>(sampleRate));
+				long long startSample  = centerSample - static_cast<long long>(N / 2);
+				long long bufStartSample = static_cast<long long>(start / channels);
+				for (int i = 0; i < N; ++i) {
+					long long localIdx = (startSample + i) - bufStartSample;
+					if (localIdx < 0 || static_cast<size_t>(localIdx) >= readCount / channels) continue;
+					size_t base = static_cast<size_t>(localIdx) * channels;
+					float acc = 0.0f;
+					for (unsigned int c = 0; c < channels; ++c)
+						acc += static_cast<float>(samples[base + c]) / 32768.0f;
+					mono[i] = acc / static_cast<float>(channels);
+				}
+				for (int i = 0; i < N; ++i) {
+					float w = 0.5f * (1.0f - cosf(2.0f * 3.14159265358979323846f * static_cast<float>(i) / static_cast<float>(N)));
+					mono[i] *= w;
+				}
+				int fftN = N, half = 0;
+				std::vector<float> magsBins;
+				kiss_fft_cfg* cfg = kiss_fft_alloc(N, 0, NULL, NULL);
+				if (cfg) {
+					int nfft = cfg->nfft;
+					std::vector<kiss_fft_cpx> fin(nfft), fout(nfft);
+					for (int i = 0; i < nfft; ++i) {
+						fin[i].r = (i < N) ? mono[i] : 0.0f;
+						fin[i].i = 0.0f;
+					}
+					kiss_fft(cfg, fin.data(), fout.data());
+					kiss_fft_free(cfg);
+					fftN = nfft; half = fftN / 2;
+					magsBins.assign(static_cast<size_t>(half) + 1, 0.0f);
+					for (int k = 0; k <= half; ++k)
+						magsBins[k] = sqrtf(fout[k].r * fout[k].r + fout[k].i * fout[k].i) / static_cast<float>(fftN);
+				} else {
+					fftN = N; half = fftN / 2;
+					magsBins.assign(static_cast<size_t>(half) + 1, 0.0f);
+				}
+				float nyq = static_cast<float>(sampleRate) * 0.5f;
+				float minF = 20.0f; if (nyq <= minF) minF = 1.0f;
+				float dbFloor = -80.0f;
+				for (int b = 0; b < eqBandCount; ++b) {
+					float lowF, highF;
+					if (eqBandCount == 1) { lowF = minF; highF = nyq; }
+					else {
+						float L = log10f(minF), H = log10f(nyq);
+						lowF  = powf(10.0f, L + (H - L) * (static_cast<float>(b)     / static_cast<float>(eqBandCount)));
+						highF = powf(10.0f, L + (H - L) * (static_cast<float>(b + 1) / static_cast<float>(eqBandCount)));
+					}
+					int cnt = 0; double bsum = 0.0;
+					for (int k = 0; k <= half; ++k) {
+						float freq = static_cast<float>(k) * static_cast<float>(sampleRate) / static_cast<float>(fftN);
+						if (freq >= lowF && freq <= highF) { bsum += magsBins[k]; cnt++; }
+					}
+					float avg = 0.0f;
+					if (cnt > 0) avg = static_cast<float>(bsum / static_cast<double>(cnt));
+					else {
+						float cf = sqrtf(lowF * highF);
+						int k = static_cast<int>(cf * static_cast<float>(fftN) / static_cast<float>(sampleRate) + 0.5f);
+						if (k < 0) k = 0; if (k > half) k = half;
+						avg = magsBins[k];
+					}
+					float db = 20.0f * log10f(std::max(avg, 1e-20f));
+					float v  = (db - dbFloor) / (-dbFloor);
+					if (!std::isfinite(v)) v = 0.0f;
+					mags[b] = std::max(0.0f, std::min(1.0f, v));
+				}
+			} else {
+				// Goertzel fallback
+				if (eqCenterFreqs.empty()) {
+					eqCenterFreqs = {31.0f, 62.0f, 125.0f, 250.0f, 500.0f, 1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f};
+				}
+				const size_t N = windowPerChannel;
+				std::vector<float> windowed(N, 0.0f);
+				for (size_t i = 0; i < N; ++i) {
+					size_t idx = i * channels;
+					if (idx >= readCount) continue;
+					float acc = 0.0f;
+					for (unsigned int c = 0; c < channels; ++c)
+						acc += static_cast<float>(samples[idx + c]) / 32768.0f;
+					float w = 0.5f * (1.0f - cosf(2.0f * 3.14159265358979323846f * static_cast<float>(i) / static_cast<float>(N)));
+					windowed[i] = (acc / static_cast<float>(channels)) * w;
+				}
+				for (int b = 0; b < eqBandCount; ++b) {
+					float freq = (b < (int)eqCenterFreqs.size()) ? eqCenterFreqs[b] : (1000.0f * (b + 1));
+					if (freq <= 0.0f || freq >= static_cast<float>(sampleRate) * 0.5f) continue;
+					float omega = 2.0f * 3.14159265358979323846f * freq / static_cast<float>(sampleRate);
+					float coeff = 2.0f * cosf(omega), s1 = 0.0f, s2 = 0.0f;
+					for (size_t n = 0; n < N; ++n) { float s = windowed[n] + coeff * s1 - s2; s2 = s1; s1 = s; }
+					float real = s1 - s2 * cosf(omega), imag = s2 * sinf(omega);
+					mags[b] = sqrtf(real * real + imag * imag) / static_cast<float>(N);
+				}
+				float maxv = 1e-9f;
+				for (float v : mags) if (v > maxv) maxv = v;
+				if (maxv > 0.0f) for (float& v : mags) v /= maxv;
+			}
+
+			// Write results under the levels mutex
+			std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+			m_levels[id] = level;
+			auto& store = m_spectra[id];
+			if ((int)store.size() != eqBandCount) store.assign(static_cast<size_t>(eqBandCount), 0.0f);
+			for (int b = 0; b < eqBandCount; ++b)
+				store[b] = store[b] * spectrumSmoothing + mags[b] * (1.0f - spectrumSmoothing);
+		}
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// GetOrCreateMusic - This method retrieves the sf::Music instance associated with a given entity. If an instance already exists in the m_activeMusic mapping, it returns it. If not, it attempts to create a new sf::Music instance based on the file path 
+// specified in the CMusic component of the entity.
 sf::Music* MusicSystem::GetOrCreateMusic(Entity& entity) {
 	CMusic* musicComp = entity.GetComponent<CMusic>();
 	if (!musicComp)
@@ -547,7 +694,7 @@ sf::Music* MusicSystem::GetOrCreateMusic(Entity& entity) {
 	m_activeMusic.emplace(id, std::move(newMusic));
 
 	if (!musicComp->path.empty()) {
-		if (!musicPtr->openFromFile(musicComp->path)) {
+		if (!musicPtr->openFromFile(Utf8ToPath(musicComp->path))) {
 			std::cerr << "MusicSystem: Failed to open audio file: " << musicComp->path << std::endl;
 		} else {
 			std::cout << "MusicSystem: Opened audio file: " << musicComp->path << " for entity " << id << std::endl;
@@ -559,17 +706,18 @@ sf::Music* MusicSystem::GetOrCreateMusic(Entity& entity) {
 		m_levels[id] = 0.0f;
 	}
 
-	// Attempt to load sf::SoundBuffer for offline analysis (may fail for large files)
+	// Open sf::InputSoundFile for streaming analysis (reads only the required sample window per frame, avoids full decode into RAM)
 	try {
-		auto buf = std::make_shared<sf::SoundBuffer>();
-		if (buf->loadFromFile(musicComp->path)) {
-        std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
-			m_buffers[id] = buf;
-			std::cout << "MusicSystem: Loaded buffer for analysis for entity " << id << std::endl;
+		auto soundFile = std::make_shared<sf::InputSoundFile>();
+		if (soundFile->openFromFile(Utf8ToPath(musicComp->path))) {
+			std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+			m_buffers[id] = soundFile;
+			std::cout << "MusicSystem: Opened sound file for analysis for entity " << id << std::endl;
 		} else {
-			std::cerr << "MusicSystem: Failed to load buffer for analysis: " << musicComp->path << std::endl;
+			std::cerr << "MusicSystem: Failed to open sound file for analysis: " << musicComp->path << std::endl;
 		}
 	} catch (...) {}
 
 	return musicPtr;
 }
+/////////////////////////////////

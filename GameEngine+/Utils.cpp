@@ -1,6 +1,12 @@
-// Utils.cpp
+/////////////////////////////////
+// Utils.cpp - utility functions for the game engine, including floating-point comparisons, string comparisons, file reading, and JSON parsing for tile maps. These functions provide common utilities that can be used throughout the game engine for various purposes such as math 
+// operations, string handling, and data serialization/deserialization.
+/////////////////////////////////
+ 
+ 
 
-// ***** Includes *****
+/////////////////////////////////
+// Includes 
 #include "Utils.h"
 #include "TileMap.h"
 #include <algorithm>
@@ -11,13 +17,23 @@
 #include <fstream>
 #include <sstream>
 #include <iomanip>
+/////////////////////////////////
 
-// ***** Utility Function definitions *****
+
+
+/////////////////////////////////
+// IsEqual - Utility function to compare two floating-point values for equality within a specified tolerance (EPSILON). This function is essential for handling the imprecision of floating-point arithmetic, allowing for reliable comparisons in game 
+// logic and rendering calculations where exact equality may not be possible due to rounding errors.
 bool IsEqual(float val1, float val2) {
 	return fabsf(val1 - val2) < EPSILON;
 }
+/////////////////////////////////
 
-static bool parse_json_string(const std::string& s, const std::string& key, std::string& out, size_t startPos = 0) {
+
+
+/////////////////////////////////
+// ParseJSONString - A simple ad-hoc JSON string parser that extracts the value of a specified key from a JSON-formatted string. This function searches for the key in the string, locates the corresponding value enclosed in double quotes, and returns it as an output parameter.
+static bool ParseJSONString(const std::string& s, const std::string& key, std::string& out, size_t startPos = 0) {
 	auto pos = s.find('"' + key + '"', startPos);
 	if (pos == std::string::npos)
 		return false;
@@ -33,8 +49,14 @@ static bool parse_json_string(const std::string& s, const std::string& key, std:
 	out = s.substr(pos + 1, endq - (pos + 1));
 	return true;
 }
+/////////////////////////////////
 
-static bool parse_json_int_array_from_pos(const std::string& s, size_t startBracketPos, std::vector<int>& out,
+
+
+/////////////////////////////////
+// ParseJSONIntArrayFromPos - A simple ad-hoc JSON array parser that extracts an array of integers from a JSON-formatted string starting from a specified position. This function checks for the opening bracket, then iterates through the characters to parse integer values, 
+// handling optional whitespace and commas, until it reaches the closing bracket.
+static bool ParseJSONIntArrayFromPos(const std::string& s, size_t startBracketPos, std::vector<int>& out,
 										  size_t& outPos) {
 	if (startBracketPos >= s.size() || s[startBracketPos] != '[')
 		return false;
@@ -71,9 +93,14 @@ static bool parse_json_int_array_from_pos(const std::string& s, size_t startBrac
 	}
 	return false;
 }
+/////////////////////////////////
 
-// parse layers: expects "layers": [ { "name": "..", "tiles": [..] }, ... ]
-static bool parse_json_layers(const std::string& s, std::vector<TileMap::Layer>& out) {
+
+
+/////////////////////////////////
+// ParseJSONLayers - A function to parse the "layers" array from a JSON-formatted string representing a tile map. This function looks for the "layers" key, then iterates through each layer object in the array, extracting the layer name and its corresponding tiles array. 
+// The parsed layers are stored in an output vector: expects "layers": [ { "name": "..", "tiles": [..] }, ... ]
+static bool ParseJSONLayers(const std::string& s, std::vector<TileMap::Layer>& out) {
 	out.clear();
 	auto pos = s.find("\"layers\"");
 	if (pos == std::string::npos)
@@ -93,7 +120,7 @@ static bool parse_json_layers(const std::string& s, std::vector<TileMap::Layer>&
 		TileMap::Layer layer;
 		// parse name inside object
 		std::string name;
-		if (parse_json_string(s, "name", name, objStart))
+		if (ParseJSONString(s, "name", name, objStart))
 			layer.name = name;
 		// find tiles array inside object
 		auto tilesPos = s.find("\"tiles\"", objStart);
@@ -101,7 +128,7 @@ static bool parse_json_layers(const std::string& s, std::vector<TileMap::Layer>&
 			auto bracket = s.find('[', tilesPos);
 			if (bracket != std::string::npos && bracket < objEnd) {
 				size_t after;
-				if (!parse_json_int_array_from_pos(s, bracket, layer.tiles, after))
+				if (!ParseJSONIntArrayFromPos(s, bracket, layer.tiles, after))
 					return false;
 			}
 		}
@@ -117,9 +144,13 @@ static bool parse_json_layers(const std::string& s, std::vector<TileMap::Layer>&
 	}
 	return !out.empty();
 }
+/////////////////////////////////
 
-// --- Ad-hoc JSON save/load for TileMap ---
 
+
+/////////////////////////////////
+// SaveTileMapJSON - A function to save a TileMap object to a JSON-formatted file. This function writes the tile map's properties such as width, height, tile size, and optionally tileset metadata and layers to a file in a structured JSON format. 
+// The function handles both the case where the tile map has multiple layers and the fallback case where it has a single tiles array.
 bool SaveTileMapJSON(const TileMap& map, const std::string& path, std::string* outErr) {
 	std::ofstream os(path, std::ios::binary);
 	if (!os) {
@@ -180,9 +211,14 @@ bool SaveTileMapJSON(const TileMap& map, const std::string& path, std::string* o
 	os << "}\n";
 	return true;
 }
+/////////////////////////////////
 
-// very small ad-hoc parser
-static bool parse_json_int(const std::string& s, const std::string& key, int& out) {
+
+
+/////////////////////////////////
+// ParseJSONInt - A simple ad-hoc JSON integer parser that extracts the value of a specified key from a JSON-formatted string. This function searches for the key in the string, locates the corresponding value after the colon, and parses it as an integer, 
+// handling optional whitespace and negative signs.
+static bool ParseJSONInt(const std::string& s, const std::string& key, int& out) {
 	auto pos = s.find('"' + key + '"');
 	if (pos == std::string::npos)
 		return false;
@@ -209,8 +245,13 @@ static bool parse_json_int(const std::string& s, const std::string& key, int& ou
 	out = neg ? -val : val;
 	return true;
 }
+/////////////////////////////////
 
-static bool parse_json_double(const std::string& s, const std::string& key, double& out) {
+
+
+/////////////////////////////////
+// ParseJSONDouble - A simple ad-hoc JSON double parser that extracts the value of a specified key from a JSON-formatted string. This function searches for the key in the string, locates the corresponding value after the colon, and parses it as a double using std::stod,
+static bool ParseJSONDouble(const std::string& s, const std::string& key, double& out) {
 	auto pos = s.find('"' + key + '"');
 	if (pos == std::string::npos)
 		return false;
@@ -228,8 +269,14 @@ static bool parse_json_double(const std::string& s, const std::string& key, doub
 		return false;
 	}
 }
+/////////////////////////////////
 
-static bool parse_json_int_array(const std::string& s, const std::string& key, std::vector<int>& out) {
+
+
+/////////////////////////////////
+// ParseJSONIntArray - A simple ad-hoc JSON array parser that extracts an array of integers from a JSON-formatted string based on a specified key. This function searches for the key in the string, locates the corresponding array enclosed in square brackets, 
+// and parses the integer values within it,
+static bool ParseJSONIntArray(const std::string& s, const std::string& key, std::vector<int>& out) {
 	auto pos = s.find('"' + key + '"');
 	if (pos == std::string::npos)
 		return false;
@@ -272,7 +319,12 @@ static bool parse_json_int_array(const std::string& s, const std::string& key, s
 	}
 	return true;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// LoadTileMapJSON - A function to load a TileMap object from a JSON-formatted file. This function reads the file content, parses the JSON string to extract the tile map's properties such as width, height, tile size, and optionally tileset metadata and layers.
 std::optional<TileMap> LoadTileMapJSON(const std::string& path, std::string* outErr) {
 	std::ifstream is(path, std::ios::binary);
 	if (!is) {
@@ -286,8 +338,8 @@ std::optional<TileMap> LoadTileMapJSON(const std::string& path, std::string* out
 
 	int width = 0, height = 0;
 	double tileSize = 0.0;
-	if (!parse_json_int(s, "width", width) || !parse_json_int(s, "height", height) ||
-		!parse_json_double(s, "tileSize", tileSize)) {
+	if (!ParseJSONInt(s, "width", width) || !ParseJSONInt(s, "height", height) ||
+		!ParseJSONDouble(s, "tileSize", tileSize)) {
 		if (outErr)
 			*outErr = "Failed to parse width/height/tileSize from JSON";
 		return std::nullopt;
@@ -295,7 +347,7 @@ std::optional<TileMap> LoadTileMapJSON(const std::string& path, std::string* out
 
 	// try to parse layers first
 	std::vector<TileMap::Layer> layers;
-	if (parse_json_layers(s, layers)) {
+	if (ParseJSONLayers(s, layers)) {
 		// use first layer as primary tiles for logic (collision) if exists
 		if (!layers.empty()) {
 			if ((int)layers[0].tiles.size() != width * height) {
@@ -309,12 +361,12 @@ std::optional<TileMap> LoadTileMapJSON(const std::string& path, std::string* out
 			map.layers = std::move(layers);
 			// optional tileset metadata
 
-			parse_json_string(s, "tilesetKey", map.tilesetKey);
-			parse_json_string(s, "tilesetImage", map.tilesetImage);
+			ParseJSONString(s, "tilesetKey", map.tilesetKey);
+			ParseJSONString(s, "tilesetImage", map.tilesetImage);
 			int tw = 0, th = 0;
 
-			parse_json_int(s, "tilesetTileW", tw);
-			parse_json_int(s, "tilesetTileH", th);
+			ParseJSONInt(s, "tilesetTileW", tw);
+			ParseJSONInt(s, "tilesetTileH", th);
 
 			map.tilesetTileW = tw;
 			map.tilesetTileH = th;
@@ -325,7 +377,7 @@ std::optional<TileMap> LoadTileMapJSON(const std::string& path, std::string* out
 
 	// fallback: single 'tiles' array
 	std::vector<int> tiles;
-	if (!parse_json_int_array(s, "tiles", tiles)) {
+	if (!ParseJSONIntArray(s, "tiles", tiles)) {
 		if (outErr)
 			*outErr = "Failed to parse tiles array from JSON";
 		return std::nullopt;
@@ -340,21 +392,31 @@ std::optional<TileMap> LoadTileMapJSON(const std::string& path, std::string* out
 	TileMap map(width, height, static_cast<float>(tileSize));
 	map.tiles = std::move(tiles);
 	// optional tileset metadata
-	parse_json_string(s, "tilesetKey", map.tilesetKey);
-	parse_json_string(s, "tilesetImage", map.tilesetImage);
+	ParseJSONString(s, "tilesetKey", map.tilesetKey);
+	ParseJSONString(s, "tilesetImage", map.tilesetImage);
 
 	int tw = 0, th = 0;
 
-	parse_json_int(s, "tilesetTileW", tw);
-	parse_json_int(s, "tilesetTileH", th);
+	ParseJSONInt(s, "tilesetTileW", tw);
+	ParseJSONInt(s, "tilesetTileH", th);
 
 	map.tilesetTileW = tw;
 	map.tilesetTileH = th;
 	return map;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // (TileMap::SaveToJSON / LoadFromJSON implemented in TileMap.cpp)
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// IsGreaterThanOrEqual and IsLessThanOrEqual - Utility functions to compare two floating-point values for greater than or equal and less than or equal, respectively, using the IsEqual function to account for floating-point imprecision. These functions provide reliable 
+// comparisons for game logic and rendering calculations where
 bool IsGreaterThanOrEqual(float val1, float val2) {
 	return val1 > val2 || IsEqual(val1, val2);
 }
@@ -362,15 +424,32 @@ bool IsGreaterThanOrEqual(float val1, float val2) {
 bool IsLessThanOrEqual(float val1, float val2) {
 	return val1 < val2 || IsEqual(val1, val2);
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// MillisecondsToSeconds - A utility function to convert a time value from milliseconds to seconds. This function takes an unsigned integer representing milliseconds and returns a floating-point value representing the equivalent time in seconds, which is commonly used 
+// in game timing and animation calculations.
 float MillisecondsToSeconds(unsigned int milliseconds) {
 	return static_cast<float>(milliseconds) / 1000.0f;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// GetIndex - A utility function to calculate the index in a one-dimensional array representing a two-dimensional grid. This function takes the width of the grid, the row and column coordinates, and returns the corresponding index in the array, which is commonly used for
 unsigned int GetIndex(unsigned int width, unsigned int row, unsigned int col) {
 	return row * width + col;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// StringCompare - A utility function to compare two strings for equality in a case-insensitive manner. This function checks if the lengths of the two strings are equal, and if so, it uses std::equal with a custom comparison function that converts characters 
+// to lowercase before comparing them.
 bool StringCompare(const std::string& a, const std::string& b) {
 	if (a.length() == b.length()) {
 		return std::equal(b.begin(), b.end(), a.begin(),
@@ -378,7 +457,12 @@ bool StringCompare(const std::string& a, const std::string& b) {
 	}
 	return false;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Clamp - A utility function to clamp a floating-point value between a specified minimum and maximum range. This function checks if the value exceeds the maximum or is below the minimum, and returns the appropriate boundary value if so; otherwise, it returns the original value.
 float Clamp(float val, float min, float max) {
 	if (val > max) {
 		return max;
@@ -387,7 +471,13 @@ float Clamp(float val, float min, float max) {
 	}
 	return val;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// ReadFile - A utility function to read the contents of a file into a dynamically allocated character buffer. This function takes the file path as input, attempts to open the file, and if successful, reads its contents into a buffer that is null-terminated. 
+// The caller is responsible for freeing the allocated memory when it is no longer needed.
 const char* ReadFile(const char* filePath) {
 	FILE* file = nullptr;
 	fopen_s(&file, filePath, "r");
@@ -409,3 +499,4 @@ const char* ReadFile(const char* filePath) {
 
 	return buffer;
 }
+/////////////////////////////////

@@ -1,10 +1,23 @@
+/////////////////////////////////
+// DebugStack.cpp
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes.
 #include "DebugStack.h"
 #include <iostream>
 #include <thread>
 #include <sstream>
 #include <iomanip>
 #include <cstdlib>
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Platform-specific includes for stack trace capture. On Windows, we use the DbgHelp library to capture and symbolize stack traces, while on Unix-like systems we use the execinfo library for similar functionality.
 #ifdef _WIN32
 #include <windows.h>
 #include <dbghelp.h>
@@ -12,7 +25,12 @@
 #else
 #include <execinfo.h>
 #endif
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// LogStack - captures and logs the current call stack with an optional tag for context. The function uses platform-specific APIs to capture the stack trace and symbolize it, then formats the output with thread information and the provided tag before logging it to standard error.
 void LogStack(const char* tag) {
     std::ostringstream oss;
     oss << "[LogStack] tag=" << (tag ? tag : "") << " thread=" << std::this_thread::get_id() << "\n";
@@ -45,3 +63,4 @@ void LogStack(const char* tag) {
 #endif
     std::cerr << oss.str() << std::flush;
 }
+/////////////////////////////////

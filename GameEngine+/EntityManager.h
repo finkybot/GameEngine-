@@ -91,6 +91,8 @@ public:
 	// new entity of the specified type and adds it to the manager, while the KillEntity method marks an entity for removal.
 	Entity* AddEntity(EntityType type);
 	void KillEntity(Entity* entity);
+	// Remove all entities immediately (call when switching scenes)
+	void ClearAll();
 	/////////////////////////////////
 
 
@@ -115,8 +117,8 @@ public:
 
 	/////////////////////////////////
 	// Accessor methods for the main systems managed by the EntityManager, including the PhysicsSystem, CollisionSystem, RenderSystem, and MusicSystem. These methods provide access to the systems for updating and rendering entities, as well as managing music playback.
-	PhysicsSystem GetPhysicsSystem() { return m_physicsSystem; }
-	CollisionSystem GetCollisionSystem() { return m_collisionSystem; }
+	PhysicsSystem& GetPhysicsSystem() { return m_physicsSystem; }
+	CollisionSystem& GetCollisionSystem() { return m_collisionSystem; }
 	RenderSystem& GetRenderSystem() { return m_renderSystem; }	
 	MusicSystem* GetMusicSystem() { return m_musicSystem.get(); } // Accessor for MusicSystem (may be nullptr)
 	/////////////////////////////////

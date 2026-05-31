@@ -57,6 +57,14 @@ private:
 	void EnsureVisibleChunks(); // Calculate which chunks intersect the current camera view plus a margin, and ensure those chunks are loaded and ready for rendering. This method will use the camera's position and viewport size to determine which chunks are needed, and will call the chunk manager to load any missing chunks.
 	void ApplyMainCameraView(); //  Apply the main camera's view to the render window before rendering the world. This method will retrieve the main camera's position and viewport settings, and set the SFML view accordingly so that the rendered chunks are displayed in the correct position and scale on the screen.
 	void ProcessInput(); // Process user input for camera controls (e.g., panning) and tile editing (e.g., painting/erasing tiles). This method will handle mouse input for painting tiles based on the current brush value, as well as middle mouse dragging for panning the camera. It will also take into account whether ImGui is capturing the mouse to avoid modifying the map when interacting with the UI.
+	void RefreshMapBounds(); // Recompute m_mapMin/m_mapMax/m_haveBounds from saved chunk files on disk. Called after any paint or erase operation so bounds grow with new tiles and shrink when tiles are removed.
+	/////////////////////////////////
+
+
+	
+	/////////////////////////////////
+	// AtlasLoadWorker - Worker function used to load a texture atlas on a background thread. This function takes the key, file path, and tile dimensions for the atlas, and will load the texture and create the necessary sub-rectangles for each tile in the atlas.
+	void AtlasLoadWorker(std::string key, std::string path, int w, int h);
 	/////////////////////////////////
 
 
@@ -71,12 +79,21 @@ private:
 	/////////////////////////////////
 	 
 	 
+
 	/////////////////////////////////
 	// input states
 	bool m_prevLmb = false;
 	bool m_prevRmb = false;
+	bool m_prevDKey = false; // previous state for 'pick tile' key (D)
 	int m_brushValue = 1;
 	int m_marginChunks = 1;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Guard that blocks any painting until all mouse buttons have been fully released at least once after entering the scene. Prevents the button used to open the scene (e.g. a main-menu click) from immediately starting a selection drag.
+	bool m_inputReady = false;
 	/////////////////////////////////
 
 
@@ -116,9 +133,10 @@ private:
 
 
 	/////////////////////////////////
-	// logical map bounds in world pixels (min, max) used to clamp camera
+	// logical map bounds in world pixels (min, max) used to clamp camera — computed once from saved chunk files on disk.
 	Vec2 m_mapMin = Vec2::Zero;
 	Vec2 m_mapMax = Vec2::Zero;
+	bool m_haveBounds = false;
 	/////////////////////////////////
 
 

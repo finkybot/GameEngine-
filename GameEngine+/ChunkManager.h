@@ -94,6 +94,11 @@ public:
 	/////////////////////////////////
 	// Load all saved chunk files from disk into memory (called on startup)
 	void LoadAllSavedChunks();
+
+	// Scan saved chunk filenames on disk and return the bounding box of all saved chunks in world pixels.
+	// Returns false if no saved chunks exist. Does not load tile data.
+	bool GetSavedChunkBounds(float& outMinX, float& outMinY, float& outMaxX, float& outMaxY) const;
+
 	void SetTilesetKey(const std::string& key) { m_tilesetKey = key; }
 	std::string GetTilesetKey() const { return m_tilesetKey; }
 	void SetMaxLoadedChunks(size_t maxChunks) {	m_maxLoadedChunks = maxChunks; } // Set the maximum number of chunks that can be loaded in memory at once. If the limit is exceeded, least recently used chunks will be unloaded.
@@ -116,6 +121,7 @@ private:
 	// Internal helper methods for loading, saving, and managing chunks
 	void EnqueueLoadChunk(int chunkX, int chunkY);
 	void FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> tileData, uint32_t versionAtEnqueue);
+	void RebuildChunkEntities(Chunk& chunk); // Rebuilds merged collider entities for a chunk; call after tile edits.
 	void EvictIfNeeded();
 	/////////////////////////////////
 	 
@@ -126,6 +132,7 @@ private:
 	static void BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<TextureAtlas>& atlas);
 	/////////////////////////////////
 	 
+
 	
 	/////////////////////////////////
 	// Helper function to combine chunkX and chunkY into a single key for the chunks map
@@ -141,6 +148,12 @@ private:
 	static inline int FloorDiv(int a, int b) { 
 		return (int)std::floor(static_cast<double>(a) / static_cast<double>(b));
 	}
+
+
+
+	/////////////////////////////////
+	// Safety: maximum number of chunks to attempt to load in a single EnsureChunksInTileRect call (span in each axis)
+	static constexpr int kMaxChunkSpan = 256;
 	/////////////////////////////////
 
 

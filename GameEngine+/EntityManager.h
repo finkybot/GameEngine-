@@ -91,6 +91,10 @@ public:
 	// new entity of the specified type and adds it to the manager, while the KillEntity method marks an entity for removal.
 	Entity* AddEntity(EntityType type);
 	void KillEntity(Entity* entity);
+	// Safely kill an entity pointer only if it is currently managed by this EntityManager.
+	// This checks internal containers by pointer identity before calling KillEntity so callers
+	// can avoid dereferencing pointers that may have been freed elsewhere.
+	void SafeKillEntity(Entity* entity);
 	// Remove all entities immediately (call when switching scenes)
 	void ClearAll();
 	/////////////////////////////////

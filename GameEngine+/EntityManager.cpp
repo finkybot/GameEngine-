@@ -425,6 +425,23 @@ void EntityManager::KillEntity(Entity* entity) {
 	entity->Destroy();
 	SetDeathCountThisFrame(GetDeathCountThisFrame() + 1);
 }
+
+
+
+/////////////////////////////////
+// Kill the entity only if it is present in our managed collections. Avoids calling Destroy
+// on pointers that the manager doesn't own which can lead to use-after-free from external callers.
+void EntityManager::SafeKillEntity(Entity* entity) {
+	if (!entity) return;
+	// check if pointer exists in m_entities or m_toAdd by pointer identity
+	for (const auto& up : m_entities) if (up.get() == entity) { KillEntity(entity); return; }
+	for (const auto& up : m_toAdd) if (up.get() == entity) { KillEntity(entity); return; }
+	// Also check type-map lists
+	for (auto &pr : m_entityMap) {
+		for (Entity* e : pr.second) if (e == entity) { KillEntity(entity); return; }
+	}
+	// If not found, ignore — this entity is not owned by us.
+}
 /////////////////////////////////
 
 

@@ -77,7 +77,43 @@ void ChunkManager::LoadAllSavedChunks() {
 
 
 /////////////////////////////////
-// SetBasePath - Sets the base directory path where chunk files will be saved and loaded from. This method ensures that the directory exists and is writable, creating it if necessary. 
+// GetSavedChunkBounds - Scans the base directory for saved chunk files and computes the world-pixel bounding box
+// of all saved chunks without loading any tile data. Returns false if no chunks are found.
+bool ChunkManager::GetSavedChunkBounds(float& outMinX, float& outMinY, float& outMaxX, float& outMaxY) const {
+	if (m_basePath.empty()) return false;
+	bool found = false;
+	outMinX = std::numeric_limits<float>::infinity();
+	outMinY = std::numeric_limits<float>::infinity();
+	outMaxX = -std::numeric_limits<float>::infinity();
+	outMaxY = -std::numeric_limits<float>::infinity();
+	try {
+		for (auto& p : fs::directory_iterator(m_basePath)) {
+			if (!p.is_regular_file()) continue;
+			std::string fname = p.path().filename().string();
+			if (fname.rfind("chunk_", 0) != 0) continue;
+			std::string body = fname.substr(6);
+			size_t us  = body.find('_');
+			size_t dot = body.find('.');
+			if (us == std::string::npos || dot == std::string::npos) continue;
+			int cx = std::stoi(body.substr(0, us));
+			int cy = std::stoi(body.substr(us + 1, dot - (us + 1)));
+			float wx = (float)(cx * m_chunkWidth)  * m_tileSize;
+			float wy = (float)(cy * m_chunkHeight) * m_tileSize;
+			outMinX = std::min(outMinX, wx);
+			outMinY = std::min(outMinY, wy);
+			outMaxX = std::max(outMaxX, wx + m_chunkWidth  * m_tileSize);
+			outMaxY = std::max(outMaxY, wy + m_chunkHeight * m_tileSize);
+			found = true;
+		}
+	} catch (...) {}
+	return found;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// SetBasePath
 // The base path is used as a prefix for all chunk file operations, allowing for organized storage of chunk data on disk.
 void ChunkManager::SetBasePath(const std::string& basePath) {
 	m_basePath = basePath;
@@ -204,7 +240,11 @@ void ChunkManager::DrawChunks(sf::RenderWindow& window, const sf::View& view) {
 			DrawInfo di;
 			di.vertexArray       = c.vertexArray;
 			di.vertexTexture     = c.vertexTexture;
-			di.readyForRendering = c.readyForRendering;
+			// If the chunk is marked not ready but contains only zero tiles (cleared),
+			// treat it as ready so we display empty space instead of the grey loading box.
+			bool allZero = true;
+			for (int t : c.tiles) { if (t != 0) { allZero = false; break; } }
+			di.readyForRendering = c.readyForRendering || allZero;
 			di.chunkX = c.chunkX; di.chunkY = c.chunkY;
 			di.width  = c.width;  di.height = c.height;
 			di.tileSize = c.tileSize;
@@ -296,7 +336,14 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue) {
 
 	const int index     = localY * chunk.width + localX;
 	const int prevValue = chunk.tiles[index];
-	if (prevValue == tileValue) return prevValue;
+	// If this chunk was just inserted as a placeholder (we created it because it wasn't loaded)
+	// then still apply the requested change even if the placeholder value matches the requested value.
+	// This handles erasing areas of maps saved on disk: the placeholder starts as zeros and an erase
+	// should overwrite the on-disk non-zero tiles once the background load finalizes.
+	// Always process clears (tileValue == 0) even if prevValue is already 0 — the chunk may be an
+	// unfinalized placeholder whose real on-disk tiles are non-zero. Bumping editVersion here ensures
+	// FinalizeLoadedChunk rejects the stale background load and keeps the cleared in-memory state.
+	if (prevValue == tileValue && !inserted && tileValue != 0) return prevValue;
 
 	chunk.tiles[index] = tileValue;
 	chunk.dirty        = true;
@@ -315,17 +362,29 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue) {
 		if (atlasOpt.has_value() && *atlasOpt) atlasPtr = *atlasOpt;
 	}
 	BuildChunkVertexArray(chunk, atlasPtr);
+	// Make chunk visible for rendering immediately after we rebuild its vertex array
+	chunk.readyForRendering = true;
+	// Rebuild collider entities so removed tiles don't leave grey rectangles behind
+	RebuildChunkEntities(chunk);
 
-	// Immediately persist to disk
+	// Immediately persist to disk — delete the file if the chunk is entirely empty so
+	// GetSavedChunkBounds only counts chunks that actually contain tiles.
 	if (!m_basePath.empty()) {
 		try {
 			std::string filename = (fs::path(m_basePath) / ("chunk_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
-			std::ofstream outFile(filename, std::ios::binary);
-			if (outFile) {
-				outFile.write(reinterpret_cast<const char*>(chunk.tiles.data()), chunk.tiles.size() * sizeof(int));
+			bool allZero = true;
+			for (int t : chunk.tiles) { if (t != 0) { allZero = false; break; } }
+			if (allZero) {
+				fs::remove(filename); // empty chunk — remove file so bounds shrink correctly
 				chunk.dirty = false;
 			} else {
-				std::cerr << "ChunkManager: failed to save chunk " << filename << "\n";
+				std::ofstream outFile(filename, std::ios::binary);
+				if (outFile) {
+					outFile.write(reinterpret_cast<const char*>(chunk.tiles.data()), chunk.tiles.size() * sizeof(int));
+					chunk.dirty = false;
+				} else {
+					std::cerr << "ChunkManager: failed to save chunk " << filename << "\n";
+				}
 			}
 		} catch (...) {}
 	}
@@ -342,10 +401,22 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 	if (tileX0 > tileX1) std::swap(tileX0, tileX1);
 	if (tileY0 > tileY1) std::swap(tileY0, tileY1);
 
-	const int cX0 = FloorDiv(tileX0, m_chunkWidth)  - marginChunks;
-	const int cY0 = FloorDiv(tileY0, m_chunkHeight) - marginChunks;
-	const int cX1 = FloorDiv(tileX1, m_chunkWidth)  + marginChunks;
-	const int cY1 = FloorDiv(tileY1, m_chunkHeight) + marginChunks;
+	int cX0 = FloorDiv(tileX0, m_chunkWidth)  - marginChunks;
+	int cY0 = FloorDiv(tileY0, m_chunkHeight) - marginChunks;
+	int cX1 = FloorDiv(tileX1, m_chunkWidth)  + marginChunks;
+	int cY1 = FloorDiv(tileY1, m_chunkHeight) + marginChunks;
+
+	// Safety clamp: avoid attempting to load an extremely large span of chunks which can freeze the app.
+	if (cX1 - cX0 > (int)ChunkManager::kMaxChunkSpan) {
+		int mid = (cX0 + cX1) / 2;
+		cX0 = mid - ChunkManager::kMaxChunkSpan / 2;
+		cX1 = mid + ChunkManager::kMaxChunkSpan / 2;
+	}
+	if (cY1 - cY0 > (int)ChunkManager::kMaxChunkSpan) {
+		int mid = (cY0 + cY1) / 2;
+		cY0 = mid - ChunkManager::kMaxChunkSpan / 2;
+		cY1 = mid + ChunkManager::kMaxChunkSpan / 2;
+	}
 
 	for (int cy = cY0; cy <= cY1; ++cy) {
 		for (int cx = cX0; cx <= cX1; ++cx) {
@@ -361,14 +432,29 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 					m_lruIndex[key] = m_lruList.begin();
 					continue;
 				}
-				m_chunks.emplace(key, Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize));
+				// Insert placeholder chunk. Mark it ready for rendering immediately if it contains no tiles
+				// so erasing/clearing operations show empty space instead of the "loading" grey box.
+				auto insertRes = m_chunks.emplace(key, Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize));
+				auto insertedItr = insertRes.first;
+				bool insertedNow = insertRes.second;
 				m_lruList.push_front(key);
 				m_lruIndex[key] = m_lruList.begin();
+					if (insertedNow) {
+						Chunk& newChunk = insertedItr->second;
+						// placeholder chunks are initialized with zero tiles; treat them as ready so they render empty immediately.
+						bool allZero = true;
+						for (int i = 0; i < newChunk.width * newChunk.height; ++i) { if (newChunk.tiles[i] != 0) { allZero = false; break; } }
+					if (allZero) newChunk.readyForRendering = true;
+				}
 				needLoad = true;
 			}
 			if (needLoad) EnqueueLoadChunk(cx, cy);
 		}
 	}
+
+	// After enqueuing loads, ensure we don't exceed allowed loaded chunks
+	// Intentional no-op context anchor: keep eviction immediately after enqueuing.
+	EvictIfNeeded();
 }
 /////////////////////////////////
 
@@ -458,7 +544,56 @@ void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY) {
 
 
 /////////////////////////////////
-// FinalizeLoadedChunk - Finalizes the loading of a chunk. Rejects the loaded data if the chunk was edited after the load was enqueued (version mismatch).
+// RebuildChunkEntities - Rebuilds the collider entities for a chunk based on its current tile data. This should be called whenever the tile data changes to ensure that the colliders match the visual representation of the chunk.
+void ChunkManager::RebuildChunkEntities(Chunk& c) {
+	// First, safely kill any existing entities that were generated for this chunk to avoid leaving orphaned entities in the world. We use SafeKillEntity to ensure that we don't attempt to access entities that may have already been destroyed.
+	try {
+		EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+		for (Entity* ge : c.generatedEntities) {
+			if (ge) em.SafeKillEntity(ge);
+		}
+		c.generatedEntities.clear();
+		std::vector<char> used(c.width * c.height, 0);
+		for (int y = 0; y < c.height; ++y) {
+			for (int x = 0; x < c.width; ++x) {
+				int idx = y * c.width + x;
+				if (used[idx]) continue;
+				int val = c.tiles[idx];
+				if (val == 0) continue;
+				int w = 1;
+				while (x + w < c.width && c.tiles[y * c.width + (x + w)] == val && !used[y * c.width + (x + w)]) ++w;
+				int h = 1;
+				bool canExtend = true;
+				while (y + h < c.height && canExtend) {
+					for (int xi = 0; xi < w; ++xi) {
+						if (c.tiles[(y + h) * c.width + (x + xi)] != val || used[(y + h) * c.width + (x + xi)]) { canExtend = false; break; }
+					}
+					if (canExtend) ++h;
+				}
+				for (int yy = 0; yy < h; ++yy) for (int xx = 0; xx < w; ++xx) used[(y + yy) * c.width + (x + xx)] = 1;
+				float tileW = c.tileSize * w;
+				float tileH = c.tileSize * h;
+				float posX = (c.chunkX * c.width + x) * c.tileSize;
+				float posY = (c.chunkY * c.height + y) * c.tileSize;
+				Entity* ent = em.AddEntity(EntityType::Tile);
+				if (ent) {
+					ent->AddComponent<CTransform>(Vec2(posX, posY), Vec2::Zero);
+					auto rect = std::make_unique<CRectangle>(tileW, tileH);
+					rect->SetColor(160.0f, 160.0f, 160.0f, 200);
+					ent->AddComponentPtr<CShape>(std::move(rect));
+					ent->AddComponent<CStatic>();
+					c.generatedEntities.push_back(ent);
+				}
+			}
+		}
+	} catch(...) {}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// FinalizeLoadedChunk
 void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> tileData, uint32_t versionAtEnqueue) {
 	long long key = GetChunkKey(chunkX, chunkY);
 	std::lock_guard<std::mutex> lock(m_mutex);
@@ -501,57 +636,7 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> 
 	m_lruIndex[key] = m_lruList.begin();
 
 	// register colliders
-	try {
-		EntityManager& em = GameEngine::GetInstance().GetEntityManager();
-		// create merged rects only for this chunk
-		// We'll create entities for contiguous runs of tiles with same value
-		Chunk& c = m_chunks[key];
-		// remove any previously generated entities for this chunk
-		for (Entity* ge : c.generatedEntities) {
-			if (ge) em.KillEntity(ge);
-		}
-		c.generatedEntities.clear();
-		// greedy merge inside chunk local coords
-		std::vector<char> used(c.width * c.height, 0);
-		for (int y = 0; y < c.height; ++y) {
-			for (int x = 0; x < c.width; ++x) {
-				int idx = y * c.width + x;
-				if (used[idx]) continue;
-				int val = c.tiles[idx];
-				if (val == 0) continue;
-				// expand width
-				int w = 1;
-				while (x + w < c.width && c.tiles[y * c.width + (x + w)] == val && !used[y * c.width + (x + w)]) ++w;
-				// expand height
-				int h = 1;
-				bool canExtend = true;
-				while (y + h < c.height && canExtend) {
-					for (int xi = 0; xi < w; ++xi) {
-						if (c.tiles[(y + h) * c.width + (x + xi)] != val || used[(y + h) * c.width + (x + xi)]) { canExtend = false; break; }
-					}
-					if (canExtend) ++h;
-				}
-				// mark used
-				for (int yy = 0; yy < h; ++yy) for (int xx = 0; xx < w; ++xx) used[(y + yy) * c.width + (x + xx)] = 1;
-				// create entity
-				float tileW = c.tileSize * w;
-				float tileH = c.tileSize * h;
-				float posX = (c.chunkX * c.width + x) * c.tileSize;
-				float posY = (c.chunkY * c.height + y) * c.tileSize;
-				Entity* ent = em.AddEntity(EntityType::Tile);
-				if (ent) {
-					ent->AddComponent<CTransform>(Vec2(posX, posY), Vec2::Zero);
-					auto rect = std::make_unique<CRectangle>(tileW, tileH);
-					rect->SetColor(160.0f, 160.0f, 160.0f, 200);
-					ent->AddComponentPtr<CShape>(std::move(rect));
-					ent->AddComponent<CStatic>();
-					c.generatedEntities.push_back(ent);
-				}
-			}
-		}
-	} catch(...) {
-		// ignore errors registering colliders
-	}
+	RebuildChunkEntities(m_chunks[key]);
 }
 /////////////////////////////////
 
@@ -583,7 +668,7 @@ void ChunkManager::EvictIfNeeded() {
 					try {
 						EntityManager& em = GameEngine::GetInstance().GetEntityManager();
 						for (Entity* ge : chunk.generatedEntities) {
-							if (ge) em.KillEntity(ge);
+							if (ge) em.SafeKillEntity(ge);
 						}
 					} catch(...) {}
 

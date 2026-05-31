@@ -17,6 +17,7 @@
 #include <imgui/imgui_internal.h>
 #include <filesystem>
 #include <mutex>
+#include <cstdlib>
 namespace fs = std::filesystem;
 /////////////////////////////////
 
@@ -29,11 +30,31 @@ LevelEditorScene::LevelEditorScene(GameEngine& engine, sf::RenderWindow& win, En
 }
 /////////////////////////////////
 
+
+
+/////////////////////////////////
 // RefreshAvailableLevels - scan "levels" directory for subfolders and populate m_availableLevels
 void LevelEditorScene::RefreshAvailableLevels() {
 	m_availableLevels.clear();
 	std::error_code ec;
-	fs::path base = fs::path("levels");
+	// Use per-user app data folder for installed builds so levels are user-writable and easy to manage
+	fs::path base;
+	// Use secure getenv alternative on MSVC
+#ifdef _MSC_VER
+	char* envBuf = nullptr;
+	size_t len = 0;
+	errno_t er = _dupenv_s(&envBuf, &len, "APPDATA");
+	if (er == 0 && envBuf && envBuf[0] != '\0') {
+		base = fs::path(envBuf) / "GameEnginePlus" / "levels";
+	} else {
+		base = fs::path("levels");
+	}
+	free(envBuf);
+#else
+	const char* appdata = std::getenv("APPDATA");
+	if (appdata && appdata[0] != '\0') base = fs::path(appdata) / "GameEnginePlus" / "levels";
+	else base = fs::path("levels");
+#endif
 	if (!fs::exists(base, ec)) return;
 	for (auto it = fs::directory_iterator(base); it != fs::directory_iterator(); ++it) {
 		try {
@@ -43,7 +64,11 @@ void LevelEditorScene::RefreshAvailableLevels() {
 		} catch(...) { continue; }
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 // SwitchToLevel - change the working level folder. Saves current chunks, sets new base path, and reloads chunks for that level.
 void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	// Save current and clear loaded chunks
@@ -52,18 +77,33 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	m_currentLevelName = name;
 	m_levelSelected = !m_currentLevelName.empty();
 	// Update chunk manager path
+	// Use same APPDATA-based path as RefreshAvailableLevels
+	// Use secure getenv alternative on MSVC
+	fs::path base;
+#ifdef _MSC_VER
+	char* envBuf = nullptr;
+	size_t len = 0;
+	errno_t er = _dupenv_s(&envBuf, &len, "APPDATA");
+	if (er == 0 && envBuf && envBuf[0] != '\0') base = fs::path(envBuf) / "GameEnginePlus" / "levels";
+	else base = fs::path("levels");
+	free(envBuf);
+#else
+	const char* appdata = std::getenv("APPDATA");
+	if (appdata && appdata[0] != '\0') base = fs::path(appdata) / "GameEnginePlus" / "levels";
+	else base = fs::path("levels");
+#endif
 	if (m_currentLevelName.empty()) {
-		m_chunkManager.SetBasePath("levels/chunks");
+		m_chunkManager.SetBasePath((base / "chunks").string());
 	} else {
-		m_chunkManager.SetBasePath((fs::path("levels") / m_currentLevelName / "chunks").string());
+		m_chunkManager.SetBasePath((base / m_currentLevelName / "chunks").string());
 	}
 	// Ensure directory exists
 	try {
-		if (m_currentLevelName.empty()) fs::create_directories(fs::path("levels") / "chunks");
-		else fs::create_directories(fs::path("levels") / m_currentLevelName / "chunks");
+		if (m_currentLevelName.empty()) fs::create_directories(base / "chunks");
+		else fs::create_directories(base / m_currentLevelName / "chunks");
 	} catch(...) {}
 	// Keep m_currentDir unchanged so tileset browser still points at assets/user folder.
-	fs::path chunkPath = (m_currentLevelName.empty()) ? (fs::path("levels") / "chunks") : (fs::path("levels") / m_currentLevelName / "chunks");
+	fs::path chunkPath = (m_currentLevelName.empty()) ? (base / "chunks") : (base / m_currentLevelName / "chunks");
 	std::cout << "SwitchToLevel: '" << name << "' basePath='" << chunkPath.string() << "'\n";
 	// Count chunk files for diagnostics
 	int fileCount = 0;
@@ -91,7 +131,7 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 		m_exportMessage += "; no saved chunks (empty level).";
 	}
 }
-
+/////////////////////////////////
 
 
 /////////////////////////////////
@@ -873,7 +913,19 @@ void LevelEditorScene::RenderLevelManagerWindow() {
 	if (ImGui::Button("Create Level")) {
 		std::string name = std::string(m_levelNameBuf);
 		if (!name.empty()) {
-			try { fs::create_directories(fs::path("levels") / name / "chunks"); } catch(...) {}
+			// create under same base path used by RefreshAvailableLevels / SwitchToLevel
+			fs::path base;
+#ifdef _MSC_VER
+			char* envBuf = nullptr; size_t len = 0; errno_t er = _dupenv_s(&envBuf, &len, "APPDATA");
+			if (er == 0 && envBuf && envBuf[0] != '\0') base = fs::path(envBuf) / "GameEnginePlus" / "levels";
+			else base = fs::path("levels");
+			free(envBuf);
+#else
+			const char* appdata = std::getenv("APPDATA");
+			if (appdata && appdata[0] != '\0') base = fs::path(appdata) / "GameEnginePlus" / "levels";
+			else base = fs::path("levels");
+#endif
+			try { fs::create_directories(base / name / "chunks"); } catch(...) {}
 			RefreshAvailableLevels();
 		}
 	}
@@ -885,13 +937,25 @@ void LevelEditorScene::RenderLevelManagerWindow() {
 		if (ImGui::Selectable(m_availableLevels[i].c_str(), sel)) m_selectedLevelIndex = (int)i;
 	}
 
-	if (m_selectedLevelIndex >= 0 && m_selectedLevelIndex < (int)m_availableLevels.size()) {
+		if (m_selectedLevelIndex >= 0 && m_selectedLevelIndex < (int)m_availableLevels.size()) {
 		if (ImGui::Button("Switch To")) SwitchToLevel(m_availableLevels[m_selectedLevelIndex]);
 		ImGui::SameLine();
 		if (ImGui::Button("Export Level")) {
 			std::string name = m_availableLevels[m_selectedLevelIndex];
-			fs::path src = fs::path("levels") / name;
-			fs::path dst = fs::path("levels") / (name + "_export");
+			// use same base as other operations
+			fs::path base;
+#ifdef _MSC_VER
+			char* envBuf = nullptr; size_t len = 0; errno_t er = _dupenv_s(&envBuf, &len, "APPDATA");
+			if (er == 0 && envBuf && envBuf[0] != '\0') base = fs::path(envBuf) / "GameEnginePlus" / "levels";
+			else base = fs::path("levels");
+			free(envBuf);
+#else
+			const char* appdata = std::getenv("APPDATA");
+			if (appdata && appdata[0] != '\0') base = fs::path(appdata) / "GameEnginePlus" / "levels";
+			else base = fs::path("levels");
+#endif
+			fs::path src = base / name;
+			fs::path dst = base / (name + "_export");
 			try { fs::remove_all(dst); fs::copy(src, dst, fs::copy_options::recursive | fs::copy_options::overwrite_existing); m_exportMessage = std::string("Exported to ") + dst.string(); } catch(...) { m_exportMessage = "Export failed"; }
 		}
 		ImGui::SameLine();

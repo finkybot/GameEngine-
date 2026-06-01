@@ -6,6 +6,7 @@
 
 /////////////////////////////////
 // Includes and forward declarations for the GameEngine implementation.
+#include "CursorSystem.h"
 #include "GameEngine.h"
 #include "FontManager.h"
 #include <SFML/System/Vector2.hpp>
@@ -47,6 +48,9 @@ GameEngine::GameEngine() {
 	if (!m_fontManager.LoadFont("default", "assets/fonts/tech.ttf")) {
 		std::cerr << "Warning: failed to load default font at assets/fonts/tech.ttf" << std::endl;
 	}
+
+	m_cursorSystem = std::make_unique<CursorSystem>(); // Initialize the cursor system with the game window
+	m_cursorSystem->Initialize(&m_window);
 
 	// Do not preload atlases automatically. Atlases should be loaded explicitly via the editor UI so users
 	// can choose which atlas to use at runtime.
@@ -168,6 +172,9 @@ void GameEngine::Run() {
 		std::cerr << "No current scene selected; skipping scene initialization." << std::endl;
 	}
 
+
+
+
 	/* Main Loop, game logic is handled in here once per frame */
 	while (m_window.isOpen()) {
 		Update(
@@ -250,6 +257,9 @@ void GameEngine::Update(float deltaTime) {
 			// Ensure the scene's EntityManager processes game logic (tile system, pending entities)
 			m_currentScene->GetEntityManager().Update(deltaTime);
 
+			// Update the global cursor system
+			m_cursorSystem->Update(deltaTime);
+
 			// Engine render pass ordering:
 			// 1) Entity shapes
 			m_currentScene->GetEntityManager().RenderShapes();
@@ -257,6 +267,8 @@ void GameEngine::Update(float deltaTime) {
 			m_currentScene->Render();
 			// 3) Entity text (render on top of overlays)
 			m_currentScene->GetEntityManager().RenderText();
+			// 4) Custom cursor (on top of scene, below ImGui)
+			m_cursorSystem->Render();
 		}
 
 		// Draw any debug overlays from the current scene before ImGui so they are visible

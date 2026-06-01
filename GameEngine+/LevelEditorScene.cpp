@@ -334,17 +334,32 @@ void LevelEditorScene::Update(float deltaTime) {
 	// If ImGui is capturing the mouse or UI is hovered/active, do not modify the map, allows us to interact with the UI without accidentally editing level or moving the camera.
 	bool uiCapturing = ImGui::GetIO().WantCaptureMouse || ImGui::IsAnyItemActive() || ImGui::IsAnyItemHovered() || ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) || ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow);
 
-	// Tile pick: press D while hovering a tile to pick its texture into the brush I will change this to a button selection and eye dropper tool later.
-	// If D key is pressed and was not pressed in the previous frame (edge) and UI is not capturing, get the tile value at the current mouse position. If the tile value is greater than 0 (we have loaded or created a level), set the selected tile index and brush value to that 
-	// tile's value, allowing the user to pick a tile from the level and use it for painting.
+	
+	
+	
+	
+	// Tile pick: hold D to activate eyedropper mode, then press left mouse button to pick a tile.
+	// While D is held, the eyedropper cursor is visible. When LMB is clicked while D is held,
+	// the tile at the mouse position is selected and becomes the active brush tile.
 	bool dKey = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
-	if (dKey && !m_prevDKey && !uiCapturing) {
+
+	// Switch to eyedropper cursor when D is pressed, revert when released
+	if (dKey && !m_prevDKey) {
+		// D key pressed (edge): switch to eyedropper mode
+		m_gameEngine.GetCursorSystem().SetMode(CursorSystem::Mode::Crosshair);
+	} else if (!dKey && m_prevDKey) {
+		// D key released (edge): switch back to default mode
+		m_gameEngine.GetCursorSystem().SetMode(CursorSystem::Mode::Default);
+	}
+
+	// Pick tile on LMB press while D is held (eyedropper mode)
+	if (dKey && lmb && !m_prevLmb && !uiCapturing) {
 		int val = m_chunkManager.GetTileAt(tileX, tileY);
 		if (val > 0) {
 			m_selectedTileIndex = val - 1;
 			m_brushValue = val;
 			// optionally echo to console for feedback
-			std::cout << "Picked tile at (" << tileX << "," << tileY << ") value=" << val << " -> selectedIndex=" << m_selectedTileIndex << std::endl;
+			//std::cout << "Picked tile at (" << tileX << "," << tileY << ") value=" << val << " -> selectedIndex=" << m_selectedTileIndex << std::endl;
 		}
 	}
 
@@ -522,6 +537,7 @@ void LevelEditorScene::Update(float deltaTime) {
 	}
 	m_prevLmb = lmb;
 	m_prevRmb = rmb;
+	m_prevDKey = dKey;
 
 	ProcessInput();
 }
@@ -787,7 +803,8 @@ void LevelEditorScene::Render() {
 						// copy key into ui buffer
 						ImStrncpy(m_tilesetKeyBuf, key.c_str(), sizeof(m_tilesetKeyBuf));
 					} else std::cerr << "Failed to load atlas: " << s_selected_file << std::endl;
-				} }
+				} 
+			}
 		}
 
 	}
@@ -809,7 +826,7 @@ void LevelEditorScene::Render() {
 				if (key.empty()) {
 					try { key = std::filesystem::path(path).stem().string(); } catch(...) { key = ""; }
 				}
-				{
+					{
 						std::lock_guard<std::mutex> lg(m_atlasLoadMutex);
 						m_atlasLoadKey = key;
 						m_atlasLoadPath = path;
@@ -817,9 +834,9 @@ void LevelEditorScene::Render() {
 						m_atlasLoadSuccess = false;
 						m_atlasLoadMessage.clear();
 					}
-					std::thread([this, key, path, w = m_tilesetTileW, h = m_tilesetTileH]() {
-						AtlasLoadWorker(key, path, w, h);
-					}).detach();
+				std::thread([this, key, path, w = m_tilesetTileW, h = m_tilesetTileH]() {
+					AtlasLoadWorker(key, path, w, h);
+				}).detach();
 			}
 		}
 	}
@@ -967,7 +984,22 @@ void LevelEditorScene::RenderLevelManagerWindow() {
 		if (ImGui::Button("Yes")) {
 			if (!m_pendingDeleteName.empty()) {
 				if (m_currentLevelName == m_pendingDeleteName) SwitchToLevel("");
-				try { fs::remove_all(fs::path("levels") / m_pendingDeleteName); } catch(...) {}
+#ifdef _MSC_VER
+				char* envBuf = nullptr; size_t len = 0; errno_t er = _dupenv_s(&envBuf, &len, "APPDATA");
+				if (er == 0 && envBuf && envBuf[0] != '\0') {
+					try { fs::remove_all(fs::path(envBuf) / "GameEnginePlus" / "levels" / m_pendingDeleteName); } catch(...) {}
+				} else {
+					try { fs::remove_all(fs::path("levels") / m_pendingDeleteName); } catch(...) {}
+				}
+				free(envBuf);
+#else
+				const char* appdata = std::getenv("APPDATA");
+				if (appdata && appdata[0] != '\0') {
+					try { fs::remove_all(fs::path(appdata) / "GameEnginePlus" / "levels" / m_pendingDeleteName); } catch(...) {}
+				} else {
+					try { fs::remove_all(fs::path("levels") / m_pendingDeleteName); } catch(...) {}
+				}
+#endif
 				RefreshAvailableLevels();
 				m_selectedLevelIndex = -1;
 			}

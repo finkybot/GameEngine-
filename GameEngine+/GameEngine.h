@@ -15,6 +15,7 @@
 #include "FontManager.h"
 #include "TextureManager.h"
 #include "Utils/FPSCounter.h"
+#include "CursorSystem.h"
 
 #include <map>
 #include <string>
@@ -110,6 +111,13 @@ public:
 
 
 	/////////////////////////////////
+	// GetCursorSystem - Accessor for the cursor system, allowing scenes and other game components to interact with the cursor system through the game engine's centralized management. This method returns a reference to the CursorSystem instance owned by the engine, enabling scenes to change the cursor mode and update/render the cursor as needed.
+	CursorSystem& GetCursorSystem() { return *m_cursorSystem; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Update - Updates the current scene and game state based on the elapsed time since the last frame, allowing for time-based updates and game logic processing. The method calculates the delta time using the SFML clock and calls the update method of the current active scene, enabling smooth and consistent updates regardless of frame rate variations.
 	void Update(float deltaTime);
 	/////////////////////////////////
@@ -145,7 +153,19 @@ public:
 	FPSCounter& GetFPSCounter() { return m_fpsCounter; }
 	TextureManager m_textureManager;
 	TextureManager& GetTextureManager() { return m_textureManager; }
+
+
+
+	
 	EntityManager& GetEntityManager() const { return *m_entityManager; } // Accessor for central entity manager, returns a reference to the EntityManager instance owned by the engine, allowing scenes and other game components to access and manage entities through the engine's central entity management system
 	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Cursor system for global cursor handling
+	std::unique_ptr<CursorSystem> m_cursorSystem;
+	/////////////////////////////////
+	
 };
 /////////////////////////////////

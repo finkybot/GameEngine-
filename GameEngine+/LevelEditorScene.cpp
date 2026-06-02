@@ -18,6 +18,7 @@
 #include <filesystem>
 #include <mutex>
 #include <cstdlib>
+#include <fstream>
 namespace fs = std::filesystem;
 /////////////////////////////////
 
@@ -102,6 +103,48 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 		if (m_currentLevelName.empty()) fs::create_directories(base / "chunks");
 		else fs::create_directories(base / m_currentLevelName / "chunks");
 	} catch(...) {}
+
+	// Parse meta.txt to determine available layers and tileset
+	std::vector<std::string> parsedLayers = { "background", "main", "upper" };
+	{
+		auto metaPath = (m_currentLevelName.empty()) ? (base / "meta.txt") : (base / m_currentLevelName / "meta.txt");
+		try {
+			std::ifstream meta(metaPath.string());
+			if (meta) {
+				std::string line;
+				while (std::getline(meta, line)) {
+					// simple key=value parsing
+					auto eq = line.find('=');
+					if (eq == std::string::npos) continue;
+					std::string key = line.substr(0, eq);
+					std::string val = line.substr(eq+1);
+					if (key == "layers") {
+						parsedLayers.clear();
+						// comma separated
+						size_t start = 0;
+						while (start < val.size()) {
+							auto comma = val.find(',', start);
+							if (comma == std::string::npos) comma = val.size();
+							std::string token = val.substr(start, comma - start);
+							if (!token.empty()) parsedLayers.push_back(token);
+							start = comma + 1;
+						}
+					}
+					else if (key == "tileset") {
+						// copy into UI buffer
+						ImStrncpy(m_tilesetKeyBuf, val.c_str(), sizeof(m_tilesetKeyBuf));
+					}
+				}
+			}
+		} catch(...) {}
+	}
+
+	// update editor layer names and inform chunk manager of layer count before loading
+	if (!parsedLayers.empty()) {
+		m_layerNames = parsedLayers;
+		m_activeLayer = std::min(m_activeLayer, (int)m_layerNames.size()-1);
+		m_chunkManager.SetNumLayers((int)m_layerNames.size());
+	}
 	// Keep m_currentDir unchanged so tileset browser still points at assets/user folder.
 	fs::path chunkPath = (m_currentLevelName.empty()) ? (base / "chunks") : (base / m_currentLevelName / "chunks");
 	std::cout << "SwitchToLevel: '" << name << "' basePath='" << chunkPath.string() << "'\n";
@@ -352,7 +395,9 @@ void LevelEditorScene::Update(float deltaTime) {
 
 	// Pick tile on LMB press while D is held (eyedropper mode)
 	if (dKey && lmb && !m_prevLmb && !uiCapturing) {
-		int val = m_chunkManager.GetTileAt(tileX, tileY);
+		int layerToPick = m_activeLayer;
+		if (layerToPick < 0 || layerToPick >= (int)m_layerNames.size()) layerToPick = 0;
+		int val = m_chunkManager.GetTileAt(tileX, tileY, layerToPick);
 		if (val > 0) {
 			m_selectedTileIndex = val - 1;
 			m_brushValue = val;
@@ -471,9 +516,11 @@ void LevelEditorScene::Update(float deltaTime) {
 				if (!m_levelSelected) {
 					m_exportMessage = "Select or create a level before editing.";
 				} else {
-					for (int ty = ty0; ty <= ty1; ++ty) {
+							for (int ty = ty0; ty <= ty1; ++ty) {
 						for (int tx = tx0; tx <= tx1; ++tx) {
-							m_chunkManager.SetTileAt(tx, ty, m_brushValue); // paint selection
+				m_chunkManager.SetTileAt(tx, ty, m_brushValue, m_activeLayer); // paint selection on active layer
+				// Debug log to help trace painting
+				std::cout << "Paint request tx=" << tx << " ty=" << ty << " layer=" << m_activeLayer << " val=" << m_brushValue << "\n";
 						}
 					}
 					// Refresh fixed bounds from disk (covers both expand on paint and shrink on erase)
@@ -519,7 +566,7 @@ void LevelEditorScene::Update(float deltaTime) {
 			} else {
 				for (int ty = ty0; ty <= ty1; ++ty) {
 					for (int tx = tx0; tx <= tx1; ++tx) {
-						m_chunkManager.SetTileAt(tx, ty, 0); // erase selection
+						m_chunkManager.SetTileAt(tx, ty, 0, m_activeLayer); // erase selection on active layer
 					}
 				}
 			
@@ -727,7 +774,6 @@ void LevelEditorScene::AtlasBrowserWindow() {
 
 	if (s_entries.empty())
 		refresh_entries();
-
 
 	// File browser: list files and directories in the current folder. Directories are shown with a trailing slash and sorted before files. Clicking a directory navigates into it, while clicking a file selects it for loading. Double-clicking a file triggers loading the atlas
 	// immediately. The selected file is also copied into the load filename buffer for convenience if the user wants to edit it before loading.
@@ -1068,12 +1114,7 @@ void LevelEditorScene::DrawChunkDiag() {
 			const float w = (float)c.width * c.tileSize;
 			const float h = (float)c.height * c.tileSize;
 			bool any = false;
-			for (int t : c.tiles) {
-				if (t != 0) {
-					any = true;
-					break;
-				}
-			}
+			for (int L = 0; L < c.numLayers; ++L) { for (int t : c.tilesPerLayer[L]) { if (t != 0) { any = true; break; } } if (any) break; }
 			sf::RectangleShape r(sf::Vector2f(w, h));
 			r.setPosition(sf::Vector2f(wx, wy));
 			r.setFillColor(sf::Color::Transparent);
@@ -1120,9 +1161,40 @@ void LevelEditorScene::LevelManagerWindow(float x, float y, float alpha) {
 			if (appdata && appdata[0] != '\0') base = fs::path(appdata) / "GameEnginePlus" / "levels";
 			else base = fs::path("levels");
 #endif
-			try { fs::create_directories(base / name / "chunks"); } catch(...) {}
+			try {
+				fs::create_directories(base / name);
+				fs::create_directories(base / name / "chunks");
+				std::ofstream meta((base / name / "meta.txt").string(), std::ios::trunc);
+				if (meta) {
+					meta << "tileset=" << m_tilesetKeyBuf << "\n";
+					meta << "layers=background,main,upper\n";
+				}
+			} catch(...) {}
 			RefreshAvailableLevels();
 		}
+	}
+
+	if (m_levelSelected) {
+		ImGui::Text("Active layer:");
+		// ImGui::Combo overload for vector of strings requires char* const* or use manual combo
+		if (ImGui::BeginCombo("Layer", m_layerNames[m_activeLayer].c_str())) {
+			for (int i = 0; i < (int)m_layerNames.size(); ++i) {
+				bool selected = (m_activeLayer == i);
+				if (ImGui::Selectable(m_layerNames[i].c_str(), selected)) m_activeLayer = i;
+				if (selected) ImGui::SetItemDefaultFocus();
+			}
+			ImGui::EndCombo();
+		}
+		// clamp active layer
+		if (m_activeLayer < 0) m_activeLayer = 0;
+		if (m_activeLayer >= (int)m_layerNames.size()) m_activeLayer = (int)m_layerNames.size() - 1;
+		m_chunkManager.SetActiveLayer(m_activeLayer);
+	}
+
+	// Slider to control transparency of unselected layers
+	float alphaVal = m_chunkManager.GetUnselectedLayerAlpha();
+	if (ImGui::SliderFloat("Unselected layer opacity", &alphaVal, 0.0f, 1.0f)) {
+		m_chunkManager.SetUnselectedLayerAlpha(alphaVal);
 	}
 
 	ImGui::Separator();

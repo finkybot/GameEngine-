@@ -30,7 +30,13 @@ namespace fs = std::filesystem;
 /////////////////////////////////
 // Static members for background loading; pending chunks are stored in a thread-safe queue and processed in the main thread
 static std::mutex s_pendingMutex; // Mutex to protect access to the pending chunks queue
-static std::vector<std::tuple<int, int, std::vector<int>, uint32_t>> s_pendingChunks; // Queue of chunks pending loading (cx, cy, tiles, editVersion at enqueue)
+static std::vector<std::tuple<int, int, int, std::vector<int>, uint32_t>> s_pendingChunks; // Queue: (cx, cy, layer, tiles, editVersion at enqueue)
+// Global loader task queue and worker threads to limit concurrency and avoid spawn storms
+static std::mutex s_loadQueueMutex;
+static std::condition_variable s_loadCv;
+static std::vector<std::tuple<int,int,int,std::string,uint32_t>> s_loadQueue; // (cx, cy, layer, basePath, versionAtEnqueue)
+static bool s_loaderStarted = false;
+static int s_maxLoaderThreads = 2; // conservative default
 /////////////////////////////////
 
 
@@ -38,7 +44,8 @@ static std::vector<std::tuple<int, int, std::vector<int>, uint32_t>> s_pendingCh
 /////////////////////////////////
 // ****** ChunkManager Implementation ******
 // Constructor - initializes the ChunkManager with specified chunk dimensions and tile size. Default values are provided for convenience.
-ChunkManager::ChunkManager(int chunkWidth, int chunkHeight, float tileSize) : m_chunkWidth(chunkWidth), m_chunkHeight(chunkHeight), m_tileSize(tileSize) {
+ChunkManager::ChunkManager(int chunkWidth, int chunkHeight, float tileSize, int numLayers)
+	: m_chunkWidth(chunkWidth), m_chunkHeight(chunkHeight), m_tileSize(tileSize), m_numLayers(std::max(1, numLayers)) {
 	// Ensure the base path exists for saving/loading chunks; if it doesn't exist, attempt to create it.
 	if (!m_basePath.empty() && !fs::exists(m_basePath)) {
 		try {
@@ -84,14 +91,16 @@ void ChunkManager::LoadAllSavedChunks() {
 			if (!p.is_regular_file()) continue;
 			std::string fname = p.path().filename().string();
 			if (fname.rfind("chunk_", 0) != 0) continue;
-			// parse chunk_X_Y.dat
+			// parse chunk_<layer>_<cx>_<cy>.dat
 			std::string body = fname.substr(6); // after "chunk_"
-			size_t us = body.find('_');
+			size_t us1 = body.find('_');
+			size_t us2 = body.find('_', us1 + 1);
 			size_t dot = body.find('.');
-			if (us == std::string::npos || dot == std::string::npos) continue;
-			int cx = std::stoi(body.substr(0, us));
-			int cy = std::stoi(body.substr(us+1, dot - (us+1)));
-			EnqueueLoadChunk(cx, cy);
+			if (us1 == std::string::npos || us2 == std::string::npos || dot == std::string::npos) continue;
+			int layer = std::stoi(body.substr(0, us1));
+			int cx = std::stoi(body.substr(us1+1, us2 - (us1+1)));
+			int cy = std::stoi(body.substr(us2+1, dot - (us2+1)));
+			EnqueueLoadChunk(cx, cy, layer);
 		}
 	} catch(...) {}
 }
@@ -115,11 +124,13 @@ bool ChunkManager::GetSavedChunkBounds(float& outMinX, float& outMinY, float& ou
 			std::string fname = p.path().filename().string();
 			if (fname.rfind("chunk_", 0) != 0) continue;
 			std::string body = fname.substr(6);
-			size_t us  = body.find('_');
+			size_t us1  = body.find('_');
+			size_t us2  = body.find('_', us1 + 1);
 			size_t dot = body.find('.');
-			if (us == std::string::npos || dot == std::string::npos) continue;
-			int cx = std::stoi(body.substr(0, us));
-			int cy = std::stoi(body.substr(us + 1, dot - (us + 1)));
+			if (us1 == std::string::npos || us2 == std::string::npos || dot == std::string::npos) continue;
+			// layer = body.substr(0, us1)
+			int cx = std::stoi(body.substr(us1 + 1, us2 - (us1 + 1)));
+			int cy = std::stoi(body.substr(us2 + 1, dot - (us2 + 1)));
 			float wx = (float)(cx * m_chunkWidth)  * m_tileSize;
 			float wy = (float)(cy * m_chunkHeight) * m_tileSize;
 			outMinX = std::min(outMinX, wx);
@@ -150,6 +161,7 @@ void ChunkManager::SetBasePath(const std::string& basePath) {
 			if (last != '/' && last != '\\') m_basePath.push_back('/');
 		}
 	}
+	// When base path changes, ensure per-level meta file exists (created by LevelEditorScene). We'll not create it here, but callers should write it.
 }
 /////////////////////////////////
 
@@ -178,55 +190,67 @@ void ChunkManager::RebuildAllChunksFromTileset() {
 // BuildChunkVertexArray - Builds the sf::VertexArray for a chunk from its tile data. Called from RebuildAllChunksFromTileset, FinalizeLoadedChunk, and SetTileAt.
 // Pass a nullptr atlas to use the solid-colour fallback.
 void ChunkManager::BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<TextureAtlas>& atlas) {
-	chunk.vertexArray.clear();
-	chunk.vertexArray.setPrimitiveType(sf::PrimitiveType::Triangles);
-	chunk.vertexTexture.reset();
-	if (atlas) chunk.vertexTexture = atlas->GetTexture();
+	// Ensure vertexArrays vector matches numLayers
+	if (chunk.vertexArrays.size() != (size_t)chunk.numLayers) chunk.vertexArrays.resize(chunk.numLayers);
+	if (atlas) {
+		chunk.vertexTexture = atlas->GetTexture();
+	} else {
+		chunk.vertexTexture.reset();
+	}
 
 	const float ts = chunk.tileSize;
 	const int baseX = chunk.chunkX * chunk.width;
 	const int baseY = chunk.chunkY * chunk.height;
-	// pre-reserve: worst case every tile is solid (6 vertices per tile)
-	chunk.vertexArray.resize(0); // clear without dealloc
 
-	for (int y = 0; y < chunk.height; ++y) {
-		for (int x = 0; x < chunk.width; ++x) {
-			int v = chunk.tiles[y * chunk.width + x];
-			if (v == 0) continue;
-			const float px = (baseX + x) * ts;
-			const float py = (baseY + y) * ts;
+	for (int L = 0; L < chunk.numLayers; ++L) {
+		sf::VertexArray &va = chunk.vertexArrays[L];
+		va.clear();
+		va.setPrimitiveType(sf::PrimitiveType::Triangles);
+		// iterate tiles for this layer
+		for (int y = 0; y < chunk.height; ++y) {
+			for (int x = 0; x < chunk.width; ++x) {
+				int v = 0;
+				if (L < (int)chunk.tilesPerLayer.size()) v = chunk.tilesPerLayer[L][y * chunk.width + x];
+				if (v == 0) continue;
+				const float px = (baseX + x) * ts;
+				const float py = (baseY + y) * ts;
 
-			bool usedTexture = false;
-			sf::Vector2f uv00, uv11;
-			if (atlas) {
-				auto rectOpt = atlas->GetSfFloatRectForTile((size_t)(v - 1));
-				if (rectOpt.has_value()) {
-					const sf::FloatRect& fr = *rectOpt;
-					uv00 = { fr.position.x, fr.position.y };
-					uv11 = { fr.position.x + fr.size.x, fr.position.y + fr.size.y };
-					usedTexture = true;
+				bool usedTexture = false;
+				sf::Vector2f uv00, uv11;
+				if (atlas) {
+					auto rectOpt = atlas->GetSfFloatRectForTile((size_t)(v - 1));
+					if (rectOpt.has_value()) {
+						const sf::FloatRect& fr = *rectOpt;
+						uv00 = { fr.position.x, fr.position.y };
+						uv11 = { fr.position.x + fr.size.x, fr.position.y + fr.size.y };
+						usedTexture = true;
+					}
 				}
-			}
 
-			if (usedTexture && chunk.vertexTexture) {
-				chunk.vertexArray.append({ {px,      py      }, sf::Color::White, uv00 });
-				chunk.vertexArray.append({ {px + ts, py      }, sf::Color::White, {uv11.x, uv00.y} });
-				chunk.vertexArray.append({ {px + ts, py + ts }, sf::Color::White, uv11 });
-				chunk.vertexArray.append({ {px,      py      }, sf::Color::White, uv00 });
-				chunk.vertexArray.append({ {px + ts, py + ts }, sf::Color::White, uv11 });
-				chunk.vertexArray.append({ {px,      py + ts }, sf::Color::White, {uv00.x, uv11.y} });
-			} else {
-				// Fallback color for tiles without texture: make fully transparent so cleared tiles show through
-				constexpr sf::Color fallback(120, 120, 120, 0);
-				chunk.vertexArray.append({ {px,      py      }, fallback });
-				chunk.vertexArray.append({ {px + ts, py      }, fallback });
-				chunk.vertexArray.append({ {px + ts, py + ts }, fallback });
-				chunk.vertexArray.append({ {px,      py      }, fallback });
-				chunk.vertexArray.append({ {px + ts, py + ts }, fallback });
-				chunk.vertexArray.append({ {px,      py + ts }, fallback });
+				if (usedTexture && chunk.vertexTexture) {
+					va.append({ {px,      py      }, sf::Color::White, uv00 });
+					va.append({ {px + ts, py      }, sf::Color::White, {uv11.x, uv00.y} });
+					va.append({ {px + ts, py + ts }, sf::Color::White, uv11 });
+					va.append({ {px,      py      }, sf::Color::White, uv00 });
+					va.append({ {px + ts, py + ts }, sf::Color::White, uv11 });
+					va.append({ {px,      py + ts }, sf::Color::White, {uv00.x, uv11.y} });
+				} else {
+					// Fallback color for tiles without texture. In-editor, show an opaque placeholder so painted tiles are visible even
+					// when a tileset isn't loaded. If a tileset key is configured we keep transparent fallback so cleared tiles show through.
+					uint8_t alpha = atlas ? 0u : 255u;
+					sf::Color fallback(120, 120, 120, alpha);
+					va.append({ {px,      py      }, fallback });
+					va.append({ {px + ts, py      }, fallback });
+					va.append({ {px + ts, py + ts }, fallback });
+					va.append({ {px,      py      }, fallback });
+					va.append({ {px + ts, py + ts }, fallback });
+					va.append({ {px,      py + ts }, fallback });
+				}
 			}
 		}
 	}
+	// Debug: log vertex counts when rebuilding (can be noisy)
+	// std::cout << "BuildChunkVertexArray chunk(" << chunk.chunkX << "," << chunk.chunkY << ") layers=" << chunk.numLayers << " atlas=" << (atlas?"yes":"no") << "\n";
 }
 /////////////////////////////////
 
@@ -262,23 +286,35 @@ void ChunkManager::DrawChunks(sf::RenderWindow& window, const sf::View& view) {
 			const float cbottom = cy + (float)c.height * c.tileSize;
 			if (cright <= vleft || cx >= vright || cbottom <= vtop || cy >= vbottom) continue;
 			DrawInfo di;
-			di.vertexArray       = c.vertexArray;
-			di.vertexTexture     = c.vertexTexture;
-			// If the chunk is marked not ready but contains only zero tiles (cleared),
-			// treat it as ready so we display empty space instead of the grey loading box.
+			// Merge per-layer vertex arrays into a single array for drawing (layers are drawn in order)
+			di.vertexArray.clear();
+			di.vertexArray.setPrimitiveType(sf::PrimitiveType::Triangles);
+			for (int L = 0; L < c.numLayers; ++L) {
+				if (c.vertexArrays.size() > (size_t)L && c.vertexArrays[L].getVertexCount() > 0) {
+					// append vertices (simple approach: copy)
+					// If this layer is not the active drawing layer, we dim by multiplying alpha of each vertex color
+					bool dim = (L != m_numLayers ? false : false); // placeholder, actual dim handled below when drawing
+					for (size_t vi = 0; vi < c.vertexArrays[L].getVertexCount(); ++vi) di.vertexArray.append(c.vertexArrays[L][vi]);
+				}
+			}
+			di.vertexTexture = c.vertexTexture;
 			bool allZero = true;
-			for (int t : c.tiles) { if (t != 0) { allZero = false; break; } }
-			di.readyForRendering = c.readyForRendering || allZero;
+			for (int L = 0; L < c.numLayers; ++L) { for (int t : c.tilesPerLayer[L]) { if (t != 0) { allZero = false; break; } } if (!allZero) break; }
+			// ready if any layer marked ready or all layers empty
+			bool anyReady = false; for (int L = 0; L < c.numLayers; ++L) if (c.readyForRendering[L]) { anyReady = true; break; }
+			di.readyForRendering = anyReady || allZero;
 			di.chunkX = c.chunkX; di.chunkY = c.chunkY;
 			di.width  = c.width;  di.height = c.height;
 			di.tileSize = c.tileSize;
+			// Debug: report vertex counts for this chunk
+			if (di.vertexArray.getVertexCount() > 0) {
+				// debug output removed: verbose per-chunk draw logging
+			}
 			visible.push_back(std::move(di));
 		}
 	}
 
 	for (const DrawInfo& d : visible) {
-		const float wx = (float)(d.chunkX * d.width)  * d.tileSize;
-		const float wy = (float)(d.chunkY * d.height) * d.tileSize;
 		if (!d.readyForRendering) {
 			// placeholder for non-ready chunks: make fully transparent so empty areas are visible
 			// (previously drew a semi-opaque grey rectangle here)
@@ -293,7 +329,38 @@ void ChunkManager::DrawChunks(sf::RenderWindow& window, const sf::View& view) {
 			if (d.vertexTexture) states.texture = d.vertexTexture.get();
 			// Ensure alpha blending is used so texture transparency is visible
 			states.blendMode = sf::BlendAlpha;
-			window.draw(d.vertexArray, states);
+			// If the engine has an active layer set, we need to draw other layers dimmed. We rendered merged vertexArray in order so
+			// we cannot distinguish layers at draw time. Simpler approach: draw per-layer instead of merged when alpha-dimming is active.
+			if (true) {
+				// per-layer draw to allow dimming
+				for (const auto &pr : m_chunks) { /* noop to keep symbol referenced */ }
+				// Re-lock and draw per-chunk per-layer to allow alpha modulation
+				std::lock_guard<std::mutex> lock(m_mutex);
+				for (const auto& pr : m_chunks) {
+					const Chunk& c = pr.second;
+					if (c.chunkX != d.chunkX || c.chunkY != d.chunkY) continue;
+					for (int L = 0; L < c.numLayers; ++L) {
+						if (c.vertexArrays.size() <= (size_t)L) continue;
+						auto &va = c.vertexArrays[L];
+						if (va.getVertexCount() == 0) continue;
+						// create a copy to modulate alpha
+						sf::VertexArray temp = va;
+						float alphaMul = 1.0f;
+						// Dim unselected layers using configured alpha
+						if (m_activeLayer >= 0 && L != m_activeLayer) alphaMul = m_unselectedLayerAlpha; 
+						for (size_t vi = 0; vi < temp.getVertexCount(); ++vi) {
+							sf::Color ccol = temp[vi].color;
+							ccol.a = static_cast<uint8_t>((float)ccol.a * alphaMul);
+							temp[vi].color = ccol;
+						}
+						sf::RenderStates s2 = states;
+						if (c.vertexTexture) s2.texture = c.vertexTexture.get();
+						window.draw(temp, s2);
+					}
+				}
+			} else {
+				window.draw(d.vertexArray, states);
+			}
 		}
 		// Optional diagnostics: draw a faint overlay for chunks that have no texture or are all-zero
 		// (controlled from LevelEditorScene debug UI)
@@ -317,7 +384,7 @@ ChunkManager::~ChunkManager() {
 /////////////////////////////////
 // GetTileAt - Retrieves the tile value at the specified tile coordinates (tileX, tileY). If the corresponding chunk is not loaded, it will be enqueued for loading in the background thread. 
 // Returns 0 if the chunk is not loaded or if the tile coordinates are out of bounds within the chunk.
-int ChunkManager::GetTileAt(int tileX, int tileY) {
+int ChunkManager::GetTileAt(int tileX, int tileY, int layerIndex) {
 	const int chunkX = FloorDiv(tileX, m_chunkWidth);
 	const int chunkY = FloorDiv(tileY, m_chunkHeight);
 	const int localX = tileX - chunkX * m_chunkWidth;
@@ -329,12 +396,13 @@ int ChunkManager::GetTileAt(int tileX, int tileY) {
 		auto itr = m_chunks.find(key);
 		if (itr != m_chunks.end()) {
 			const Chunk& chunk = itr->second;
+			if (layerIndex < 0 || layerIndex >= chunk.numLayers) return 0;
 			if (localX >= 0 && localX < chunk.width && localY >= 0 && localY < chunk.height)
-				return chunk.tiles[localY * chunk.width + localX];
+				return chunk.tilesPerLayer[layerIndex][localY * chunk.width + localX];
 			return 0;
 		}
 	} // release lock before enqueue to avoid re-entrancy / deadlock
-	EnqueueLoadChunk(chunkX, chunkY);
+	EnqueueLoadChunk(chunkX, chunkY, layerIndex);
 	return 0;
 }
 /////////////////////////////////
@@ -344,7 +412,7 @@ int ChunkManager::GetTileAt(int tileX, int tileY) {
 /////////////////////////////////
 // SetTileAt - Sets the tile value at the specified tile coordinates (tileX, tileY) to the given tileValue. 
 // If the corresponding chunk is not loaded, it will be enqueued for loading in the background thread.
-int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue) {
+int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex) {
 	const int chunkX = FloorDiv(tileX, m_chunkWidth);
 	const int chunkY = FloorDiv(tileY, m_chunkHeight);
 	const int localX = tileX - chunkX * m_chunkWidth;
@@ -354,7 +422,7 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue) {
 	std::lock_guard<std::mutex> lock(m_mutex);
 
 	// Create placeholder chunk on first paint
-	auto [itr, inserted] = m_chunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize));
+	auto [itr, inserted] = m_chunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers));
 	if (inserted) {
 		m_lruList.push_front(key);
 		m_lruIndex[key] = m_lruList.begin();
@@ -363,18 +431,22 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue) {
 
 	Chunk& chunk = itr->second;
 	if (localX < 0 || localX >= chunk.width || localY < 0 || localY >= chunk.height) return 0;
+	if (layerIndex < 0 || layerIndex >= chunk.numLayers) return 0;
 
 	const int index     = localY * chunk.width + localX;
-	const int prevValue = chunk.tiles[index];
+	const int prevValue = chunk.tilesPerLayer[layerIndex][index];
 
 	// If this chunk was just inserted as a placeholder (we created it because it wasn't loaded) then still apply the requested change even if the placeholder value matches the requested value. This handles erasing areas of maps saved on disk: the placeholder starts as zeros 
 	// and an erase should overwrite the on-disk non-zero tiles once the background load finalizes. Always process clears (tileValue == 0) even if prevValue is already 0 — the chunk may be an unfinalized placeholder whose real on-disk tiles are non-zero. Bumping editVersion here ensures
 	// FinalizeLoadedChunk rejects the stale background load and keeps the cleared in-memory state.
 	if (prevValue == tileValue && !inserted && tileValue != 0) return prevValue;
 
-	chunk.tiles[index] = tileValue;
-	chunk.dirty        = true;
-	chunk.editVersion++;
+	chunk.tilesPerLayer[layerIndex][index] = tileValue;
+	chunk.dirty[layerIndex]        = 1;
+	chunk.editVersion[layerIndex]++;
+
+	// Debug log for paints so we can confirm SetTileAt is being called and values are applied
+	std::cout << "ChunkManager::SetTileAt chunk=(" << chunk.chunkX << "," << chunk.chunkY << ") local=(" << localX << "," << localY << ") layer=" << layerIndex << " val=" << tileValue << " prev=" << prevValue << "\n";
 
 	// O(1) LRU touch via iterator index
 	auto lruIt = m_lruIndex.find(key);
@@ -390,7 +462,7 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue) {
 	}
 	BuildChunkVertexArray(chunk, atlasPtr);
 	// Make chunk visible for rendering immediately after we rebuild its vertex array
-	chunk.readyForRendering = true;
+	chunk.readyForRendering[layerIndex] = 1;
 	// Rebuild collider entities so removed tiles don't leave grey rectangles behind
 	RebuildChunkEntities(chunk);
 
@@ -398,19 +470,24 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue) {
 	// GetSavedChunkBounds only counts chunks that actually contain tiles.
 	if (!m_basePath.empty()) {
 		try {
-			std::string filename = (fs::path(m_basePath) / ("chunk_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
-			bool allZero = true;
-			for (int t : chunk.tiles) { if (t != 0) { allZero = false; break; } }
-			if (allZero) {
-				fs::remove(filename); // empty chunk — remove file so bounds shrink correctly
-				chunk.dirty = false;
-			} else {
-				std::ofstream outFile(filename, std::ios::binary);
-				if (outFile) {
-					outFile.write(reinterpret_cast<const char*>(chunk.tiles.data()), chunk.tiles.size() * sizeof(int));
-					chunk.dirty = false;
+			// Save per-layer chunk files named: chunk_<layer>_<cx>_<cy>.dat
+			bool anyNonZero = false;
+			for (int layer = 0; layer < chunk.numLayers; ++layer) {
+				std::string filename = (fs::path(m_basePath) / ("chunk_" + std::to_string(layer) + "_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
+				bool allZero = true;
+				for (int t : chunk.tilesPerLayer[layer]) { if (t != 0) { allZero = false; break; } }
+				if (allZero) {
+					try { fs::remove(filename); } catch(...) {}
+					chunk.dirty[layer] = false;
 				} else {
-					std::cerr << "ChunkManager: failed to save chunk " << filename << "\n";
+					anyNonZero = true;
+					std::ofstream outFile(filename, std::ios::binary);
+					if (outFile) {
+						outFile.write(reinterpret_cast<const char*>(chunk.tilesPerLayer[layer].data()), chunk.tilesPerLayer[layer].size() * sizeof(int));
+						chunk.dirty[layer] = false;
+					} else {
+						std::cerr << "ChunkManager: failed to save chunk " << filename << "\n";
+					}
 				}
 			}
 		} catch (...) {}
@@ -461,7 +538,7 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 				}
 				// Insert placeholder chunk. Mark it ready for rendering immediately if it contains no tiles
 				// so erasing/clearing operations show empty space instead of the "loading" grey box.
-				auto insertRes = m_chunks.emplace(key, Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize));
+				auto insertRes = m_chunks.emplace(key, Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers));
 				auto insertedItr = insertRes.first;
 				bool insertedNow = insertRes.second;
 				m_lruList.push_front(key);
@@ -469,9 +546,12 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 					if (insertedNow) {
 						Chunk& newChunk = insertedItr->second;
 						// placeholder chunks are initialized with zero tiles; treat them as ready so they render empty immediately.
-						bool allZero = true;
-						for (int i = 0; i < newChunk.width * newChunk.height; ++i) { if (newChunk.tiles[i] != 0) { allZero = false; break; } }
-					if (allZero) newChunk.readyForRendering = true;
+					bool allZero = true;
+					for (int i = 0; i < newChunk.width * newChunk.height; ++i) { 
+						for (int L = 0; L < newChunk.numLayers; ++L) { if (!newChunk.tilesPerLayer.empty() && newChunk.tilesPerLayer[L][i] != 0) { allZero = false; break; } }
+						if (!allZero) break;
+					}
+					if (allZero) for (int L = 0; L < newChunk.numLayers; ++L) if (!newChunk.readyForRendering.empty()) newChunk.readyForRendering[L] = 1;
 				}
 				needLoad = true;
 			}
@@ -490,19 +570,21 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 /////////////////////////////////
 // UpdateMainThread - This method should be called from the main thread to perform any necessary updates, such as processing dirty chunks or preparing vertex buffers for rendering.
 void ChunkManager::UpdateMainThread() {
-	// Process any chunks that have been loaded in the background thread and are pending finalization. We copy the pending chunks to a local variable while holding the mutex, 
-	// then release the mutex before processing to minimize lock time and allow the background thread to continue loading new chunks without waiting for finalization to complete.
-	std::vector<std::tuple<int, int, std::vector<int>, uint32_t>> pendingChunksCopy;
+	// Process pending loaded chunks in small batches to avoid spending a long time on the main thread
+	const int kMaxPendingPerFrame = 16;
+	std::vector<std::tuple<int, int, int, std::vector<int>, uint32_t>> pendingChunksCopy;
 	{
-		std::lock_guard<std::mutex> lock(s_pendingMutex); // Lock the mutex to safely access the pending chunks queue
-		pendingChunksCopy = s_pendingChunks; // Copy the pending chunks to a local variable
-		s_pendingChunks.clear(); // Clear the original pending chunks queue to free memory and allow new chunks to be added by the background thread
+		std::lock_guard<std::mutex> lock(s_pendingMutex);
+		int take = (int)std::min<size_t>(s_pendingChunks.size(), (size_t)kMaxPendingPerFrame);
+		pendingChunksCopy.reserve(take);
+		for (int i = 0; i < take; ++i) pendingChunksCopy.emplace_back(std::move(s_pendingChunks[i]));
+		if (take > 0) s_pendingChunks.erase(s_pendingChunks.begin(), s_pendingChunks.begin() + take);
 	}
-	
-	// Finalize each loaded chunk by setting its tile data and marking it as ready for rendering. 
-	// This should be done in the main thread to ensure thread safety when modifying the chunks map and to prepare the chunk for rendering.
-	for (const auto& [chunkX, chunkY, tileData, version] : pendingChunksCopy) { // Loop through the copied list of pending chunks
-		FinalizeLoadedChunk(chunkX, chunkY, tileData, version);
+
+	// Finalize each loaded chunk that we copied (bounded count)
+	for (const auto& pending : pendingChunksCopy) {
+		const auto& [chunkX, chunkY, layer, tileData, version] = pending;
+		FinalizeLoadedChunk(chunkX, chunkY, layer, tileData, version);
 	}
 }
 /////////////////////////////////
@@ -512,20 +594,26 @@ void ChunkManager::UpdateMainThread() {
 /////////////////////////////////
 // SaveAllChunks - Saves all dirty chunks to disk in the specified directory. Each chunk will be saved as a separate file named "chunk_X_Y.dat" where X and Y are the chunk coordinates.
 void ChunkManager::SaveAllChunks() {
-	std::lock_guard<std::mutex> lock(m_mutex); // Lock the mutex to safely access the chunks map
+	std::lock_guard<std::mutex> lock(m_mutex);
 	for (auto& pr : m_chunks) {
-		Chunk& chunk = pr.second; // Get a reference to the current chunk in the loop
-		if (chunk.dirty) {		  // Only save chunks that are marked as dirty to avoid unnecessary disk writes
-		std::filesystem::path p(m_basePath);
-		std::string name = std::string("chunk_") + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat";
-		std::string filename = (p / name).string(); // Construct the filename for the chunk based on its coordinates
-			std::ofstream outFile(filename, std::ios::binary); // Open a binary output file stream to save the chunk data
-			
+		Chunk& chunk = pr.second;
+		for (int layer = 0; layer < chunk.numLayers; ++layer) {
+			if (!chunk.dirty[layer]) continue;
+			std::filesystem::path p(m_basePath);
+			std::string filename = (p / ("chunk_" + std::to_string(layer) + "_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
+			bool allZero = true;
+			for (int t : chunk.tilesPerLayer[layer]) { if (t != 0) { allZero = false; break; } }
+			if (allZero) {
+				try { fs::remove(filename); } catch(...) {}
+				chunk.dirty[layer] = false;
+				continue;
+			}
+			std::ofstream outFile(filename, std::ios::binary);
 			if (outFile) {
-				outFile.write(reinterpret_cast<const char*>(chunk.tiles.data()), chunk.tiles.size() * sizeof(int));
-				chunk.dirty = false;
+				outFile.write(reinterpret_cast<const char*>(chunk.tilesPerLayer[layer].data()), chunk.tilesPerLayer[layer].size() * sizeof(int));
+				chunk.dirty[layer] = false;
 			} else {
-				std::cerr << "Error saving chunk to file: " << filename << std::endl; // Log an error if the file could not be opened for writing
+				std::cerr << "Error saving chunk to file: " << filename << std::endl;
 			}
 		}
 	}
@@ -536,35 +624,81 @@ void ChunkManager::SaveAllChunks() {
 
 /////////////////////////////////
 // EnqueueLoadChunk - Enqueues a chunk to be loaded in the background thread. The chunk will be loaded from disk if it exists, or created with default tile data if it does not.
+// EnqueueLoadChunk - new overload accepts optional layer; if layer==-1 load all layers
 void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY) {
+	// existing behavior: load all layers (delegate to layer-aware overload)
+	EnqueueLoadChunk(chunkX, chunkY, -1);
+}
+
+void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY, int layer) {
 	// Capture the current editVersion of this chunk so FinalizeLoadedChunk can reject stale loads
 	uint32_t versionAtEnqueue = 0;
 	{
 		std::lock_guard<std::mutex> lk(m_mutex);
 		auto it = m_chunks.find(GetChunkKey(chunkX, chunkY));
-		if (it != m_chunks.end()) versionAtEnqueue = it->second.editVersion;
+		if (it != m_chunks.end()) {
+			if (!it->second.editVersion.empty()) versionAtEnqueue = it->second.editVersion[std::max(0, layer)];
+		}
 	}
-	// Start a background thread to load the chunk data from disk. The chunk will be loaded from disk if it exists, or created with default tile data if it does not.
-	std::thread([chunkX, chunkY, versionAtEnqueue, this]() {
-		std::filesystem::path p(m_basePath);
-		std::string name = std::string("chunk_") + std::to_string(chunkX) + "_" + std::to_string(chunkY) + ".dat";
-		std::string filename = (p / name).string(); // Construct the filename for the chunk based on its coordinates
-		std::vector<int> tileData(m_chunkWidth * m_chunkHeight,	0); // Create a vector to hold the tile data for the chunk, initialized with default values (0 = empty)
-
-		if (fs::exists(filename)) {
-			std::ifstream inFile(filename, std::ios::binary);
-			if (inFile) {
-				inFile.read(reinterpret_cast<char*>(tileData.data()), tileData.size() * sizeof(int));
-			} else {
-				std::cerr << "ChunkManager: Error opening chunk file for reading: " << filename << std::endl;
+	// Instead of spawning an unbounded thread per request, push into a global load queue processed by a small pool.
+	// copy needed members for worker threads to avoid capturing 'this'
+	int localChunkW = m_chunkWidth;
+	int localChunkH = m_chunkHeight;
+	int localNumLayers = m_numLayers;
+	{
+		std::lock_guard<std::mutex> lk(s_loadQueueMutex);
+		s_loadQueue.emplace_back(chunkX, chunkY, layer, m_basePath, versionAtEnqueue);
+		// start loader pool once
+		if (!s_loaderStarted) {
+			s_loaderStarted = true;
+			for (int i = 0; i < s_maxLoaderThreads; ++i) {
+				std::thread([localChunkW, localChunkH, localNumLayers]() {
+					while (true) {
+						std::tuple<int,int,int,std::string,uint32_t> job;
+						{
+							std::unique_lock<std::mutex> ql(s_loadQueueMutex);
+							s_loadCv.wait(ql, [] { return !s_loadQueue.empty(); });
+							job = s_loadQueue.back(); s_loadQueue.pop_back();
+						}
+						int jobCx = std::get<0>(job);
+						int jobCy = std::get<1>(job);
+						int jobLayer = std::get<2>(job);
+						std::string jobBase = std::get<3>(job);
+						uint32_t jobVer = std::get<4>(job);
+						// perform load for this job: attempt to read the specified layer only (or all layers if layer==-1)
+						if (jobLayer < 0) {
+							for (int L = 0; L < localNumLayers; ++L) {
+								std::vector<int> tileData(localChunkW * localChunkH, 0);
+								std::string name = std::string("chunk_") + std::to_string(L) + "_" + std::to_string(jobCx) + "_" + std::to_string(jobCy) + ".dat";
+								std::string filename = (fs::path(jobBase) / name).string();
+								if (fs::exists(filename)) {
+									std::ifstream inFile(filename, std::ios::binary);
+									if (inFile) inFile.read(reinterpret_cast<char*>(tileData.data()), tileData.size() * sizeof(int));
+								}
+								{
+									std::lock_guard<std::mutex> lock(s_pendingMutex);
+									s_pendingChunks.emplace_back(jobCx, jobCy, L, std::move(tileData), jobVer);
+								}
+							}
+						} else {
+							std::vector<int> tileData(localChunkW * localChunkH, 0);
+							std::string name = std::string("chunk_") + std::to_string(jobLayer) + "_" + std::to_string(jobCx) + "_" + std::to_string(jobCy) + ".dat";
+							std::string filename = (fs::path(jobBase) / name).string();
+							if (fs::exists(filename)) {
+								std::ifstream inFile(filename, std::ios::binary);
+								if (inFile) inFile.read(reinterpret_cast<char*>(tileData.data()), tileData.size() * sizeof(int));
+							}
+							{
+								std::lock_guard<std::mutex> lock(s_pendingMutex);
+								s_pendingChunks.emplace_back(jobCx, jobCy, jobLayer, std::move(tileData), jobVer);
+							}
+						}
+					}
+				}).detach();
 			}
 		}
-		// After loading the chunk data, add it to the pending queue with the version captured at enqueue time
-		{
-			std::lock_guard<std::mutex> lock(s_pendingMutex);
-			s_pendingChunks.emplace_back(chunkX, chunkY, tileData, versionAtEnqueue);
-		}
-	}).detach(); // Detach the thread to allow it to run independently without blocking the main thread
+	}
+	s_loadCv.notify_one();
 }
 /////////////////////////////////
 
@@ -585,15 +719,16 @@ void ChunkManager::RebuildChunkEntities(Chunk& c) {
 			for (int x = 0; x < c.width; ++x) {
 				int idx = y * c.width + x;
 				if (used[idx]) continue;
-				int val = c.tiles[idx];
+				int val = 0;
+				if (!c.tilesPerLayer.empty()) val = c.tilesPerLayer[0][idx];
 				if (val == 0) continue;
 				int w = 1;
-				while (x + w < c.width && c.tiles[y * c.width + (x + w)] == val && !used[y * c.width + (x + w)]) ++w;
+				while (x + w < c.width && (!c.tilesPerLayer.empty() && c.tilesPerLayer[0][y * c.width + (x + w)] == val) && !used[y * c.width + (x + w)]) ++w;
 				int h = 1;
 				bool canExtend = true;
 				while (y + h < c.height && canExtend) {
 					for (int xi = 0; xi < w; ++xi) {
-						if (c.tiles[(y + h) * c.width + (x + xi)] != val || used[(y + h) * c.width + (x + xi)]) { canExtend = false; break; }
+						if ((!c.tilesPerLayer.empty() && c.tilesPerLayer[0][(y + h) * c.width + (x + xi)] != val) || used[(y + h) * c.width + (x + xi)]) { canExtend = false; break; }
 					}
 					if (canExtend) ++h;
 				}
@@ -621,7 +756,7 @@ void ChunkManager::RebuildChunkEntities(Chunk& c) {
 
 /////////////////////////////////
 // FinalizeLoadedChunk
-void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> tileData, uint32_t versionAtEnqueue) {
+void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue) {
 	long long key = GetChunkKey(chunkX, chunkY);
 	std::lock_guard<std::mutex> lock(m_mutex);
 	auto itr = m_chunks.find(key);
@@ -632,22 +767,20 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> 
 	}
 
 	Chunk& chunk = itr->second;
+	if (layer < 0 || layer >= chunk.numLayers) return;
 	// If the chunk's editVersion changed since the load was enqueued, the disk data is stale — skip overwriting
-	if (chunk.editVersion != versionAtEnqueue) {
-		// The chunk was edited after enqueue; keep current in-memory tiles and just mark ready for rendering
-		chunk.readyForRendering = true;
+	if (chunk.editVersion[layer] != versionAtEnqueue) {
+		chunk.readyForRendering[layer] = 1;
 	} else {
-		// Safe to apply loaded data
 		if ((int)tileData.size() == chunk.width * chunk.height) {
-			chunk.tiles = std::move(tileData);
+			chunk.tilesPerLayer[layer] = std::move(tileData);
 		} else {
-			chunk.tiles.assign(chunk.width * chunk.height, 0);
+			chunk.tilesPerLayer[layer].assign(chunk.width * chunk.height, 0);
 		}
-		chunk.dirty = false;
-		chunk.readyForRendering = true;
+		chunk.dirty[layer] = 0;
+		chunk.readyForRendering[layer] = 1;
 	}
-	// Build GPU vertex array on the main thread
-	chunk.cpuVertexBuffer.clear();
+	// Build GPU vertex arrays for this chunk layer on the main thread
 	std::shared_ptr<TextureAtlas> atlasPtr;
 	if (!m_tilesetKey.empty()) {
 		auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
@@ -680,17 +813,17 @@ void ChunkManager::EvictIfNeeded() {
 			Chunk& chunk = itr->second;
 			
 			// Save if dirty
-			if (chunk.dirty) {
-			std::filesystem::path p(m_basePath);
-			std::string filename = (p / ("chunk_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
-			std::ofstream outFile(filename, std::ios::binary);
-				
-						if (outFile) {
-							outFile.write(reinterpret_cast<const char*>(chunk.tiles.data()), chunk.tiles.size() * sizeof(int));
-						} else {
-							std::cerr << "ChunkManager: eviction save failed: " << filename << "\n";
-						}
-					}
+			for (int layer = 0; layer < chunk.numLayers; ++layer) {
+				if (!chunk.dirty.empty() && !chunk.dirty[layer]) continue;
+				std::filesystem::path p(m_basePath);
+				std::string filename = (p / ("chunk_" + std::to_string(layer) + "_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
+				std::ofstream outFile(filename, std::ios::binary);
+				if (outFile) {
+					outFile.write(reinterpret_cast<const char*>(chunk.tilesPerLayer[layer].data()), chunk.tilesPerLayer[layer].size() * sizeof(int));
+				} else {
+					std::cerr << "ChunkManager: eviction save failed: " << filename << "\n";
+				}
+			}
 
 					try {
 						EntityManager& em = GameEngine::GetInstance().GetEntityManager();

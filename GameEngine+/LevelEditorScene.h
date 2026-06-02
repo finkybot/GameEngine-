@@ -220,6 +220,14 @@ private:
 
 
 	/////////////////////////////////
+	// Layer editing
+	std::vector<std::string> m_layerNames = { "background", "main", "upper" };
+	int m_activeLayer = 1; // default to main
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Helper methods for level management UI
 	void RefreshAvailableLevels();
 	void SwitchToLevel(const std::string& name);

@@ -33,26 +33,40 @@ struct Chunk {
 	int width = 0, height = 0; // chunk size in tiles (e.g., 16x16 tiles per chunk)
 
 	float tileSize = 32.0f; // size of each tile in pixels (for rendering and collision)
-	std::vector<int> tiles; // tile data for the chunk (0 = empty, non-zero = solid)
-	
-	bool dirty = false;		// flag to indicate if the chunk has been modified and needs saving
-	bool readyForRendering = false; // flag to indicate if the chunk is ready to be rendered (e.g., after loading or generating
-	uint32_t editVersion = 0; // incremented on every in-memory edit; used to detect stale background loads
+	// per-layer storage: tilesPerLayer[layer][y * width + x]
+	int numLayers = 1;
+	std::vector<std::vector<int>> tilesPerLayer;
+	std::vector<char> dirty; // per-layer dirty flags
+	std::vector<char> readyForRendering; // per-layer ready flags
+	std::vector<uint32_t> editVersion; // per-layer edit versions
 
 	// Entities generated for this chunk's merged collision rectangles (Tile static entities)
 	std::vector<Entity*> generatedEntities;
 
 	std::vector<float> cpuVertexBuffer; // CPU-side vertex buffer for the chunk's tiles, used for rendering.
-	sf::VertexArray vertexArray; // GPU-friendly vertex array for fast rendering (built on main thread)
-	std::shared_ptr<sf::Texture> vertexTexture; // texture used by the vertexArray (if any)
+	std::vector<sf::VertexArray> vertexArrays; // one vertex array per layer
+	std::shared_ptr<sf::Texture> vertexTexture; // texture used by the vertexArrays (if any)
 
 	Chunk() = default;
 
-	Chunk(int x, int y, int width, int height, float tileSize)
+	Chunk(int x, int y, int width, int height, float tileSize, int numLayers)
 		: chunkX(x), chunkY(y), width(width), height(height), tileSize(tileSize) {
-		tiles.resize(width * height, 0); // Initialize all tiles to empty (0)
-		vertexArray.setPrimitiveType(sf::PrimitiveType::Triangles);
+		numLayers = std::max(1, numLayers);
+		this->numLayers = numLayers;
+		tilesPerLayer.resize(numLayers);
+		dirty.resize(numLayers, false);
+		readyForRendering.resize(numLayers, false);
+		editVersion.resize(numLayers, 0);
+		for (int i = 0; i < numLayers; ++i) {
+			tilesPerLayer[i].resize(width * height, 0);
+		}
+		vertexArrays.resize(numLayers);
+		for (auto &va : vertexArrays) va.setPrimitiveType(sf::PrimitiveType::Triangles);
 	}
+
+	// Backwards compat helpers for single-layer access
+	int GetTileSingleLayer(int x, int y) const { return (tilesPerLayer.empty() ? 0 : tilesPerLayer[0][y * width + x]); }
+	void SetTileSingleLayer(int x, int y, int v) { if (!tilesPerLayer.empty()) tilesPerLayer[0][y * width + x] = v; }
 };
 /////////////////////////////////
 
@@ -66,7 +80,7 @@ class ChunkManager {
 public:
 	/////////////////////////////////
 	// Constructor and destructor for the ChunkManager class
-	ChunkManager(int chunkWidth = 32, int chunkHeight = 32, float tileSize = 32.0f);
+	ChunkManager(int chunkWidth = 32, int chunkHeight = 32, float tileSize = 32.0f, int numLayers = 3);
 	~ChunkManager();
 	/////////////////////////////////
 
@@ -74,8 +88,9 @@ public:
 	
 	/////////////////////////////////
 	// Public methods for getting and setting tile values, ensuring chunks are loaded for a given area, updating the main thread with loaded chunks, saving chunks to disk, and managing configuration such as base path and tileset key.
-	int GetTileAt(int tileX, int tileY);
-	int SetTileAt(int tileX, int tileY, int tileValue);
+	// layerIndex defaults to 0 (main layer) for backward compatibility
+	int GetTileAt(int tileX, int tileY, int layerIndex = 0);
+	int SetTileAt(int tileX, int tileY, int tileValue, int layerIndex = 0);
 	/////////////////////////////////
 
 	
@@ -87,6 +102,7 @@ public:
 	void SaveAllChunks(); // Save all dirty chunks to disk in the specified directory. Each chunk will be saved as a separate file named "chunk_X_Y.dat" where X and Y are the chunk coordinates.
 
 	void SetBasePath(const std::string& basePath); // Set the base directory path where chunk files will be saved and loaded from.
+	std::string GetBasePath() const { return m_basePath; }
 	/////////////////////////////////
 	
 
@@ -104,7 +120,22 @@ public:
 	std::string GetTilesetKey() const { return m_tilesetKey; }
 	void SetMaxLoadedChunks(size_t maxChunks) {	m_maxLoadedChunks = maxChunks; } // Set the maximum number of chunks that can be loaded in memory at once. If the limit is exceeded, least recently used chunks will be unloaded.
 	/////////////////////////////////
-	
+
+
+
+	/////////////////////////////////
+	// Expose active layer control to callers (which may be editor UI)
+	void SetActiveLayer(int layer) { m_activeLayer = std::max(0, std::min(layer, m_numLayers-1)); }
+	int GetActiveLayer() const { return m_activeLayer; }
+
+	// Allow changing number of layers at runtime based on level meta
+	void SetNumLayers(int n) { m_numLayers = std::max(1, n); }
+	int GetNumLayers() const { return m_numLayers; }
+
+	void SetUnselectedLayerAlpha(float a) { m_unselectedLayerAlpha = std::clamp(a, 0.0f, 1.0f); }
+	float GetUnselectedLayerAlpha() const { return m_unselectedLayerAlpha; }
+	/////////////////////////////////
+
 
 
 	/////////////////////////////////
@@ -121,7 +152,8 @@ private:
 	/////////////////////////////////
 	// Internal helper methods for loading, saving, and managing chunks
 	void EnqueueLoadChunk(int chunkX, int chunkY);
-	void FinalizeLoadedChunk(int chunkX, int chunkY, std::vector<int> tileData, uint32_t versionAtEnqueue);
+	void EnqueueLoadChunk(int chunkX, int chunkY, int layer);
+	void FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue);
 	void RebuildChunkEntities(Chunk& chunk); // Rebuilds merged collider entities for a chunk; call after tile edits.
 	void EvictIfNeeded();
 	/////////////////////////////////
@@ -149,7 +181,7 @@ private:
 	static inline int FloorDiv(int a, int b) { 
 		return (int)std::floor(static_cast<double>(a) / static_cast<double>(b));
 	}
-
+	/////////////////////////////////
 
 
 	/////////////////////////////////
@@ -174,6 +206,9 @@ private:
 	std::mutex m_mutex;	// Mutex to protect access to the chunks map and LRU list across threads
 
 	std::string m_tilesetKey; // optional tileset atlas key used to texture chunk vertex arrays
+	int m_numLayers = 1; // number of layers per chunk (background, main, upper)
+	int m_activeLayer = 0; // drawing: which layer is fully opaque
+	float m_unselectedLayerAlpha = 0.3f; // opacity for unselected layers (0..1)
 	/////////////////////////////////
 
 

@@ -49,6 +49,10 @@ private:
 	// Public interface for accessing the singleton instance of the GameEngine and managing scenes. The copy constructor and copy assignment operator are deleted to prevent copying of the game engine instance, ensuring that only one instance exists throughout the application. 
 	// The GetInstance method provides access to the singleton instance, while AddScene, ChangeScene, RemoveScene, Run, and Update methods provide functionality for scene management and the main game loop.
 public:
+	// Access to the engine-wide InputController
+	InputController& GetInputController() { return m_InputController; }
+	/////////////////////////////////
+
 
 	/////////////////////////////////
 	// Deleted copy constructor and copy assignment operator to prevent copying of the game engine instance, ensuring that only one instance exists throughout the application.

@@ -98,5 +98,14 @@ private:
 	// We manage cursor appearance via software rendering and visibility toggles.
 
 
+
+	/////////////////////////////////
+	std::optional<sf::Cursor> m_defaultCursor;
+	std::optional<sf::Cursor> m_crosshairCursor;
+	std::optional<sf::Cursor> m_pointerCursor;
+	/////////////////////////////////
+
+
+
 };
 /////////////////////////////////

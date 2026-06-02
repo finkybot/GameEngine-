@@ -32,6 +32,51 @@ void InputController::Init(InputAction quitAction, sf::RenderWindow* window) {
 
 
 /////////////////////////////////
+// IsKeyboardEnabled - returns true when keyboard input should be processed (only while the window has focus). This method checks if the window reference is valid and if the window currently has focus, indicating that keyboard input should be accepted.
+bool InputController::IsKeyboardEnabled() const {
+	if (!m_window) return false;
+	return m_window->hasFocus();
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// IsPointerInsideWindow - returns true when the pointer is currently inside the window client area. This method checks if the window reference is valid and retrieves the current mouse position relative to the window, comparing it against the window size 
+// to determine if the pointer is within the bounds of the window.
+bool InputController::IsPointerInsideWindow() const {
+	if (!m_window) return false;
+	// getPosition(window) returns position relative to the window client area
+	sf::Vector2i pos = sf::Mouse::getPosition(*m_window);
+	sf::Vector2u size = m_window->getSize();
+	return pos.x >= 0 && pos.y >= 0 && pos.x < static_cast<int>(size.x) && pos.y < static_cast<int>(size.y);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// IsMouseEnabled - returns true when mouse input should be processed (window focused or pointer over window). This method checks if the window reference is valid and accepts mouse input if either the window has focus or the pointer is currently inside 
+// the window, allowing for more flexible mouse input handling.
+bool InputController::IsMouseEnabled() const {
+	if (!m_window) return false;
+	// Accept mouse input if either window has focus OR the pointer is inside the window
+	return m_window->hasFocus() || IsPointerInsideWindow();
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// IsMouseButtonDown - returns true if the specified mouse button is down and mouse input is enabled. This method checks if mouse input is currently enabled and then uses SFML's isButtonPressed function to check the state of the specified mouse button.
+bool InputController::IsMouseButtonDown(sf::Mouse::Button button) const {
+	return IsMouseEnabled() && sf::Mouse::isButtonPressed(button);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // Update - updates the input controller by polling for SFML events and triggering the appropriate actions based on user input, such as key presses, mouse movements, and window events. 
 // It takes the delta time since the last update as a parameter for potential use in input handling logic (e.g., for timing-based input actions).
 void InputController::Update(uint32_t deltaT) {

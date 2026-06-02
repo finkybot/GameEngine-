@@ -179,6 +179,7 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	{
 		float mapPxW = cam->m_viewportWidth * 3.0f;
 		float mapPxH = cam->m_viewportHeight * 3.0f;
+		
 		// store world bounds so camera panning can be clamped
 		m_mapMin = Vec2(cam->m_position.x - mapPxW * 0.5f, cam->m_position.y - mapPxH * 0.5f);
 		m_mapMax = Vec2(cam->m_position.x + mapPxW * 0.5f, cam->m_position.y + mapPxH * 0.5f);
@@ -187,6 +188,7 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 		int tx1 = (int)std::floor((cam->m_position.x + mapPxW * 0.5f) / m_tileSize);
 		int ty1 = (int)std::floor((cam->m_position.y + mapPxH * 0.5f) / m_tileSize);
 		m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, m_marginChunks);
+		
 		// finalize any background loads immediately so chunks are ready
 		m_chunkManager.UpdateMainThread();
 		m_chunkManager.RebuildAllChunksFromTileset();
@@ -201,6 +203,7 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 		if (m_currentLevelName.empty()) m_chunkManager.SetBasePath("levels/chunks");
 		else m_chunkManager.SetBasePath((fs::path("levels") / m_currentLevelName / "chunks").string());
 	}
+
 	m_chunkManager.SetMaxLoadedChunks(256);
 	// Load any previously-saved chunk files so saved maps appear on startup
 	m_chunkManager.LoadAllSavedChunks();
@@ -221,6 +224,7 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 			m_haveBounds = false;
 		}
 	}
+
 	// set start folder to assets and do not auto-load any tileset at startup
 	std::error_code ec;
 	auto assetsPath = std::filesystem::current_path() / std::filesystem::path("assets");
@@ -229,6 +233,7 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	} else {
 		m_currentDir = std::filesystem::current_path();
 	}
+
 	// ensure no tileset is active at start
 	if (sizeof(m_tilesetKeyBuf) > 0) ImStrncpy(m_tilesetKeyBuf, "", sizeof(m_tilesetKeyBuf));
 	if (sizeof(m_loadFilenameBuffer) > 0) ImStrncpy(m_loadFilenameBuffer, "", sizeof(m_loadFilenameBuffer));
@@ -236,18 +241,15 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	// Rebuild any already-loaded chunks so they use the tileset (if available)
 	m_chunkManager.RebuildAllChunksFromTileset();
 
-	// Reset all input/selection state so stale drag positions from a previous session
-	// don't cause a huge area fill on the very first click after re-entering the scene.
-	// Seed prevLmb/prevRmb from the CURRENT hardware state so that a button which is
-	// already physically held when the scene initialises (e.g. the LMB used to click the
-	// "Level Editor" main-menu button) is never treated as a fresh press edge.
+	// Reset all input/selection state so stale drag positions from a previous session don't cause a huge area fill on the very first click after re-entering the scene. Seed prevLmb/prevRmb from the CURRENT hardware state so that a button which is
+	// already physically held when the scene initialises (e.g. the LMB used to click the "Level Editor" main-menu button) is never treated as a fresh press edge.
 	m_prevLmb        = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
 	m_prevRmb        = sf::Mouse::isButtonPressed(sf::Mouse::Button::Right);
 	m_prevDKey       = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
 	m_prevMiddleDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle);
 	m_panning        = false;
-	// If LMB or RMB is already down we must NOT start a selection — wait for a full
-	// press/release cycle before allowing any painting.
+	
+	// If LMB or RMB is already down we must NOT start a selection — wait for a full press/release cycle before allowing any painting.
 	m_lmbSelecting   = false;
 	m_rmbSelecting   = false;
 	sf::Vector2i curMouse = sf::Mouse::getPosition(m_window);
@@ -327,26 +329,22 @@ void LevelEditorScene::Update(float deltaTime) {
 	int tileX = (int)std::floor(world.x / m_tileSize);
 	int tileY = (int)std::floor(world.y / m_tileSize);
 
-	// Check and record mouse buttons and keyboard state
-	bool lmb = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
-	bool rmb = sf::Mouse::isButtonPressed(sf::Mouse::Button::Right);
+	// Check and record mouse buttons and keyboard state (engine-wide policy)
+	bool lmb = m_gameEngine.GetInputController().IsMouseButtonDown(sf::Mouse::Button::Left);
+	bool rmb = m_gameEngine.GetInputController().IsMouseButtonDown(sf::Mouse::Button::Right);
 
 	// If ImGui is capturing the mouse or UI is hovered/active, do not modify the map, allows us to interact with the UI without accidentally editing level or moving the camera.
 	bool uiCapturing = ImGui::GetIO().WantCaptureMouse || ImGui::IsAnyItemActive() || ImGui::IsAnyItemHovered() || ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) || ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow);
 
+		
 	
-	
-	
-	
-	// Tile pick: hold D to activate eyedropper mode, then press left mouse button to pick a tile.
-	// While D is held, the eyedropper cursor is visible. When LMB is clicked while D is held,
-	// the tile at the mouse position is selected and becomes the active brush tile.
-	bool dKey = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
+	// Tile pick: hold D to activate eyedropper mode, then press left mouse button to pick a tile. While D is held, the eyedropper cursor is visible. When LMB is clicked while D is held, the tile at the mouse position is selected and becomes the active brush tile.
+	bool dKey = m_gameEngine.GetInputController().IsKeyboardEnabled() && sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
 
 	// Switch to eyedropper cursor when D is pressed, revert when released
 	if (dKey && !m_prevDKey) {
 		// D key pressed (edge): switch to eyedropper mode
-		m_gameEngine.GetCursorSystem().SetMode(CursorSystem::Mode::Crosshair);
+		m_gameEngine.GetCursorSystem().SetMode(CursorSystem::Mode::Pointer);
 	} else if (!dKey && m_prevDKey) {
 		// D key released (edge): switch back to default mode
 		m_gameEngine.GetCursorSystem().SetMode(CursorSystem::Mode::Default);
@@ -365,7 +363,7 @@ void LevelEditorScene::Update(float deltaTime) {
 
 	// Camera panning with the middle mouse button; if we press the middle mouse button and it wasn't pressed in the previous frame, then start the panning process. Begin by recording the initial mouse 'start' position and camera position.
 	// When the middle mouse button is released, end the panning process.
-	bool isMiddleDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle);
+	bool isMiddleDown = m_gameEngine.GetInputController().IsMouseButtonDown(sf::Mouse::Button::Middle);
 	m_prevMiddleDown = isMiddleDown;
 	bool wasPanning = m_panning;
 	// allow panning even if ImGui reports capture so middle-click drag still moves camera
@@ -423,11 +421,6 @@ void LevelEditorScene::Update(float deltaTime) {
 				if (auto t = m_cameraEntity->GetComponent<CTransform>()) {
 					t->m_position = newPos;
 				}
-			}
-			// print only when camera position changed by more than 1 unit to reduce spam
-			if (std::abs(newPos.x - m_lastCameraPos.x) > 1.0f || std::abs(newPos.y - m_lastCameraPos.y) > 1.0f) {
-				std::cout << "Camera moved to=(" << newPos.x << "," << newPos.y << ") delta=(" << delta.x << "," << delta.y << ")" << std::endl;
-				m_lastCameraPos = newPos;
 			}
 		}
 	}
@@ -548,150 +541,35 @@ void LevelEditorScene::Update(float deltaTime) {
 /////////////////////////////////
 // Render - Render the level editor scene. This will be called every frame by the game engine after Update. In this function, we will render the loaded chunks of the level based on the current camera view.
 void LevelEditorScene::Render() {
-	// Draw a checkerboard background so transparent tiles show a clear pattern
-	{
-		const float checkSize = m_tileSize; // use tile size for checker size
-		sf::View view = m_window.getView();
-		sf::Vector2f center = view.getCenter();
-		sf::Vector2f size = view.getSize();
-		float left = center.x - size.x * 0.5f;
-		float top  = center.y - size.y * 0.5f;
-		int x0 = (int)std::floor(left / checkSize) - 1;
-		int y0 = (int)std::floor(top  / checkSize) - 1;
-		int x1 = (int)std::ceil((left + size.x) / checkSize) + 1;
-		int y1 = (int)std::ceil((top  + size.y) / checkSize) + 1;
-		sf::RectangleShape cell(sf::Vector2f(checkSize, checkSize));
-		for (int y = y0; y <= y1; ++y) {
-			for (int x = x0; x <= x1; ++x) {
-				bool even = ((x + y) % 2) == 0;
-				cell.setPosition(sf::Vector2f(x * checkSize, y * checkSize));
-				cell.setFillColor(even ? sf::Color(34, 34, 34) : sf::Color(18, 18, 18));
-				cell.setOutlineThickness(0.0f);
-				m_window.draw(cell);
-			}
-		}
-	}
+	DrawCheckerboardBackground();
 
 	// Delegate drawing of visible chunks to the ChunkManager which performs culling and draws without holding the internal lock
 	m_chunkManager.DrawChunks(m_window, m_window.getView());
 
-	// Optional chunk diagnostics overlay: show per-chunk outline indicating whether chunk contains tiles and/or a texture
-	if (m_showChunkDiagnostics) {
-		std::lock_guard<std::mutex> lg(m_chunkManager.GetMutex());
-		for (const auto &pr : m_chunkManager.GetChunks()) {
-			const Chunk &c = pr.second;
-			const float wx = (float)(c.chunkX * c.width)  * c.tileSize;
-			const float wy = (float)(c.chunkY * c.height) * c.tileSize;
-			const float w = (float)c.width * c.tileSize;
-			const float h = (float)c.height * c.tileSize;
-			bool any = false;
-			for (int t : c.tiles) { if (t != 0) { any = true; break; } }
-			sf::RectangleShape r(sf::Vector2f(w, h));
-			r.setPosition(sf::Vector2f(wx, wy));
-			r.setFillColor(sf::Color::Transparent);
-			if (!any) {
-				r.setOutlineColor(sf::Color(200, 0, 0, 180)); // red = empty
-			} else if (c.vertexTexture) {
-				r.setOutlineColor(sf::Color(0, 200, 0, 180)); // green = has tiles + texture
-			} else {
-				r.setOutlineColor(sf::Color(200, 200, 0, 180)); // yellow = has tiles but no texture
-			}
-			r.setOutlineThickness(2.0f);
-			m_window.draw(r);
-		}
-	}
+	// Optional debug: draw chunk boundaries and diagnostics
+	DrawChunkDiag(); // Draw diagonal lines across each chunk for visual debugging purposes
+	DrawDragRect(); // Draw a rectangle on the screen to visualize the current selection area when dragging with the mouse
+	DrawMapBounds(); // Draw a rectangle representing the current map bounds (m_mapMin to m_mapMax) for visual debugging purposes
 
-	// Draw selection rectangle in world space while dragging (left or right button)
-	if (m_lmbSelecting || m_rmbSelecting) {
-		// Map the pixel selection corners into world coordinates using the active view
-		sf::Vector2f w0 = m_window.mapPixelToCoords(m_lmbSelecting ? m_selectLmbStartPx : m_selectRmbStartPx, m_window.getView());
-		sf::Vector2f w1 = m_window.mapPixelToCoords(m_lmbSelecting ? m_selectLmbEndPx : m_selectRmbEndPx, m_window.getView());
-		float left = std::min(w0.x, w1.x);
-		float top  = std::min(w0.y, w1.y);
-		float width = std::abs(w1.x - w0.x);
-		float height = std::abs(w1.y - w0.y);
-		sf::RectangleShape rect(sf::Vector2f(width, height));
-		rect.setPosition(sf::Vector2f(left, top));
-		rect.setFillColor(sf::Color::Transparent);
-		if (m_lmbSelecting) rect.setOutlineColor(sf::Color(100, 150, 255, 200)); else rect.setOutlineColor(sf::Color(255, 100, 100, 200));
-		rect.setOutlineThickness(2.0f);
-		m_window.draw(rect);
-	}
-
-	// Draw map bounds rectangle (if available)
-	if (m_haveBounds) {
-		float left = m_mapMin.x;
-		float top = m_mapMin.y;
-		float width = m_mapMax.x - m_mapMin.x;
-		float height = m_mapMax.y - m_mapMin.y;
-		if (width > 0 && height > 0) {
-			sf::RectangleShape boundsRect(sf::Vector2f(width, height));
-			boundsRect.setPosition(sf::Vector2f(left, top));
-			boundsRect.setFillColor(sf::Color::Transparent);
-			boundsRect.setOutlineColor(sf::Color(0, 200, 0, 180));
-			boundsRect.setOutlineThickness(2.0f);
-			m_window.draw(boundsRect);
-
-			// Draw small corner markers so the bounds are visible even when outline is thin or offscreen
-			const float markerSize = std::max(8.0f, std::min(width, height) * 0.02f);
-			sf::RectangleShape corner(sf::Vector2f(markerSize, markerSize));
-			corner.setFillColor(sf::Color::Red);
-			corner.setPosition(sf::Vector2f(left - markerSize * 0.5f, top - markerSize * 0.5f));
-			m_window.draw(corner);
-			corner.setPosition(sf::Vector2f(left + width - markerSize * 0.5f, top - markerSize * 0.5f));
-			m_window.draw(corner);
-			corner.setPosition(sf::Vector2f(left - markerSize * 0.5f, top + height - markerSize * 0.5f));
-			m_window.draw(corner);
-			corner.setPosition(sf::Vector2f(left + width - markerSize * 0.5f, top + height - markerSize * 0.5f));
-			m_window.draw(corner);
-		}
-	}
 	// reset view to default for UI rendering
 	m_window.setView(m_window.getDefaultView());
 
-	// Debug: show computed bounds and camera info to help diagnose missing bounds rectangle
-	{
-		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
-		int chunkCount = 0;
-		{
-			std::lock_guard<std::mutex> lg(m_chunkManager.GetMutex());
-			chunkCount = (int)m_chunkManager.GetChunks().size();
-		}
-		// Place the bounds/debug window at the bottom-right on first show
-		{
-			ImGuiIO& io = ImGui::GetIO();
-			float margin = 10.0f;
-			float approxW = 320.0f;
-			float approxH = 140.0f;
-			ImGui::SetNextWindowPos(ImVec2(std::max(0.0f, io.DisplaySize.x - approxW - margin), std::max(0.0f, io.DisplaySize.y - approxH - margin)), ImGuiCond_Once);
-		}
-		ImGui::Begin("Bounds Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
-		ImGui::Text("Loaded chunks: %d  haveBounds: %s", chunkCount, m_haveBounds ? "yes" : "no");
-		ImGui::Text("m_mapMin=(%.1f, %.1f)", m_mapMin.x, m_mapMin.y);
-		ImGui::Text("m_mapMax=(%.1f, %.1f)", m_mapMax.x, m_mapMax.y);
-		ImGui::Checkbox("Show Chunk Diagnostics", &m_showChunkDiagnostics);
-		if (camOpt) {
-			CCamera* cam = *camOpt;
-			float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
-			float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
-			ImGui::Text("Camera pos=(%.1f, %.1f) zoom=%.2f", cam->m_position.x, cam->m_position.y, cam->m_zoom);
-			ImGui::Text("Half view=(%.1f, %.1f)", halfW, halfH);
-			if (m_haveBounds) {
-				ImGui::Text("minCx=%.1f maxCx=%.1f", m_mapMin.x + halfW, m_mapMax.x - halfW);
-				ImGui::Text("minCy=%.1f maxCy=%.1f", m_mapMin.y + halfH, m_mapMax.y - halfH);
-			}
-		}
-		ImGui::End();
+	// Show bounds info in a separate ImGui window
+	BoundsInfoWindow();
 
 	// Render the separate Level Manager window
-	RenderLevelManagerWindow();
-	}
+	LevelManagerWindow(10.0f, m_window.getSize().y - 130.0f, 0.35f);
 
-	// Mirror TileMapEditor tileset panel - place near bottom-left so it doesn't overlap other windows
+	// ████
+	// ████
+	// ████
+	
+	// ImGui Browser Parent window for tileset management and brush preview. This is where we will add the UI for loading a tileset atlas, inputting the tileset key, 
+	// and showing a preview of the currently selected tile/brush. We will also include some diagnostics here like FPS and camera info for convenience while editing.
 	{
 		ImGuiIO& io = ImGui::GetIO();
 		float margin = 10.0f;
-		float winH = io.DisplaySize.y;
+		float winH = 10.0f;
 		// approximate window height for the tileset panel, position so bottom aligns with margin
 		float approxHeight = 420.0f;
 		ImGui::SetNextWindowPos(ImVec2(10, std::max(margin, winH - approxHeight - margin)), ImGuiCond_Once);
@@ -705,6 +583,72 @@ void LevelEditorScene::Render() {
 	// Fetch atlas once for UI usage (preview + brush). Declared here so later preview code can use it.
 	auto atlasOpt = m_gameEngine.GetTextureManager().GetAtlas(std::string(m_tilesetKeyBuf));
 
+SeclectedBrushWindow(atlasOpt);
+
+	// ████
+
+	CameraZoomWindow();
+	
+	// ████
+		
+	AtlasBrowserWindow();
+
+	// ████
+	
+	TilesetKeyWindow(); // UI for inputting the tileset key and dimensions
+
+	// ████
+
+	// Snapshot shared async-load state under lock, then release before any ImGui/chunk work
+	std::string atlasMessage;
+	bool atlasFinished = false, atlasSuccess = false;
+	std::string atlasKey;
+	{
+		std::lock_guard<std::mutex> lg(m_atlasLoadMutex);
+		atlasMessage  = m_atlasLoadMessage;
+		if (m_atlasLoadFinished) {
+			atlasFinished = true;
+			atlasSuccess  = m_atlasLoadSuccess;
+			atlasKey      = m_atlasLoadKey;
+			m_atlasLoadFinished = false; // clear flag while we still hold the lock
+		}
+	}
+
+	// ████
+
+	// Display message outside the lock
+	if (!atlasMessage.empty()) ImGui::TextUnformatted(atlasMessage.c_str());
+
+	// Apply finished load result outside the lock
+	if (atlasFinished) {
+		if (atlasSuccess) {
+			ImStrncpy(m_tilesetKeyBuf, atlasKey.c_str(), sizeof(m_tilesetKeyBuf));
+			m_chunkManager.SetTilesetKey(atlasKey);
+			m_chunkManager.RebuildAllChunksFromTileset();
+			m_chunkManager.UpdateMainThread();
+			m_chunkManager.RebuildAllChunksFromTileset();
+			m_selectedTileIndex = 0;
+		}
+	}
+
+	// ████
+
+	TilePreviewWindow(atlasOpt); // Window for previewing the currently loaded tileset atlas and selecting the active brush tile
+	ImGui::End();
+
+	// ████
+	// ████
+	// ████
+
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// SeclectedTileWindow - Renders a small floating preview of the currently-selected tile/atlas used for painting. This provides visual feedback to the user about which tile is currently active as the brush for painting in the level editor. It checks if an atlas is 
+// loaded and if a brush tile is selected, then extracts the corresponding tile from the atlas texture and displays it using ImGui::ImageButton. If no brush is selected, it shows a "(no brush)" message.
+void LevelEditorScene::SeclectedBrushWindow(std::optional<std::shared_ptr<TextureAtlas>>& atlasOpt) {
 	// Small floating preview of the currently-selected tile/atlas used for painting
 	ImGui::Separator();
 	ImGui::Text("Current Brush");
@@ -729,91 +673,126 @@ void LevelEditorScene::Render() {
 	} else {
 		ImGui::Text("(no brush)");
 	}
+}
+/////////////////////////////////
 
-	// Small diagnostics: FPS + camera position
-	{
-		float fps = m_gameEngine.GetFPSCounter().GetFPS();
-		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
-		if (camOpt) {
-			CCamera* cam = *camOpt;
-			ImGui::Text("FPS: %.1f  Camera: (%.1f, %.1f)  Zoom: %.2fx", fps, cam->m_position.x, cam->m_position.y,
-						cam->m_zoom);
-			constexpr int kMaxIndex = static_cast<int>(std::size(k_zoomSteps)) - 1;
-			if (ImGui::Button("Zoom In") && m_zoomIndex > 0) {
-				m_zoomIndex--;
-				cam->m_zoom = k_zoomSteps[m_zoomIndex];
-			}
-			ImGui::SameLine();
-			if (ImGui::Button("Reset Zoom")) {
-				m_zoomIndex = 1;
-				cam->m_zoom = k_zoomSteps[m_zoomIndex];
-			}
-			ImGui::SameLine();
-			if (ImGui::Button("Zoom Out") && m_zoomIndex < kMaxIndex) {
-				m_zoomIndex++;
-				cam->m_zoom = k_zoomSteps[m_zoomIndex];
-			}
-		} else {
-			ImGui::Text("FPS: %.1f  Camera: (no main camera)", fps);
-		}
-		ImGui::Separator();
-	}
 
-	if (m_currentDir.empty()) m_currentDir = std::filesystem::current_path();
+
+/////////////////////////////////
+// AtlasBrowserWindow - Renders ImGui controls for browsing the filesystem to load a tileset atlas, inputting the tileset key and tile dimensions, and triggering the loading of the atlas. When an atlas is loaded, we also trigger a rebuild of all chunks to update 
+// their vertex textures based on the new atlas.
+void LevelEditorScene::AtlasBrowserWindow() {
+
+		// Atlas loader - file browser to load a tileset atlas, plus input for tileset key and tile dimensions. When an atlas is loaded, we also trigger a rebuild of all chunks to update their vertex textures based on the new atlas.
+	if (m_currentDir.empty())
+		m_currentDir = std::filesystem::current_path();
 
 	static std::vector<std::filesystem::directory_entry> s_entries;
 	auto refresh_entries = [&]() {
 		s_entries.clear();
 		try {
-			for (auto &e : std::filesystem::directory_iterator(m_currentDir)) s_entries.push_back(e);
-			std::sort(s_entries.begin(), s_entries.end(), [](const auto &a, const auto &b) {
-				bool a_dir=false,b_dir=false; try{a_dir=a.is_directory();}catch(...){a_dir=false;} try{b_dir=b.is_directory();}catch(...){b_dir=false;} if (a_dir!=b_dir) return a_dir>b_dir; return a.path().filename().string()<b.path().filename().string();
+			for (auto& e : std::filesystem::directory_iterator(m_currentDir))
+				s_entries.push_back(e);
+			std::sort(s_entries.begin(), s_entries.end(), [](const auto& a, const auto& b) {
+				bool a_dir = false, b_dir = false;
+				try {
+					a_dir = a.is_directory();
+				} catch (...) {
+					a_dir = false;
+				}
+				try {
+					b_dir = b.is_directory();
+				} catch (...) {
+					b_dir = false;
+				}
+				if (a_dir != b_dir)
+					return a_dir > b_dir;
+				return a.path().filename().string() < b.path().filename().string();
 			});
-		} catch(...) { s_entries.clear(); }
+		} catch (...) {
+			s_entries.clear();
+		}
 	};
 
-	if (ImGui::Button("Up") && m_currentDir.has_parent_path()) { m_currentDir = m_currentDir.parent_path(); refresh_entries(); }
+	if (ImGui::Button("Up") && m_currentDir.has_parent_path()) {
+		m_currentDir = m_currentDir.parent_path();
+		refresh_entries();
+	}
 	ImGui::SameLine();
-	if (ImGui::Button("Refresh")) { refresh_entries(); }
-	ImGui::SameLine(); ImGui::Text("Current folder: %s", m_currentDir.string().c_str());
+	if (ImGui::Button("Refresh")) {
+		refresh_entries();
+	}
+	ImGui::SameLine();
+	ImGui::Text("Current folder: %s", m_currentDir.string().c_str());
 
-	if (s_entries.empty()) refresh_entries();
+	if (s_entries.empty())
+		refresh_entries();
 
-	ImGui::BeginChild("files_list", ImVec2(0,200), true);
+
+	// File browser: list files and directories in the current folder. Directories are shown with a trailing slash and sorted before files. Clicking a directory navigates into it, while clicking a file selects it for loading. Double-clicking a file triggers loading the atlas
+	// immediately. The selected file is also copied into the load filename buffer for convenience if the user wants to edit it before loading.
+	ImGui::BeginChild("files_list", ImVec2(0, 200), true);
 	static std::string s_selected_file;
-	for (size_t i=0;i<s_entries.size();++i) {
-		auto &entry = s_entries[i];
+	for (size_t i = 0; i < s_entries.size(); ++i) {
+		auto& entry = s_entries[i];
 		std::string name = entry.path().filename().string();
-		bool is_dir=false; try{is_dir=entry.is_directory();}catch(...){is_dir=false;}
+		bool is_dir = false;
+		try {
+			is_dir = entry.is_directory();
+		} catch (...) {
+			is_dir = false;
+		}
 		std::string label = is_dir ? (name + "/") : name;
 		std::string fullpath = (m_currentDir / entry.path().filename()).string();
-		bool selected = (!s_selected_file.empty() && s_selected_file==fullpath);
-				if (ImGui::Selectable(label.c_str(), selected)) {
-					if (is_dir) { m_currentDir = entry.path(); s_selected_file.clear(); refresh_entries(); }
-						else { ImStrncpy(m_loadFilenameBuffer, fullpath.c_str(), sizeof(m_loadFilenameBuffer)); s_selected_file = fullpath; if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+		bool selected = (!s_selected_file.empty() && s_selected_file == fullpath);
+		if (ImGui::Selectable(label.c_str(), selected)) {
+			if (is_dir) {
+				m_currentDir = entry.path();
+				s_selected_file.clear();
+				refresh_entries();
+			} else {
+				ImStrncpy(m_loadFilenameBuffer, fullpath.c_str(), sizeof(m_loadFilenameBuffer));
+				s_selected_file = fullpath;
+				if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
 					// load selected atlas. If UI key is empty, derive a key from filename stem so we don't register under an empty key.
 					std::string key = std::string(m_tilesetKeyBuf);
 					if (key.empty()) {
-						try { key = std::filesystem::path(s_selected_file).stem().string(); } catch(...) { key = ""; }
+						try {
+							key = std::filesystem::path(s_selected_file).stem().string();
+						} catch (...) {
+							key = "";
+						}
 					}
-					if (m_gameEngine.GetTextureManager().LoadAtlas(key, s_selected_file, m_tilesetTileW, m_tilesetTileH)) {
+					if (m_gameEngine.GetTextureManager().LoadAtlas(key, s_selected_file, m_tilesetTileW,
+																   m_tilesetTileH)) {
 						m_chunkManager.SetTilesetKey(key);
 						m_chunkManager.RebuildAllChunksFromTileset();
 						std::cout << "Loaded atlas: " << s_selected_file << " key='" << key << "'" << std::endl;
 						// copy key into ui buffer
 						ImStrncpy(m_tilesetKeyBuf, key.c_str(), sizeof(m_tilesetKeyBuf));
-					} else std::cerr << "Failed to load atlas: " << s_selected_file << std::endl;
-				} 
+					} else
+						std::cerr << "Failed to load atlas: " << s_selected_file << std::endl;
+				}
 			}
 		}
-
 	}
 	ImGui::EndChild();
+}
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// TilesetKeyWindow - Renders ImGui controls for inputting the tileset key and tile dimensions, plus a button to trigger loading the atlas based on the current UI state. When an atlas is loaded, we trigger a rebuild of all chunks to update their vertex textures based on the new atlas.
+void LevelEditorScene::TilesetKeyWindow() {
+	// Input for tileset key and tile dimensions, plus button to trigger loading the atlas based on the current UI state. When an atlas is loaded, we trigger a rebuild of all chunks to update their vertex textures based on the new atlas.
 	ImGui::Separator();
 	ImGui::Text("Tileset key: %s", m_tilesetKeyBuf);
 	ImGui::SameLine();
-	if (ImGui::Button("Set Key")) { m_chunkManager.SetTilesetKey(std::string(m_tilesetKeyBuf)); m_chunkManager.RebuildAllChunksFromTileset(); }
+	if (ImGui::Button("Set Key")) {
+		m_chunkManager.SetTilesetKey(std::string(m_tilesetKeyBuf));
+		m_chunkManager.RebuildAllChunksFromTileset();
+	}
 
 	ImGui::Separator();
 	if (ImGui::Button("Load Selected")) {
@@ -824,53 +803,34 @@ void LevelEditorScene::Render() {
 			if (!m_atlasLoading.exchange(true)) {
 				// if UI key is empty, derive a key from filename stem so we don't register under an empty key
 				if (key.empty()) {
-					try { key = std::filesystem::path(path).stem().string(); } catch(...) { key = ""; }
-				}
-					{
-						std::lock_guard<std::mutex> lg(m_atlasLoadMutex);
-						m_atlasLoadKey = key;
-						m_atlasLoadPath = path;
-						m_atlasLoadFinished = false;
-						m_atlasLoadSuccess = false;
-						m_atlasLoadMessage.clear();
+					try {
+						key = std::filesystem::path(path).stem().string();
+					} catch (...) {
+						key = "";
 					}
+				}
+				{
+					std::lock_guard<std::mutex> lg(m_atlasLoadMutex);
+					m_atlasLoadKey = key;
+					m_atlasLoadPath = path;
+					m_atlasLoadFinished = false;
+					m_atlasLoadSuccess = false;
+					m_atlasLoadMessage.clear();
+				}
 				std::thread([this, key, path, w = m_tilesetTileW, h = m_tilesetTileH]() {
 					AtlasLoadWorker(key, path, w, h);
 				}).detach();
 			}
 		}
 	}
+}
+/////////////////////////////////
 
-	// Snapshot shared async-load state under lock, then release before any ImGui/chunk work
-	std::string atlasMessage;
-	bool atlasFinished = false, atlasSuccess = false;
-	std::string atlasKey;
-	{
-		std::lock_guard<std::mutex> lg(m_atlasLoadMutex);
-		atlasMessage  = m_atlasLoadMessage;
-		if (m_atlasLoadFinished) {
-			atlasFinished = true;
-			atlasSuccess  = m_atlasLoadSuccess;
-			atlasKey      = m_atlasLoadKey;
-			m_atlasLoadFinished = false; // clear flag while we still hold the lock
-		}
-	}
 
-	// Display message outside the lock
-	if (!atlasMessage.empty()) ImGui::TextUnformatted(atlasMessage.c_str());
 
-	// Apply finished load result outside the lock
-	if (atlasFinished) {
-		if (atlasSuccess) {
-			ImStrncpy(m_tilesetKeyBuf, atlasKey.c_str(), sizeof(m_tilesetKeyBuf));
-			m_chunkManager.SetTilesetKey(atlasKey);
-			m_chunkManager.RebuildAllChunksFromTileset();
-			m_chunkManager.UpdateMainThread();
-			m_chunkManager.RebuildAllChunksFromTileset();
-			m_selectedTileIndex = 0;
-		}
-	}
-
+/////////////////////////////////
+// TilePreviewWindow - Renders a preview of the currently loaded tileset atlas, showing all the individual tiles in a grid. The user can click on any tile in the preview to select it as the active brush tile for painting. The selected tile is highlighted with a background color. This provides a convenient visual reference for the user to see all available tiles in the atlas and quickly select one for editing the level.
+void LevelEditorScene::TilePreviewWindow(std::optional<std::shared_ptr<TextureAtlas>>& atlasOpt) {
 	// Preview loaded atlas tiles if available
 	ImGui::Separator();
 	// atlasOpt was fetched above once for UI usage
@@ -907,9 +867,227 @@ void LevelEditorScene::Render() {
 			ImGui::EndChild();
 		}
 	}
+}
+/////////////////////////////////
 
 
-	ImGui::End();
+
+/////////////////////////////////
+// ShowCameraZoomWindow - Renders a small ImGui window with diagnostics about the camera and controls to adjust the zoom level. This allows the user to see the current FPS, camera position, and zoom level at a glance while editing the level, and provides convenient 
+// buttons to quickly adjust the zoom without needing to use the mouse wheel.
+void LevelEditorScene::CameraZoomWindow() {
+	// Separator and diagnostics window to group related info and controls together. This includes FPS, camera position, zoom level, and buttons to control zoom. Small diagnostics: FPS + camera position and zoom, plus buttons to zoom in/out and reset zoom to default. 
+	// This is useful for testing and debugging the camera system while we are editing levels, and also serves as a reminder of the current zoom level which affects how the level will look in-game.
+	{
+		float fps = m_gameEngine.GetFPSCounter().GetFPS();
+		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+		if (camOpt) {
+			CCamera* cam = *camOpt;
+			ImGui::Text("FPS: %.1f  Camera: (%.1f, %.1f)  Zoom: %.2fx", fps, cam->m_position.x, cam->m_position.y,
+						cam->m_zoom);
+			constexpr int kMaxIndex = static_cast<int>(std::size(k_zoomSteps)) - 1;
+			if (ImGui::Button("Zoom In") && m_zoomIndex > 0) {
+				m_zoomIndex--;
+				cam->m_zoom = k_zoomSteps[m_zoomIndex];
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Reset Zoom")) {
+				m_zoomIndex = 1;
+				cam->m_zoom = k_zoomSteps[m_zoomIndex];
+			}
+			ImGui::SameLine();
+			if (ImGui::Button("Zoom Out") && m_zoomIndex < kMaxIndex) {
+				m_zoomIndex++;
+				cam->m_zoom = k_zoomSteps[m_zoomIndex];
+			}
+		} else {
+			ImGui::Text("FPS: %.1f  Camera: (no main camera)", fps);
+		}
+		ImGui::Separator();
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// DrawCheckerboardBackground - Renders a checkerboard pattern in the background of the level editor to visually indicate transparent areas of the tiles. This helps the user see where they have placed transparent tiles and provides a clear visual distinction between 
+// empty space and transparent tiles. The checker size is based on the tile size for consistency.
+void LevelEditorScene::DrawCheckerboardBackground() {
+	// Draw a checkerboard background so transparent tiles show a clear pattern
+	{
+		const float checkSize = m_tileSize; // use tile size for checker size
+		sf::View view = m_window.getView();
+		sf::Vector2f center = view.getCenter();
+		sf::Vector2f size = view.getSize();
+		float left = center.x - size.x * 0.5f;
+		float top = center.y - size.y * 0.5f;
+		int x0 = (int)std::floor(left / checkSize) - 1;
+		int y0 = (int)std::floor(top / checkSize) - 1;
+		int x1 = (int)std::ceil((left + size.x) / checkSize) + 1;
+		int y1 = (int)std::ceil((top + size.y) / checkSize) + 1;
+		sf::RectangleShape cell(sf::Vector2f(checkSize, checkSize));
+		for (int y = y0; y <= y1; ++y) {
+			for (int x = x0; x <= x1; ++x) {
+				bool even = ((x + y) % 2) == 0;
+				cell.setPosition(sf::Vector2f(x * checkSize, y * checkSize));
+				cell.setFillColor(even ? sf::Color(34, 34, 34) : sf::Color(18, 18, 18));
+				cell.setOutlineThickness(0.0f);
+				m_window.draw(cell);
+			}
+		}
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// ShowsBoundsInfo - Debug function to display the current map bounds and camera info in an ImGui window. This is useful for diagnosing issues with the bounds calculation and ensuring that the camera clamping logic has the correct values to work with. It also includes a checkbox to toggle 
+// additional chunk diagnostics rendering.
+void LevelEditorScene::BoundsInfoWindow() {
+	// Debug: show computed bounds and camera info to help diagnose missing bounds rectangle
+	{
+		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+		int chunkCount = 0;
+		{
+			std::lock_guard<std::mutex> lg(m_chunkManager.GetMutex());
+			chunkCount = (int)m_chunkManager.GetChunks().size();
+		}
+		// Place the bounds/debug window at the bottom-right on first show
+		{
+			ImGuiIO& io = ImGui::GetIO();
+			float margin = 10.0f;
+			float approxW = 320.0f;
+			float approxH = 140.0f;
+			ImGui::SetNextWindowPos(ImVec2(std::max(0.0f, io.DisplaySize.x - approxW - margin),
+										   std::max(0.0f, io.DisplaySize.y - approxH - margin)),
+									ImGuiCond_Once);
+		}
+		ImGui::Begin("Bounds Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
+		ImGui::Text("Loaded chunks: %d  haveBounds: %s", chunkCount, m_haveBounds ? "yes" : "no");
+		ImGui::Text("m_mapMin=(%.1f, %.1f)", m_mapMin.x, m_mapMin.y);
+		ImGui::Text("m_mapMax=(%.1f, %.1f)", m_mapMax.x, m_mapMax.y);
+		ImGui::Checkbox("Show Chunk Diagnostics", &m_showChunkDiagnostics);
+		if (camOpt) {
+			CCamera* cam = *camOpt;
+			float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
+			float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
+			ImGui::Text("Camera pos=(%.1f, %.1f) zoom=%.2f", cam->m_position.x, cam->m_position.y, cam->m_zoom);
+			ImGui::Text("Half view=(%.1f, %.1f)", halfW, halfH);
+			if (m_haveBounds) {
+				ImGui::Text("minCx=%.1f maxCx=%.1f", m_mapMin.x + halfW, m_mapMax.x - halfW);
+				ImGui::Text("minCy=%.1f maxCy=%.1f", m_mapMin.y + halfH, m_mapMax.y - halfH);
+			}
+		}
+		ImGui::End();
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// DrawMapBounds - If the map bounds are available, draw a rectangle around the edges of the map to visually indicate the limits of the level. This is especially helpful when panning around a large level to know where the edges are. The bounds are drawn in world 
+// space using the active view, and include small corner markers to ensure visibility even when the outline is thin or partially offscreen.
+void LevelEditorScene::DrawMapBounds() {
+	// Draw map bounds rectangle (if available)
+	if (m_haveBounds) {
+		float left = m_mapMin.x;
+		float top = m_mapMin.y;
+		float width = m_mapMax.x - m_mapMin.x;
+		float height = m_mapMax.y - m_mapMin.y;
+		if (width > 0 && height > 0) {
+			sf::RectangleShape boundsRect(sf::Vector2f(width, height));
+			boundsRect.setPosition(sf::Vector2f(left, top));
+			boundsRect.setFillColor(sf::Color::Transparent);
+			boundsRect.setOutlineColor(sf::Color(0, 200, 0, 180));
+			boundsRect.setOutlineThickness(2.0f);
+			m_window.draw(boundsRect);
+
+			// Draw small corner markers so the bounds are visible even when outline is thin or offscreen
+			const float markerSize = std::max(8.0f, std::min(width, height) * 0.02f);
+			sf::RectangleShape corner(sf::Vector2f(markerSize, markerSize));
+			corner.setFillColor(sf::Color::Red);
+			corner.setPosition(sf::Vector2f(left - markerSize * 0.5f, top - markerSize * 0.5f));
+			m_window.draw(corner);
+			corner.setPosition(sf::Vector2f(left + width - markerSize * 0.5f, top - markerSize * 0.5f));
+			m_window.draw(corner);
+			corner.setPosition(sf::Vector2f(left - markerSize * 0.5f, top + height - markerSize * 0.5f));
+			m_window.draw(corner);
+			corner.setPosition(sf::Vector2f(left + width - markerSize * 0.5f, top + height - markerSize * 0.5f));
+			m_window.draw(corner);
+		}
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Draw the selection rectangle while dragging with left or right mouse button. The rectangle is drawn in world space using the active view to convert from pixel coordinates to world coordinates. 
+// The outline color indicates whether it's a paint (blue) or erase (red) selection. This provides visual feedback to the user about the area they are selecting for painting or erasing tiles.
+void LevelEditorScene::DrawDragRect() {
+	// Draw selection rectangle in world space while dragging (left or right button)
+	if (m_lmbSelecting || m_rmbSelecting) {
+		// Map the pixel selection corners into world coordinates using the active view
+		sf::Vector2f w0 =
+			m_window.mapPixelToCoords(m_lmbSelecting ? m_selectLmbStartPx : m_selectRmbStartPx, m_window.getView());
+		sf::Vector2f w1 =
+			m_window.mapPixelToCoords(m_lmbSelecting ? m_selectLmbEndPx : m_selectRmbEndPx, m_window.getView());
+		float left = std::min(w0.x, w1.x);
+		float top = std::min(w0.y, w1.y);
+		float width = std::abs(w1.x - w0.x);
+		float height = std::abs(w1.y - w0.y);
+		sf::RectangleShape rect(sf::Vector2f(width, height));
+		rect.setPosition(sf::Vector2f(left, top));
+		rect.setFillColor(sf::Color::Transparent);
+		if (m_lmbSelecting)
+			rect.setOutlineColor(sf::Color(100, 150, 255, 200));
+		else
+			rect.setOutlineColor(sf::Color(255, 100, 100, 200));
+		rect.setOutlineThickness(2.0f);
+		m_window.draw(rect);
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Optional debug overlay to show chunk boundaries and whether they contain tiles and/or a texture. This can help diagnose issues with missing chunks or textures not being applied. It draws a colored outline around each loaded chunk: red for empty chunks, 
+// yellow for chunks with tiles but no texture, and green for chunks with both tiles and a texture. The overlay can be toggled on and off with a checkbox in the Bounds Debug window.
+void LevelEditorScene::DrawChunkDiag() {
+	// Optional chunk diagnostics overlay: show per-chunk outline indicating whether chunk contains tiles and/or a texture
+	if (m_showChunkDiagnostics) {
+		std::lock_guard<std::mutex> lg(m_chunkManager.GetMutex());
+		for (const auto& pr : m_chunkManager.GetChunks()) {
+			const Chunk& c = pr.second;
+			const float wx = (float)(c.chunkX * c.width) * c.tileSize;
+			const float wy = (float)(c.chunkY * c.height) * c.tileSize;
+			const float w = (float)c.width * c.tileSize;
+			const float h = (float)c.height * c.tileSize;
+			bool any = false;
+			for (int t : c.tiles) {
+				if (t != 0) {
+					any = true;
+					break;
+				}
+			}
+			sf::RectangleShape r(sf::Vector2f(w, h));
+			r.setPosition(sf::Vector2f(wx, wy));
+			r.setFillColor(sf::Color::Transparent);
+			if (!any) {
+				r.setOutlineColor(sf::Color(200, 0, 0, 180)); // red = empty
+			} else if (c.vertexTexture) {
+				r.setOutlineColor(sf::Color(0, 200, 0, 180)); // green = has tiles + texture
+			} else {
+				r.setOutlineColor(sf::Color(200, 200, 0, 180)); // yellow = has tiles but no texture
+			}
+			r.setOutlineThickness(2.0f);
+			m_window.draw(r);
+		}
+	}
 }
 /////////////////////////////////
 
@@ -917,10 +1095,10 @@ void LevelEditorScene::Render() {
 
 /////////////////////////////////
 // Separate Level Manager window so selection/creation/deletion is distinct from Tileset browser
-void LevelEditorScene::RenderLevelManagerWindow() {
+void LevelEditorScene::LevelManagerWindow(float x, float y, float alpha) {
 	// Level manager near top-left (avoid overlapping tileset browser)
-	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
-	ImGui::SetNextWindowBgAlpha(0.35f);
+	ImGui::SetNextWindowPos(ImVec2(x, y), ImGuiCond_Once);
+	ImGui::SetNextWindowBgAlpha(alpha);
 	if (!ImGui::Begin("Level Manager", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) { ImGui::End(); return; }
 
 	if (ImGui::Button("Refresh Levels")) RefreshAvailableLevels();

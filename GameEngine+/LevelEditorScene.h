@@ -55,11 +55,21 @@ public:
 	// Private helper methods for the LevelEditorScene class. These methods include logic for ensuring that visible chunks are loaded based on the camera view, applying the main camera's view to the render window, and processing user input for camera controls and tile editing.
 private:
 	/////////////////////////////////
+	void DrawCheckerboardBackground(); // Draw a checkerboard pattern in the background of the level editor for visual reference. This method will be called during rendering to provide a visual grid that helps users align and position tiles within the chunks, improving the usability of the level editor.
+	void DrawChunkDiag(); // Draw diagonal lines across each chunk for visual debugging purposes. This method will be called during rendering to help visualize the boundaries of each chunk in the level editor, making it easier for users to see how the world is divided into chunks.
+	void DrawDragRect(); // Draw a rectangle on the screen to visualize the current selection area when dragging with the mouse. This method will be called during rendering to provide visual feedback to the user about the area they are selecting for painting or erasing tiles.
+	void DrawMapBounds(); // Draw a rectangle representing the current map bounds (m_mapMin to m_mapMax) for visual debugging purposes. This method will be called during rendering to help visualize the overall bounds of the map based on the loaded chunks, providing feedback to the user about the extent of the world they are editing.
 	void EnsureVisibleChunks(); // Calculate which chunks intersect the current camera view plus a margin, and ensure those chunks are loaded and ready for rendering. This method will use the camera's position and viewport size to determine which chunks are needed, and will call the chunk manager to load any missing chunks.
 	void ApplyMainCameraView(); //  Apply the main camera's view to the render window before rendering the world. This method will retrieve the main camera's position and viewport settings, and set the SFML view accordingly so that the rendered chunks are displayed in the correct position and scale on the screen.
 	void ProcessInput(); // Process user input for camera controls (e.g., panning) and tile editing (e.g., painting/erasing tiles). This method will handle mouse input for painting tiles based on the current brush value, as well as middle mouse dragging for panning the camera. It will also take into account whether ImGui is capturing the mouse to avoid modifying the map when interacting with the UI.
 	void RefreshMapBounds(); // Recompute m_mapMin/m_mapMax/m_haveBounds from saved chunk files on disk. Called after any paint or erase operation so bounds grow with new tiles and shrink when tiles are removed.
-	void RenderLevelManagerWindow();
+	void LevelManagerWindow(float x, float y, float alpha);
+	void BoundsInfoWindow(); // Show map bounds info in an ImGui window for debugging purposes. This method will display the current map bounds (m_mapMin and m_mapMax) in an ImGui window, providing feedback to the user about the extent of the world they are editing and helping with debugging and level design.
+	void CameraZoomWindow(); // Show camera zoom info in an ImGui window for debugging purposes. This method will display the current camera zoom level in an ImGui window, providing feedback to the user about the current zoom state of the camera and helping with debugging and level design.
+	void TilePreviewWindow(std::optional<std::shared_ptr<TextureAtlas>>&atlasOpt); // Show a tile preview window in ImGui that displays the currently selected tile from the atlas. This method will take an optional shared pointer to the texture atlas, and if available, will render a preview of the currently selected tile based on m_selectedTileIndex. This provides visual feedback to the user about which tile they have selected for painting in the level editor.
+	void TilesetKeyWindow(); // Show a window in ImGui for inputting the tileset key, file path, and tile dimensions, and a button to load the atlas. This method will provide a user interface for loading a texture atlas into the level editor, allowing users to specify the necessary information for loading the atlas and providing feedback on the loading process.
+	void AtlasBrowserWindow(); // Show a file browser window in ImGui for selecting a texture atlas file to load. This method will allow users to navigate their file system and select a texture atlas file, providing an alternative way to specify the atlas path for loading into the level editor.
+	void SeclectedBrushWindow(std::optional<std::shared_ptr<TextureAtlas>>&atlasOpt); // Show a window in ImGui for displaying and inputting the currently selected tile index for painting. This method will allow users to see which tile they have currently selected from the atlas, and will provide an input field for changing the selected tile index, giving users control over which tile they are painting with in the level editor.
 	/////////////////////////////////
 
 
@@ -123,13 +133,6 @@ private:
 	bool m_rmbSelecting = false;
 	sf::Vector2i m_selectRmbStartPx = sf::Vector2i(0, 0);
 	sf::Vector2i m_selectRmbEndPx = sf::Vector2i(0, 0);
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// last known camera position for console updates
-	Vec2 m_lastCameraPos = Vec2::Zero;
 	/////////////////////////////////
 	
 

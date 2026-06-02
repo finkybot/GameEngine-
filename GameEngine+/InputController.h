@@ -66,5 +66,33 @@ public:
 	// SetGameController - sets the current GameController reference for this input controller, allowing it to access the input action mappings defined in the GameController and trigger the appropriate actions based on user input events.
 	void SetGameController(GameController* controller);
 	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// IsKeyboardEnabled - returns true when keyboard input should be processed (only while the window has focus).
+	bool IsKeyboardEnabled() const;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// IsMouseEnabled - returns true when mouse input should be processed (window focused or pointer over window).
+	bool IsMouseEnabled() const;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// IsPointerInsideWindow - returns true when the pointer is currently inside the window client area.
+	bool IsPointerInsideWindow() const;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// IsMouseButtonDown - returns true if the specified mouse button is down and mouse input is enabled.
+	bool IsMouseButtonDown(sf::Mouse::Button button) const;
+	/////////////////////////////////
 };
 /////////////////////////////////

@@ -15,6 +15,7 @@
   - Do not store entity IDs in Chunk struct for now; omit entityIds until needed.
   - Integrate this with TileMapEditorScene.
 - Edit the editor cursor and provide different sf::Cursor instances (or custom sprite cursors) for different editor modes (paint, erase, move, pan, selection). Keep cursor objects alive as members and switch via window.setMouseCursor().
+- Centralize mouse-inside-window checks in InputController to prevent mouse events from other monitors being processed.
 
 ## Audio Integration
 - Prepare to implement audio (sound effects and music) integration into the GameEngine+ project.

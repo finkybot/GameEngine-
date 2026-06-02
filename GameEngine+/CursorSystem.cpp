@@ -12,7 +12,6 @@
 #include <iostream>
 
 #include <SFML/Window/Cursor.hpp>
-#pragma message("Cursor constructor is: " SFML_VERSION_MAJOR "." SFML_VERSION_MINOR "." SFML_VERSION_PATCH)
 /////////////////////////////////
 
 
@@ -31,23 +30,38 @@ void CursorSystem::Initialize(sf::RenderWindow* window) {
 /////////////////////////////////
 // Load cursor textures for different cursor states (e.g., default, pointer, crosshair). This method will handle loading the necessary textures from disk and storing them for use when rendering the cursor.
 void CursorSystem::LoadCursors() {
-
-	std::cout << "Loading cursors...\n";
-
-	// Load eyedropper texture for software cursor rendering in Crosshair mode
-	if (!m_eyeDropperTexture) {
-		m_eyeDropperTexture = std::make_unique<sf::Texture>();
-		if (m_eyeDropperTexture->loadFromFile("assets/cursors/eyedropper_small.png")) {
-			// Create sprite with the loaded texture
-			m_eyeDropperSprite.reset(new sf::Sprite(*m_eyeDropperTexture));
-			m_eyeDropperSprite->setOrigin(sf::Vector2f(0.0f, 0.0f)); // Top-left origin
-			m_cursorHotspot = sf::Vector2f(0.0f, 0.0f); // Hotspot at top-left
-			std::cout << "Successfully loaded eyedropper cursor texture\n";
+// Load default cursor (Issue Solved)
+	// Note: SFML 3's sf::Cursor cannot be default-constructed or copied reliably, so we use optional unique_ptrs to manage them. 
+	// We load system cursors for Default, Pointer, and Crosshair modes. If loading fails, we log an error and reset the pointer to ensure we don't use an invalid cursor later.
+	if (!m_defaultCursor) {
+		m_defaultCursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Arrow);
+		m_crosshairCursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Cross);
+		m_pointerCursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Hand);
+		
+		if (m_defaultCursor && m_crosshairCursor && m_pointerCursor) {
+			std::cout << "Successfully loaded cursors\n";
 		} else {
-			std::cerr << "Failed to load eyedropper cursor from assets/cursors/eyedropper_small.png\n";
-			m_eyeDropperTexture.reset();
+			std::cerr << "Failed to load cursors\n";
+			m_defaultCursor.reset();
+			m_crosshairCursor.reset();
+			m_pointerCursor.reset();
 		}
 	}
+
+	// Load eyedropper texture for software cursor rendering in Crosshair mode
+	//if (!m_eyeDropperTexture) {
+	//	m_eyeDropperTexture = std::make_unique<sf::Texture>();
+	//	if (m_eyeDropperTexture->loadFromFile("assets/cursors/eyedropper_small.png")) {
+	//		// Create sprite with the loaded texture
+	//		m_eyeDropperSprite.reset(new sf::Sprite(*m_eyeDropperTexture));
+	//		m_eyeDropperSprite->setOrigin(sf::Vector2f(0.0f, 0.0f)); // Top-left origin
+	//		m_cursorHotspot = sf::Vector2f(0.0f, 0.0f); // Hotspot at top-left
+	//		std::cout << "Successfully loaded eyedropper cursor texture\n";
+	//	} else {
+	//		std::cerr << "Failed to load eyedropper cursor from assets/cursors/eyedropper_small.png\n";
+	//		m_eyeDropperTexture.reset();
+	//	}
+	//}
 }
 /////////////////////////////////
 
@@ -69,22 +83,25 @@ void CursorSystem::Update(float deltaTime) {
 	if (!m_window)
 		return; // Ensure we have a valid window pointer
 
-	// For now, we'll use a simple approach: toggle mouse visibility based on mode.
-	// A full cursor system with OS-level cursor changes requires static cursors or custom rendering.
-	// Mode::Crosshair (eyedropper) will hide the OS cursor so we can render a custom one if needed.
+	
 
 	switch (m_mode) {
 	case Mode::Default:
+		//m_window->setMouseCursorVisible(true);
+		m_window->setMouseCursor(*m_defaultCursor);
+		break;
 	case Mode::Pointer:
-		m_window->setMouseCursorVisible(true);
+		//m_window->setMouseCursorVisible(true);
+		m_window->setMouseCursor(*m_pointerCursor);
 		break;
 	case Mode::Crosshair:
 		// Hide OS cursor for eyedropper mode
-		m_window->setMouseCursorVisible(false);
+		//m_window->setMouseCursorVisible(false);
+		m_window->setMouseCursor(*m_crosshairCursor);
 
 		break;
 	default:
-		m_window->setMouseCursorVisible(true);
+		m_window->setMouseCursor(*m_defaultCursor);
 		break;
 	}
 

@@ -21,6 +21,14 @@
 class Entity;
 class EntityManager;
 class TextureAtlas;
+
+// SAL annotation macro for thread-safety documentation (MSVC static analysis).
+// This marks members/sections as guarded by a specific mutex.
+#ifdef _MSC_VER
+	#define _GUARDED_BY(lock) // no-op; only used for documentation
+#else
+	#define _GUARDED_BY(lock) // no-op on non-MSVC
+#endif
 /////////////////////////////////
 
 
@@ -200,10 +208,10 @@ private:
 	std::string m_basePath = "levels/"; // Base directory path for chunk files
 	size_t m_maxLoadedChunks = 256; // Maximum number of chunks that can be loaded in memory at once
 
-	std::unordered_map<long long, Chunk> m_chunks; // Map of loaded chunks, keyed by a combined chunkX and chunkY value (e.g., (chunkX << 32) | chunkY)
-	std::list<long long> m_lruList; // List to track the least recently used chunks for eviction (stores chunk keys)
-	std::unordered_map<long long, std::list<long long>::iterator> m_lruIndex; // O(1) iterator lookup into m_lruList
 	std::mutex m_mutex;	// Mutex to protect access to the chunks map and LRU list across threads
+	std::unordered_map<long long, Chunk> _GUARDED_BY(m_mutex) m_chunks; // Map of loaded chunks, keyed by a combined chunkX and chunkY value (e.g., (chunkX << 32) | chunkY)
+	std::list<long long> _GUARDED_BY(m_mutex) m_lruList; // List to track the least recently used chunks for eviction (stores chunk keys)
+	std::unordered_map<long long, std::list<long long>::iterator> _GUARDED_BY(m_mutex) m_lruIndex; // O(1) iterator lookup into m_lruList
 
 	std::string m_tilesetKey; // optional tileset atlas key used to texture chunk vertex arrays
 	int m_numLayers = 1; // number of layers per chunk (background, main, upper)

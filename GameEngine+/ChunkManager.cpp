@@ -382,8 +382,8 @@ ChunkManager::~ChunkManager() {
 
 
 /////////////////////////////////
-// GetTileAt - Retrieves the tile value at the specified tile coordinates (tileX, tileY). If the corresponding chunk is not loaded, it will be enqueued for loading in the background thread. 
-// Returns 0 if the chunk is not loaded or if the tile coordinates are out of bounds within the chunk.
+// GetTileAt - Retrieves the tile value at the specified tile coordinates (tileX, tileY). If the corresponding chunk is not loaded, it will be enqueued for loading in the 
+// background thread. Returns 0 if the chunk is not loaded or if the tile coordinates are out of bounds within the chunk.
 int ChunkManager::GetTileAt(int tileX, int tileY, int layerIndex) {
 	const int chunkX = FloorDiv(tileX, m_chunkWidth);
 	const int chunkY = FloorDiv(tileY, m_chunkHeight);
@@ -410,8 +410,8 @@ int ChunkManager::GetTileAt(int tileX, int tileY, int layerIndex) {
 
 
 /////////////////////////////////
-// SetTileAt - Sets the tile value at the specified tile coordinates (tileX, tileY) to the given tileValue. 
-// If the corresponding chunk is not loaded, it will be enqueued for loading in the background thread.
+// SetTileAt - Sets the tile value at the specified tile coordinates (tileX, tileY) to the given tileValue. If the corresponding chunk is not loaded, it will be enqueued 
+// for loading in the background thread.
 int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex) {
 	const int chunkX = FloorDiv(tileX, m_chunkWidth);
 	const int chunkY = FloorDiv(tileY, m_chunkHeight);
@@ -436,9 +436,10 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 	const int index     = localY * chunk.width + localX;
 	const int prevValue = chunk.tilesPerLayer[layerIndex][index];
 
-	// If this chunk was just inserted as a placeholder (we created it because it wasn't loaded) then still apply the requested change even if the placeholder value matches the requested value. This handles erasing areas of maps saved on disk: the placeholder starts as zeros 
-	// and an erase should overwrite the on-disk non-zero tiles once the background load finalizes. Always process clears (tileValue == 0) even if prevValue is already 0 — the chunk may be an unfinalized placeholder whose real on-disk tiles are non-zero. Bumping editVersion here ensures
-	// FinalizeLoadedChunk rejects the stale background load and keeps the cleared in-memory state.
+	// If this chunk was just inserted as a placeholder (we created it because it wasn't loaded) then still apply the requested change even if the placeholder value matches 
+	// the requested value. This handles erasing areas of maps saved on disk: the placeholder starts as zeros and an erase should overwrite the on-disk non-zero tiles once 
+	// the background load finalizes. Always process clears (tileValue == 0) even if prevValue is already 0 — the chunk may be an unfinalized placeholder whose real on-disk 
+	// tiles are non-zero. Bumping editVersion here ensures FinalizeLoadedChunk rejects the stale background load and keeps the cleared in-memory state.
 	if (prevValue == tileValue && !inserted && tileValue != 0) return prevValue;
 
 	chunk.tilesPerLayer[layerIndex][index] = tileValue;
@@ -629,7 +630,13 @@ void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY) {
 	// existing behavior: load all layers (delegate to layer-aware overload)
 	EnqueueLoadChunk(chunkX, chunkY, -1);
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// EnqueueLoadChunk - Overload that accepts specific layer to load. If layer is -1, loads all layers. Captures the current editVersion of the chunk at the time of enqueue to allow 
+// FinalizeLoadedChunk to reject stale loads.
 void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY, int layer) {
 	// Capture the current editVersion of this chunk so FinalizeLoadedChunk can reject stale loads
 	uint32_t versionAtEnqueue = 0;
@@ -640,8 +647,7 @@ void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY, int layer) {
 			if (!it->second.editVersion.empty()) versionAtEnqueue = it->second.editVersion[std::max(0, layer)];
 		}
 	}
-	// Instead of spawning an unbounded thread per request, push into a global load queue processed by a small pool.
-	// copy needed members for worker threads to avoid capturing 'this'
+	// Enqueue the load job with chunk coordinates, layer, base path, and captured version. The background loader threads will process this queue and perform the actual loading from disk.
 	int localChunkW = m_chunkWidth;
 	int localChunkH = m_chunkHeight;
 	int localNumLayers = m_numLayers;
@@ -705,9 +711,11 @@ void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY, int layer) {
 
 
 /////////////////////////////////
-// RebuildChunkEntities - Rebuilds the collider entities for a chunk based on its current tile data. This should be called whenever the tile data changes to ensure that the colliders match the visual representation of the chunk.
+// RebuildChunkEntities - Rebuilds the collider entities for a chunk based on its current tile data. This should be called whenever the tile data changes to ensure that the 
+// colliders match the visual representation of the chunk.
 void ChunkManager::RebuildChunkEntities(Chunk& c) {
-	// First, safely kill any existing entities that were generated for this chunk to avoid leaving orphaned entities in the world. We use SafeKillEntity to ensure that we don't attempt to access entities that may have already been destroyed.
+	// First, safely kill any existing entities that were generated for this chunk to avoid leaving orphaned entities in the world. We use SafeKillEntity to ensure that we 
+	// don't attempt to access entities that may have already been destroyed.
 	try {
 		EntityManager& em = GameEngine::GetInstance().GetEntityManager();
 		for (Entity* ge : c.generatedEntities) {
@@ -843,7 +851,8 @@ void ChunkManager::EvictIfNeeded() {
 
 
 /////////////////////////////////
-// RegisterChunkColliders - Registers the collider entities generated for all chunks. This should be called after loading chunks to ensure that the colliders are present in the game world for physics and collision detection.
+// RegisterChunkColliders - Registers the collider entities generated for all chunks. This should be called after loading chunks to ensure that the colliders are 
+// present in the game world for physics and collision detection.
 void ChunkManager::RegisterChunkColliders(EntityManager& em) {}
 /////////////////////////////////
 

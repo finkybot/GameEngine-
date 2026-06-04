@@ -611,11 +611,12 @@ void LevelEditorScene::Render() {
 	// reset view to default for UI rendering
 	m_window.setView(m_window.getDefaultView());
 
+	
 	// Show bounds info in a separate ImGui window
-	BoundsInfoWindow();
+	BoundsInfoWindow(m_window.getSize().x, m_window.getSize().y, 0.35f);
 
 	// Render the separate Level Manager window
-	LevelManagerWindow(10.0f, m_window.getSize().y - 130.0f, 0.35f);
+	LevelManagerWindow(m_window.getSize().x - 550.0f, 10, 0.35f);
 
 	// ████
 	// ████
@@ -640,7 +641,7 @@ void LevelEditorScene::Render() {
 	// Fetch atlas once for UI usage (preview + brush). Declared here so later preview code can use it.
 	auto atlasOpt = m_gameEngine.GetTextureManager().GetAtlas(std::string(m_tilesetKeyBuf));
 
-SeclectedBrushWindow(atlasOpt);
+	SelectedBrushWindow(atlasOpt);
 
 	// ████
 
@@ -706,7 +707,7 @@ SeclectedBrushWindow(atlasOpt);
 // SeclectedTileWindow - Renders a small floating preview of the currently-selected tile/atlas used for painting. This provides visual feedback to the user about which 
 // tile is currently active as the brush for painting in the level editor. It checks if an atlas is loaded and if a brush tile is selected, then extracts the 
 // corresponding tile from the atlas texture and displays it using ImGui::ImageButton. If no brush is selected, it shows a "(no brush)" message.
-void LevelEditorScene::SeclectedBrushWindow(std::optional<std::shared_ptr<TextureAtlas>>& atlasOpt) {
+void LevelEditorScene::SelectedBrushWindow(std::optional<std::shared_ptr<TextureAtlas>>& atlasOpt) {
 	// Small floating preview of the currently-selected tile/atlas used for painting
 	ImGui::Separator();
 	ImGui::Text("Current Brush");
@@ -1011,7 +1012,7 @@ void LevelEditorScene::DrawCheckerboardBackground() {
 // ShowsBoundsInfo - Debug function to display the current map bounds and camera info in an ImGui window. This is useful for diagnosing issues
 // with the bounds calculation and ensuring that the camera clamping logic has the correct values to work with. It also includes a checkbox to 
 // toggle additional chunk diagnostics rendering.
-void LevelEditorScene::BoundsInfoWindow() {
+void LevelEditorScene::BoundsInfoWindow(float x, float y, float alpha) {
 	// Debug: show computed bounds and camera info to help diagnose missing bounds rectangle
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	int chunkCount = 0;
@@ -1020,15 +1021,16 @@ void LevelEditorScene::BoundsInfoWindow() {
 		chunkCount = (int)m_chunkManager.GetChunks().size();
 	}
 	// Place the bounds/debug window at the bottom-right on first show
-	{
-		ImGuiIO& io = ImGui::GetIO();
-		float margin = 10.0f;
-		float approxW = 320.0f;
-		float approxH = 140.0f;
-		ImGui::SetNextWindowPos(ImVec2(std::max(0.0f, io.DisplaySize.x - approxW - margin),
-										std::max(0.0f, io.DisplaySize.y - approxH - margin)),
-								ImGuiCond_Once);
-	}
+
+	float margin = 10.0f;
+	float approxW = 255.0f;
+	float approxH = 140.0f;
+	ImGui::SetNextWindowPos(ImVec2(std::max(0.0f, x - approxW - margin),
+									std::max(0.0f, y - approxH - margin)),
+							ImGuiCond_Once);
+
+	ImGui::SetNextWindowBgAlpha(alpha);
+
 	ImGui::Begin("Bounds Debug", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoCollapse);
 	ImGui::Text("Loaded chunks: %d  haveBounds: %s", chunkCount, m_haveBounds ? "yes" : "no");
 	ImGui::Text("m_mapMin=(%.1f, %.1f)", m_mapMin.x, m_mapMin.y);

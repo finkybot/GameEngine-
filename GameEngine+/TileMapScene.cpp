@@ -310,18 +310,29 @@ void TileMapScene::DoAction() {}
 
 
 /////////////////////////////////
-// Draw the tile grid by iterating over the tile map and drawing a semi-transparent rectangle for each solid tile
+// Draw the tile grid by iterating over the tile map and enqueueing semi-transparent rectangles for each solid tile
 void TileMapScene::DrawTileGrid() {
 	if (m_tileMap.width <= 0 || m_tileMap.height <= 0)
 		return;
+
+	// Clear temporary storage from previous frame
+	m_tempTileGridShapes.clear();
+	m_nextTempShapeId = 0;
+
+	// Create and enqueue rectangles for all solid tiles
 	for (int y = 0; y < m_tileMap.height; ++y) {
 		for (int x = 0; x < m_tileMap.width; ++x) {
 			if (m_tileMap.IsSolid(x, y)) {
-				sf::RectangleShape rect(sf::Vector2f(m_tileMap.tileSize, m_tileMap.tileSize));
-				rect.setPosition(sf::Vector2f(x * m_tileMap.tileSize, y * m_tileMap.tileSize));
-				rect.setFillColor(sf::Color(100, 100, 100, 150));
-				rect.setOutlineColor(sf::Color::Transparent);
-				m_window.draw(rect);
+				auto rect = std::make_shared<sf::RectangleShape>(sf::Vector2f(m_tileMap.tileSize, m_tileMap.tileSize));
+				rect->setPosition(sf::Vector2f(x * m_tileMap.tileSize, y * m_tileMap.tileSize));
+				rect->setFillColor(sf::Color(100, 100, 100, 150));
+				rect->setOutlineColor(sf::Color::Transparent);
+
+				// Store the shape to keep it alive through the frame
+				m_tempTileGridShapes.push_back(rect);
+
+				// Enqueue to the engine render queue at depth 10 (below UI)
+				GetEngineRenderQueue().Enqueue(rect.get(), 10);
 			}
 		}
 	}

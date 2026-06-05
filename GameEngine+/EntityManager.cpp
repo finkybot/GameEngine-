@@ -307,17 +307,10 @@ void EntityManager::UpdateSpatialHashAndRender() {
 
 
 /////////////////////////////////
-// RenderShapes - renders the shapes of all entities in the EntityManager using the RenderSystem. This method iterates through the layer buckets in order (Background, Mid, Foreground, Overlay) and renders each entity's shape if it is alive, 
-// ensuring that entities are drawn in the correct order based on their layers.
+// RenderShapes - renders the shapes of all entities in the EntityManager using the RenderSystem. Direct rendering to window (not queued).
 /////////////////////////////////
 void EntityManager::RenderShapes() {
-    // Use incremental layer buckets for rendering: iterate Background->Mid->Foreground->Overlay
-	for (size_t layer = 0; layer < m_layerBuckets.size(); ++layer) {
-		for (Entity* e : m_layerBuckets[layer]) {
-			if (!e || !e->IsAlive()) continue;
-			m_renderSystem.RenderEntity(e, m_window);
-		}
-	}
+	m_renderSystem.RenderShapes(m_entities, m_window);
 }
 /////////////////////////////////
 
@@ -336,7 +329,7 @@ void EntityManager::ValidateIntegrity() const {
 
 
 /////////////////////////////////
-// RenderText - renders the text components of all entities in the EntityManager using the RenderSystem. This method iterates through the list of entities and renders any text components for alive entities, allowing for text to be drawn separately from shapes if desired.
+// RenderText - renders the text components of all entities using the RenderSystem. Direct render to window.
 void EntityManager::RenderText() {
 	m_renderSystem.RenderText(m_entities, m_window);
 }
@@ -345,10 +338,17 @@ void EntityManager::RenderText() {
 
 
 /////////////////////////////////
-// RenderAll - a convenience method that renders all entities in the EntityManager using the RenderSystem. The mode parameter allows the caller to specify whether to render only shapes, render shapes followed by text, or render shapes now and defer text 
-// rendering until after overlays are rendered.
+// RenderAll - a convenience method that renders all entities in the EntityManager using the RenderSystem. The mode parameter allows the caller to specify whether to render only shapes or shapes followed by text.
 void EntityManager::RenderAll(RenderSystem::RenderMode mode) {
-	m_renderSystem.RenderAll(m_entities, m_window, mode);
+	if (mode == RenderSystem::RenderMode::ShapesOnly) {
+		RenderShapes();
+	} else if (mode == RenderSystem::RenderMode::ShapesThenText) {
+		RenderShapes();
+		RenderText();
+	} else {
+		// ShapesThenTextAfterOverlays
+		RenderShapes();
+	}
 }
 /////////////////////////////////
 

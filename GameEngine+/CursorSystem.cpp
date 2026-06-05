@@ -15,6 +15,7 @@
 /////////////////////////////////
 
 
+
 /////////////////////////////////
 // Initialize the cursor system, including loading cursor textures and setting up any necessary state. This method will be called during the game's initialization phase to prepare the cursor for use.
 void CursorSystem::Initialize(sf::RenderWindow* window) {

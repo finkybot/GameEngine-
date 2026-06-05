@@ -186,8 +186,9 @@ private:
 
 
 	/////////////////////////////////
-	// Deprecated: Font manager for text rendering. This member variable is no longer used, as scenes should use the engine's shared FontManager via m_gameEngine.GetFontManager() instead of maintaining their own instance.
-	// FontManager m_fontManager; // Font manager for text rendering
+	// Temporary drawable storage for render queue. These are cleared at the start of Render() 
+	// and repopulated with frame-specific drawables for enqueueing to the engine render queue.
+	std::vector<std::shared_ptr<sf::RectangleShape>> m_tempTileGridShapes; // Temporary grid tile rectangles
+	int m_nextTempShapeId = 0;
 	/////////////////////////////////
 };
-/////////////////////////////////

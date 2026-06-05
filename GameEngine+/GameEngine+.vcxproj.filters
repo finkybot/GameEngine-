@@ -389,6 +389,9 @@
     <ClInclude Include="CursorSystem.h">
       <Filter>Header Files\Systems</Filter>
     </ClInclude>
+    <ClInclude Include="RenderQueue.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="GameEngine+.rc">
@@ -400,5 +403,6 @@
     <None Include="GameEngine+.vcxproj.filters" />
     <None Include=".clang-format" />
     <None Include="assets\spawners\default.json" />
+    <None Include="RENDER_QUEUE_PHASE1.md" />
   </ItemGroup>
 </Project>

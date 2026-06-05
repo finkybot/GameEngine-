@@ -77,10 +77,10 @@ public:
 
 	/////////////////////////////////
 	// Public methods for updating and rendering entities, as well as adding and removing entities from the manager. The Update method will handle 
-	// updating all systems and processing pending entities, while the Render methods will handle drawing entities to the screen.
+	// updating all systems and processing pending entities, while the Render methods will handle drawing entities.
 	void Update(float deltaTime = 1.0f / 60.0f);
-	void RenderShapes();
-	void RenderText();
+	void RenderShapes(); // Direct rendering (not queued)
+	void RenderText(); // Direct render (no queue)
 	void RenderAll(RenderSystem::RenderMode mode = RenderSystem::RenderMode::ShapesThenText);
 	/////////////////////////////////
 
@@ -221,14 +221,14 @@ private:
 
 
 	/////////////////////////////////
-    // Incremental layer buckets for fast rendering
+	// Incremental layer buckets for fast rendering
 	std::array<std::vector<Entity*>, 4> m_layerBuckets;
 	/////////////////////////////////
-	 
-	 
-	
+
+
+
 	/////////////////////////////////
-    // Thread id that owns this EntityManager (captured at construction). Used to detect cross-thread access in debug builds.
+	// Thread id that owns this EntityManager (captured at construction). Used to detect cross-thread access in debug builds.
 	std::thread::id m_ownerThreadId;
 	/////////////////////////////////
 };

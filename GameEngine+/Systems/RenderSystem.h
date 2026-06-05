@@ -73,7 +73,7 @@ public:
 	/////////////////////////////////
 
 
-	
+
 	/////////////////////////////////
 	// RenderShapes - Render only shapes for all alive entities.
 	void RenderShapes(const std::vector<std::unique_ptr<Entity>>& entities, sf::RenderWindow& window);

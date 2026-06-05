@@ -17,6 +17,7 @@
 #include <SFML/Window/VideoMode.hpp>
 #include <SFML/System/Clock.hpp>
 #include "GameEngine.h"
+#include "RenderQueue.h"
 
 class GameEngine;
 class EntityManager;
@@ -96,6 +97,18 @@ public:
 
 	/////////////////////////////////
 	// Helper to access the injected game engine (already a reference)
+	GameEngine& GetGameEngine() { return m_gameEngine; }
+	/////////////////////////////////
+
+
+
+	// Helper to access the engine-wide render queue
+	/////////////////////////////////
+	RenderQueue& GetEngineRenderQueue();
+	/////////////////////////////////
+
+
+
 protected:
 	/////////////////////////////////
 	// Construction contract: derived scenes must initialize these references
@@ -124,6 +137,7 @@ protected:
 	bool m_isLoaded = false;
 	bool m_isActive = false;
 	bool m_isPaused = false;
+	RenderQueue m_renderQueue; // Render queue for depth-sorted, batched drawing
 	/////////////////////////////////
 
 

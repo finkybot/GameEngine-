@@ -199,6 +199,9 @@ void GameEngine::Update(float deltaTime) {
 		// of an unintended grey fallback.
 		m_window.clear(sf::Color::Transparent);
 
+		// Clear the engine-wide render queue from the previous frame
+		m_renderQueue.Clear();
+
 		// Restart delta clock and update ImGui once per frame
 		sf::Time frameTime = m_deltaClock.restart();
 		if (ImGui::GetCurrentContext())
@@ -261,18 +264,24 @@ void GameEngine::Update(float deltaTime) {
 			m_cursorSystem->Update(deltaTime);
 
 			// Engine render pass ordering:
-			// 1) Entity shapes
+			// 1) Entity shapes (direct render for now to avoid queue lifetime issues with sprites)
 			m_currentScene->GetEntityManager().RenderShapes();
 			// 2) Scene overlays
 			m_currentScene->Render();
-			// 3) Entity text (render on top of overlays)
+			// 3) Flush queued overlays and shapes
+			m_renderQueue.Flush(m_window);
+			// 4) Entity text (direct render after queue flush so text appears on top)
 			m_currentScene->GetEntityManager().RenderText();
-			// 4) Custom cursor (on top of scene, below ImGui)
+			// 5) Custom cursor (on top of scene, below ImGui)
 			m_cursorSystem->Render();
 		}
 
 		// Draw any debug overlays from the current scene before ImGui so they are visible
 		//if (m_currentScene) m_currentScene->RenderDebugOverlay();
+
+		// Flush the engine-wide render queue to the window before ImGui rendering
+		// This ensures all scene and entity draws appear behind the UI
+		m_renderQueue.Flush(m_window);
 
 		// Render ImGui on top of everything (ImGui::SFML::Render without args uses current target)
 		if (ImGui::GetCurrentContext() && (m_currentScene == nullptr || m_currentScene->IsImGuiEnabled())) {

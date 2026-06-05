@@ -55,10 +55,10 @@ public:
 	// Private helper methods for the LevelEditorScene class. These methods include logic for ensuring that visible chunks are loaded based on the camera view, applying the main camera's view to the render window, and processing user input for camera controls and tile editing.
 private:
 	/////////////////////////////////
-	void DrawCheckerboardBackground(); // Draw a checkerboard pattern in the background of the level editor for visual reference. This method will be called during rendering to provide a visual grid that helps users align and position tiles within the chunks, improving the usability of the level editor.
-	void DrawChunkDiag(); // Draw diagonal lines across each chunk for visual debugging purposes. This method will be called during rendering to help visualize the boundaries of each chunk in the level editor, making it easier for users to see how the world is divided into chunks.
-	void DrawDragRect(); // Draw a rectangle on the screen to visualize the current selection area when dragging with the mouse. This method will be called during rendering to provide visual feedback to the user about the area they are selecting for painting or erasing tiles.
-	void DrawMapBounds(); // Draw a rectangle representing the current map bounds (m_mapMin to m_mapMax) for visual debugging purposes. This method will be called during rendering to help visualize the overall bounds of the map based on the loaded chunks, providing feedback to the user about the extent of the world they are editing.
+	void EnqueueCheckerboardBackground(); // Enqueue a checkerboard pattern to the render queue for background rendering
+	void EnqueueChunkDiag(); // Enqueue chunk diagnostics visualization to the render queue
+	void EnqueueDragRect(); // Enqueue the selection rectangle to the render queue
+	void EnqueueMapBounds(); // Enqueue map bounds visualization to the render queue
 	void EnsureVisibleChunks(); // Calculate which chunks intersect the current camera view plus a margin, and ensure those chunks are loaded and ready for rendering. This method will use the camera's position and viewport size to determine which chunks are needed, and will call the chunk manager to load any missing chunks.
 	void ApplyMainCameraView(); //  Apply the main camera's view to the render window before rendering the world. This method will retrieve the main camera's position and viewport settings, and set the SFML view accordingly so that the rendered chunks are displayed in the correct position and scale on the screen.
 	void ProcessInput(); // Process user input for camera controls (e.g., panning) and tile editing (e.g., painting/erasing tiles). This method will handle mouse input for painting tiles based on the current brush value, as well as middle mouse dragging for panning the camera. It will also take into account whether ImGui is capturing the mouse to avoid modifying the map when interacting with the UI.
@@ -142,6 +142,16 @@ private:
 	Vec2 m_mapMin = Vec2::Zero;
 	Vec2 m_mapMax = Vec2::Zero;
 	bool m_haveBounds = false;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Temporary storage for render shapes during Enqueue phase (kept alive until Flush completes)
+	// Use a map with stable memory addresses instead of a vector to avoid pointer invalidation
+	std::unordered_map<int, std::shared_ptr<sf::Shape>> m_tempRenderShapes;
+	std::unordered_map<int, std::shared_ptr<sf::VertexArray>> m_tempRenderVertexArrays;
+	int m_nextTempId = 0;
 	/////////////////////////////////
 
 

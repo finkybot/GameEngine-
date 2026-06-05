@@ -16,6 +16,7 @@
 #include "TextureManager.h"
 #include "Utils/FPSCounter.h"
 #include "CursorSystem.h"
+#include "RenderQueue.h"
 
 #include <map>
 #include <string>
@@ -157,10 +158,11 @@ public:
 	FPSCounter& GetFPSCounter() { return m_fpsCounter; }
 	TextureManager m_textureManager;
 	TextureManager& GetTextureManager() { return m_textureManager; }
-
+	/////////////////////////////////
 
 
 	
+	/////////////////////////////////
 	EntityManager& GetEntityManager() const { return *m_entityManager; } // Accessor for central entity manager, returns a reference to the EntityManager instance owned by the engine, allowing scenes and other game components to access and manage entities through the engine's central entity management system
 	/////////////////////////////////
 
@@ -170,6 +172,20 @@ public:
 	// Cursor system for global cursor handling
 	std::unique_ptr<CursorSystem> m_cursorSystem;
 	/////////////////////////////////
-	
+
+
+
+	/////////////////////////////////
+	// Engine-wide render queue for depth-sorted rendering across all scenes
+	RenderQueue m_renderQueue;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Accessor for engine-wide render queue
+	RenderQueue& GetRenderQueue() { return m_renderQueue; }
+	/////////////////////////////////
+
 };
 /////////////////////////////////

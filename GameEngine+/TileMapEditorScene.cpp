@@ -586,11 +586,14 @@ void TileMapEditorScene::Update(float deltaTime) {
 
 
 /////////////////////////////////
-// Render - renders the tile map editor scene, including any entities and debug overlays. The engine normally handles rendering centrally, but we can call EntityManager render here to ensure spawned entities are drawn while debugging.
+// Render - renders the tile map editor scene, including any entities and debug overlays. The engine normally handles rendering centrally, but we ensure tile entities are rendered through the queue.
 void TileMapEditorScene::Render() {
-	// Ensure entities are rendered for this scene. The engine normally drives rendering centrally
-	// but call EntityManager render here to guarantee spawned entities are drawn while debugging.
-	//m_entityManager.RenderShapes();
+	// Tile entities are rendered by RenderSystem through the engine-wide render queue
+	// The engine handles entity shape rendering, so nothing explicit is needed here
+	// If tiles aren't showing, verify:
+	// 1. TileSystem created the entities (check console output)
+	// 2. Entities have proper CTexture and CTransform components
+	// 3. Render queue is receiving entity shapes
 }
 /////////////////////////////////
 

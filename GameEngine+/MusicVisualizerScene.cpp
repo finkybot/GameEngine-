@@ -1329,19 +1329,30 @@ void MusicVisualizerScene::InitializeGame(sf::Vector2u windowSize) {
 
 
 /////////////////////////////////
-// DrawGrid - this function is responsible for drawing a grid overlay on the window based on the tile map we set up in InitializeGame. We will iterate through each tile in the tile map and draw a rectangle outline for it using SFML's RectangleShape. 
+// DrawGrid - this function is responsible for drawing a grid overlay on the window based on the tile map we set up in InitializeGame. We will iterate through each tile in the tile map and enqueue rectangle outlines to the render queue for it using the engine's centralized rendering system.
 // The rectangles will be transparent with a light outline color to create a subtle grid effect that doesn't overpower the visuals of the music visualizer. We also check if the tile map has valid dimensions before attempting to draw to avoid unnecessary processing.
 void MusicVisualizerScene::DrawGrid() {
 	if (m_tileMap.width <= 0 || m_tileMap.height <= 0)
 		return;
+
+	// Clear temporary storage from previous frame
+	m_tempGridShapes.clear();
+	m_nextTempShapeId = 0;
+
+	// Create and enqueue grid rectangles
 	for (int y = 0; y < m_tileMap.height; ++y) {
 		for (int x = 0; x < m_tileMap.width; ++x) {
-			sf::RectangleShape outline(sf::Vector2f(m_tileMap.tileSize, m_tileMap.tileSize));
-			outline.setPosition(sf::Vector2f(x * m_tileMap.tileSize, y * m_tileMap.tileSize));
-			outline.setFillColor(sf::Color::Transparent);
-			outline.setOutlineColor(sf::Color(200, 200, 200, 60));
-			outline.setOutlineThickness(1.0f);
-			m_window.draw(outline);
+			auto outline = std::make_shared<sf::RectangleShape>(sf::Vector2f(m_tileMap.tileSize, m_tileMap.tileSize));
+			outline->setPosition(sf::Vector2f(x * m_tileMap.tileSize, y * m_tileMap.tileSize));
+			outline->setFillColor(sf::Color::Transparent);
+			outline->setOutlineColor(sf::Color(200, 200, 200, 60));
+			outline->setOutlineThickness(1.0f);
+
+			// Store the shape to keep it alive through the frame
+			m_tempGridShapes.push_back(outline);
+
+			// Enqueue to the engine render queue at depth 5 (behind most other elements)
+			GetEngineRenderQueue().Enqueue(outline.get(), 5);
 		}
 	}
 }

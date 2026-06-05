@@ -371,6 +371,68 @@ void ChunkManager::DrawChunks(sf::RenderWindow& window, const sf::View& view) {
 
 
 /////////////////////////////////
+// EnqueueChunks - Enqueue all visible chunks to the render queue with depth-based sorting
+// This is the ECS-aligned rendering method that replaces DrawChunks for use with the render queue
+void ChunkManager::EnqueueChunks(RenderQueue& queue, const sf::View& view) {
+	const sf::Vector2f viewCenter = view.getCenter();
+	const sf::Vector2f viewSize = view.getSize();
+	const float vleft = viewCenter.x - viewSize.x * 0.5f;
+	const float vtop = viewCenter.y - viewSize.y * 0.5f;
+	const float vright = vleft + viewSize.x;
+	const float vbottom = vtop + viewSize.y;
+
+	std::lock_guard<std::mutex> lock(m_mutex);
+	for (auto& pr : m_chunks) {
+		Chunk& c = pr.second;
+		if (c.width <= 0 || c.height <= 0) continue;
+		const float cx = (float)(c.chunkX * c.width) * c.tileSize;
+		const float cy = (float)(c.chunkY * c.height) * c.tileSize;
+		const float cright = cx + (float)c.width * c.tileSize;
+		const float cbottom = cy + (float)c.height * c.tileSize;
+		if (cright <= vleft || cx >= vright || cbottom <= vtop || cy >= vbottom) continue;
+
+		// Check if this chunk is ready to render
+		bool anyReady = false; 
+		for (int L = 0; L < c.numLayers; ++L) if (c.readyForRendering[L]) { anyReady = true; break; }
+		bool allZero = true;
+		for (int L = 0; L < c.numLayers; ++L) { for (int t : c.tilesPerLayer[L]) { if (t != 0) { allZero = false; break; } } if (!allZero) break; }
+		if (!anyReady && !allZero) continue; // Skip if not ready and has tiles
+
+		// Enqueue per-layer vertex arrays with alpha modulation
+		for (int L = 0; L < c.numLayers; ++L) {
+			if (c.vertexArrays.size() <= (size_t)L) continue;
+			auto& va = c.vertexArrays[L];
+			if (va.getVertexCount() == 0) continue;
+
+			// Create a modified copy that will stay alive in tempVertexArraysForRendering[L]
+			if (c.tempVertexArraysForRendering.size() <= (size_t)L) continue;
+			c.tempVertexArraysForRendering[L] = va; // Store a copy in the chunk's per-layer temp buffer
+
+			// Apply alpha modulation to the copy
+			float alphaMul = 1.0f;
+			if (m_activeLayer >= 0 && L != m_activeLayer) alphaMul = m_unselectedLayerAlpha;
+
+			for (size_t vi = 0; vi < c.tempVertexArraysForRendering[L].getVertexCount(); ++vi) {
+				sf::Color col = c.tempVertexArraysForRendering[L][vi].color;
+				col.a = static_cast<uint8_t>((float)col.a * alphaMul);
+				c.tempVertexArraysForRendering[L][vi].color = col;
+			}
+
+			DrawRequest req;
+			req.drawable = &c.tempVertexArraysForRendering[L];
+			req.texture = c.vertexTexture;
+			req.blendMode = sf::BlendAlpha;
+			req.depth = 10 + L; // depth 10-12 for layers to maintain ordering
+
+			queue.Enqueue(req);
+		}
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // Destructor - currently does not have any special cleanup logic, but we could add it if needed in the future (e.g., to save dirty chunks before exiting)
 ChunkManager::~ChunkManager() { 
 	SaveAllChunks(); // Ensure all dirty chunks are saved to disk when the ChunkManager is destroyed to prevent data loss.

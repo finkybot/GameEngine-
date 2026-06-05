@@ -525,9 +525,12 @@ void LevelEditorScene::Update(float deltaTime) {
 				if (!m_levelSelected) {
 					m_exportMessage = "Select or create a level before editing.";
 				} else {
-							for (int ty = ty0; ty <= ty1; ++ty) {
+					std::cout << "DEBUG: Painting tiles in rect (" << tx0 << "," << ty0 << ") to (" 
+						<< tx1 << "," << ty1 << ") with value " << m_brushValue 
+						<< " on layer " << m_activeLayer << std::endl;
+					for (int ty = ty0; ty <= ty1; ++ty) {
 						for (int tx = tx0; tx <= tx1; ++tx) {
-				m_chunkManager.SetTileAt(tx, ty, m_brushValue, m_activeLayer); // paint selection on active layer
+			m_chunkManager.SetTileAt(tx, ty, m_brushValue, m_activeLayer); // paint selection on active layer
 				// Debug log to help trace painting
 				std::cout << "Paint request tx=" << tx << " ty=" << ty << " layer=" << m_activeLayer << " val=" << m_brushValue << "\n";
 						}
@@ -598,15 +601,24 @@ void LevelEditorScene::Update(float deltaTime) {
 // Render - Render the level editor scene. This will be called every frame by the game engine after Update. In this function, we will render the loaded chunks 
 // of the level based on the current camera view.
 void LevelEditorScene::Render() {
-	DrawCheckerboardBackground();
+	// Clear temporary render storage from previous frame
+	m_tempRenderShapes.clear();
+	m_tempRenderVertexArrays.clear();
+	m_nextTempId = 0;
 
-	// Delegate drawing of visible chunks to the ChunkManager which performs culling and draws without holding the internal lock
-	m_chunkManager.DrawChunks(m_window, m_window.getView());
+	// Enqueue checkerboard background at depth 0 (background layer)
+	EnqueueCheckerboardBackground();
 
-	// Optional debug: draw chunk boundaries and diagnostics
-	DrawChunkDiag();	// Draw diagonal lines across each chunk for visual debugging purposes
-	DrawDragRect();		// Draw a rectangle on the screen to visualize the current selection area when dragging with the mouse
-	DrawMapBounds();	// Draw a rectangle representing the current map bounds (m_mapMin to m_mapMax) for visual debugging purposes
+	// Enqueue chunks through the render queue with proper per-layer temp storage
+	m_chunkManager.EnqueueChunks(m_renderQueue, m_window.getView());
+
+	// Enqueue optional debug visualization at depth 100 (on top of chunks, below UI)
+	EnqueueChunkDiag();
+	EnqueueDragRect();
+	EnqueueMapBounds();
+
+	// Flush the render queue to the window (this renders all enqueued drawables in depth order)
+	m_renderQueue.Flush(m_window);
 
 	// reset view to default for UI rendering
 	m_window.setView(m_window.getDefaultView());
@@ -978,31 +990,47 @@ void LevelEditorScene::CameraZoomWindow() {
 
 
 /////////////////////////////////
-// DrawCheckerboardBackground - Renders a checkerboard pattern in the background of the level editor to visually indicate transparent areas 
-// of the tiles. This helps the user see where they have placed transparent tiles and provides a clear visual distinction between 
-// empty space and transparent tiles. The checker size is based on the tile size for consistency.
-void LevelEditorScene::DrawCheckerboardBackground() {
-	// Draw a checkerboard background so transparent tiles show a clear pattern
-	const float checkSize = m_tileSize; // use tile size for checker size
+// EnqueueCheckerboardBackground - Generates checkerboard pattern and enqueues it to the render queue
+// This is the new ECS-aligned way to render the editor background
+void LevelEditorScene::EnqueueCheckerboardBackground() {
+	const float checkSize = m_tileSize;
 	sf::View view = m_window.getView();
 	sf::Vector2f center = view.getCenter();
 	sf::Vector2f size = view.getSize();
+
 	float left = center.x - size.x * 0.5f;
 	float top = center.y - size.y * 0.5f;
+
 	int x0 = (int)std::floor(left / checkSize) - 1;
 	int y0 = (int)std::floor(top / checkSize) - 1;
 	int x1 = (int)std::ceil((left + size.x) / checkSize) + 1;
 	int y1 = (int)std::ceil((top + size.y) / checkSize) + 1;
-	sf::RectangleShape cell(sf::Vector2f(checkSize, checkSize));
+
+	auto va = std::make_shared<sf::VertexArray>(sf::PrimitiveType::Triangles);
+
 	for (int y = y0; y <= y1; ++y) {
 		for (int x = x0; x <= x1; ++x) {
 			bool even = ((x + y) % 2) == 0;
-			cell.setPosition(sf::Vector2f(x * checkSize, y * checkSize));
-			cell.setFillColor(even ? sf::Color(34, 34, 34) : sf::Color(18, 18, 18));
-			cell.setOutlineThickness(0.0f);
-			m_window.draw(cell);
+			sf::Color color = even ? sf::Color(34, 34, 34) : sf::Color(18, 18, 18);
+
+			float px = x * checkSize;
+			float py = y * checkSize;
+			float px2 = px + checkSize;
+			float py2 = py + checkSize;
+
+			// Quad as two triangles: TL, TR, BR then TL, BR, BL
+			va->append(sf::Vertex(sf::Vector2f(px, py), color));
+			va->append(sf::Vertex(sf::Vector2f(px2, py), color));
+			va->append(sf::Vertex(sf::Vector2f(px2, py2), color));
+			va->append(sf::Vertex(sf::Vector2f(px, py), color));
+			va->append(sf::Vertex(sf::Vector2f(px2, py2), color));
+			va->append(sf::Vertex(sf::Vector2f(px, py2), color));
 		}
 	}
+
+	m_tempRenderVertexArrays[m_nextTempId] = va;
+	m_renderQueue.Enqueue(va.get(), 0); // depth 0: background
+	m_nextTempId++;
 }
 /////////////////////////////////
 
@@ -1054,48 +1082,9 @@ void LevelEditorScene::BoundsInfoWindow(float x, float y, float alpha) {
 
 
 /////////////////////////////////
-// DrawMapBounds - If the map bounds are available, draw a rectangle around the edges of the map to visually indicate the limits of the level. 
-// This is especially helpful when panning around a large level to know where the edges are. The bounds are drawn in world space using the 
-// active view, and include small corner markers to ensure visibility even when the outline is thin or partially offscreen.
-void LevelEditorScene::DrawMapBounds() {
-	// Draw map bounds rectangle (if available)
-	if (m_haveBounds) {
-		float left = m_mapMin.x;
-		float top = m_mapMin.y;
-		float width = m_mapMax.x - m_mapMin.x;
-		float height = m_mapMax.y - m_mapMin.y;
-		if (width > 0 && height > 0) {
-			sf::RectangleShape boundsRect(sf::Vector2f(width, height));
-			boundsRect.setPosition(sf::Vector2f(left, top));
-			boundsRect.setFillColor(sf::Color::Transparent);
-			boundsRect.setOutlineColor(sf::Color(0, 200, 0, 180));
-			boundsRect.setOutlineThickness(2.0f);
-			m_window.draw(boundsRect);
-
-			// Draw small corner markers so the bounds are visible even when outline is thin or offscreen
-			const float markerSize = std::max(8.0f, std::min(width, height) * 0.02f);
-			sf::RectangleShape corner(sf::Vector2f(markerSize, markerSize));
-			corner.setFillColor(sf::Color::Red);
-			corner.setPosition(sf::Vector2f(left - markerSize * 0.5f, top - markerSize * 0.5f));
-			m_window.draw(corner);
-			corner.setPosition(sf::Vector2f(left + width - markerSize * 0.5f, top - markerSize * 0.5f));
-			m_window.draw(corner);
-			corner.setPosition(sf::Vector2f(left - markerSize * 0.5f, top + height - markerSize * 0.5f));
-			m_window.draw(corner);
-			corner.setPosition(sf::Vector2f(left + width - markerSize * 0.5f, top + height - markerSize * 0.5f));
-			m_window.draw(corner);
-		}
-	}
-}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// Draw the selection rectangle while dragging with left or right mouse button. The rectangle is drawn in world space using the active view to convert from pixel coordinates to world coordinates. 
-// The outline color indicates whether it's a paint (blue) or erase (red) selection. This provides visual feedback to the user about the area they are selecting for painting or erasing tiles.
-void LevelEditorScene::DrawDragRect() {
-	// Draw selection rectangle in world space while dragging (left or right button)
+// EnqueueDragRect - Enqueue the selection rectangle to the render queue
+void LevelEditorScene::EnqueueDragRect() {
+	// Enqueue selection rectangle in world space while dragging (left or right button)
 	if (m_lmbSelecting || m_rmbSelecting) {
 		// Map the pixel selection corners into world coordinates using the active view
 		sf::Vector2f w0 =
@@ -1106,15 +1095,19 @@ void LevelEditorScene::DrawDragRect() {
 		float top = std::min(w0.y, w1.y);
 		float width = std::abs(w1.x - w0.x);
 		float height = std::abs(w1.y - w0.y);
-		sf::RectangleShape rect(sf::Vector2f(width, height));
-		rect.setPosition(sf::Vector2f(left, top));
-		rect.setFillColor(sf::Color::Transparent);
+
+		auto rect = std::make_shared<sf::RectangleShape>(sf::Vector2f(width, height));
+		rect->setPosition(sf::Vector2f(left, top));
+		rect->setFillColor(sf::Color::Transparent);
 		if (m_lmbSelecting)
-			rect.setOutlineColor(sf::Color(100, 150, 255, 200));
+			rect->setOutlineColor(sf::Color(100, 150, 255, 200));
 		else
-			rect.setOutlineColor(sf::Color(255, 100, 100, 200));
-		rect.setOutlineThickness(2.0f);
-		m_window.draw(rect);
+			rect->setOutlineColor(sf::Color(255, 100, 100, 200));
+		rect->setOutlineThickness(2.0f);
+
+		m_tempRenderShapes[m_nextTempId] = rect;
+		m_renderQueue.Enqueue(rect.get(), 100); // depth 100: debug overlay
+		m_nextTempId++;
 	}
 }
 /////////////////////////////////
@@ -1122,37 +1115,95 @@ void LevelEditorScene::DrawDragRect() {
 
 
 /////////////////////////////////
-// Optional debug overlay to show chunk boundaries and whether they contain tiles and/or a texture. This can help diagnose issues with missing chunks or textures not being applied. 
-// It draws a colored outline around each loaded chunk: red for empty chunks, yellow for chunks with tiles but no texture, and green for chunks with both tiles and a texture. 
-// The overlay can be toggled on and off with a checkbox in the Bounds Debug window.
-void LevelEditorScene::DrawChunkDiag() {
-	// Optional chunk diagnostics overlay: show per-chunk outline indicating whether chunk contains tiles and/or a texture
-	if (m_showChunkDiagnostics) {
-		std::lock_guard<std::mutex> lg(m_chunkManager.GetMutex());
-		for (const auto& pr : m_chunkManager.GetChunks()) {
-			const Chunk& c = pr.second;
-			const float wx = (float)(c.chunkX * c.width) * c.tileSize;
-			const float wy = (float)(c.chunkY * c.height) * c.tileSize;
-			const float w = (float)c.width * c.tileSize;
-			const float h = (float)c.height * c.tileSize;
-			bool any = false;
-			for (int L = 0; L < c.numLayers; ++L) { for (int t : c.tilesPerLayer[L]) { if (t != 0) { any = true; break; } } if (any) break; }
-			sf::RectangleShape r(sf::Vector2f(w, h));
-			r.setPosition(sf::Vector2f(wx, wy));
-			r.setFillColor(sf::Color::Transparent);
-			if (!any) {
-				r.setOutlineColor(sf::Color(200, 0, 0, 180)); // red = empty
-			} else if (c.vertexTexture) {
-				r.setOutlineColor(sf::Color(0, 200, 0, 180)); // green = has tiles + texture
-			} else {
-				r.setOutlineColor(sf::Color(200, 200, 0, 180)); // yellow = has tiles but no texture
-			}
-			r.setOutlineThickness(2.0f);
-			m_window.draw(r);
+// EnqueueChunkDiag - Enqueue debug chunk diagnostics visualization
+void LevelEditorScene::EnqueueChunkDiag() {
+	if (!m_showChunkDiagnostics) return;
+
+	std::lock_guard<std::mutex> lg(m_chunkManager.GetMutex());
+	for (const auto& pr : m_chunkManager.GetChunks()) {
+		const Chunk& c = pr.second;
+		const float wx = (float)(c.chunkX * c.width) * c.tileSize;
+		const float wy = (float)(c.chunkY * c.height) * c.tileSize;
+		const float w = (float)c.width * c.tileSize;
+		const float h = (float)c.height * c.tileSize;
+		bool any = false;
+		for (int L = 0; L < c.numLayers; ++L) { for (int t : c.tilesPerLayer[L]) { if (t != 0) { any = true; break; } } if (any) break; }
+
+		auto r = std::make_shared<sf::RectangleShape>(sf::Vector2f(w, h));
+		r->setPosition(sf::Vector2f(wx, wy));
+		r->setFillColor(sf::Color::Transparent);
+		if (!any) {
+			r->setOutlineColor(sf::Color(200, 0, 0, 180)); // red = empty
+		} else if (c.vertexTexture) {
+			r->setOutlineColor(sf::Color(0, 200, 0, 180)); // green = has tiles + texture
+		} else {
+			r->setOutlineColor(sf::Color(200, 200, 0, 180)); // yellow = has tiles but no texture
 		}
+		r->setOutlineThickness(2.0f);
+		m_tempRenderShapes[m_nextTempId] = r;
+		m_renderQueue.Enqueue(r.get(), 100); // depth 100: debug overlay
+		m_nextTempId++;
 	}
 }
 /////////////////////////////////
+
+
+
+/////////////////////////////////
+// EnqueueMapBounds - Enqueue map bounds visualization
+void LevelEditorScene::EnqueueMapBounds() {
+	if (!m_haveBounds) return;
+
+	float width = m_mapMax.x - m_mapMin.x;
+	float height = m_mapMax.y - m_mapMin.y;
+
+	std::cout << "DEBUG: EnqueueMapBounds: min=(" << m_mapMin.x << "," << m_mapMin.y 
+			  << ") max=(" << m_mapMax.x << "," << m_mapMax.y 
+			  << ") width=" << width << " height=" << height << std::endl;
+
+	// Get outline thickness based on zoom
+	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	float outlineThickness = 2.0f;
+	if (camOpt) {
+		float zoom = (*camOpt)->m_zoom;
+		outlineThickness = 2.0f / zoom;
+	}
+
+	// Instead of using RectangleShape outline (which has rendering issues with large bounds),
+	// draw the four edges as separate line segments using a vertex array
+	auto va = std::make_shared<sf::VertexArray>();
+	va->setPrimitiveType(sf::PrimitiveType::Lines);
+
+	sf::Color boundsColor(255, 255, 255, 200);
+	float x0 = m_mapMin.x;
+	float y0 = m_mapMin.y;
+	float x1 = m_mapMax.x;
+	float y1 = m_mapMax.y;
+
+	// Top edge
+	va->append(sf::Vertex(sf::Vector2f(x0, y0), boundsColor));
+	va->append(sf::Vertex(sf::Vector2f(x1, y0), boundsColor));
+
+	// Bottom edge
+	va->append(sf::Vertex(sf::Vector2f(x0, y1), boundsColor));
+	va->append(sf::Vertex(sf::Vector2f(x1, y1), boundsColor));
+
+	// Left edge
+	va->append(sf::Vertex(sf::Vector2f(x0, y0), boundsColor));
+	va->append(sf::Vertex(sf::Vector2f(x0, y1), boundsColor));
+
+	// Right edge
+	va->append(sf::Vertex(sf::Vector2f(x1, y0), boundsColor));
+	va->append(sf::Vertex(sf::Vector2f(x1, y1), boundsColor));
+
+	m_tempRenderVertexArrays[m_nextTempId] = va;
+	m_renderQueue.Enqueue(va.get(), 100); // depth 100: debug overlay
+	m_nextTempId++;
+}
+/////////////////////////////////
+
+
+
 
 
 
@@ -1388,7 +1439,13 @@ void LevelEditorScene::ApplyMainCameraView() {
 		else newPos.y = (m_mapMin.y + m_mapMax.y) * 0.5f;
 	}
 	cam->m_position = newPos;
-	v.setCenter(sf::Vector2f(newPos.x, newPos.y));
+
+	// Snap camera to half-pixel boundaries to reduce shimmer/jitter when rendering
+	// This ensures that the view center aligns with rasterization boundaries
+	float snapX = std::round(newPos.x * 2.0f) * 0.5f;
+	float snapY = std::round(newPos.y * 2.0f) * 0.5f;
+
+	v.setCenter(sf::Vector2f(snapX, snapY));
 	m_window.setView(v);
 }
 /////////////////////////////////

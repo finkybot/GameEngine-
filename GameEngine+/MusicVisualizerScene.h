@@ -311,5 +311,14 @@ private:
 	// Request to restart the track from the beginning (used when pressing Play after track ends)
 	bool m_requestRestart = false;
 	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Temporary drawable storage for render queue. These are cleared at the start of Render() 
+	// and repopulated with frame-specific drawables for enqueueing to the engine render queue.
+	std::vector<std::shared_ptr<sf::RectangleShape>> m_tempGridShapes; // Temporary grid rectangles
+	int m_nextTempShapeId = 0;
+	/////////////////////////////////
 };
 /////////////////////////////////

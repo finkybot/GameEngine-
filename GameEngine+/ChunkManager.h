@@ -15,6 +15,7 @@
 #include <string>
 
 #include "TileMap.h"
+#include "RenderQueue.h"
 #include <SFML/Graphics.hpp>
 
 // forward declarations to avoid include cycles
@@ -55,6 +56,8 @@ struct Chunk {
 	std::vector<sf::VertexArray> vertexArrays; // one vertex array per layer
 	std::shared_ptr<sf::Texture> vertexTexture; // texture used by the vertexArrays (if any)
 
+	std::vector<sf::VertexArray> tempVertexArraysForRendering; // temporary storage per-layer for alpha-modulated vertex data during enqueue
+
 	Chunk() = default;
 
 	Chunk(int x, int y, int width, int height, float tileSize, int numLayers)
@@ -70,6 +73,8 @@ struct Chunk {
 		}
 		vertexArrays.resize(numLayers);
 		for (auto &va : vertexArrays) va.setPrimitiveType(sf::PrimitiveType::Triangles);
+		tempVertexArraysForRendering.resize(numLayers);
+		for (auto &va : tempVertexArraysForRendering) va.setPrimitiveType(sf::PrimitiveType::Triangles);
 	}
 
 	// Backwards compat helpers for single-layer access
@@ -226,7 +231,8 @@ private:
 public:
 	/////////////////////////////////
 	// Draw all chunks that intersect the provided view. This will perform a short copy of visible chunk data under the mutex and then draw them without holding the lock to minimize contention.
-	void DrawChunks(sf::RenderWindow& window, const sf::View& view);
+	void DrawChunks(sf::RenderWindow& window, const sf::View& view); // DEPRECATED: Use EnqueueChunks instead
+	void EnqueueChunks(RenderQueue& queue, const sf::View& view); // Enqueue all visible chunks to the render queue
 
 
 

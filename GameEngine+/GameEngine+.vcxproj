@@ -239,6 +239,7 @@
     <ClInclude Include="MusicVisualizerScene.h" />
     <ClInclude Include="QuadTree.h" />
     <ClInclude Include="Raycast.h" />
+    <ClInclude Include="RenderQueue.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Scene.h" />
     <ClInclude Include="SpatialHashGrid.h" />
@@ -265,6 +266,7 @@
     <None Include="assets\spawners\default.json" />
     <None Include="GameEngine+.vcxproj.filters" />
     <None Include="imgui.ini" />
+    <None Include="RENDER_QUEUE_PHASE1.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

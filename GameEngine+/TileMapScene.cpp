@@ -1,5 +1,8 @@
 /////////////////////////////////
-// TileMapScene.cpp - Implementation of the TileMapScene class, which is responsible for rendering a tile map and handling user input for raycasting and tile editing. The scene allows users to click and drag to perform raycasts against the tile map, visualize the results with debug lines and points, and toggle tile states with right-clicks. It also includes functionality for toggling visual debug overlays and handling keyboard input for scene management.
+// TileMapScene.cpp -	Implementation of the TileMapScene class, which is responsible for rendering a tile map and handling user input for raycasting and 
+//						tile editing. The scene allows users to click and drag to perform raycasts against the tile map, visualize the results with debug lines 
+//						and points, and toggle tile states with right-clicks. It also includes functionality for toggling visual debug overlays and handling 
+//						keyboard input for scene management.
 /////////////////////////////////
 
 
@@ -70,57 +73,56 @@ void TileMapScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 	}
 	// If mouse is up and was down in previous frame, end dragging and perform raycast
 	else if (!leftMouseDown && m_prevLmbMouseDown) {
-		// Only perform raycast if we were dragging, otherwise it was just a click without movement, and we will handle that case separately to toggle tile state. This prevents us from performing unnecessary raycasts on simple clicks
-		// and allows us to use clicks for toggling tiles while still supporting drag-based raycasts for longer drags. We get the magnitude of the drag and if it's very small, we treat it as a click rather than a drag, which allows us
-		// to toggle the tile state without performing a raycast. This provides a more intuitive user experience where clicks can be used for quick edits and drags can be used for raycasting.
+		// To prevent unnecessary raycasts, only perform raycast if we were dragging, otherwise it was just a click without movement, and we will handle 
+		// that case separately to toggle tile state. We get the magnitude of the drag and if it's very small, we treat it as a click rather than a drag.
 		if (m_lmbdragging) {
 			m_lmbdragging = false;
 			m_lmbDragEnd = mouseWorld;
 			Vec2 dir = m_lmbDragEnd - m_lmbDragStart;
 			float dragLen = dir.Mag();
 
-			// If the drag length is very small, we can treat it as a click rather than a drag. We use this to toggle a tile solid/not solid state.
-			// I'm using a very small threshold of 0.001f but it can be adjusted based on testing and needs.
+			// If the drag length is very small, we can treat it as a click to toggle a tile solid/not solid state.
+			// I'm using a small threshold of 0.001 units.
 			if (dragLen <= 0.001f) {
 				m_previewActive = false;
 				m_prevLmbMouseDown = leftMouseDown;
 				return;
 			}
 
-			// Normalize the direction vector for raycasting. We will use the original drag length to clamp the raycast distance, but the direction needs to be a unit vector for the DDA algorithm.
-			// Also clear previous debug lines and points before performing the new raycast, so that we only visualize the current raycast result. This ensures that our debug visualization is accurate and up-to-date with the latest raycast.
+			// Normalize the direction vector for raycasting. Use the original drag length to clamp the raycast distance, 
+			// but the direction needs to be a unit vector for the DDA algorithm.
 			dir = dir.GetUnitVec();
+
+			// Clear previous debug lines and points to ensure that our debug visualization is accurate and up-to-date with the latest raycast.
 			m_debugLines.clear();
 			m_debugPoints.clear();
 
-			// Determine if the starting cell is solid, which affects how we handle the raycast. If the ray starts inside a solid tile, the DDA will not report a hit since it only detects transitions from empty to solid.
-			// We need to check the starting cell and if it's solid, we will create a synthetic hit at the start position to represent the immediate collision. This allows us to visualize rays that start inside walls and
-			// ensures consistent behavior for clicks and short drags that begin in solid tiles.
+			// Calculate the starting tile coordinates based on the drag start position
 			int startTileX = static_cast<int>(std::floor(m_lmbDragStart.x / m_tileMap.tileSize));
 			int startTileY = static_cast<int>(std::floor(m_lmbDragStart.y / m_tileMap.tileSize));
+
+			// Check if the starting tile is solid
 			bool startSolid = m_tileMap.InBounds(startTileX, startTileY) && m_tileMap.IsSolid(startTileX, startTileY);
 
-			// Perform the raycast using DDA. If the start cell is solid, we will ignore it in the DDA and create a synthetic hit at the start position. The DDA will then find
-			// the next hit along the ray, which allows us to visualize rays that start inside walls and see where they exit or hit another wall.
+			
 			m_visitedCells.clear(); // clear visited cells before DDA
-			RaycastHit rayHitIgnore =
-				RaycastTilemapDDA(m_lmbDragStart, dir, m_tileMap, dragLen, startSolid, &m_visitedCells);
+			RaycastHit rayHitIgnore = RaycastTilemapDDA(m_lmbDragStart, dir, m_tileMap, dragLen, startSolid, &m_visitedCells);
 			RaycastHit rayHitStartCell = MakeStartCellHit(startTileX, startTileY, m_lmbDragStart);
 
-			// Build the list of visited cells for visualization. We will sample points along the ray at regular intervals and determine which cells they correspond to, adding them to the visited cells list if they are not already in it.
-			// This allows us to visualize the path of the ray through the grid and see which cells it passes through, which can be helpful for debugging the raycasting logic and understanding how rays interact with the tilemap.
+			// Build the list of visited cells for visualization. Sample points along the ray at regular intervals and add corresponding cells to the 
+			// m_visitedCells list if they are not already in it. This allows us to visualize the path of the ray through the grid and see which cells 
+			// it passes through, which can be helpful for debugging the raycasting logic and understanding how rays interact with the tilemap.
 			m_visitedCells.clear();
-			float step = std::max(1.0f, m_tileMap.tileSize * 0.25f);
+			float step = std::max(1.0f, m_tileMap.tileSize * 0.25f); // Set step size 
 
-			// Sample points along the ray at regular intervals and determine which cells they correspond to, adding them to the visited cells list if they are not already in it.
-			// This allows us to visualize the path of the ray through the grid and see which cells it passes through, which can be helpful for debugging the raycasting logic and understanding how rays interact with the tilemap.
+			// Use the step size to sample points along the ray and determine which cesll each point corresponds to. Can be used for visualization 
+			// of the ray path
 			for (float rayDistance = 0.0f; rayDistance <= dragLen; rayDistance += step) {
 				Vec2 worldPos(m_lmbDragStart.x + dir.x * rayDistance, m_lmbDragStart.y + dir.y * rayDistance);
 				int cellX = static_cast<int>(std::floor(worldPos.x / m_tileMap.tileSize));
 				int cellY = static_cast<int>(std::floor(worldPos.y / m_tileMap.tileSize));
 
-				// Add the cell to the visited cells list if it's not already in it. We check if the cell is within bounds of the tilemap before adding it, and we also check if it's
-				// already in the visited cells list to avoid duplicates. This allows us to visualize which cells were visited during the raycast.
+				// Add the cell to the visited cells list if it's not already in it.
 				if (!m_tileMap.InBounds(cellX, cellY))
 					continue;
 				if (std::find(m_visitedCells.begin(), m_visitedCells.end(), std::pair<int, int>(cellX, cellY)) ==
@@ -129,12 +131,15 @@ void TileMapScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 				}
 			}
 
-			// Determine which hit to use for visualization. If the ray starts inside a solid tile, we will use the synthetic hit at the start position for visualization, but we will also check if the DDA reported a
-			// different hit further along the ray. If it did, we will draw a line to that hit as well to show the exit point from the wall. If the ray starts in an empty tile, we will just use the DDA hit as normal.
+			// Determine which hit to use for visualization. If the ray starts inside a solid tile, we will use the synthetic hit at the start position for 
+			// visualization, but we will also check if the DDA reported a different hit further along the ray. If it did, we will draw a line to that hit 
+			// as well to show the exit point from the wall. If the ray starts in an empty tile, we will just use the DDA hit as normal.
 			RaycastHit rayHit;
 			if (startSolid) {
-				// If the ray starts inside a solid tile, we use the synthetic hit at the start position for visualization. However, we also check if the DDA reported a different hit further along the ray.
-				// If it did, we will draw a line to that hit as well to show the exit point from the wall. This allows us to visualize rays that start inside walls and see where they exit or hit another wall.
+				// If the ray starts inside a solid tile, we use the synthetic hit at the start position for visualization. 
+				// However, we also check if the DDA reported a different hit further along the ray.
+				// If it did, we will draw a line to that hit as well to show the exit point from the wall. 
+				// This allows us to visualize rays that start inside walls and see where they exit or hit another wall.
 				rayHit = rayHitStartCell;
 				if (rayHitIgnore.hit &&
 					(rayHitIgnore.tileX != rayHitStartCell.tileX || rayHitIgnore.tileY != rayHitStartCell.tileY)) {
@@ -147,9 +152,10 @@ void TileMapScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 				rayHit = rayHitIgnore;
 			}
 
-			// For visualization, we will draw a line from the drag start to the hit position. If there was a hit, we will clamp the hit position to the ray length in case it exceeds it (which can happen if the ray starts inside
-			// a solid tile and the DDA reports a hit at the boundary). We will also draw a point at the hit position. If there was no hit, we will draw a line to the drag end position and a point there instead. This allows us
-			// to visualize the result of the raycast and see where it hit or where it ended if it didn't hit anything.
+			// For visualization, we will draw a line from the drag start to the hit position. If there was a hit, we will clamp the hit position 
+			// to the ray length in case it exceeds it (which can happen if the ray starts inside a solid tile and the DDA reports a hit at the boundary). 
+			// We will also draw a point at the hit position. If there was no hit, we will draw a line to the drag end position and a point there instead. 
+			// This allows us to visualize the result of the raycast and see where it hit or where it ended if it didn't hit anything.
 			if (rayHit.hit) {
 				Vec2 hitPos = rayHit.position;
 				float proj = (hitPos.x - m_lmbDragStart.x) * dir.x + (hitPos.y - m_lmbDragStart.y) * dir.y;
@@ -160,7 +166,8 @@ void TileMapScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 				m_debugPoints.push_back(hitPos);
 				m_rawHitPoints.push_back(rayHit.position);
 			}
-			// Otherwise, if there was no hit, we will draw a line to the drag end position and a point there instead. This allows us to visualize the result of the raycast and see where it hit or where it ended if it didn't hit anything.
+			// Otherwise, if there was no hit, we will draw a line to the drag end position and a point there instead. This allows us to visualize 
+			// the result of the raycast and see where it hit or where it ended if it didn't hit anything.
 			else {
 				m_debugLines.push_back({m_lmbDragStart, m_lmbDragEnd});
 				m_debugPoints.push_back(m_lmbDragEnd);
@@ -183,14 +190,17 @@ void TileMapScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 
 
 /////////////////////////////////
-// ProcessMouseRightDrag - handles right mouse drag to toggle tiles. We will toggle the tile state at the current mouse position when the right mouse button is pressed, and we will also support dragging to toggle multiple tiles in a single drag.
-// When the right mouse button is released, we will end the drag. This allows us to quickly edit the tilemap by clicking or dragging with the right mouse button to toggle tiles between solid and empty states.
+// ProcessMouseRightDrag - handles right mouse drag to toggle tiles. We will toggle the tile state at the current mouse position when the right 
+// mouse button is pressed, and we will also support dragging to toggle multiple tiles in a single drag. When the right mouse button is released, 
+// we will end the drag....This allows us to quickly edit the tilemap by clicking or dragging with the right mouse button to toggle tiles between 
+// solid and empty states.
 void TileMapScene::ProcessMouseRightDrag(bool& rightMouseDown, const Vec2& mouseWorld) {
 	Vec2 currentTile = Vec2(static_cast<int>(std::floor(mouseWorld.x / m_tileMap.tileSize)),
 							static_cast<int>(std::floor(mouseWorld.y / m_tileMap.tileSize)));
 
-	// If the right mouse button is pressed and was not pressed in the previous frame, we start a new drag operation. We also check if the current tile under the mouse is different from the last tile we toggled
-	// to prevent multiple toggles on the same tile when we first press down. This allows us to toggle a tile immediately on right-click without dragging, while still supporting dragging to toggle multiple tiles.
+	// If the right mouse button is pressed and was not pressed in the previous frame, we start a new drag operation. We also check if the current tile 
+	// under the mouse is different from the last tile we toggled to prevent multiple toggles on the same tile when we first press down... 
+	// This allows us to toggle a tile immediately on right-click without dragging, while still supporting dragging to toggle multiple tiles.
 	if (rightMouseDown && !m_prevRmbMouseDown && currentTile != m_currentTile) {
 		m_rmbdragging = true;
 		m_rmbDragStart = mouseWorld;
@@ -198,8 +208,8 @@ void TileMapScene::ProcessMouseRightDrag(bool& rightMouseDown, const Vec2& mouse
 			currentTile; // Set the current tile to the tile under the mouse when we start dragging, so that we can track which tile we last toggled and avoid toggling the same tile multiple times on click.
 		ToggleTileAt(currentTile.x, currentTile.y);
 	}
-	// Otherwise if the right mouse button is released and was pressed in the previous frame, we end the drag operation. If we were dragging, we record the drag end position
-	// and calculate the drag direction vector, although for tile toggling we may not need the direction.
+	// Otherwise if the right mouse button is released and was pressed in the previous frame, we end the drag operation. If we were dragging, 
+	// we record the drag end position and calculate the drag direction vector, although for tile toggling we may not need the direction.
 	else if (!rightMouseDown && m_prevRmbMouseDown) {
 		// Only end dragging if we were actually dragging, otherwise it was just a click without movement, and we will handle that case separately to toggle tile state.
 		// This prevents us from performing unnecessary toggles on simple clicks
@@ -214,15 +224,17 @@ void TileMapScene::ProcessMouseRightDrag(bool& rightMouseDown, const Vec2& mouse
 			//ToggleTileAt(currentTile.x, currentTile.y);
 		}
 	}
-	// If the right mouse button is currently down and we are in a dragging state, we will update the drag end position and toggle the tile at the current mouse position if it's different from the last toggled tile.
+	// If the right mouse button is currently down and we are in a dragging state, we will update the drag end position and toggle the tile at the current 
+	// mouse position if it's different from the last toggled tile.
 	else if (rightMouseDown && m_rmbdragging && currentTile != m_currentTile) {
 		m_rmbDragEnd = mouseWorld;
 		m_currentTile = Vec2(static_cast<int>(std::floor(m_rmbDragEnd.x / m_tileMap.tileSize)),
 							 static_cast<int>(std::floor(m_rmbDragEnd.y / m_tileMap.tileSize)));
 		ToggleTileAt(currentTile.x, currentTile.y);
 	}
-	// Additionally, we want to support toggling tiles on simple right-clicks without dragging. To do this, we will check if the right mouse button is currently down and was not down in the previous frame (indicating a new click),
-	// and if the current tile under the mouse is the same as the last toggled tile, we will toggle it again. This allows us to toggle a tile immediately on right-click without dragging, while still supporting dragging to toggle multiple tiles.
+	// Additionally, we want to support toggling tiles on simple right-clicks without dragging. To do this, we will check if the right mouse button is currently 
+	// down and was not down in the previous frame (indicating a new click), and if the current tile under the mouse is the same as the last toggled tile, we will 
+	// toggle it again... This allows us to toggle a tile immediately on right-click without dragging, while still supporting dragging to toggle multiple tiles.
 	else if (rightMouseDown && !m_prevRmbMouseDown && currentTile == m_currentTile) {
 		ToggleTileAt(currentTile.x, currentTile.y);
 	}
@@ -245,7 +257,8 @@ void TileMapScene::ProcessEscapeKey(bool keyDown) const {
 
 
 /////////////////////////////////
-// ProcessSaveKey - handles input to save the tilemap to a JSON file when left control + S is pressed. We will check if the left control key is currently down and if the S key is pressed, and if so, we will call the SaveToJSON method on the tilemap to save it to a file.
+// ProcessSaveKey - handles input to save the tilemap to a JSON file when left control + S is pressed. We will check if the left control key is currently down 
+// and if the S key is pressed, and if so, we will call the SaveToJSON method on the tilemap to save it to a file.
 void TileMapScene::ProcessSaveKey(bool keyDown) const {
 	if (keyDown && m_leftCtrlKeyDown) {
 		std::string filename = "assets//testmap.json";
@@ -374,7 +387,8 @@ void TileMapScene::DrawHitPoints() {
 
 
 /////////////////////////////////
-// DrawRawHitPoints - draws raw hit points (before clamping) as blue circles, only if visual debug mode is enabled. This can show the actual intersection point with the tile boundary, which may be outside the ray length if the ray starts inside a solid tile.
+// DrawRawHitPoints - draws raw hit points (before clamping) as blue circles, only if visual debug mode is enabled. This can show the actual intersection point with the tile 
+// boundary, which may be outside the ray length if the ray starts inside a solid tile.
 void TileMapScene::DrawRawHitPoints() {
 	if (!m_visualDebug)
 		return;
@@ -391,7 +405,8 @@ void TileMapScene::DrawRawHitPoints() {
 
 
 /////////////////////////////////
-// DrawVisitedCells - draws visited cells as semi-transparent blue rectangles, only if visual debug mode is enabled. This shows which cells have been visited during raycasting or other pathfinding operations.
+// DrawVisitedCells - draws visited cells as semi-transparent blue rectangles, only if visual debug mode is enabled. This shows which cells have been visited during 
+// raycasting or other pathfinding operations.
 void TileMapScene::DrawVisitedCells() {
 	if (!m_visualDebug)
 		return;
@@ -413,7 +428,8 @@ void TileMapScene::DrawVisitedCells() {
 
 
 /////////////////////////////////
-// DrawPreviewLine - draws a preview line during mouse drag to show the current ray segment being defined by the drag. This is drawn in green and only shown when the preview is active and visual debug mode is enabled.
+// DrawPreviewLine - draws a preview line during mouse drag to show the current ray segment being defined by the drag. This is drawn in green and only shown when 
+// the preview is active and visual debug mode is enabled.
 void TileMapScene::DrawPreviewLine() {
 	if (!(m_previewActive && m_visualDebug))
 		return;
@@ -468,7 +484,8 @@ void TileMapScene::OnExit() {}
 
 
 /////////////////////////////////
-// LoadResources - currently empty, but could be used to load textures, sounds, or other resources needed by the scene. In this example, we load the tile map in InitializeGame instead, but we could also move it here if we wanted to separate resource loading from game initialization.
+// LoadResources - currently empty, but could be used to load textures, sounds, or other resources needed by the scene. In this example, we load the tile map in 
+// InitializeGame instead, but we could also move it here if we wanted to separate resource loading from game initialization.
 void TileMapScene::LoadResources() {}
 /////////////////////////////////
 
@@ -482,14 +499,15 @@ void TileMapScene::UnloadResources() {}
 
 
 /////////////////////////////////
-// InitializeGame - loads the tile map from a JSON file and creates a tile map entity in the entity manager. Errors are ignored or could be handled via UI, and there is no console output in this method.
+// InitializeGame - loads the tile map from a JSON file and creates a tile map entity in the entity manager. Errors are ignored or could be handled via UI, 
+// and there is no console output in this method.
 void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	sf::Vector2u windowSize =
 		m_window.getSize(); // Get the actual window size for use in tile map loading and entity setup
 
-	// Load tilemap (no console output; errors are ignored or can be handled via UI)
+	// Load tilemap using FileManager
 	std::string err;
-	auto maybe = TileMap::LoadFromJSON("assets\\testmap.json", &err);
+	auto maybe = m_gameEngine.GetFileManager().LoadTileMap("assets\\testmap.json", &err);
 	if (maybe) {
 		m_tileMap = *maybe;
 		m_entityManager.CreateTileMapEntity(m_tileMap);
@@ -522,7 +540,8 @@ void TileMapScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 
 
 /////////////////////////////////
-// SpawnTestTileMap - creates a simple test tile map with various platforms and obstacles for testing raycasting and visualization. This method is not currently called, but can be used to generate a procedural tile map instead of loading from JSON.
+// SpawnTestTileMap - creates a simple test tile map with various platforms and obstacles for testing raycasting and visualization. This method is not currently 
+// called, but can be used to generate a procedural tile map instead of loading from JSON.
 void TileMapScene::SpawnTestTileMap() {
 	// Create a tilemap sized to at least cover the window so platforms span the screen
 	const float tileSize = 32.0f;
@@ -622,7 +641,8 @@ RaycastHit TileMapScene::MakeStartCellHit(int tileX, int tileY, const Vec2& orig
 
 
 /////////////////////////////////
-// ToggleTileAt - toggle a tile at the specified map cell coordinates (tx, ty). This method toggles the tile value between 0 and 1, updates the tile map in the entity manager, and marks it as dirty for rendering. This allows for interactive editing of the tile map by clicking on cells.
+// ToggleTileAt - toggle a tile at the specified map cell coordinates (tx, ty). This method toggles the tile value between 0 and 1, updates the tile map in the entity 
+// manager, and marks it as dirty for rendering. This allows for interactive editing of the tile map by clicking on cells.
 void TileMapScene::ToggleTileAt(int tx, int ty) {
 	if (!m_tileMap.InBounds(tx, ty))
 		return;
@@ -635,7 +655,8 @@ void TileMapScene::ToggleTileAt(int tx, int ty) {
 		// Try to find an existing CTileMap component and update it
 		bool updated = false;
 
-		// Get the entities from the entity manager and look for one with a CTileMap component. If found, update its map reference and mark it dirty. We also remove any existing tile entities so that the TileSystem will recreate them based on the u
+		// Get the entities from the entity manager and look for one with a CTileMap component. If found, update its map reference and mark it dirty. 
+		// We also remove any existing tile entities so that the TileSystem will recreate them based on the u
 		for (auto& up_entity : m_entityManager.GetEntities()) {
 			Entity* entity = up_entity.get();
 			if (!entity)

@@ -47,19 +47,34 @@ public:
 	~RenderQueue() = default;
 
 	/////////////////////////////////
-	// Enqueue a drawable request with depth info
+	// Enqueue - Enqueue a drawable request with depth info
 	void Enqueue(sf::Drawable* drawable, int depth) {
 		m_queue.emplace_back(drawable, depth);
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Enqueue - Enqueue a drawable request with texture and optional blend mode for textured drawables
 	void Enqueue(sf::Drawable* drawable, int depth, const std::shared_ptr<sf::Texture>& tex) {
 		m_queue.emplace_back(drawable, depth, tex);
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Enqueue - Enqueue a drawable request with texture and blend mode for textured drawables
 	void Enqueue(sf::Drawable* drawable, int depth, const std::shared_ptr<sf::Texture>& tex, sf::BlendMode blend) {
 		m_queue.emplace_back(drawable, depth, tex, blend);
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Enqueue - Enqueue a fully specified draw request
 	void Enqueue(const DrawRequest& request) {
 		m_queue.push_back(request);
 	}
@@ -68,7 +83,7 @@ public:
 
 
 	/////////////////////////////////
-	// Flush the queue: sort by depth and render all drawables to the window
+	// Flush - Flush the queue: sort by depth and render all drawables to the window
 	void Flush(sf::RenderWindow& window) {
 		// Sort by depth (ascending so lower depths render first)
 		std::sort(m_queue.begin(), m_queue.end());
@@ -90,16 +105,22 @@ public:
 
 
 	/////////////////////////////////
-	// Clear queue without rendering (e.g., on error or scene change)
+	// Clear - Clear queue without rendering (e.g., on error or scene change)
 	void Clear() {
 		m_queue.clear();
 	}
-
-	size_t Size() const { return m_queue.size(); }
 	/////////////////////////////////
 
 
 
+	/////////////////////////////////
+	// Size - Get the number of draw requests currently in the queue
+	size_t Size() const { return m_queue.size(); }
+	/////////////////////////////////
+
+
+	/////////////////////////////////
+	// Private member variables
 private:
 	std::vector<DrawRequest> m_queue;
 };

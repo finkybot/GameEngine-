@@ -1,5 +1,7 @@
 /////////////////////////////////
-// TileMapEditorScene.cpp - implementation of the TileMapEditorScene class, which provides a simple UI for loading, editing, and saving tile maps using ImGui for the interface and integrating with the game engine's entity system for rendering and interaction.
+// TileMapEditorScene.cpp - Implementation of the TileMapEditorScene class, which provides a simple UI for loading, and saving tile 
+//							maps using ImGui for the interface and integrating with the game engine's entity system for rendering 
+//							and interaction.
 /////////////////////////////////
 
 
@@ -28,8 +30,9 @@
 /////////////////////////////////
  
 
+
 /////////////////////////////////
-// Constructor - initializes the tile map editor scene with references to the game engine, render window, and entity manager
+// Constructor - Initializes the tile map editor scene with references to the game engine, render window, and entity manager
 TileMapEditorScene::TileMapEditorScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
 	: Scene(engine, entityManager), m_window(win) {}
 /////////////////////////////////
@@ -37,28 +40,39 @@ TileMapEditorScene::TileMapEditorScene(GameEngine& engine, sf::RenderWindow& win
 
 
 /////////////////////////////////
-// Destructor - defaulted since we don't have any special cleanup logic, but we could add it if needed in the future
+// Destructor - Defaulted since we don't have any special cleanup logic, but we could add it if needed in the future
 TileMapEditorScene::~TileMapEditorScene() = default;
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// Update - updates the game logic for the tile map editor scene, including handling explosions, updating the FPS counter, and rendering the ImGui toolbar for loading/saving tile maps. 
+// Update - Updates the game logic for the tile map editor scene, including: 
+// handling explosions, 
+// updating the FPS counter, 
+// and rendering the ImGui toolbar for loading/saving tile maps. 
+// 
 // It also includes functionality for showing file dialogs and processing user input for editing the tile map.
 void TileMapEditorScene::Update(float deltaTime) {
-	// Update explosions (move/expand/fade) similar to TestScene behaviour so audio-reactive spawned explosions animate
+	// Update explosions (move/expand/fade) similar to TestScene behaviour so audio-reactive 
+	// spawned explosions animate
 	UpdateExplosions();
 
 	// Update shared FPS counter is handled by the engine; query it here for display
 	m_fps = m_gameEngine.GetFPSCounter().GetFPS();
+	
+	// ******
 	// Disabled ImGui update while debugging visuals
-	//ImGui::SFML::Update(m_gameEngine.m_window, frameTime);
-
+	// ImGui::SFML::Update(m_gameEngine.m_window, frameTime);
 	// ImGui toolbar (minimal)
-	// Ensure instance current dir is initialized once
+	// ******
+	
+	//  Initialise the curent directory (initialized once)
 	if (m_currentDir.empty())
 		m_currentDir = std::filesystem::current_path();
+	
+	// Render ImGui toolbar for loading/saving tile maps, but only if it is initialised and within frame scope,
+	// this is a safety check to avoid calling ImGui functions when not ready.
 	if (GImGui && GImGui->WithinFrameScope) {
 		ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
 		ImGui::SetNextWindowBgAlpha(0.35f);
@@ -73,39 +87,15 @@ void TileMapEditorScene::Update(float deltaTime) {
 		ImGui::Text("FPS (instant): %.1f", m_gameEngine.GetFPSCounter().GetInstantFPS());
 		ImGui::Separator();
 
-		// Keep track of selected file from navigator
-		static std::string s_selected_file;
-		auto try_load_path = [&](const std::string& fullpath) {
-			if (fullpath.empty())
-				return;
-			std::string err;
-			auto maybeMap = TileMap::LoadFromJSON(fullpath, &err);
-			if (maybeMap) {
-				m_tileMap = *maybeMap;
-				m_currentFilename = fullpath;
-				m_dirty = false;
-				std::cout << "Loaded tilemap: " << fullpath << std::endl;
-				// If we have an existing CTileMap entity, update its component so TileSystem will reprocess
-				if (m_tileMapEntity) {
-					auto cmp = m_tileMapEntity->GetComponent<CTileMap>();
-					if (cmp) {
-						cmp->map = m_tileMap; // copy whole TileMap including tileset metadata
-						cmp->m_dirty = true;
-						cmp->m_processed = false;
-						m_entityManager.SetHasPendingTileMaps(true);
 
-						//m_entityManager.Update(0.0f); // force immediate processing so textures attach when atlas available
-					}
-				}
-			} else {
-				std::cerr << "Failed to load tilemap: " << err << std::endl;
-			}
-		};
+		// File loading and saving UI, including buttons to open file dialogs and input fields for specifying file paths.
+		// Keep track of selected file from navigator
+		static std::string s_selectedFile;
 
 		if (ImGui::Button("Load")) {
 			// If a file is selected in the navigator, load it immediately
-			if (!s_selected_file.empty()) {
-				try_load_path(s_selected_file);
+			if (!s_selectedFile.empty()) {
+				LoadTileMapFromPath(s_selectedFile);
 			} else {
 				// Prefill load buffer with current folder if empty and open popup
 				if (m_loadFilenameBuffer[0] == '\0') {
@@ -127,7 +117,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 					p = m_currentDir / p;
 				std::string path = p.string();
 				if (!path.empty())
-					try_load_path(path);
+					LoadTileMapFromPath(path);
 				ImGui::CloseCurrentPopup();
 				m_showLoadDialog = false;
 			}
@@ -259,19 +249,19 @@ void TileMapEditorScene::Update(float deltaTime) {
 			}
 			std::string label = is_dir ? (name + "/") : name;
 			std::string fullpath = (m_currentDir / entry.path().filename()).string();
-			bool selected = (!s_selected_file.empty() && s_selected_file == fullpath);
+			bool selected = (!s_selectedFile.empty() && s_selectedFile == fullpath);
 			if (ImGui::Selectable(label.c_str(), selected)) {
 				if (is_dir) {
 					m_currentDir = entry.path();
-					s_selected_file.clear();
+					s_selectedFile.clear();
 					refresh_entries();
 				} else {
 					// populate load buffer with full relative path and mark selection
 					ImStrncpy(m_loadFilenameBuffer, fullpath.c_str(), sizeof(m_loadFilenameBuffer));
-					s_selected_file = fullpath;
+					s_selectedFile = fullpath;
 					// Double-click to load immediately
 					if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-						try_load_path(s_selected_file);
+						LoadTileMapFromPath(s_selectedFile);
 					}
 				}
 			}
@@ -433,8 +423,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 
 			// Check candidates for existence and pick the first one found
 			std::string found;
-			std::error_code
-				errorCode; // To avoid exceptions in the filesystem operations. If an error occurs, the error code will be set and we can check it instead of catching exceptions.
+			std::error_code	errorCode; // We'll use an error code to avoid exceptions in the filesystem operations. 
 			for (auto& candidate : candidates) {
 				if (!candidate.empty() && std::filesystem::exists(candidate, errorCode) && !errorCode) {
 					found = candidate.string();
@@ -442,8 +431,9 @@ void TileMapEditorScene::Update(float deltaTime) {
 				}
 			}
 			// If found, create a music entity with CMusic component to play it. Otherwise, log an error.
-			// Note: the music file must be a valid format supported by SFML (e.g. OGG, WAV, FLAC) and not too large to load into memory, since SFML's sf::Music streams from file but still needs
-			// to load the file header and manage it with sf::Music instance. If the file is very large or in an unsupported format, loading may fail. ....Shit we can load Flac????? HollllyyyySsseeehhhhiiiit
+			// Note: the music file must be a valid format supported by SFML (e.g. OGG, WAV, FLAC) and not too large to load into memory, 
+			// since SFML's sf::Music streams from file but still needs to load the file header and manage it with sf::Music instance. 
+			// If the file is very large or in an unsupported format, loading may fail. ....Shit we can load Flac????? HollllyyyySsseeehhhhiiiit
 			if (found.empty()) // check if there is nothing, report error
 			{
 				s_music_status = "ambition.mp3 not found in candidates";
@@ -586,7 +576,8 @@ void TileMapEditorScene::Update(float deltaTime) {
 
 
 /////////////////////////////////
-// Render - renders the tile map editor scene, including any entities and debug overlays. The engine normally handles rendering centrally, but we ensure tile entities are rendered through the queue.
+// Render - renders the tile map editor scene, including any entities and debug overlays. The engine normally handles rendering 
+// centrally, but we ensure tile entities are rendered through the queue.
 void TileMapEditorScene::Render() {
 	// Tile entities are rendered by RenderSystem through the engine-wide render queue
 	// The engine handles entity shape rendering, so nothing explicit is needed here
@@ -600,8 +591,9 @@ void TileMapEditorScene::Render() {
 
 
 /////////////////////////////////
-// RenderDebugOverlay - renders debug overlays for the tile map editor scene, such as the grid and tile highlights. This is called by the engine after the main scene rendering, 
-// allowing us to draw on top of entities and ensure alignment with screen pixels for accurate tile editing.
+// RenderDebugOverlay - renders debug overlays for the tile map editor scene, such as the grid and tile highlights. This is called 
+// by the engine after the main scene rendering, allowing us to draw on top of entities and ensure alignment with screen pixels 
+// for accurate tile editing.
 void TileMapEditorScene::RenderDebugOverlay() {
 	// Draw debug overlay using a view that maps world (0,0..window) to screen so tile coordinates align
 	sf::View prevView = m_window.getView();
@@ -631,8 +623,9 @@ void TileMapEditorScene::RenderDebugOverlay() {
 
 
 /////////////////////////////////
-// DoAction - placeholder for any actions that need to be performed on the tile map editor scene, such as applying changes or triggering specific behaviors. 
-// Currently empty since we handle interactions directly in Update() and HandleEvent(), but this could be expanded in the future if needed.
+// DoAction - placeholder for any actions that need to be performed on the tile map editor scene, such as applying changes or triggering 
+// specific behaviors. Currently empty since we handle interactions directly in Update() and HandleEvent(), but this could be expanded 
+// in the future if needed.
 void TileMapEditorScene::DoAction() {}
 /////////////////////////////////
 
@@ -698,7 +691,8 @@ void TileMapEditorScene::UnloadResources() {}
 
 
 /////////////////////////////////
-// InitializeGame - initializes the tile map editor scene by creating a default tile map based on the window size and setting up a CTileMap entity for rendering.
+// InitializeGame - initializes the tile map editor scene by creating a default tile map based on the window size 
+// and setting up a CTileMap entity for rendering.
 void TileMapEditorScene::InitializeGame(sf::Vector2u windowSize) {
 	// create a default map sized to the window
 	const float tileSize = 32.0f;
@@ -755,7 +749,9 @@ void TileMapEditorScene::InitializeGame(sf::Vector2u windowSize) {
 
 
 /////////////////////////////////
-// DrawGrid - draws the tile grid for the editor scene, including filled rectangles for solid tiles (if no texture atlas) and grid lines. This is called in RenderDebugOverlay() to ensure it is drawn on top of entities and aligned with screen pixels for accurate editing.
+// DrawGrid - draws the tile grid for the editor scene, including filled rectangles for solid tiles (if no texture atlas) 
+// and grid lines. This is called in RenderDebugOverlay() to ensure it is drawn on top of entities and aligned with screen 
+// pixels for accurate editing.
 void TileMapEditorScene::DrawGrid() {
 	if (m_tileMap.width <= 0 || m_tileMap.height <= 0)
 		return;
@@ -787,7 +783,8 @@ void TileMapEditorScene::DrawGrid() {
 
 
 /////////////////////////////////
-// ProcessInput - handles real-time input for the tile map editor scene, such as keyboard shortcuts for saving and mouse clicks for toggling tiles. This is called in the Update() loop to ensure key presses are captured accurately.
+// ProcessInput - handles real-time input for the tile map editor scene, such as keyboard shortcuts for saving and mouse clicks 
+// for toggling tiles. This is called in the Update() loop to ensure key presses are captured accurately.
 void TileMapEditorScene::ProcessInput() {
 	// handle keyboard shortcuts using real-time state (need to use in Update loop so keypress is captured)
 	bool ctrlS =
@@ -830,8 +827,9 @@ void TileMapEditorScene::ProcessInput() {
 
 
 /////////////////////////////////
-// ToggleTileAt - toggles a tile at the specified tile coordinates (tx, ty) to be solid or empty based on the setSolid parameter. This updates the TileMap data and marks it as dirty for re-rendering. 
-// If a CTileMap entity is attached, it also updates the corresponding tile in the component and marks it dirty for the TileSystem to update the rendered entities.
+// ToggleTileAt - toggles a tile at the specified tile coordinates (tx, ty) to be solid or empty based on the setSolid parameter. 
+// This updates the TileMap data and marks it as dirty for re-rendering. If a CTileMap entity is attached, it also updates the 
+// corresponding tile in the component and marks it dirty for the TileSystem to update the rendered entities.
 void TileMapEditorScene::ToggleTileAt(int tx, int ty, bool setSolid) {
 	if (!m_tileMap.InBounds(tx, ty))
 		return;
@@ -851,6 +849,42 @@ void TileMapEditorScene::ToggleTileAt(int tx, int ty, bool setSolid) {
 			// m_entityManager.Update(0.0f);
 			std::cout << "Tile entities now: " << m_entityManager.GetEntities(EntityType::Tile).size() << std::endl;
 		}
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// LoadTileMapFromPath - loads a tilemap from the specified path using the FileManager.
+// Updates the scene state and CTileMap component if available.
+void TileMapEditorScene::LoadTileMapFromPath(const std::string& fullpath) {
+	if (fullpath.empty())
+		return;
+
+	// Update FileManager base path to current directory
+	m_gameEngine.GetFileManager().SetBasePath(m_currentDir);
+
+	std::string err;
+	auto maybeMap = m_gameEngine.GetFileManager().LoadTileMap(fullpath, &err);
+	if (maybeMap) {
+		m_tileMap = *maybeMap;
+		m_currentFilename = fullpath;
+		m_dirty = false;
+		std::cout << "Loaded tilemap: " << fullpath << std::endl;
+
+		// If we have an existing CTileMap entity, update its component so TileSystem will reprocess
+		if (m_tileMapEntity) {
+			auto cmp = m_tileMapEntity->GetComponent<CTileMap>();
+			if (cmp) {
+				cmp->map = m_tileMap; // copy whole TileMap including tileset metadata
+				cmp->m_dirty = true;
+				cmp->m_processed = false;
+				m_entityManager.SetHasPendingTileMaps(true);
+			}
+		}
+	} else {
+		std::cerr << "Failed to load tilemap: " << err << std::endl;
 	}
 }
 /////////////////////////////////

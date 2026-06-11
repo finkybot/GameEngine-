@@ -42,9 +42,25 @@ protected:
 	// Public methods for shape manipulation and rendering
 public:
 	/////////////////////////////////
-	// Constructors for the CExplosion component. The default constructor initializes the circle with default properties, while the constructor with a size parameter initializes the circle with a specified radius.
-	CExplosion();			// Default constructor - initializes the circle with default properties
-	CExplosion(float size); // Constructor with size parameter - initializes the circle with a specified radius
+	// Constructors for the CExplosion component. The default constructor initializes the circle with default properties
+	CExplosion() {
+		m_circle = sf::CircleShape(3.f);
+		m_midLength = 4.f;
+		m_circle.setFillColor(sf::Color(220, 80, 40, 220));
+		m_circle.setOrigin(sf::Vector2f(3.f, 3.f));
+	}		
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Constructor with size parameter - initializes the circle with a specified radius
+	CExplosion(float size) {
+		m_circle = sf::CircleShape(size);
+		m_midLength = size + 1.f;
+		m_circle.setFillColor(sf::Color(220, 120, 40, 220));
+		m_circle.setOrigin(sf::Vector2f(size, size));
+	}
 	/////////////////////////////////
 
 
@@ -92,14 +108,14 @@ public:
 	
 	/////////////////////////////////
 	// GetCentrePoint - returns the center point of the circle shape, which is the position plus the radius in both x and y directions. This is used for collision detection and spatial hashing.
-	Vec2 GetCentrePoint() const	override;
+	Vec2 GetCentrePoint() const	override { return Vec2(m_circle.getPosition().x + m_circle.getRadius(), m_circle.getPosition().y + m_circle.getRadius()); }
 	/////////////////////////////////
 
 
 
 	/////////////////////////////////
 	// SetColor - sets the fill color of the explosion shape using RGBA values, where alpha is an integer in the range [0, 255]. This method updates the fill color of the underlying SFML CircleShape object.
-	void SetColor(float r, float g, float b, int alpha);
+	void SetColor(float r, float g, float b, int alpha) { m_circle.setFillColor(sf::Color(static_cast<int>(r), static_cast<int>(g), static_cast<int>(b), alpha)); }
 	/////////////////////////////////
 
 

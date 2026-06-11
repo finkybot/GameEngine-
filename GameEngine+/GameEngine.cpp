@@ -52,6 +52,9 @@ GameEngine::GameEngine() {
 	m_cursorSystem = std::make_unique<CursorSystem>(); // Initialize the cursor system with the game window
 	m_cursorSystem->Initialize(&m_window);
 
+	// Initialize FileManager with current working directory for asset loading
+	m_fileManager.SetBasePath(".");
+
 	// Do not preload atlases automatically. Atlases should be loaded explicitly via the editor UI so users
 	// can choose which atlas to use at runtime.
 
@@ -73,7 +76,8 @@ GameEngine::~GameEngine() {}
 
 
 /////////////////////////////////
-// AddScene - Adds a new scene to the game engine with the given name and scene instance, allowing for dynamic scene management. The scene is stored in a map of scene names to scene instances, enabling easy retrieval and switching between scenes during the game loop.
+// AddScene - Adds a new scene to the game engine with the given name and scene instance, allowing for dynamic scene management. The scene is stored in a map of 
+// scene names to scene instances, enabling easy retrieval and switching between scenes during the game loop.
 void GameEngine::AddScene(const std::string& sceneName, std::shared_ptr<Scene> scene) {
 	m_scenes[sceneName] = scene;
 }
@@ -93,7 +97,8 @@ std::vector<std::string> GameEngine::GetSceneNames() const {
 
 
 /////////////////////////////////
-// ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions. The method checks if the specified scene exists in the scenes map and sets it as the current active scene, enabling the game loop to update and render the new scene. If the scene name is not found, a warning is logged.
+// ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions. The method checks if the specified scene exists 
+// in the scenes map and sets it as the current active scene, enabling the game loop to update and render the new scene. If the scene name is not found, a warning is logged.
 void GameEngine::ChangeScene(const std::string& sceneName) {
 	auto it = m_scenes.find(sceneName);
 	if (it != m_scenes.end()) {
@@ -138,19 +143,19 @@ void GameEngine::RemoveScene(const std::string& sceneName) {
 
 
 /////////////////////////////////
-// Run - Starts the main game loop, handling scene initialization, event processing, updating, and rendering. The method sets up the initial scene, initializes it, and enters a loop that continues until the window is closed. 
-// Within the loop, it processes events, updates the current scene with a fixed delta time, and renders the scene to the window.
+// Run - Starts the main game loop, handling scene initialization, event processing, updating, and rendering. The method sets up the initial scene, initializes it, and enters a 
+// loop that continues until the window is closed... The loop processes events, updates the current scene with a fixed delta time, and renders the scene to the window.
 void GameEngine::Run() {
 	// Setup Event Handler.
 	bool running = true; // Create a Boolean variable to manage the engine running state
 
 	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
-	AddScene("MainMenu", std::make_shared<MainMenuScene>(*this, m_window, *m_entityManager));
-	AddScene("TestScene", std::make_shared<TestScene>(*this, m_window, *m_entityManager));		 // Adding TestScene
-	AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, m_window, *m_entityManager)); // Adding TileMapScene
-	AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, m_window, *m_entityManager)); // Adding TileMapEditor
-	AddScene("MusicVisualizer", std::make_shared<MusicVisualizerScene>(*this, m_window, *m_entityManager)); // Adding MusicVisualizer	
-	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, m_window, *m_entityManager)); // Adding LevelEditor
+	AddScene("MainMenu", std::make_shared<MainMenuScene>(*this, m_window, *m_entityManager));					// Adding MainMenuScene
+	AddScene("TestScene", std::make_shared<TestScene>(*this, m_window, *m_entityManager));						// Adding TestScene
+	AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, m_window, *m_entityManager));				// Adding TileMapScene
+	AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, m_window, *m_entityManager));			// Adding TileMapEditor
+	AddScene("MusicVisualizer", std::make_shared<MusicVisualizerScene>(*this, m_window, *m_entityManager));		// Adding MusicVisualizer	
+	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, m_window, *m_entityManager));				// Adding LevelEditor
 
 	ChangeScene("MainMenu");
 
@@ -189,13 +194,13 @@ void GameEngine::Run() {
 
 
 /////////////////////////////////
-// Update - Updates the current scene and game state based on the elapsed time since the last frame, allowing for time-based updates and game logic processing. The method calculates the delta time using the SFML clock and calls 
-// the update method of the current active scene, enabling smooth and consistent updates regardless of frame rate variations. It also handles event polling and forwarding to ImGui and the current scene, as well as rendering the scene and ImGui.
+// Update - Updates the current scene and game state based on the elapsed time since the last frame, allowing for time-based updates and game logic processing. 
+// The method calculates the delta time using the SFML clock and calls the update method of the current active scene, enabling smooth and consistent updates 
+// regardless of frame rate variations. It also handles event polling and forwarding to ImGui and the current scene, as well as rendering the scene and ImGui.
 void GameEngine::Update(float deltaTime) {
 	// Handle events and input before updating the scene.
 	while (m_window.isOpen()) {
-		// Clear the window at the start of each frame. Use an explicit clear color so
-		// fully transparent tiles in the editor reveal the intended background instead
+		// Clear the window at the start of each frame. Use an explicit clear color so fully transparent tiles in the editor reveal the intended background instead
 		// of an unintended grey fallback.
 		m_window.clear(sf::Color::Transparent);
 
@@ -216,8 +221,8 @@ void GameEngine::Update(float deltaTime) {
 			if (ImGui::GetCurrentContext())
 				ImGui::SFML::ProcessEvent(m_window, *eventOpt);
 
-			// Global Escape handling: intercept Escape before forwarding to the scene so scene-level handlers
-			// that close the window won't run. If Escape is pressed and we're not already on MainMenu, switch to it
+			// Global Escape handling: intercept Escape before forwarding to the scene so scene-level handlers that close the window won't run. If Escape is 
+			// pressed and we're not already on MainMenu, switch to it
 			if (eventOpt->is<sf::Event::KeyPressed>()) {
 				if (auto kp = eventOpt->getIf<sf::Event::KeyPressed>()) {
 					if (static_cast<sf::Keyboard::Key>(kp->code) == sf::Keyboard::Key::Escape) {
@@ -240,8 +245,8 @@ void GameEngine::Update(float deltaTime) {
 		// Update method will run  (carry out) these actions.
 		m_InputController.Update(deltaTime);
 
-		// Global keyboard poll: if Escape is held, switch back to MainMenu before any scene Update runs.
-		// This prevents scenes that poll sf::Keyboard::isKeyPressed(Escape) from closing the window directly.
+		// Global keyboard poll: if Escape is held, switch back to MainMenu before any scene Update runs... This prevents scenes that poll sf::Keyboard::isKeyPressed(Escape) 
+		// from closing the window directly.
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
 			auto it = m_scenes.find("MainMenu");
 			if (it != m_scenes.end() && m_currentScene && m_currentScene != it->second) {
@@ -253,8 +258,7 @@ void GameEngine::Update(float deltaTime) {
 			}
 		}
 		if (m_currentScene) {
-			// Let the scene update (handles ImGui update and input)
-			// Use the actual frame time measured above so scenes get accurate timing for FPS and logic.
+			// Let the scene update (handles ImGui update and input)... Use the actual frame time measured above so scenes get accurate timing for FPS and logic.
 			m_currentScene->Update(frameTime.asSeconds());
 
 			// Ensure the scene's EntityManager processes game logic (tile system, pending entities)

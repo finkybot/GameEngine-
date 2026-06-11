@@ -19,15 +19,15 @@
 
 
 /////////////////////////////////
-// TileMapEditorScene class - implements a simple interactive tilemap editor scene with mouse input for toggling tiles, keyboard shortcuts for saving/loading, and an optional ImGui interface for additional controls. 
-// The scene manages a tile map data structure and allows the user to edit it in real-time, with support for saving and loading tile maps from files.
+// TileMapEditorScene class - implements a simple interactive tilemap editor scene with mouse input for toggling tiles, keyboard shortcuts for saving/loading, and an optional ImGui interface for 
+// additional controls. The scene manages a tile map data structure and allows the user to edit it in real-time, with support for saving and loading tile maps from files.
 class TileMapEditorScene : public Scene {
 	/////////////////////////////////
 	// Public Methods
 public:
 	/////////////////////////////////
-	// Constructor and destructor for the TileMapEditorScene class. The constructor initializes the tile map editor scene with references to the game engine, render window, and entity manager, while the destructor is 
-	// defaulted since we don't have any special cleanup logic, but we could add it if needed in the future.
+	// Constructor and destructor for the TileMapEditorScene class. The constructor initializes the tile map editor scene with references to the game engine, render window, and entity manager, 
+	// while the destructor is defaulted since we don't have any special cleanup logic, but we could add it if needed in the future.
 	TileMapEditorScene(	GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager);
 	~TileMapEditorScene() override;
 	/////////////////////////////////
@@ -66,10 +66,12 @@ public:
 	// Private methods
 private:
 	/////////////////////////////////
-	// Helper methods for the TileMapEditorScene class. These methods include logic for drawing grid lines based on the tile map dimensions and tile size, processing user input for editing the tile map, and toggling tiles at specific coordinates.
+	// Helper methods for the TileMapEditorScene class. These methods include logic for drawing grid lines based on the tile map dimensions and tile size, processing user input for editing 
+	//the tile map, and toggling tiles at specific coordinates.
 	void DrawGrid();
 	void ProcessInput();
 	void ToggleTileAt(int tx, int ty, bool setSolid);
+	void LoadTileMapFromPath(const std::string& fullpath);	// Load tilemap using FileManager
 	/////////////////////////////////
 
 

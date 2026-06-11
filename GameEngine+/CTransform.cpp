@@ -4,7 +4,7 @@
 
 
 
-/////////////////////////////////
-// Includes and necessary headers for the CTransform component implementation.
-#include "CTransform.h"
-/////////////////////////////////
+///////////////////////////////////
+//// Includes and necessary headers for the CTransform component implementation.
+//#include "CTransform.h"
+///////////////////////////////////

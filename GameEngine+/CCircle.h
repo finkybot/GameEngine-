@@ -42,9 +42,27 @@ protected:
 	// Public methods for shape manipulation and rendering
 public:
 	/////////////////////////////////
-	// Constructors for the CCircle component. The default constructor initializes the circle with default properties, while the constructor with a size parameter initializes the circle with a specified radius.
-	CCircle();			 // Default constructor - initializes the circle with default properties
-	CCircle(float size); // Constructor with size parameter - initializes the circle with a specified radius
+	// Constructors for the CCircle component. The default constructor initializes the circle with default properties
+	CCircle() {
+		m_circle = sf::CircleShape(3.f);
+		m_midLength = 4.f;
+		m_circle.setFillColor(sf::Color(200, 120, 80, 220));
+		m_circle.setOrigin(sf::Vector2f(3.f, 3.f));
+	}
+	/////////////////////////////////
+	
+
+
+	/////////////////////////////////
+	// Constructor with size parameter - initializes the circle with a specified radius
+	CCircle(float size)
+	{
+		m_circle = sf::CircleShape(size);
+		m_midLength = size + 1.f;
+		// Ensure visible default styling: fill color and origin so transform position is the circle center
+		m_circle.setFillColor(sf::Color(200, 120, 80, 220));
+		m_circle.setOrigin(sf::Vector2f(size, size));
+	}
 	/////////////////////////////////
 
 
@@ -90,14 +108,14 @@ public:
 
 	/////////////////////////////////
 	// GetCentrePoint - returns the center point of the circle shape as a Vec2 object. The center point is calculated as the position of the circle plus the radius in both x and y directions, since SFML circles are positioned at their top-left corner.
-	Vec2 GetCentrePoint() const	override;
+	Vec2 GetCentrePoint() const	override { return Vec2(m_circle.getPosition().x + m_circle.getRadius(), m_circle.getPosition().y + m_circle.getRadius()); }
 	/////////////////////////////////
 
 
 
 	/////////////////////////////////
 	// SetColor - sets the fill color of the circle shape using RGBA values. The r, g, and b parameters are floats representing the red, green, and blue components of the color (in the range [0.0f, 255.0f]), while the alpha parameter is an integer representing the opacity (in the range [0, 255]).
-	void SetColor(float r, float g, float b, int alpha);
+	void SetColor(float r, float g, float b, int alpha) { m_circle.setFillColor(sf::Color(static_cast<int>(r), static_cast<int>(g), static_cast<int>(b), alpha)); }
 	/////////////////////////////////
 
 

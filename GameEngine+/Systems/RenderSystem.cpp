@@ -28,8 +28,9 @@
 
 
 /////////////////////////////////
-// RenderAliveEntities - Renders all alive entities to the provided SFML render window. This method iterates through the list of entities, checks if they are alive, and draws their shapes and text components if present. It serves as the main entry point 
-// for rendering entities in the game loop.
+// RenderAliveEntities - Renders all alive entities to the provided SFML render window. This method iterates through the list of entities, 
+// checks if they are alive, and draws their shapes and text components if present. It serves as the main entry point for rendering entities 
+// in the game loop.
 void RenderSystem::RenderAliveEntities(const std::vector<std::unique_ptr<Entity>>& entities, sf::RenderWindow& window) {
 	// Backwards-compatible: render shapes then text if configured.
 	RenderShapes(entities, window);
@@ -41,7 +42,8 @@ void RenderSystem::RenderAliveEntities(const std::vector<std::unique_ptr<Entity>
 
 
 /////////////////////////////////
-// RenderAll - A convenience method that renders all entities with a single call. The mode parameter controls whether to render only shapes, render shapes followed by text, or render shapes now and defer text rendering until after overlays are rendered.
+// RenderAll - A convenience method that renders all entities with a single call. The mode parameter controls whether to render only shapes, 
+// render shapes followed by text, or render shapes now and defer text rendering until after overlays are rendered.
 void RenderSystem::RenderAll(const std::vector<std::unique_ptr<Entity>>& entities, sf::RenderWindow& window,
 							 RenderSystem::RenderMode mode) {
 	// Always render shapes
@@ -57,8 +59,9 @@ void RenderSystem::RenderAll(const std::vector<std::unique_ptr<Entity>>& entitie
 
 
 /////////////////////////////////
-// RenderEntity - Renders a single entity to the provided SFML render window. This method checks for the presence of a CTexture component and attempts to render it using the associated texture atlas. If the entity has an area specified in the CTexture component, 
-// it will draw repeated sprites to fill that area. If any of the requirements for textured rendering are not met, it falls back to rendering a shape component if present.
+// RenderEntity - Renders a single entity to the provided SFML render window. This method checks for the presence of a CTexture component 
+// and attempts to render it using the associated texture atlas. If the entity has an area specified in the CTexture component, it will draw repeated 
+// sprites to fill that area. If any of the requirements for textured rendering are not met, it falls back to rendering a shape component if present.
 void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const {
 	if (!entity)
 		return;

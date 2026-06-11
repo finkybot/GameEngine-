@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -147,20 +147,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="CameraSystem.cpp" />
-    <ClCompile Include="CCircle.cpp" />
-    <ClCompile Include="CExplosion.cpp" />
     <ClCompile Include="ChunkManager.cpp" />
-    <ClCompile Include="CMusic.cpp" />
-    <ClCompile Include="CName.cpp" />
-    <ClCompile Include="CRectangle.cpp" />
-    <ClCompile Include="CShape.cpp" />
-    <ClCompile Include="CText.cpp" />
-    <ClCompile Include="CTransform.cpp" />
     <ClCompile Include="CursorSystem.cpp" />
     <ClCompile Include="DebugStack.cpp" />
     <ClCompile Include="Entity.cpp" />
     <ClCompile Include="EntityManager.cpp" />
     <ClCompile Include="FileDialog.cpp" />
+    <ClCompile Include="FileManager.cpp" />
     <ClCompile Include="FontManager.cpp" />
     <ClCompile Include="GameController.cpp" />
     <ClCompile Include="GameEngine.cpp" />
@@ -204,7 +197,9 @@
     <ClInclude Include="CMusic.h" />
     <ClInclude Include="CName.h" />
     <ClInclude Include="Component.h" />
+    <ClInclude Include="CRectangle.h" />
     <ClInclude Include="CShape.h" />
+    <ClInclude Include="CSoundEffect.h" />
     <ClInclude Include="CStatic.h" />
     <ClInclude Include="CText.h" />
     <ClInclude Include="CTexture.h" />
@@ -216,6 +211,7 @@
     <ClInclude Include="EntityManager.h" />
     <ClInclude Include="EntityType.h" />
     <ClInclude Include="FileDialog.h" />
+    <ClInclude Include="FileManager.h" />
     <ClInclude Include="FontManager.h" />
     <ClInclude Include="GameController.h" />
     <ClInclude Include="GameEngine.h" />

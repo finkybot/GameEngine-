@@ -46,10 +46,9 @@ protected:
 public:
 	/////////////////////////////////
 	// Constructor and virtual destructor for the CShape component. The constructor initializes the shape with default properties, while the virtual destructor allows for proper cleanup of derived shape classes when deleted through a base class pointer.
-	CShape();		  
-	virtual ~CShape();
+	CShape() {}		  
+	virtual ~CShape() {}
 	/////////////////////////////////
-
 
 
 	/////////////////////////////////

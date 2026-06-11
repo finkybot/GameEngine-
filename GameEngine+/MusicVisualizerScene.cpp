@@ -1,12 +1,14 @@
 /////////////////////////////////
-// MusicVisualizerScene.cpp - implementation of the MusicVisualizerScene class, which is responsible for managing the music visualizer scene in the game. This includes handling music playback, updating visual effects based on 
-// the music spectrum, and managing user input for controlling the visualizer settings.
+// MusicVisualizerScene.cpp -	Implementation of the MusicVisualizerScene class, which is responsible for managing the music visualizer 
+//								scene in the game. This includes handling music playback, updating visual effects based on the music spectrum, 
+//								and managing user input for controlling the visualizer settings.
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// Includes and namespace aliases for the MusicVisualizerScene implementation. We include necessary headers for SFML graphics and events, as well as the GameEngine, EntityManager, and various component and system classes used in the scene.
+// Includes and namespace aliases for the MusicVisualizerScene implementation. We include necessary headers for SFML graphics and events, as well as the GameEngine, 
+// EntityManager, and various component and system classes used in the scene.
 #include "MusicVisualizerScene.h"
 #include "GameEngine.h"
 #include "EntityManager.h"
@@ -42,8 +44,9 @@ static std::string PathToUtf8(const std::filesystem::path& p) {
 
 
 /////////////////////////////////
-// SpawnAudioReactiveExplosion - creates a new explosion entity with random size, color, position, and upward velocity. The explosion is spawned around the center of the screen with some random jitter, and its properties are randomized to create a visually interesting 
-// effect that reacts to the music. If resetSpawnTimer is true, the spawn timer will be reset to 0 after spawning the explosion, allowing for controlled timing of explosion spawns based on the music spectrum.
+// SpawnAudioReactiveExplosion - creates a new explosion entity with random size, color, position, and upward velocity. The explosion is spawned 
+// around the center of the screen with some random jitter, and its properties are randomized to create a visually interesting effect that reacts to the music. 
+// If resetSpawnTimer is true, the spawn timer will be reset to 0 after spawning the explosion, allowing for controlled timing of explosion spawns based on the music spectrum.
 void MusicVisualizerScene::SpawnAudioReactiveExplosion(bool resetSpawnTimer) {
 	Entity* spawnedEntity = m_entityManager.AddEntity(EntityType::Explosion);
 	if (!spawnedEntity)
@@ -80,8 +83,8 @@ void MusicVisualizerScene::SpawnAudioReactiveExplosion(bool resetSpawnTimer) {
 
 
 /////////////////////////////////
-// InitializeEqualizerBars - creates or resizes a fixed pool of equalizer bar entities based on the specified visualCount. The bars are evenly spaced across the bottom of the window with some margin on the sides, 
-// and they start with a small height and low alpha so they are visible even before the first update.
+// InitializeEqualizerBars - creates or resizes a fixed pool of equalizer bar entities based on the specified visualCount. The bars are evenly spaced 
+// across the bottom of the window with some margin on the sides, and they start with a small height and low alpha so they are visible even before the first update.
 void MusicVisualizerScene::InitializeEqualizerBars(size_t visualCount) {
 	// Remove existing equalizer bars if bandCount changed
 	std::vector<Entity*> toRemove;
@@ -103,7 +106,8 @@ void MusicVisualizerScene::InitializeEqualizerBars(size_t visualCount) {
 	float barWidth = usable / static_cast<float>(n);
 	float windowHeight = static_cast<float>(m_window.getSize().y);
 
-	// Create 'n' bars evenly spaced across the bottom of the window, with some margin on the sides. Bars start with a small height and low alpha so they are visible even before the first update.
+	// Create 'n' bars evenly spaced across the bottom of the window, with some margin on the sides. Bars start with a small height and low alpha so they 
+	// are visible even before the first update.
     for (size_t i = 0; i < n; ++i) {
 		Entity* be = m_entityManager.AddEntity(EntityType::Equalizer);
 		if (!be) continue;
@@ -132,8 +136,8 @@ void MusicVisualizerScene::InitializeEqualizerBars(size_t visualCount) {
 
 
 /////////////////////////////////
-// HideEqualizerBars - iterates through all equalizer bar entities and sets their size to 1x1 and alpha to 0, effectively hiding them from view. This method is called when the music stops or when the 
-// visualizer is toggled off, ensuring that the bars are not visible when they are not active.
+// HideEqualizerBars - iterates through all equalizer bar entities and sets their size to 1x1 and alpha to 0, effectively hiding them from view. This method 
+// is called when the music stops or when the visualizer is toggled off, ensuring that the bars are not visible when they are not active.
 void MusicVisualizerScene::HideEqualizerBars() {
 	auto& pool = m_entityManager.GetEntities(EntityType::Equalizer);
 	for (Entity* e : pool) {
@@ -152,7 +156,8 @@ void MusicVisualizerScene::HideEqualizerBars() {
 
 
 /////////////////////////////////
-// UpdateExplosions - iterates through all explosion entities and updates their size and alpha based on their age. Explosions grow in size and fade out over a lifespan of 1 second, creating a visually appealing effect that reacts to the music.
+// UpdateExplosions - iterates through all explosion entities and updates their size and alpha based on their age. Explosions grow in size and fade out over 
+// a lifespan of 1 second, creating a visually appealing effect that reacts to the music.
 void MusicVisualizerScene::UpdateEqualizerBars(const std::vector<float>& bands) {
     // allow empty bands to clear/fade bars
 	auto& ents = m_entityManager.GetEntities(EntityType::Equalizer);
@@ -166,7 +171,8 @@ void MusicVisualizerScene::UpdateEqualizerBars(const std::vector<float>& bands) 
 	float barWidth = usable / static_cast<float>(m);
 	float windowHeight = static_cast<float>(m_window.getSize().y);
 
-	// Map spectrum bands to visualizer bars. If there are more bars than bands, some bars will be empty. If there are more bands than bars, multiple bands will be averaged/interpolated for each bar.
+	// Map spectrum bands to visualizer bars. If there are more bars than bands, some bars will be empty. If there are more bands than bars, 
+	// multiple bands will be averaged/interpolated for each bar.
     for (size_t i = 0; i < m; ++i) {
 		float level = 0.0f;
         
@@ -233,7 +239,8 @@ void MusicVisualizerScene::UpdateEqualizerBars(const std::vector<float>& bands) 
 
 
 /////////////////////////////////
-// SpawnCircularExplosionByLevel - creates a new explosion entity with size, color, and velocity influenced by the provided music level (0.0 - 1.0 expected range). The explosion is spawned in a circular pattern around the center of the screen, 
+// SpawnCircularExplosionByLevel - creates a new explosion entity with size, color, and velocity influenced by the provided music level 
+// (0.0 - 1.0 expected range). The explosion is spawned in a circular pattern around the center of the screen, 
 // with its properties scaled based on the music level to create a dynamic visual effect that reacts to the music spectrum.
 void MusicVisualizerScene::SpawnCircularExplosionByLevel(float level, bool resetSpawnTimer) {
 	Entity* spawnedEntity = m_entityManager.AddEntity(EntityType::Explosion);
@@ -301,8 +308,10 @@ void MusicVisualizerScene::SpawnCircularExplosionByLevel(float level, bool reset
 
 
 /////////////////////////////////
-// SpawnCircularExplosion - creates a new explosion entity in a deterministic circular pattern around the center of the screen. The explosion's size and color vary based on the current angle in the circular pattern, 
-// creating a visually appealing effect that reacts to the music spectrum. Each time this method is called, the angle is advanced by m_circularSpeed, allowing for a continuous circular spawning pattern.
+// SpawnCircularExplosion - creates a new explosion entity in a deterministic circular pattern around the center of the screen. 
+// The explosion's size and color vary based on the current angle in the circular pattern, creating a visually appealing effect 
+// that reacts to the music spectrum. Each time this method is called, the angle is advanced by m_circularSpeed, allowing for 
+// a continuous circular spawning pattern.
 void MusicVisualizerScene::SpawnCircularExplosion(bool resetSpawnTimer) {
 	Entity* spawnedEntity = m_entityManager.AddEntity(EntityType::Explosion);
 	if (!spawnedEntity)
@@ -346,8 +355,10 @@ void MusicVisualizerScene::SpawnCircularExplosion(bool resetSpawnTimer) {
 
 
 /////////////////////////////////
-// DrawAudioReactiveWindow - renders the ImGui window for controlling the audio reactive spawn settings and visualizer options. This method allows the user to enable or disable the reactive spawn system, toggle the equalizer overlay, and adjust various parameters 
-// for how entities are spawned in response to the music spectrum. The window is positioned in the bottom-right corner of the screen and is designed to be an overlay that does not interfere with the main visualizer display.
+// DrawAudioReactiveWindow - renders the ImGui window for controlling the audio reactive spawn settings and visualizer options. This method 
+// allows the user to enable or disable the reactive spawn system, toggle the equalizer overlay, and adjust various parameters for how entities 
+// are spawned in response to the music spectrum. The window is positioned in the bottom-right corner of the screen and is designed to be an 
+// overlay that does not interfere with the main visualizer display.
 void MusicVisualizerScene::DrawAudioReactiveWindow() {
 	if (!(GImGui && GImGui->WithinFrameScope))
 		return;
@@ -438,13 +449,17 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 							  pat == Spawn::Pattern::Spiral || pat == Spawn::Pattern::Figure8 ||
 							  pat == Spawn::Pattern::MultiRing || pat == Spawn::Pattern::Helix);
 
-		// Show rotation speed control if the selected pattern involves rotation. This allows users to adjust how fast the circular/spiral patterns rotate around the center, which can create different visual effects and better sync with the music.
+		// Show rotation speed control if the selected pattern involves rotation. This allows users to adjust how fast the circular/spiral 
+		// patterns rotate around the center, which can create different visual effects and better sync with the music.
 		if (needsRotation)
 			ImGui::SliderFloat("Rotation Speed", &spawnConfigs[0].circularSpeed, 0.01f, 1.0f, "%.2f");
-		// Show spiral expansion control if Spiral pattern is selected. This controls how quickly the spiral expands outward with each spawn, allowing for tighter or looser spirals based on user preference.
+
+		// Show spiral expansion control if Spiral pattern is selected. This controls how quickly the spiral expands outward with each spawn, 
+		// allowing for tighter or looser spirals based on user preference.
 		if (pat == Spawn::Pattern::Spiral)
 			ImGui::SliderFloat("Spiral Expansion", &spawnConfigs[0].spiralExpansion, 0.1f, 20.0f, "%.1f");
-		// Show ring count control if MultiRing pattern is selected. This allows users to choose how many concentric rings of spawns are created, which can create more complex and visually interesting patterns that still react to the music.
+		// Show ring count control if MultiRing pattern is selected. This allows users to choose how many concentric rings of spawns are created, 
+		// which can create more complex and visually interesting patterns that still react to the music.
 		if (pat == Spawn::Pattern::MultiRing)
 			ImGui::SliderInt("Ring Count", &spawnConfigs[0].ringCount, 2, 8);
 
@@ -457,8 +472,9 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			int spectrumBands = static_cast<int>(ms->GetSpectrumBandCount());
 			ImGui::Text("Spectrum Bands: %d", spectrumBands);
 
-			// Allow user to configure how many visual bars to display in the equalizer overlay. This controls how many entities are spawned for the equalizer visualization and how spectrum bands are mapped to them. 
-			// It can be more or less than the actual spectrum band count for creative visual effects.
+			// Allow user to configure how many visual bars to display in the equalizer overlay. This controls how many entities are spawned for 
+			// the equalizer visualization and how spectrum bands are mapped to them. It can be more or less than the actual spectrum band count 
+			// for creative visual effects.
 			int visualBars = m_visualBarCount;
 			if (ImGui::SliderInt("Visual Bars", &visualBars, 10, 256)) {
 				if (visualBars < 1) visualBars = 1;
@@ -486,7 +502,8 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			}
 		}
 
-		// Load buttons for default and custom presets. Default preset is read-only and can be used as a fallback or starting point, while custom preset allows users to save their own configurations.
+		// Load buttons for default and custom presets. Default preset is read-only and can be used as a fallback or starting point, while custom 
+		// preset allows users to save their own configurations.
 		ImGui::SameLine();
 		if (ImGui::Button("Load Default")) {
 			std::string error;
@@ -497,7 +514,8 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			}
 		}
 
-		// Custom preset load allows users to persist their own configurations across sessions. It will overwrite the current spawn system configuration with the one loaded from the file, so users can experiment and then save if they like the changes.
+		// Custom preset load allows users to persist their own configurations across sessions. It will overwrite the current spawn system configuration 
+		// with the one loaded from the file, so users can experiment and then save if they like the changes.
 		ImGui::SameLine();
 		if (ImGui::Button("Load Custom")) {
 			std::string error;
@@ -587,7 +605,8 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 
 
 /////////////////////////////////
-// DrawPlaybackControls - renders the ImGui controls for music playback, including play/pause/stop buttons, volume slider, loop toggle, and playhead slider for seeking. The controls reflect the current state of the music entity and allow the user to interactively control playback.
+// DrawPlaybackControls - renders the ImGui controls for music playback, including play/pause/stop buttons, volume slider, loop toggle, and playhead 
+// slider for seeking. The controls reflect the current state of the music entity and allow the user to interactively control playback.
 void MusicVisualizerScene::DrawPlaybackControls() {
 	// Display music status and controls
 	if (!m_musicStatus.empty())
@@ -616,8 +635,7 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 			// Playback control buttons: change the music state and process immediately
 			if (ImGui::Button("Play")) {
 				musicCmp->state = CMusic::State::Playing;
-				std::cout << "[MusicVisualizer] Play pressed for entity "
-						  << (m_musicEntity ? m_musicEntity->GetId() : 0) << std::endl;
+				std::cout << "[MusicVisualizer] Play pressed for entity "  << (m_musicEntity ? m_musicEntity->GetId() : 0) << std::endl;
 				
 				// If the track has ended and looping is disabled, request a restart next update
 				if (auto musicSys = m_entityManager.GetMusicSystem()) {
@@ -629,12 +647,14 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 					musicSys->Process();
 				}
 			} // Play music
+			
 			ImGui::SameLine();
 			if (ImGui::Button("Pause")) {
 				musicCmp->state = CMusic::State::Paused;
 				if (auto musicSys = m_entityManager.GetMusicSystem())
 					musicSys->Process();
 			} // Pause music
+			
 			ImGui::SameLine();
 			if (ImGui::Button("Stop")) {
 				musicCmp->state = CMusic::State::Stopped;
@@ -708,10 +728,11 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 							musicSys->Process();
 					}
 				}
-			}
-			m_playheadActive =
-				sliderActive; // set the playhead active state, true if we are currently dragging the playhead, and false after we let go, I'm updating this at the end that way I can check the previous state when we detect the transition from not active to active (drag start) and from active to not active (drag end) to implement the pause on drag behavior, lots and lots of words, blame copilot it took over half of this comment, I just wanted to explain the reasoning behind the pause on drag behavior and how we are detecting the drag start and end using the slider active state and the m_playheadActive member variable to track whether we are currently dragging the playhead or not, which is important for implementing the pause on drag behavior to prevent repeated sound samples during seek which sound like, well, like, did you actually read this far???????
+			} 
+			// Set the playhead active state, true if we are currently dragging the playhead, and false after we let go, using this to provide a pause on drag
+			m_playheadActive = sliderActive;
 
+			// Display the current playhead position and duration
 			ImGui::SameLine();
 			ImGui::Text("/ %.2fs", m_duration);
 
@@ -731,8 +752,9 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 
 
 /////////////////////////////////
-// ShowOpenFileBrowser - handles the ImGui UI for browsing and selecting audio files to load into the music visualizer. When the user clicks the "Browse..." button, a modal popup appears with a file browser interface that allows navigation through directories, 
-// filtering of audio files, and selection of a music file. Upon selecting a valid audio file, it is loaded into the scene and assigned to a music entity with a CMusic component for playback and analysis.
+// ShowOpenFileBrowser - handles the ImGui UI for browsing and selecting audio files to load into the music visualizer. When the user clicks the "Browse..." button, 
+// a modal popup appears with a file browser interface that allows navigation through directories, filtering of audio files, and selection of a music file. Upon 
+// selecting a valid audio file, it is loaded into the scene and assigned to a music entity with a CMusic component for playback and analysis.
 void MusicVisualizerScene::ShowOpenFileBrowser() {
 	ImGui::SameLine(); // Keep the "Browse..." button on the same line as the previous UI elements
 
@@ -752,9 +774,8 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 		static bool showNonAudio = false;
 		static std::filesystem::path lastRefreshedDir; // Track which directory we last refreshed
 
-		// If we haven't refreshed the current directory yet, or if the current directory has changed since the last refresh,
-		// normalize to an absolute path before comparing. This avoids subtle mismatches due to relative vs absolute or trailing slash
-		// differences that can prevent a refresh when the user navigates into a directory.
+		// If we haven't refreshed the current directory yet, or if the current directory has changed since the last refresh, normalize to an absolute path before comparing. 
+		// This avoids subtle mismatches due to relative vs absolute or trailing slash differences that can prevent a refresh when the user navigates into a directory.
 		std::filesystem::path normCur;
 		try {
 			normCur = std::filesystem::absolute(m_currentDir);
@@ -772,8 +793,8 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 			m_currentDir = normCur;
 		}
 
-		// Drive selection combo box: On Windows (I'm not planning this for other platforms but....), Users can select different drives (C:\, D:\, etc.) so populate a list of available drives
-		// and show it in a combo box. When the user selects a drive, change the current directory to the given drive and refresh the entries.
+		// Drive selection combo box: On Windows (I'm not planning this for other platforms but....), Users can select different drives (C:\, D:\, etc.) so populate 
+		// a list of available drives and show it in a combo box. When the user selects a drive, change the current directory to the given drive and refresh the entries.
 		std::vector<std::string> drives;
 
 		// Check for drives and add them to the list if they exist. Using std::filesystem::exists to check if the root of the drive exists
@@ -822,8 +843,15 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 			searchBuf[0] = '\0';
 		}
 
-		// Display the current folder path. Provide an "Up" button to navigate to the parent directory, which updates the current directory and refreshes the listing. Also provide a "Refresh" button to manually refresh the directory listing in case of external changes.
-		ImGui::Text("Current folder: %s", PathToUtf8(m_currentDir).c_str());
+		// Display the current folder path. Provide an "Up" button to navigate to the parent directory, which updates the current directory and refreshes the listing. 
+		// Also provide a "Refresh" button to manually refresh the directory listing in case of external changes.
+		std::string currentDirStr;
+		try {
+			currentDirStr = m_currentDir.empty() ? "(empty)" : PathToUtf8(m_currentDir);
+		} catch (...) {
+			currentDirStr = "(invalid)";
+		}
+		ImGui::Text("Current folder: %s", currentDirStr.c_str());
 		if (ImGui::Button("Up") && m_currentDir.has_parent_path()) {
 			m_currentDir = m_currentDir.parent_path();
 			RefreshDirectoryListing(m_currentDir, entries, refreshError, skippedCount, showNonAudio);
@@ -836,7 +864,8 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 			lastRefreshedDir = m_currentDir;
 		}
 
-		// Display any errors that occur during directory reading or refreshing, as well as the count of skipped entries due to permissions or other issues. Finally, show the count of items being displayed.
+		// Display any errors that occur during directory reading or refreshing, as well as the count of skipped entries due to permissions or other issues. Finally, 
+		// show the count of items being displayed.
 		if (!refreshError.empty()) {
 			ImGui::TextColored(ImVec4(1, 0.3f, 0.3f, 1), "%s", refreshError.c_str());
 		}
@@ -845,7 +874,8 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 		}
 		// We'll show the filtered count below after rendering the list
 
-		// Child region to display the list of files and directories. Each entry is selectable, and double-clicking a directory will navigate into it, while double-clicking a file will select it for loading.
+		// Child region to display the list of files and directories. Each entry is selectable, and double-clicking a directory will navigate into it, while double-clicking 
+		// a file will select it for loading.
 		ImGui::BeginChild("file_list", ImVec2(600, 300), true);
 		// Track how many entries we actually display after applying the search filter
 		int displayedCount = 0;
@@ -860,11 +890,32 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 
 		for (auto& ent : entries) {
 			// Apply search filter (case-insensitive substring). If empty, show all.
+			// Validate the entry path before attempting to call filename() on it
 			std::string nameTry;
+			bool entryValid = false;
 			try {
-				nameTry = PathToUtf8(ent.path().filename());
+				// Create a defensive copy of the path to avoid use-after-free from stale directory_entry
+				std::filesystem::path entPathCopy;
+				try {
+					entPathCopy = ent.path();
+					entryValid = true;
+				} catch (...) {
+					// If path() itself fails, skip this entry
+					entryValid = false;
+				}
+
+				// Check if path is empty before accessing it to prevent invalid pointer dereference
+				if (entryValid && !entPathCopy.empty()) {
+					nameTry = PathToUtf8(entPathCopy.filename());
+				} else {
+					nameTry.clear();
+				}
 			} catch (...) {
 				nameTry.clear();
+			}
+
+			if (!entryValid) {
+				continue; // Skip invalid entries
 			}
 
 			std::string nameLower = nameTry;
@@ -879,7 +930,18 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 				continue;
 			std::string name;
 			try {
-				name = PathToUtf8(ent.path().filename());
+				// Create a defensive copy of the path to avoid use-after-free from stale directory_entry
+				std::filesystem::path entPathCopy;
+				try {
+					entPathCopy = ent.path();
+					if (entPathCopy.empty()) {
+						name = "<invalid>";
+					} else {
+						name = PathToUtf8(entPathCopy.filename());
+					}
+				} catch (...) {
+					name = "<unreadable>";
+				}
 			} catch (...) {
 				name = "<unreadable>";
 			}
@@ -894,22 +956,45 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 			std::string label = is_dir ? (name + "/") : name;
 			std::string entPathStr;
 			try {
-				entPathStr = PathToUtf8(ent.path());
+				// Create a defensive copy of the path to avoid use-after-free from stale directory_entry
+				std::filesystem::path entPathCopy;
+				try {
+					entPathCopy = ent.path();
+					if (entPathCopy.empty()) {
+						entPathStr.clear();
+					} else {
+						entPathStr = PathToUtf8(entPathCopy);
+					}
+				} catch (...) {
+					entPathStr.clear();
+				}
 			} catch (...) {
 				entPathStr.clear();
 			}
 			bool selected = (!selectedPath.empty() && selectedPath == entPathStr);
 
-			// Render the selectable entry. If it's selected, update the selectedPath. If it's a directory and we double-click it, navigate into it and refresh the listing. If it's a file and we double-click it, select it for loading.
+			// Render the selectable entry. If it's selected, update the selectedPath. If it's a directory and we double-click it, navigate into it and refresh the listing. 
+			// If it's a file and we double-click it, select it for loading.
 			if (ImGui::Selectable(label.c_str(), selected)) {
 				if (!entPathStr.empty())
 					selectedPath = entPathStr;
 				if (is_dir) {
 					// normalize directory we are entering to absolute form to avoid later mismatches
 					try {
-						m_currentDir = std::filesystem::absolute(ent.path());
+						// Create a defensive copy of the path
+						std::filesystem::path entPathCopy;
+						try {
+							entPathCopy = ent.path();
+							m_currentDir = std::filesystem::absolute(entPathCopy);
+						} catch (...) {
+							try {
+								m_currentDir = ent.path();
+							} catch (...) {
+								// If all else fails, don't navigate
+							}
+						}
 					} catch (...) {
-						m_currentDir = ent.path();
+						// Navigation failed, continue without changing directory
 					}
 					refreshError.clear();
 					skippedCount = 0;
@@ -925,8 +1010,9 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 			if (!is_dir && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
 				std::string sel = selectedPath;
 
-				// Load a file immediately on double-click: if it's a valid selection; create an entity and add a CMusic component with the selected file, finally close the popup and reset browser state.
-				if (!sel.empty()) { // not empty or directory
+				// Load a file immediately on double-click: if it's a valid selection; create an entity and add a CMusic component with the selected file, 
+				// finally close the popup and reset browser state.
+				if (!sel.empty()) {
 					// kill and music entity that might exist, don't want multiple music entities
 					if (m_musicEntity) {
 						m_entityManager.KillEntity(m_musicEntity);
@@ -988,8 +1074,10 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 
 
 /////////////////////////////////
-// RefreshDirectoryListing - helper function to read the contents of a directory and populate a list of entries for the file browser. It takes the directory path, an output vector for entries, an output string for error messages, an output int for skipped entry count, and a flag to 
-// show non-audio files. It performs validation on the directory path, iterates through the directory while handling errors gracefully, filters entries based on audio file extensions (unless showNonAudio is true), and sorts the entries with directories first followed by files in alphabetical order. It returns true on success or false on failure with an appropriate error message.
+// RefreshDirectoryListing - helper function to read the contents of a directory and populate a list of entries for the file browser. It takes the directory path, an output vector 
+// for entries, an output string for error messages, an output int for skipped entry count, and a flag to show non-audio files. It performs validation on the directory path, iterates 
+// through the directory while handling errors gracefully, filters entries based on audio file extensions (unless showNonAudio is true), and sorts the entries with directories first 
+// followed by files in alphabetical order. It returns true on success or false on failure with an appropriate error message.
 bool MusicVisualizerScene::RefreshDirectoryListing(const std::filesystem::path& dir,
 												   std::vector<std::filesystem::directory_entry>& outEntries,
 												   std::string& outError, int& outSkipped, bool showNonAudio) {
@@ -1013,9 +1101,13 @@ bool MusicVisualizerScene::RefreshDirectoryListing(const std::filesystem::path& 
 		return false;
 	}
 
+	// Set options to skip entries we don't have permission to access and to follow directory symlinks. This allows us to avoid exceptions for permission 
+	// issues and still show the contents of symlinked directories.
 	std::filesystem::directory_options opts = std::filesystem::directory_options::skip_permission_denied |
 											  std::filesystem::directory_options::follow_directory_symlink;
 
+	// Iterate through the directory entries with error handling. For each entry, we check if it's a directory or an audio file (based on extension) and add it to the list.
+	// If we encounter errors while accessing an entry (e.g., permissions), we increment the skipped count and continue without adding it to the list.
 	try {
 		std::error_code dirEc;
 		std::filesystem::directory_iterator it(dir, opts, dirEc);
@@ -1097,15 +1189,18 @@ bool MusicVisualizerScene::RefreshDirectoryListing(const std::filesystem::path& 
 
 
 /////////////////////////////////
-// MusicVisualizerScene class implementation. This scene allows users to load music files, control playback, and visualize audio-reactive spawns based on the music's spectrum analysis. It includes an ImGui interface for file browsing, playback controls, 
-// and spawn system configuration. The scene manages a music entity with a CMusic component for audio playback and analysis, and a SpawnSystem for handling music-reactive spawns. The Update function processes music levels to trigger spawns and renders the ImGui UI for user interaction.
+// MusicVisualizerScene class implementation. This scene allows users to load music files, control playback, and visualize audio-reactive spawns based on the music's 
+// spectrum analysis. It includes an ImGui interface for file browsing, playback controls, and spawn system configuration. The scene manages a music entity with a 
+// CMusic component for audio playback and analysis, and a SpawnSystem for handling music-reactive spawns. The Update function processes music levels to trigger 
+// spawns and renders the ImGui UI for user interaction.
 MusicVisualizerScene::MusicVisualizerScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager): Scene(engine, entityManager), m_window(win) {}
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// Destructor for the MusicVisualizerScene. It ensures that any dynamically allocated resources, such as the SpawnSystem, are properly released when the scene is destroyed to prevent memory leaks.
+// Destructor for the MusicVisualizerScene. It ensures that any dynamically allocated resources, such as the SpawnSystem, are properly released when the scene is 
+// destroyed to prevent memory leaks.
 MusicVisualizerScene::~MusicVisualizerScene() {
 	delete m_spawnSystem;
 	m_spawnSystem = nullptr;
@@ -1115,8 +1210,9 @@ MusicVisualizerScene::~MusicVisualizerScene() {
 
 
 /////////////////////////////////
-// Update - the main update loop for the MusicVisualizerScene. It processes music playback state, updates audio-reactive spawns based on the current music level, and renders the ImGui interface for music loading and playback controls. It also handles initialization of 
-// the current directory for the file browser and manages the state of the spawn system and equalizer bars based on user interactions and music analysis.
+// Update - the main update loop for the MusicVisualizerScene. It processes music playback state, updates audio-reactive spawns based on the current music level, 
+// and renders the ImGui interface for music loading and playback controls. It also handles initialization of the current directory for the file browser and manages 
+// the state of the spawn system and equalizer bars based on user interactions and music analysis.
 void MusicVisualizerScene::Update(float deltaTime) {
 	// Minimal update: process explosions and audio-reactive spawns similar to TileMapEditorScene
 	// Pause visual updates when music is paused so effects stop on pause
@@ -1261,23 +1357,29 @@ void MusicVisualizerScene::Update(float deltaTime) {
 
 
 /////////////////////////////////
-// Render - the main render function for the MusicVisualizerScene. This function is responsible for rendering any custom visuals for the scene, but in this case, we are doing all of our rendering through ImGui and the SpawnSystem's CShape components, 
-// so this function can be minimal. We will render the grid as part of the debug overlay, and the music-reactive visuals (explosions) are rendered via their CShape components in the main render loop of the engine, so we don't need to do anything special here for them. However, if we wanted to add any additional custom rendering specific to the music visualizer in the future, this would be the place to do it.
+// Render - the main render function for the MusicVisualizerScene. This function is responsible for rendering any custom visuals for the scene, but in this case, 
+// we are doing all of our rendering through ImGui and the SpawnSystem's CShape components, so this function can be minimal. We will render the grid as part of the 
+// debug overlay, and the music-reactive visuals (explosions) are rendered via their CShape components in the main render loop of the engine, so we don't need to do 
+// anything special here for them. However, if we wanted to add any additional custom rendering specific to the music visualizer in the future, this would be 
+// the place to do it.
 void MusicVisualizerScene::Render() {}
 /////////////////////////////////
 
 
 
-// DoAction - this function is meant to handle any specific actions or updates that need to occur in the scene, but for the MusicVisualizerScene, we are handling all of our updates in the Update function, and we don't have any specific actions that need to be triggered separately, 
-// so we can just leave this empty for now. If we wanted to add any special behavior that should be triggered on a timer or in response to certain conditions, we could implement that here.
+// DoAction - this function is meant to handle any specific actions or updates that need to occur in the scene, but for the MusicVisualizerScene, we are handling all 
+// of our updates in the Update function, and we don't have any specific actions that need to be triggered separately, so we can just leave this empty for now. 
+// If we wanted to add any special behavior that should be triggered on a timer or in response to certain conditions, we could implement that here.
 void MusicVisualizerScene::DoAction() {}
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// RenderDebugOverlay - this function is responsible for rendering any debug visuals for the scene. For the MusicVisualizerScene, we will use this to render a grid overlay on the window, which can help visualize the space and add a nice aesthetic for the music visualizer. We will set the view to the default view to ensure the grid is aligned with the window coordinates, then draw the grid and restore the previous view. 
-// This way, the grid will always be rendered in screen space and won't be affected by any camera transformations that might be applied to other entities in the scene.
+// RenderDebugOverlay - this function is responsible for rendering any debug visuals for the scene. For the MusicVisualizerScene, we will use this to render a grid overlay 
+// on the window, which can help visualize the space and add a nice aesthetic for the music visualizer. We will set the view to the default view to ensure the grid is aligned 
+// with the window coordinates, then draw the grid and restore the previous view. This way, the grid will always be rendered in screen space and won't be affected by any 
+// camera transformations that might be applied to other entities in the scene.
 void MusicVisualizerScene::RenderDebugOverlay() {
 	// Draw grid only
 	sf::View prevView = m_window.getView();
@@ -1291,15 +1393,18 @@ void MusicVisualizerScene::RenderDebugOverlay() {
 
 
 /////////////////////////////////
-// HandleEvent - this function is meant to handle any SFML events that are relevant to the scene, such as keyboard input, mouse input, window events, etc. However, for the MusicVisualizerScene, we are handling user input in a more immediate mode style within the 
-// Update function (e.g., checking key states for the Escape key to close the window), and we don't have any specific event-based interactions that we need to handle separately,
+// HandleEvent - this function is meant to handle any SFML events that are relevant to the scene, such as keyboard input, mouse input, window events, etc. However, for the 
+// MusicVisualizerScene, we are handling user input in a more immediate mode style within the Update function (e.g., checking key states for the Escape key to close the window), 
+// and we don't have any specific event-based interactions that we need to handle separately,
 void MusicVisualizerScene::HandleEvent(const std::optional<sf::Event>& event) {}
 /////////////////////////////////
 
 
 
-// OnEnter and OnExit - these functions are called when the scene is entered or exited, respectively. For the MusicVisualizerScene, we don't have any specific setup or teardown that needs to occur when entering or exiting the scene, so we can just leave these empty for now. If we 
-// wanted to add any special behavior that should occur when the scene is entered (e.g., initializing certain variables, starting background music, etc.) or when it is exited (e.g., cleaning up resources, stopping music, etc.), we could implement that here.
+// OnEnter and OnExit - these functions are called when the scene is entered or exited, respectively. For the MusicVisualizerScene, we don't have any specific setup or teardown 
+// that needs to occur when entering or exiting the scene, so we can just leave these empty for now. If we wanted to add any special behavior that should occur when the scene is 
+// entered (e.g., initializing certain variables, starting background music, etc.) or when it is exited (e.g., cleaning up resources, stopping music, etc.), we could implement 
+// that here.
 void MusicVisualizerScene::OnEnter() {}
 void MusicVisualizerScene::OnExit() {}
 /////////////////////////////////
@@ -1307,8 +1412,9 @@ void MusicVisualizerScene::OnExit() {}
 
 
 /////////////////////////////////
-// LoadResources and UnloadResources - these functions are meant to handle the loading and unloading of any resources that the scene needs, such as textures, sounds, music, etc. However, for the MusicVisualizerScene, we are loading music files dynamically based on user selection 
-// through the ImGui file browser, and we don't have any specific resources that we need to load or unload at the scene level,
+// LoadResources and UnloadResources - these functions are meant to handle the loading and unloading of any resources that the scene needs, such as textures, sounds, music, etc. 
+// However, for the MusicVisualizerScene, we are loading music files dynamically based on user selection through the ImGui file browser, and we don't have any specific resources 
+// that we need to load or unload at the scene level,
 void MusicVisualizerScene::LoadResources() { m_isLoaded = true; }
 void MusicVisualizerScene::UnloadResources() {}
 /////////////////////////////////
@@ -1316,8 +1422,10 @@ void MusicVisualizerScene::UnloadResources() {}
 
 
 /////////////////////////////////
-// InitializeGame - this function is responsible for initializing the game state for the scene when it is first created. For the MusicVisualizerScene, we will set up a tile map that covers the entire window, which we can use for visual effects or as a background grid. 
-// We will calculate the number of columns and rows needed based on the window size and a defined tile size, and then create a TileMap instance with those dimensions. This will allow us to easily draw a grid overlay in the RenderDebugOverlay function and potentially use the tile map for other visual effects in the future.
+// InitializeGame - this function is responsible for initializing the game state for the scene when it is first created. For the MusicVisualizerScene, we will set up a tile map that 
+// covers the entire window, which we can use for visual effects or as a background grid. We will calculate the number of columns and rows needed based on the window size and a defined 
+// tile size, and then create a TileMap instance with those dimensions. This will allow us to easily draw a grid overlay in the RenderDebugOverlay function and potentially use the 
+// tile map for other visual effects in the future.
 void MusicVisualizerScene::InitializeGame(sf::Vector2u windowSize) {
 	const float tileSize = 32.0f;
 	int cols = static_cast<int>(windowSize.x / static_cast<unsigned int>(tileSize)) + 2;
@@ -1329,8 +1437,9 @@ void MusicVisualizerScene::InitializeGame(sf::Vector2u windowSize) {
 
 
 /////////////////////////////////
-// DrawGrid - this function is responsible for drawing a grid overlay on the window based on the tile map we set up in InitializeGame. We will iterate through each tile in the tile map and enqueue rectangle outlines to the render queue for it using the engine's centralized rendering system.
-// The rectangles will be transparent with a light outline color to create a subtle grid effect that doesn't overpower the visuals of the music visualizer. We also check if the tile map has valid dimensions before attempting to draw to avoid unnecessary processing.
+// DrawGrid - this function is responsible for drawing a grid overlay on the window based on the tile map we set up in InitializeGame. We will iterate through each tile in the tile map 
+// and enqueue rectangle outlines to the render queue for it using the engine's centralized rendering system. The rectangles will be transparent with a light outline color to create a 
+// subtle grid effect that doesn't overpower the visuals of the music visualizer. We also check if the tile map has valid dimensions before attempting to draw to avoid unnecessary processing.
 void MusicVisualizerScene::DrawGrid() {
 	if (m_tileMap.width <= 0 || m_tileMap.height <= 0)
 		return;
@@ -1361,8 +1470,9 @@ void MusicVisualizerScene::DrawGrid() {
 
 
 /////////////////////////////////
-// ProcessInput - this function is responsible for processing user input for the scene. For the MusicVisualizerScene, we will check for the Escape key to allow the user to close the window and exit the application. This provides a simple way for users to exit the music 
-// visualizer without needing to interact with the window controls, which can be especially useful if the visualizer is running in fullscreen mode.
+// ProcessInput - this function is responsible for processing user input for the scene. For the MusicVisualizerScene, we will check for the Escape key to allow the user to close the 
+// window and exit the application. This provides a simple way for users to exit the music visualizer without needing to interact with the window controls, which can be especially 
+// useful if the visualizer is running in fullscreen mode.
 void MusicVisualizerScene::ProcessInput() {
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
 		m_gameEngine.ChangeScene("MainMenu");
@@ -1373,8 +1483,9 @@ void MusicVisualizerScene::ProcessInput() {
 
 
 /////////////////////////////////
-// LoadMusicFromPath - this function is responsible for loading a music file from a given file path and setting it up for playback in the scene. It first checks if there is an existing music entity and destroys it to ensure that only one music track is playing at a time. 
-// Then, it creates a new entity and adds a CMusic component to it with the specified file path, default volume, loop setting based on the current UI state, and starts playback immediately.
+// LoadMusicFromPath - this function is responsible for loading a music file from a given file path and setting it up for playback in the scene. It first checks if there is an existing 
+// music entity and destroys it to ensure that only one music track is playing at a time. Then, it creates a new entity and adds a CMusic component to it with the specified file path, 
+// default volume, loop setting based on the current UI state, and starts playback immediately.
 void MusicVisualizerScene::LoadMusicFromPath(const std::string& path) {
 	// Kill any existing music entity to ensure we only have one music playing at a time. We also call Update after killing the entity to ensure it is fully removed before
 	// we create a new one, which can help prevent issues with the MusicSystem still trying to process the old entity.

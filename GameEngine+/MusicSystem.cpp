@@ -26,7 +26,8 @@
 
 
 /////////////////////////////////
-// Include kiss_fft implementation directly in the MusicSystem.cpp to avoid needing to link against an external library. This allows us to keep the music system self-contained and simplifies the build process, as we don't need to worry about linking against a separate FFT library.
+// Include kiss_fft implementation directly in the MusicSystem.cpp to avoid needing to link against an external library. This allows us 
+// to keep the music system self-contained and simplifies the build process, as we don't need to worry about linking against a separate FFT library.
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
@@ -37,7 +38,8 @@
 
 
 /////////////////////////////////
-// UtfToPath - Converts a UTF-8 encoded std::string to a std::filesystem::path, ensuring that Unicode characters are correctly handled on Windows. On Windows, we round-trip through a wide string (std::wstring) to ensure that the full Unicode path is preserved, 
+// UtfToPath - Converts a UTF-8 encoded std::string to a std::filesystem::path, ensuring that Unicode characters are correctly handled on 
+// Windows. On Windows, we round-trip through a wide string (std::wstring) to ensure that the full Unicode path is preserved, 
 // as the Windows API expects wide strings for file paths.
 static std::filesystem::path Utf8ToPath(const std::string& utf8) {
 #ifdef _WIN32
@@ -58,9 +60,11 @@ static std::filesystem::path Utf8ToPath(const std::string& utf8) {
 // Provide simple kiss_fft implementation inline so it is compiled into the binary
 extern "C" {
 /////////////////////////////////
-// ks_internal_fft - This function implements a simple radix-2 Cooley-Tukey FFT algorithm. It takes an array of complex numbers (kiss_fft_cpx) and its size, and performs the FFT in-place. The function first performs a bit-reversal permutation on the input data,
+// ks_internal_fft - This function implements a simple radix-2 Cooley-Tukey FFT algorithm. It takes an array of complex 
+// numbers (kiss_fft_cpx) and its size, and performs the FFT in-place. The function first performs a bit-reversal permutation on the input data,
 static void ks_internal_fft(kiss_fft_cpx* data, int size) {
-	// require power of two size, but we won't enforce it here since the config allocator will round up to the next power of two. Just do the best we can with the given size and ignore any extra samples if not a power of two
+	// require power of two size, but we won't enforce it here since the config allocator will round up to the next 
+	// power of two. Just do the best we can with the given size and ignore any extra samples if not a power of two
 	if (size <= 1) return;
 	
 	// bit reverse
@@ -68,8 +72,9 @@ static void ks_internal_fft(kiss_fft_cpx* data, int size) {
 	for (i = 1; i < size; ++i) { // start at 1 since bit reverse of 0 is 0 and we can skip that swap
 		int bit = size >> 1;
 
-		// This bit reversal code is a common pattern in radix-2 FFT implementations. It effectively computes the bit-reversed index for each position i and swaps the elements accordingly. 
-		// The inner loop shifts the bit variable right until it finds a bit that is not set in j, at which point it toggles that bit in j. 
+		// This bit reversal code is a common pattern in radix-2 FFT implementations. It effectively computes the bit-reversed 
+		// index for each position i and swaps the elements accordingly. The inner loop shifts the bit variable right 
+		// until it finds a bit that is not set in j, at which point it toggles that bit in j. 
 		// This process generates the correct bit-reversed indices for the FFT algorithm.
 		for (; j & bit; bit >>= 1) j ^= bit;
 		j ^= bit;
@@ -107,7 +112,8 @@ static void ks_internal_fft(kiss_fft_cpx* data, int size) {
 
 
 /////////////////////////////////
-// kiss_fft_alloc - This function allocates and initializes a configuration structure for the FFT. It takes the desired FFT size (nfft), a flag indicating whether to perform an inverse FFT, and optional memory parameters which we ignore in this simple implementation.
+// kiss_fft_alloc - This function allocates and initializes a configuration structure for the FFT. It takes the desired FFT size 
+// (nfft), a flag indicating whether to perform an inverse FFT, and optional memory parameters which we ignore in this simple implementation.
 kiss_fft_cfg* kiss_fft_alloc(int nfft, int inverse_fft, void* mem, size_t* lenmem) {
 	(void)mem; (void)lenmem;
 	if (nfft <= 0) return NULL;
@@ -123,7 +129,8 @@ kiss_fft_cfg* kiss_fft_alloc(int nfft, int inverse_fft, void* mem, size_t* lenme
 
 
 /////////////////////////////////
-// kiss_fft_free - This function frees the configuration structure allocated by kiss_fft_alloc. It simply checks if the pointer is not null and then frees the memory.
+// kiss_fft_free - This function frees the configuration structure allocated by kiss_fft_alloc. It simply checks if the pointer is 
+// not null and then frees the memory.
 void kiss_fft_free(kiss_fft_cfg* cfg) {
 	if (cfg) free(cfg);
 }
@@ -131,8 +138,10 @@ void kiss_fft_free(kiss_fft_cfg* cfg) {
 
 
 /////////////////////////////////
-// kiss_fft - This function performs the FFT using the provided configuration and input/output buffers. It first checks for null pointers, then allocates a temporary buffer to hold the input data. It copies the input data into the buffer, zero-padding if necessary, 
-// and then calls the internal FFT function to perform the transformation in-place. Finally, it copies the result to the output buffer and frees the temporary buffer.
+// kiss_fft - This function performs the FFT using the provided configuration and input/output buffers. It first checks for null 
+// pointers, then allocates a temporary buffer to hold the input data. It copies the input data into the buffer, zero-padding if necessary, 
+// and then calls the internal FFT function to perform the transformation in-place. Finally, it copies the result to the output buffer 
+// and frees the temporary buffer.
 void kiss_fft(const kiss_fft_cfg* cfg, const kiss_fft_cpx* fin, kiss_fft_cpx* fout) {
 	if (!cfg || !fin || !fout) return;
 	int n = cfg->nfft;
@@ -159,8 +168,11 @@ MusicSystem::MusicSystem(EntityManager& entityManager) : m_entityManager(entityM
 
 
 /////////////////////////////////
-// StopAllMusic - This method is responsible for stopping all currently playing music tracks. It first signals the analysis thread to stop and waits for it to finish, ensuring that no analysis is running while we clear the active music state. Then, it iterates through all 
-// active music instances and calls their stop method, effectively halting playback. Finally, it clears the active music mapping and any associated analysis buffers and levels to reset the state of the MusicSystem.
+// StopAllMusic - This method is responsible for stopping all currently playing music tracks. It first signals the analysis 
+// thread to stop and waits for it to finish, ensuring that no analysis is running while we clear the active music state. 
+// Then, it iterates through all active music instances and calls their stop method, effectively halting playback. 
+// Finally, it clears the active music mapping and any associated analysis buffers and levels to reset the state of 
+// the MusicSystem.
 void MusicSystem::StopAllMusic() {
 	// Pause the analysis thread while we clear state
 	m_analysisStop.store(true);
@@ -184,8 +196,10 @@ void MusicSystem::StopAllMusic() {
 
 
 /////////////////////////////////
-// GetSpectrum - This method retrieves the latest computed spectrum data for a given entity ID. It locks the levels mutex to ensure thread safety while accessing the spectra mapping, then checks if there is an entry for 
-// the specified entity ID. If an entry exists, it copies the spectrum data to the output parameter and returns true; otherwise, it returns false to indicate that no spectrum data is available for that entity.
+// GetSpectrum - This method retrieves the latest computed spectrum data for a given entity ID. It locks the levels mutex to 
+// ensure thread safety while accessing the spectra mapping, then checks if there is an entry for the specified entity ID. 
+// If an entry exists, it copies the spectrum data to the output parameter and returns true; otherwise, it returns false to 
+// indicate that no spectrum data is available for that entity.
 bool MusicSystem::GetSpectrum(size_t entityId, std::vector<float>& outSpectrum) const {
 	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	auto it = m_spectra.find(entityId);
@@ -198,7 +212,8 @@ bool MusicSystem::GetSpectrum(size_t entityId, std::vector<float>& outSpectrum) 
 
 
 /////////////////////////////////
-// GetSpectrumBandCount - This method returns the number of frequency bands that are being analyzed in the spectrum. It simply returns the value of m_eqBandCount, which is the current number of bands configured for spectral analysis. 
+// GetSpectrumBandCount - This method returns the number of frequency bands that are being analyzed in the spectrum. It simply 
+// returns the value of m_eqBandCount, which is the current number of bands configured for spectral analysis. 
 // This value can be used by callers to understand how many frequency bins are present in the spectrum data.
 size_t MusicSystem::GetSpectrumBandCount() const {
 	return static_cast<size_t>(m_eqBandCount);
@@ -208,7 +223,8 @@ size_t MusicSystem::GetSpectrumBandCount() const {
 
 
 /////////////////////////////////
-// SetSpectrumBandCount - This method sets the number of frequency bands to analyze in the spectrum. It takes an integer count as a parameter, which specifies how many bands should be used for spectral analysis. 
+// SetSpectrumBandCount - This method sets the number of frequency bands to analyze in the spectrum. It takes an integer count 
+// as a parameter, which specifies how many bands should be used for spectral analysis. 
 // The method first checks if the count is positive; if not, it returns without making changes.
 void MusicSystem::SetSpectrumBandCount(int count) {
 	if (count <= 0) return;
@@ -229,7 +245,8 @@ void MusicSystem::SetSpectrumBandCount(int count) {
 
 
 /////////////////////////////////
-// GetSpectrumBandCount - This method returns the current number of frequency bands that are being analyzed in the spectrum. It simply returns the value of m_eqBandCount, which is the current configuration for spectral analysis.
+// GetSpectrumBandCount - This method returns the current number of frequency bands that are being analyzed in the spectrum. It simply 
+// returns the value of m_eqBandCount, which is the current configuration for spectral analysis.
 void MusicSystem::SetSpectrumSmoothing(float smoothing) {
 	if (smoothing < 0.0f) smoothing = 0.0f;
 	if (smoothing > 0.99f) smoothing = 0.99f;
@@ -241,8 +258,9 @@ void MusicSystem::SetSpectrumSmoothing(float smoothing) {
 
 
 /////////////////////////////////
-// GetSpectrumSmoothing - This method returns the current smoothing factor applied to the spectrum data. The smoothing factor is a value between 0.0 and 0.99 that determines how much the spectrum values are smoothed over time, 
-// with higher values resulting in smoother but less responsive spectrum data.
+// GetSpectrumSmoothing - This method returns the current smoothing factor applied to the spectrum data. The smoothing factor is a value between 
+// 0.0 and 0.99 that determines how much the spectrum values are smoothed over time, with higher values resulting in smoother but less 
+// responsive spectrum data.
 float MusicSystem::GetSpectrumSmoothing() const {
             std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	return m_spectrumSmoothing;
@@ -252,8 +270,9 @@ float MusicSystem::GetSpectrumSmoothing() const {
 
 
 /////////////////////////////////
-// SetUseFFT - This method enables or disables the use of FFT analysis for the music tracks. It takes a boolean parameter useFFT, which indicates whether FFT analysis should be used. The method locks the levels mutex to ensure thread 
-// safety while modifying the m_useFFT member variable, which controls whether FFT analysis is performed in the background thread.
+// SetUseFFT - This method enables or disables the use of FFT analysis for the music tracks. It takes a boolean parameter useFFT, which 
+// indicates whether FFT analysis should be used. The method locks the levels mutex to ensure thread safety while modifying the m_useFFT 
+// member variable, which controls whether FFT analysis is performed in the background thread.
 void MusicSystem::SetUseFFT(bool useFFT) {
 	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	m_useFFT = useFFT;
@@ -263,7 +282,8 @@ void MusicSystem::SetUseFFT(bool useFFT) {
 
 
 /////////////////////////////////
-// GetUseFFT - This method returns whether FFT analysis is currently enabled for the music tracks. It locks the levels mutex to ensure thread safety while accessing the m_useFFT member variable, which indicates whether FFT analysis is being used.
+// GetUseFFT - This method returns whether FFT analysis is currently enabled for the music tracks. It locks the levels mutex to ensure thread 
+// safety while accessing the m_useFFT member variable, which indicates whether FFT analysis is being used.
 bool MusicSystem::GetUseFFT() const {
 	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	return m_useFFT;
@@ -273,7 +293,8 @@ bool MusicSystem::GetUseFFT() const {
 
 
 /////////////////////////////////
-// SetFFTSize - This method sets the size of the FFT to be used for spectral analysis. It takes an integer size as a parameter, which specifies the desired FFT size. The method first checks if the size is positive; if not, it returns without making changes.
+// SetFFTSize - This method sets the size of the FFT to be used for spectral analysis. It takes an integer size as a parameter, which specifies 
+// the desired FFT size. The method first checks if the size is positive; if not, it returns without making changes.
 void MusicSystem::SetFFTSize(int size) {
 	if (size <= 0) return;
 	// ensure power of two
@@ -287,7 +308,8 @@ void MusicSystem::SetFFTSize(int size) {
 
 
 /////////////////////////////////
-// GetFFTSize - This method returns the current size of the FFT being used for spectral analysis. It locks the levels mutex to ensure thread safety while accessing the m_fftSize member variable, which holds the current FFT size configuration.
+// GetFFTSize - This method returns the current size of the FFT being used for spectral analysis. It locks the levels mutex to ensure thread 
+// safety while accessing the m_fftSize member variable, which holds the current FFT size configuration.
 int MusicSystem::GetFFTSize() const {
 	std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	return m_fftSize;
@@ -297,7 +319,8 @@ int MusicSystem::GetFFTSize() const {
 
 
 /////////////////////////////////
-// GetPlayingOffset - This method retrieves the current playback position (in seconds) for a given entity ID. It first checks if there is an active music instance for the specified entity ID; if not, it returns 0.0f. If an active music instance exists, 
+// GetPlayingOffset - This method retrieves the current playback position (in seconds) for a given entity ID. It first checks if there is an 
+// active music instance for the specified entity ID; if not, it returns 0.0f. If an active music instance exists, 
 // it attempts to get the playing offset using the SFML Music API,
 float MusicSystem::GetPlayingOffset(size_t entityId) const {
 	auto it = m_activeMusic.find(entityId);
@@ -314,8 +337,10 @@ float MusicSystem::GetPlayingOffset(size_t entityId) const {
 
 
 /////////////////////////////////
-// GetDuration - This method retrieves the total duration (in seconds) of the music track associated with a given entity ID. It first checks if there is an active music instance for the specified entity ID; if not, it returns 0.0f. If an active music instance exists, 
-// it attempts to get the duration using the SFML Music API, and returns it in seconds. If any exceptions occur during this process, it catches them and returns 0.0f as a fallback.
+// GetDuration - This method retrieves the total duration (in seconds) of the music track associated with a given entity ID. It first checks 
+// if there is an active music instance for the specified entity ID; if not, it returns 0.0f. If an active music instance exists, it attempts 
+// to get the duration using the SFML Music API, and returns it in seconds. If any exceptions occur during this process, it catches them and 
+// returns 0.0f as a fallback.
 float MusicSystem::GetDuration(size_t entityId) const {
 	auto it = m_activeMusic.find(entityId);
 	if (it == m_activeMusic.end() || !it->second)
@@ -331,7 +356,8 @@ float MusicSystem::GetDuration(size_t entityId) const {
 
 
 /////////////////////////////////
-// Seek - This method seeks to a specific position (in seconds) in the music track associated with a given entity ID. It first checks if there is an active music instance for the specified entity ID; if not, it returns without doing anything. If an active music instance exists,
+// Seek - This method seeks to a specific position (in seconds) in the music track associated with a given entity ID. It first checks if there is an active 
+// music instance for the specified entity ID; if not, it returns without doing anything. If an active music instance exists,
 void MusicSystem::Seek(size_t entityId, float seconds) {
 	auto it = m_activeMusic.find(entityId);
 	if (it == m_activeMusic.end() || !it->second)
@@ -448,9 +474,9 @@ void MusicSystem::Process() {
 		music->setVolume(musicComp->volume);
 		music->setLooping(musicComp->loop);
 
+		//std::cout << "Time left to play for music " << music->getDuration().asSeconds() - music->getPlayingOffset().asSeconds() << ": " << std::endl;
 		// Check if music has naturally finished (stopped by reaching end, not by user)
-		if (music->getStatus() == sf::SoundSource::Status::Stopped && musicComp->state == CMusic::State::Playing &&
-			!musicComp->loop) {
+		if (!musicComp->loop && music->getDuration().asSeconds() - music->getPlayingOffset().asSeconds() < 0.01f) {
 			musicComp->state = CMusic::State::Stopped;
 		}
 
@@ -459,6 +485,7 @@ void MusicSystem::Process() {
 		case CMusic::State::Playing:
 			if (music->getStatus() == sf::SoundSource::Status::Stopped) {
 				try {
+					std::cout << "Playing music " << std::endl;
 					music->setPlayingOffset(sf::seconds(0));
 				} catch (...) {}
 			}
@@ -489,7 +516,8 @@ void MusicSystem::Process() {
 
 
 /////////////////////////////////
-// AnalysisThreadFunc - runs on a dedicated thread at ~30 Hz. Reads playhead snapshots written by Process(), seeks/reads from InputSoundFile, performs FFT or Goertzel analysis, and stores results in m_levels / m_spectra.
+// AnalysisThreadFunc - runs on a dedicated thread at ~30 Hz. Reads playhead snapshots written by Process(), seeks/reads from InputSoundFile, 
+// performs FFT or Goertzel analysis, and stores results in m_levels / m_spectra.
 void MusicSystem::AnalysisThreadFunc() {
 	using namespace std::chrono_literals;
 	while (!m_analysisStop.load(std::memory_order_relaxed)) {
@@ -518,6 +546,9 @@ void MusicSystem::AnalysisThreadFunc() {
 		float spectrumSmoothing;
 		bool useFFT;
 		int fftSize;
+		
+		// Make a local copy of the EQ center frequencies for use in this analysis iteration. This allows the main thread to modify the center 
+		// frequencies without affecting the analysis thread until the next iteration, and avoids holding the levels mutex while performing analysis.
 		std::vector<float> eqCenterFreqs;
 		{
 			std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
@@ -528,6 +559,9 @@ void MusicSystem::AnalysisThreadFunc() {
 			eqCenterFreqs = m_eqCenterFreqs;
 		}
 
+		// For each active music track, read a window of audio samples around the playhead position, compute the RMS level and spectrum, and store the results. 
+		// I use the playhead snapshot to know where to read from each track's sound file, while the buffer snapshot is used to access the sound files without 
+		// holding locks during analysis.
 		for (auto& [id, soundFile] : bufSnap) {
 			if (!soundFile) continue;
 			auto pit = playheadSnap.find(id);
@@ -564,12 +598,15 @@ void MusicSystem::AnalysisThreadFunc() {
 			// Band analysis
 			std::vector<float> mags(static_cast<size_t>(eqBandCount), 0.0f);
 
+			// FFT analysis
 			if (useFFT && fftSize > 0) {
 				int N = fftSize;
 				std::vector<float> mono(static_cast<size_t>(N), 0.0f);
 				long long centerSample = static_cast<long long>(seconds * static_cast<float>(sampleRate));
 				long long startSample  = centerSample - static_cast<long long>(N / 2);
 				long long bufStartSample = static_cast<long long>(start / channels);
+				
+				// Convert to mono
 				for (int i = 0; i < N; ++i) {
 					long long localIdx = (startSample + i) - bufStartSample;
 					if (localIdx < 0 || static_cast<size_t>(localIdx) >= readCount / channels) continue;
@@ -579,10 +616,14 @@ void MusicSystem::AnalysisThreadFunc() {
 						acc += static_cast<float>(samples[base + c]) / 32768.0f;
 					mono[i] = acc / static_cast<float>(channels);
 				}
+
+				// Apply Hanning window
 				for (int i = 0; i < N; ++i) {
 					float w = 0.5f * (1.0f - cosf(2.0f * 3.14159265358979323846f * static_cast<float>(i) / static_cast<float>(N)));
 					mono[i] *= w;
 				}
+
+				// Perform FFT using kiss_fft
 				int fftN = N, half = 0;
 				std::vector<float> magsBins;
 				kiss_fft_cfg* cfg = kiss_fft_alloc(N, 0, NULL, NULL);
@@ -606,6 +647,8 @@ void MusicSystem::AnalysisThreadFunc() {
 				float nyq = static_cast<float>(sampleRate) * 0.5f;
 				float minF = 20.0f; if (nyq <= minF) minF = 1.0f;
 				float dbFloor = -80.0f;
+				
+				// Average bins into bands
 				for (int b = 0; b < eqBandCount; ++b) {
 					float lowF, highF;
 					if (eqBandCount == 1) { lowF = minF; highF = nyq; }
@@ -614,11 +657,17 @@ void MusicSystem::AnalysisThreadFunc() {
 						lowF  = powf(10.0f, L + (H - L) * (static_cast<float>(b)     / static_cast<float>(eqBandCount)));
 						highF = powf(10.0f, L + (H - L) * (static_cast<float>(b + 1) / static_cast<float>(eqBandCount)));
 					}
+					
+					// Average all FFT bins whose center frequency falls within the band's low/high range. If no bins fall within the band, 
+					// use the single bin closest to the band's center frequency.
 					int cnt = 0; double bsum = 0.0;
 					for (int k = 0; k <= half; ++k) {
 						float freq = static_cast<float>(k) * static_cast<float>(sampleRate) / static_cast<float>(fftN);
 						if (freq >= lowF && freq <= highF) { bsum += magsBins[k]; cnt++; }
 					}
+
+					// Compute the average magnitude for the band, convert to dB, and normalize to [0, 1] based on a floor value. 
+					// If no bins were averaged, use the single closest bin's magnitude as a fallback.
 					float avg = 0.0f;
 					if (cnt > 0) avg = static_cast<float>(bsum / static_cast<double>(cnt));
 					else {
@@ -627,6 +676,8 @@ void MusicSystem::AnalysisThreadFunc() {
 						if (k < 0) k = 0; if (k > half) k = half;
 						avg = magsBins[k];
 					}
+
+					// Convert to dB and normalize
 					float db = 20.0f * log10f(std::max(avg, 1e-20f));
 					float v  = (db - dbFloor) / (-dbFloor);
 					if (!std::isfinite(v)) v = 0.0f;
@@ -637,6 +688,8 @@ void MusicSystem::AnalysisThreadFunc() {
 				if (eqCenterFreqs.empty()) {
 					eqCenterFreqs = {31.0f, 62.0f, 125.0f, 250.0f, 500.0f, 1000.0f, 2000.0f, 4000.0f, 8000.0f, 16000.0f};
 				}
+
+				// Convert to mono and apply Hanning window
 				const size_t N = windowPerChannel;
 				std::vector<float> windowed(N, 0.0f);
 				for (size_t i = 0; i < N; ++i) {
@@ -648,6 +701,9 @@ void MusicSystem::AnalysisThreadFunc() {
 					float w = 0.5f * (1.0f - cosf(2.0f * 3.14159265358979323846f * static_cast<float>(i) / static_cast<float>(N)));
 					windowed[i] = (acc / static_cast<float>(channels)) * w;
 				}
+
+				// For each band, run a Goertzel analysis to compute the magnitude at the band's center frequency. 
+				// This is less accurate than FFT binning but much cheaper to compute, and allows for arbitrary center frequencies.
 				for (int b = 0; b < eqBandCount; ++b) {
 					float freq = (b < (int)eqCenterFreqs.size()) ? eqCenterFreqs[b] : (1000.0f * (b + 1));
 					if (freq <= 0.0f || freq >= static_cast<float>(sampleRate) * 0.5f) continue;
@@ -677,7 +733,8 @@ void MusicSystem::AnalysisThreadFunc() {
 
 
 /////////////////////////////////
-// GetOrCreateMusic - This method retrieves the sf::Music instance associated with a given entity. If an instance already exists in the m_activeMusic mapping, it returns it. If not, it attempts to create a new sf::Music instance based on the file path 
+// GetOrCreateMusic - This method retrieves the sf::Music instance associated with a given entity. If an instance already exists in 
+// the m_activeMusic mapping, it returns it. If not, it attempts to create a new sf::Music instance based on the file path 
 // specified in the CMusic component of the entity.
 sf::Music* MusicSystem::GetOrCreateMusic(Entity& entity) {
 	CMusic* musicComp = entity.GetComponent<CMusic>();

@@ -14,6 +14,7 @@
 #include "InputController.h"
 #include "FontManager.h"
 #include "TextureManager.h"
+#include "FileManager.h"
 #include "Utils/FPSCounter.h"
 #include "CursorSystem.h"
 #include "RenderQueue.h"
@@ -183,8 +184,22 @@ public:
 
 
 	/////////////////////////////////
+	// Centralized file manager for loading all types of engine assets (tilemaps, configs, etc.)
+	FileManager m_fileManager;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Accessor for engine-wide render queue
 	RenderQueue& GetRenderQueue() { return m_renderQueue; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Accessor for centralized file manager, allowing scenes and systems to load assets
+	FileManager& GetFileManager() { return m_fileManager; }
 	/////////////////////////////////
 
 };

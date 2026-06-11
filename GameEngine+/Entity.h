@@ -16,6 +16,10 @@
 #include "CShape.h"
 #include "CTransform.h"
 #include "CLayer.h"
+#include "CCamera.h"
+#include "CTileMap.h"
+#include "CSoundEffect.h"
+#include "CText.h"
 #include "Vec2.h"
 #include "EntityType.h"
 /////////////////////////////////
@@ -23,20 +27,30 @@
 
 
 /////////////////////////////////
-// Entity class - represents a game object with a unique ID, type, and a collection of components.
+// Entity class -	|	Main game object that will represent every game object in the world. Entities require components to be attached to it in order to define its behavior and appearance. 
+//					|	Entities should be created and managed by the EntityManager. The Entity class provides methods for adding, retrieving, and removing components, as well as helper methods for 
+//					|	accessing common components and properties.
+//					|
+//					|___________________________________________________________________________________
 class Entity {
 	/////////////////////////////////
-	// Private members and friend declaration. Only the EntityManager can create and manage entities, so the constructor is private and EntityManager is declared as a friend class.
+	// Private members and friend declaration.
 private:
-	friend class EntityManager; // Only EntityManager can create and manage entities, so constructor is private.
-
+	/////////////////////////////////
+	// Only EntityManager can create and manage entities so we will make the constructor private 
+	friend class EntityManager; 
+	/////////////////////////////////
 	// Private member variables for entity state management, tagged with m_ prefix to indicate member variables
 	const size_t m_id = 0;
 	EntityType m_type = EntityType::Default;
 	bool m_alive = true;
 	std::map<std::type_index, std::unique_ptr<Component>> m_components;
 	Vec2 m_previousPosition = Vec2::Zero;
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
     // Private constructor, only callable by EntityManager
 	Entity(EntityType type, size_t id);
 	/////////////////////////////////
@@ -46,7 +60,6 @@ private:
 	/////////////////////////////////
 	// Public interface for entity manipulation and component management.
 public:
-
 	/////////////////////////////////
     // Rendering layer for the entity. Default to Mid so most entities draw in the main layer. Backward-compatible with new CLayer component: 
 	// if CLayer exists, renderer will prefer it; otherwise these accessors provide a fallback stored on the entity.
@@ -56,7 +69,8 @@ public:
 
 
 	/////////////////////////////////
-	// Get the rendering layer for the entity. If a CLayer component exists, its layer will be returned; otherwise, the layer stored at the entity level will be returned for backward compatibility.
+	// Get the rendering layer for the entity. If a CLayer component exists, its layer will be returned; otherwise, the layer stored at the 
+	// entity level will be returned for backward compatibility.
 	Layer GetLayer() const {
 		if (auto cl = GetComponent<CLayer>()) {
 			return static_cast<Layer>(cl->m_layer);
@@ -68,7 +82,8 @@ public:
 
 
 	/////////////////////////////////
-	// Set the rendering layer for the entity. If a CLayer component exists, it will be updated; otherwise, the layer will be stored at the entity level for backward compatibility.
+	// Set the rendering layer for the entity. If a CLayer component exists, it will be updated; otherwise, the layer will be stored at the 
+	// entity level for backward compatibility.
 	void SetLayer(Layer layer) {
 		if (auto cl = GetComponent<CLayer>()) {
 			cl->m_layer = static_cast<CLayer::Layer>(layer);
@@ -88,7 +103,8 @@ public:
 
 
 	/////////////////////////////////
-	// Template method to add a component of type T to the entity, forwarding any constructor arguments. Returns a pointer to the added component for convenience.
+	// Template method to add a component of type T to the entity, forwarding any constructor arguments. Returns a pointer to the added 
+	// component for convenience.
 	template <typename T, typename... Args>
 	T* AddComponent(Args&&... args) {
 		static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
@@ -102,7 +118,8 @@ public:
 
 
 	/////////////////////////////////
-	// Template method to add a component of type T to the entity using a unique_ptr. This allows for more complex component construction outside of the entity. Returns a pointer to the added component for convenience.
+	// Template method to add a component of type T to the entity using a unique_ptr. This allows for more complex component construction
+	// outside of the entity. Returns a pointer to the added component for convenience.
 	template <typename T>
 	T* AddComponentPtr(std::unique_ptr<T> comp) {
 		static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
@@ -167,15 +184,15 @@ public:
 
 
 	/////////////////////////////////
-	// Convenience methods to get specific components commonly used in the game. These methods return nullptr if the component does not exist on the entity.
-	CShape* GetShape() { return GetComponent<CShape>(); }			  // Get the CShape component of the entity
-	CTransform* GetTransform() { return GetComponent<CTransform>(); } // Get the CTransform component of the entity
-	CName* GetName() { return GetComponent<CName>(); }				  // Get the CName component of the entity
+	// Helper methods to get specific components commonly used in the game. These methods return nullptr if the component does not exist on the entity.
+	CShape* GetShape() { return GetComponent<CShape>(); }				// Get the CShape component of the entity
+	CTransform* GetTransform() { return GetComponent<CTransform>(); }	// Get the CTransform component of the entity
+	CName* GetName() { return GetComponent<CName>(); }					// Get the CName component of the entity
 
-	EntityType GetType() const;						 // Get the type of the entity
-	void SetType(EntityType type) { m_type = type; } // Set the type of the entity
-	bool IsAlive() const;							 // Check if the entity is alive (not marked for destruction)
-	void Destroy();									 // Mark the entity for destruction
+	EntityType GetType() const;											// Get the type of the entity
+	void SetType(EntityType type) { m_type = type; }					// Set the type of the entity
+	bool IsAlive() const;												// Check if the entity is alive (not marked for destruction)
+	void Destroy();														// Mark the entity for destruction
 	/////////////////////////////////
 	
 
@@ -260,16 +277,32 @@ public:
 
 
 	/////////////////////////////////
-	// Bucket metadata for incremental per-layer rendering maintenance
-	int GetBucketId() const { return m_bucketId; } // Get the bucket ID for the entity, which indicates which layer bucket it belongs to for rendering optimization. Returns -1 if the entity is not currently in a bucket.
-	int GetBucketPos() const { return m_bucketPos; } // Get the position of the entity within its bucket. Returns -1 if the entity is not currently in a bucket.
-	void SetBucketInfo(int bucketId, int bucketPos) { m_bucketId = bucketId; m_bucketPos = bucketPos; } // Set the bucket information for the entity, indicating which layer bucket it belongs to and its position within that bucket. This is used for incremental rendering maintenance to optimize drawing performance.
+	// GetBucketId - Get the bucket ID for the entity, which indicates which layer bucket it belongs to for rendering optimization. 
+	// Returns -1 if the entity is not currently in a bucket.
+	int GetBucketId() const { return m_bucketId; }
 	/////////////////////////////////
 
 
 
 	/////////////////////////////////
-	// Private member variables and methods for internal state management. These are not accessible outside of the Entity class and are used to manage the entity's rendering layer and bucket metadata for rendering optimization.
+	// GetBucketPos - Get the bucket position for the entity, which indicates its position within its layer bucket for rendering optimization. 
+	// Returns -1 if the entity is not currently in a bucket.
+	int GetBucketPos() const { return m_bucketPos; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// SetBucketInfo - Set the bucket information for the entity, indicating which layer bucket it belongs to and its position within that bucket. 
+	// This is used for incremental rendering maintenance to optimize drawing performance.
+	void SetBucketInfo(int bucketId, int bucketPos) { m_bucketId = bucketId; m_bucketPos = bucketPos; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Private member variables and methods for internal state management. These are not accessible outside of the Entity class and are used to 
+	// manage the entity's rendering layer and bucket metadata for rendering optimization.
 private:
 	// Backing field for render layer (default Mid)
 	Layer m_layer = Layer::Mid;

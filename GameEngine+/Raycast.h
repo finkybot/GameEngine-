@@ -216,9 +216,11 @@ static inline bool IntersectAABB_Ray(const Vec2& origin, double ndx, double ndy,
 
 
 /////////////////////////////////
-// RaycastTilemapDDA - Perform DDA raycasting against a tilemap. This function implements the Digital Differential Analyzer (DDA) algorithm to efficiently traverse the grid of tiles in the tilemap along the path of the ray defined by the origin and direction.
-// The function returns RaycastHit with hit info if we hit a solid tile, or default RaycastHit with hit=false if no hit. The ray is defined by an origin and a direction vector. The direction vector should ideally be normalized for consistent results,
-// but the function can handle non-normalized directions as well.
+// RaycastTilemapDDA - Perform DDA raycasting against a tilemap. This function implements the Digital Differential Analyzer (DDA) algorithm to efficiently 
+// traverse the grid of tiles in the tilemap along the path of the ray defined by the origin and direction. The function returns RaycastHit with hit info 
+// if we hit a solid tile, or default RaycastHit with hit=false if no hit..... If we start in a solid tile and ignoreStartingCell is false, we will report 
+// an immediate hit at the origin. Otherwise, we will step through the grid using DDA and check for hits at each cell boundary crossing.
+// I recommend the direction vector be normalized for consistent results but can handle non-normalized directions as well.
 inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const TileMap& map, float maxDistance,
 									bool ignoreStartingCell = false,
 									std::vector<std::pair<int, int>>* outVisited = nullptr) {

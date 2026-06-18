@@ -20,6 +20,7 @@
 // Forward declarations
 class Entity;
 class EntityManager;
+namespace Spawn { class SpawnSystem; }
 /////////////////////////////////
 
 
@@ -48,6 +49,11 @@ public:
 	~CollisionSystem() = default;
 	/////////////////////////////////
 
+	/////////////////////////////////
+	// SetSpawnSystem - Set the SpawnSystem reference for explosion spawning
+	void SetSpawnSystem(Spawn::SpawnSystem* spawnSystem) { m_spawnSystem = spawnSystem; }
+	/////////////////////////////////
+
 
 
 	/////////////////////////////////
@@ -67,6 +73,11 @@ private:
 	// Pointer to the EntityManager for accessing entities and spawning explosions during collision resolution. This allows the CollisionSystem to interact with the EntityManager to create new entities (e.g., explosions) and update the state of existing entities (e.g., marking them as destroyed) based on collision outcomes.
 	EntityManager*
 		m_entityManager; // Pointer to the EntityManager for accessing entities and spawning explosions during collision resolution
+	/////////////////////////////////
+
+	/////////////////////////////////
+	// Pointer to the SpawnSystem for spawning explosions during collision resolution. Allows CollisionSystem to delegate explosion creation through SpawnSystem instead of directly creating entities.
+	Spawn::SpawnSystem* m_spawnSystem = nullptr;
 	/////////////////////////////////
 
 

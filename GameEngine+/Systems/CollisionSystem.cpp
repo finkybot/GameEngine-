@@ -8,15 +8,18 @@
 /////////////////////////////////
 // Includes
 #include "CollisionSystem.h"
+#include "SpawnSystem.h"
 #include "../Entity.h"
 #include "../CShape.h"
 #include "../CCircle.h"
 #include "../CExplosion.h"
+#include "../CSoundEffect.h"
 #include "../EntityType.h"
 #include "../EntityManager.h"
 #include "../CStatic.h"
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 /////////////////////////////////
 
 
@@ -155,20 +158,38 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 		// The explosion radius is 5.0f, so subtract it to get the correct top-left position
 		const float explosionRadius = 5.0f;
 		Vec2 explosionPosition = collisionPoint - Vec2(explosionRadius, explosionRadius);
-		//m_entityManager->addEntity(EntityType::Explosion, explosionRadius, blendedColor, explosionPosition, explosionVelocity, 200);
 
-		Entity* en = m_entityManager->AddEntity(EntityType::Explosion);
+		// Use SpawnSystem if available, otherwise fall back to direct creation
+		if (m_spawnSystem) {
+			m_spawnSystem->SpawnExplosion(
+				explosionPosition.x, explosionPosition.y,
+				explosionVelocity.x, explosionVelocity.y,
+				static_cast<unsigned char>(blendedColor.x),
+				static_cast<unsigned char>(blendedColor.y),
+				static_cast<unsigned char>(blendedColor.z),
+				200,  // alpha
+				Spawn::ComponentFlags::Default
+			);
+		} else {
+			// Fallback: create explosion directly
+			Entity* en = m_entityManager->AddEntity(EntityType::Explosion);
+			en->AddComponent<CTransform>(explosionPosition, explosionVelocity);
 
-		// Set transform for explosion so UpdateExplosions can use creation time and transform
-		en->AddComponent<CTransform>(explosionPosition, explosionVelocity);
+			auto explosion = std::make_unique<CExplosion>();
+			explosion->SetRadius(explosionRadius);
+			explosion->SetColor(blendedColor.x, blendedColor.y, blendedColor.z, 200);
+			en->AddComponentPtr<CShape>(std::move(explosion));
 
-		auto explosion = std::make_unique<CExplosion>();
-		explosion->SetRadius(explosionRadius);
-		explosion->SetColor(blendedColor.x, blendedColor.y, blendedColor.z, 200);
-		//explosion->SetPosition(explosionPosition.x, explosionPosition.y);
-		//explosion->SetVelocity(explosionVelocity.x, explosionVelocity.y);
-
-		en->AddComponentPtr<CShape>(std::move(explosion));
+			auto soundEffect = en->AddComponent<CSoundEffect>();
+			soundEffect->m_Path = "assets/sounds/medium-explosion.ogg";
+			soundEffect->m_volume = 75.0f;
+			soundEffect->m_loop = false;
+			soundEffect->m_priority = SoundPriority::SFX;
+			soundEffect->m_is3D = true;
+			soundEffect->m_3DMinDistance = 200.0f;
+			soundEffect->m_3DMaxDistance = 2000.0f;
+			soundEffect->m_shouldPlay = true;
+		}
 
 		m_entityManager->KillEntity(entity1);
 		m_entityManager->KillEntity(entity2);

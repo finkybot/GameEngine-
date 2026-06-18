@@ -175,6 +175,15 @@
       <Filter>Source Files\Systems</Filter>
     </ClCompile>
     <ClCompile Include="FileManager.cpp">
+      <Filter>Source Files\Managers</Filter>
+    </ClCompile>
+    <ClCompile Include="SoundSystem.cpp">
+      <Filter>Source Files\Systems</Filter>
+    </ClCompile>
+    <ClCompile Include="SoundSystem_impl.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="SoundSystem_fixed.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -368,14 +377,17 @@
     <ClInclude Include="CRectangle.h">
       <Filter>Header Files\Components</Filter>
     </ClInclude>
-    <ClInclude Include="CSoundEffect.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="RenderQueue.h">
       <Filter>Header Files\Managers</Filter>
     </ClInclude>
     <ClInclude Include="FileManager.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Managers</Filter>
+    </ClInclude>
+    <ClInclude Include="CSoundEffect.h">
+      <Filter>Header Files\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="SoundSystem.h">
+      <Filter>Header Files\Systems</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

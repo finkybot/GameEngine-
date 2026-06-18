@@ -411,7 +411,16 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 		const char* typeItems[] = {"Burst", "Continuous", "Periodic"};
 		int typeIdx = static_cast<int>(spawnConfigs[0].type);
 		if (ImGui::Combo("Spawn Type", &typeIdx, typeItems, IM_ARRAYSIZE(typeItems))) {
-			spawnConfigs[0].type = static_cast<Spawn::Type>(typeIdx);
+			Spawn::Type newType = static_cast<Spawn::Type>(typeIdx);
+			// Reset rate to appropriate defaults when switching types
+			if (newType == Spawn::Type::Burst) {
+				// Burst uses cooldown (0.05-2.0s range), set to minimum
+				spawnConfigs[0].rate = 0.05f;
+			} else {
+				// Continuous/Periodic use rate (0.5-30 spawns/s), set to maximum for more visible effect
+				spawnConfigs[0].rate = 30.0f;
+			}
+			spawnConfigs[0].type = newType;
 		}
 
 		// Pattern selector (all new patterns)
@@ -1500,9 +1509,9 @@ void MusicVisualizerScene::LoadMusicFromPath(const std::string& path) {
 	if (!musicEntity)
 		return;
 
-	// Get here? then we have an entity to work with, so add a CMusic component with the given path and default settings (volume 80, start playing immediately).
+	// Get here? then we have an entity to work with, so add a CMusic component with the given path and default settings (volume 100, start playing immediately).
 	// Use the current m_loopEnabled setting from the UI for the loop state.
-	auto* musicComponent = musicEntity->AddComponent<CMusic>(path, 80.f, m_loopEnabled, true);
+	auto* musicComponent = musicEntity->AddComponent<CMusic>(path, 100.f, m_loopEnabled, true);
 	musicComponent->state = CMusic::State::Playing;
 	musicComponent->loop = m_loopEnabled; // Respect current UI loop setting
 	m_musicEntity = musicEntity;

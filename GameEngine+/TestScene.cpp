@@ -15,6 +15,7 @@
 #include "CCircle.h"
 #include "CShape.h"
 #include "CExplosion.h"
+#include "CSoundEffect.h"
 
 #include "Entity.h"
 #include "EntityType.h"
@@ -203,35 +204,34 @@ void TestScene::UnloadResources() { /* unload resources */ }
 /////////////////////////////////
 // InitializeGame - responsible for initializing the game state for the scene, including spawning entities with random properties and setting up any necessary game logic or mechanics.
 void TestScene::InitializeGame(sf::Vector2u windowSize) {
-	int maxEntities = 5000; // Target entity population to maintain in the scene (it won't reach this number as to many will be murdered in collisions, but still should be a lively scene)
-
 	// Initialize random number generator ONCE (not per entity)
 	std::random_device randDevice;
 	std::default_random_engine generator(randDevice());
 
 	// Initialize random number generator once (not every frame)
 	m_generator = std::default_random_engine(randDevice());		 // Random entity colours, in the brighter colour range
-	
+
 	m_xVelocity = std::uniform_int_distribution<int>(-420, -60); // Faster movement speed
 	m_yVelocity = std::uniform_int_distribution<int>(-150, 150); // Faster movement speed
 
 	m_xDistro = std::uniform_int_distribution<int>(	20,	m_gameEngine.m_windowSize.x - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the left and a 5-pixel margin on the right to prevent immediate off-screen spawning
 	m_yDistro = std::uniform_int_distribution<int>(	20,	m_gameEngine.m_windowSize.y - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the top and a 5-pixel margin on the bottom to prevent immediate off-screen spawning
-	
+
 	m_redVal = std::uniform_int_distribution<int>(100, 255);			// Brighter reds
 	m_greenVal = std::uniform_int_distribution<int>(100, 255);			// Brighter greens
 	m_blueVal = std::uniform_int_distribution<int>(100, 255);			// Brighter blues
 	m_alphaVal = std::uniform_int_distribution<int>(150, 255);			// More opaque
-	
+
 	m_radiusDistro = std::uniform_real_distribution<float>(1.5f, 2.0f); // Slightly larger radius for better visibility
-	
+
 	m_entityType = std::uniform_int_distribution<int>(0, 4);			// 5 team types
-	
+
 	m_spawnZone = std::uniform_int_distribution<int>(0, 3);				// 4 quadrants
-	
+
 	m_direction = std::uniform_int_distribution<int>(0, 1);				// 2 movement directions: leftward or rightward
 
-	for (int i = 0; i < maxEntities; ++i) {
+	// Spawn initial entities using targetEntityCount
+	for (int i = 0; i < targetEntityCount; ++i) {
 		// For bulk initialization, sample direction first then make left/right spawns use consistent teams
 		int direction = m_direction(generator);
 		unsigned int type = (direction == 1) ? 0u : 1u;
@@ -370,11 +370,17 @@ void TestScene::UpdateExplosions() {
 	for (auto& entity :	m_entityManager.GetEntities()) { // Iterate over all entities to find explosions and update their state based on elapsed time since creation
 		if (entity->GetType() == EntityType::Explosion) {
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->m_creationTime);
-			if (elapsed.count() > 2900) {
+
+			// Check if the sound effect is still playing
+			CSoundEffect* soundEffect = entity->GetComponent<CSoundEffect>();
+			bool soundStillPlaying = soundEffect && soundEffect->m_sound && soundEffect->m_state == CSoundEffect::State::Playing;
+
+			// Only destroy the entity if both the visual lifespan is over AND the sound has finished
+			if (elapsed.count() > 2900 && !soundStillPlaying) {
 				entity->Destroy();
 			} else {
 				m_explosionCount++; // Increment explosion count for active explosions that have not yet expired
-                float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
+				float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
 				// Use a higher base alpha so explosions remain more visible as they expand.
 				const int maxAlpha = 220; // match CExplosion default alpha
 				int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));

@@ -105,7 +105,7 @@ private:
 
 	/////////////////////////////////
 	// Private member variables for the TestScene class. These include references to the GameEngine, EntityManager, and SFML window, as well as random distributions for entity properties and tracking variables for explosions and FPS.
-	const int targetEntityCount = 5000;
+	const int targetEntityCount = 1000;
 	sf::Window& m_window; // Reference to the SFML window for rendering and event handling
 	int m_explosionCount = 0; // Number of active explosions currently playing, used for tracking and displaying explosion count in the game info window.
 	float m_fps = 0.0f; // Current frames per second (FPS).

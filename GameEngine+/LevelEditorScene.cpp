@@ -1157,13 +1157,16 @@ void LevelEditorScene::EnqueueMapBounds() {
 	float width = m_mapMax.x - m_mapMin.x;
 	float height = m_mapMax.y - m_mapMin.y;
 
-	std::cout << "DEBUG: EnqueueMapBounds: min=(" << m_mapMin.x << "," << m_mapMin.y 
-			  << ") max=(" << m_mapMax.x << "," << m_mapMax.y 
-			  << ") width=" << width << " height=" << height << std::endl;
+	//std::cout << "DEBUG: EnqueueMapBounds: min=(" << m_mapMin.x << "," << m_mapMin.y 
+	//		  << ") max=(" << m_mapMax.x << "," << m_mapMax.y 
+	//		  << ") width=" << width << " height=" << height << std::endl;
 
 	// Get outline thickness based on zoom
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	float outlineThickness = 2.0f;
+	
+	// If we have a main camera, adjust the outline thickness based on the zoom level to keep it 
+	// visually consistent regardless of zoom.
 	if (camOpt) {
 		float zoom = (*camOpt)->m_zoom;
 		outlineThickness = 2.0f / zoom;

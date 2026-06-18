@@ -20,6 +20,7 @@
 // Forward declarations to avoid header cycles. We forward declare the EntityManager and MusicSystem classes, as well as the SFML RenderWindow class, which are used in the SpawnSystem but we don't need their full definitions in this header.
 struct EntityManager;
 struct MusicSystem;
+class Entity;
 namespace sf { 
 	class RenderWindow; 
 }
@@ -49,6 +50,34 @@ enum class Pattern {
 };
 /////////////////////////////////
 
+/////////////////////////////////
+// Component flags - bitwise flags to control which components are added to spawned entities
+enum class ComponentFlags {
+	None = 0,
+	HasVisual = 1 << 0,      // Add CExplosion or visual component
+	HasSound = 1 << 1,       // Add CSoundEffect component
+	HasPhysics = 1 << 2,     // Add physics/velocity
+	HasTransform = 1 << 3,   // Add CTransform component
+	HasCollision = 1 << 4,   // Entity participates in collisions
+	Default = HasVisual | HasSound | HasPhysics | HasTransform | HasCollision
+};
+
+// Bitwise OR operator for ComponentFlags
+inline ComponentFlags operator|(ComponentFlags a, ComponentFlags b) {
+	return static_cast<ComponentFlags>(static_cast<int>(a) | static_cast<int>(b));
+}
+
+// Bitwise AND operator for ComponentFlags
+inline ComponentFlags operator&(ComponentFlags a, ComponentFlags b) {
+	return static_cast<ComponentFlags>(static_cast<int>(a) & static_cast<int>(b));
+}
+
+// Check if flag is set
+inline bool HasFlag(ComponentFlags flags, ComponentFlags flag) {
+	return (flags & flag) == flag;
+}
+/////////////////////////////////
+
 
 
 /////////////////////////////////
@@ -72,6 +101,7 @@ struct SpawnerConfig {
 	float circularSpeed = 0.06f;  // radians per spawn
 	float spiralExpansion = 2.0f; // how fast spiral expands
 	int ringCount = 3;			  // for MultiRing pattern
+	bool hasSound = true;         // Whether to add CSoundEffect component to spawned entities
 };
 /////////////////////////////////
 
@@ -167,6 +197,12 @@ public:
 		m_spiralRadius.clear();
 		m_spawnCounter.clear();
 	}
+	/////////////////////////////////
+
+	/////////////////////////////////
+	// SpawnExplosion - Spawn an explosion at the given position with optional sound
+	// flags controls which components are added (HasVisual, HasSound, etc.)
+	Entity* SpawnExplosion(float x, float y, float vx, float vy, unsigned char r, unsigned char g, unsigned char b, unsigned char a, ComponentFlags flags = ComponentFlags::Default);
 	/////////////////////////////////
 
 

@@ -34,7 +34,7 @@ void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities,
 
 					  SlowEntity(
 						  entity.get(),
-						  0.9992f); // Apply a global slow factor to simulate friction (can be adjusted or made dynamic)
+						  0.9999f); // Apply a global slow factor to simulate friction (can be adjusted or made dynamic)
 					  MoveEntity(entity.get(), deltaTime, windowWidth, windowHeight);
 				  });
 }

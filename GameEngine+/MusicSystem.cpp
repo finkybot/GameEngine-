@@ -394,7 +394,9 @@ MusicSystem::~MusicSystem() {
 
 
 /////////////////////////////////
-// GetLevel - This method retrieves the latest measured RMS level for a given entity ID. It locks the levels mutex to ensure thread safety while accessing the m_levels mapping, then checks if there is an entry for the specified entity ID. If an entry exists, it returns the RMS level;
+// GetLevel - This method retrieves the latest measured RMS level for a given entity ID. It locks the levels mutex to ensure 
+// thread safety while accessing the m_levels mapping, then checks if there is an entry for the specified entity ID. If an 
+// entry exists, it returns the RMS level;
 float MusicSystem::GetLevel(size_t entityId) const {
         std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	auto it = m_levels.find(entityId);
@@ -407,8 +409,9 @@ float MusicSystem::GetLevel(size_t entityId) const {
 
 
 /////////////////////////////////
-// HasAnalysisBuffer - This method checks if an analysis buffer (sf::SoundBuffer) is available for a given entity ID. It locks the levels mutex to ensure thread safety while accessing the m_buffers mapping, then checks if there is an entry for the specified entity ID. 
-// If an entry exists, it returns true; otherwise, it returns false.
+// HasAnalysisBuffer - This method checks if an analysis buffer (sf::SoundBuffer) is available for a given entity ID. It 
+// locks the levels mutex to ensure thread safety while accessing the m_buffers mapping, then checks if there is an entry 
+// or the specified entity ID. If an entry exists, it returns true; otherwise, it returns false.
 bool MusicSystem::HasAnalysisBuffer(size_t entityId) const {
         std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 	return m_buffers.find(entityId) != m_buffers.end();
@@ -418,19 +421,23 @@ bool MusicSystem::HasAnalysisBuffer(size_t entityId) const {
 
 
 /////////////////////////////////
-// GetOrCreateMusic - This method retrieves the sf::Music instance associated with a given entity. If an instance already exists in the m_activeMusic mapping, it returns it. If not, it attempts to create a new sf::Music instance based on the file path 
-// specified in the CMusic component of the entity.
+// Update - This method is called every frame to update the music playback state and manage the analysis thread. It currently 
+// does sweet FA, as the main processing is handled in the Process() method. However, it can be used in 
+// the future to implement additional per-frame logic related to music playback or analysis.
 void MusicSystem::Update(float deltaSeconds) {}
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// Process - This method is called every frame to update the music playback state and manage the analysis thread. It starts the analysis thread if it hasn't been started yet, cleans up active music instances for entities that no longer have a CMusic component, 
-// and processes all entities with a CMusic component to control playback and update playhead snapshots for analysis. Audio analysis runs on a background thread (AnalysisThreadFunc) at ~30 Hz.
+// Process - This method is called every frame to update the music playback state and manage the analysis thread. It starts 
+// the analysis thread if it hasn't been started yet, cleans up active music instances for entities that no longer have a 
+// CMusic component, and processes all entities with a CMusic component to control playback and update playhead snapshots 
+// for analysis. Audio analysis runs on a background thread (AnalysisThreadFunc) at ~30 Hz.
 void MusicSystem::Process() {
-	// Start the analysis thread the first time Process() is called
-	if (!m_analysisThread.joinable()) {
+	// Start the analysis thread the first time Process()e.g. run the thread if it hasn't been started yet.
+	// The analysis thread will run in the background at ~30 Hz, reading playhead snapshots written by Process(),
+	if (!m_analysisThread.joinable()) { 
 		m_analysisStop.store(false);
 		m_analysisThread = std::thread(&MusicSystem::AnalysisThreadFunc, this);
 	}
@@ -754,7 +761,10 @@ sf::Music* MusicSystem::GetOrCreateMusic(Entity& entity) {
 		if (!musicPtr->openFromFile(Utf8ToPath(musicComp->path))) {
 			std::cerr << "MusicSystem: Failed to open audio file: " << musicComp->path << std::endl;
 		} else {
-			std::cout << "MusicSystem: Opened audio file: " << musicComp->path << " for entity " << id << std::endl;
+			std::cout << "MusicSystem: Opened audio file: " << musicComp->path << " for entity " << id 
+				<< " | Sample Rate: " << musicPtr->getSampleRate() 
+				<< " | Channels: " << musicPtr->getChannelCount()
+				<< " | Duration: " << musicPtr->getDuration().asSeconds() << "s" << std::endl;
 		}
 	}
 

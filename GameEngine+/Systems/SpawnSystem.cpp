@@ -13,6 +13,7 @@
 #include "CExplosion.h"
 #include "CRectangle.h"
 #include "MusicSystem.h"
+#include "CSoundEffect.h"
 #include "DebugStack.h"
 #include <SFML/System/Clock.hpp>
 #include <cmath>
@@ -98,6 +99,7 @@ void SpawnSystem::LoadDefault() {
 	spawnerConfig.circularSpeed = 0.15f;
 	spawnerConfig.spiralExpansion = 3.0f;
 	spawnerConfig.ringCount = 3;
+	spawnerConfig.hasSound = false;  // Disable sound for default music visualizer spawner
 	m_configs.push_back(spawnerConfig);
 }
 /////////////////////////////////
@@ -487,8 +489,10 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 
 	// Create a new explosion entity. In a full implementation, this could be extended to spawn different types of entities based on the config.
 	Entity* entity = m_entityManager->AddEntity(EntityType::Explosion);
-	if (!entity)
+	if (!entity) {
+		std::cerr << "[SpawnSystem ERROR] Failed to create entity" << std::endl;
 		return; // Failed to create entity, exit early
+	}
 
 	// Base spawn position is the center of the window. This will be modified based on the pattern.
 	float centerX = (float)m_window->getSize().x * 0.5f;
@@ -700,11 +704,71 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 	circle->SetColor((float)r, (float)g, (float)b, 220);
 	entity->AddComponentPtr<CShape>(std::move(circle));
 	entity->AddComponent<CTransform>(Vec2(x, y), Vec2(xVelocity, yVelocity));
-    // Place the initial explosion behind subsequent after-effects
+
+	// Add sound effect component for explosion sound (if enabled in config)
+	if (cfg.hasSound) {
+		auto soundEffect = entity->AddComponent<CSoundEffect>();
+		soundEffect->m_Path = "assets/sounds/medium-explosion.ogg";
+		soundEffect->m_volume = 75.0f;
+		soundEffect->m_loop = false;
+		soundEffect->m_priority = SoundPriority::SFX;
+		soundEffect->m_is3D = true;  // Enable 3D spatialization
+		soundEffect->m_3DMinDistance = 200.0f;   // Full volume closer to listener
+		soundEffect->m_3DMaxDistance = 2000.0f;  // Extend max range so more explosions are audible
+		soundEffect->m_shouldPlay = true;
+	}
+
+	// Place the initial explosion behind subsequent after-effects
 	if (m_entityManager) {
 		m_entityManager->SetEntityLayer(entity, Entity::Layer::Background);
 	}
-    // Defer processing of pending entities to the main EntityManager update to
+	// Defer processing of pending entities to the main EntityManager update to
 	// avoid possible re-entrancy and ensure all systems run in the expected order.
 }
+/////////////////////////////////
+
+/////////////////////////////////
+// SpawnExplosion - Spawn an explosion at the given position with component flags
+Entity* SpawnSystem::SpawnExplosion(float x, float y, float vx, float vy, unsigned char r, unsigned char g, unsigned char b, unsigned char a, ComponentFlags flags) {
+	if (!m_entityManager) {
+		return nullptr;
+	}
+
+	// Create explosion entity
+	Entity* entity = m_entityManager->AddEntity(EntityType::Explosion);
+	if (!entity) {
+		return nullptr;
+	}
+
+	// Always add transform
+	if (HasFlag(flags, ComponentFlags::HasTransform)) {
+		entity->AddComponent<CTransform>(Vec2(x, y), Vec2(vx, vy));
+	}
+
+	// Add visual component if requested
+	if (HasFlag(flags, ComponentFlags::HasVisual)) {
+		auto explosion = std::make_unique<CExplosion>(5.0f);  // Default radius
+		explosion->SetColor(static_cast<float>(r), static_cast<float>(g), static_cast<float>(b), a);
+		entity->AddComponentPtr<CShape>(std::move(explosion));
+	}
+
+	// Add sound component if requested
+	if (HasFlag(flags, ComponentFlags::HasSound)) {
+		auto soundEffect = entity->AddComponent<CSoundEffect>();
+		soundEffect->m_Path = "assets/sounds/medium-explosion.ogg";
+		soundEffect->m_volume = 75.0f;
+		soundEffect->m_loop = false;
+		soundEffect->m_priority = SoundPriority::SFX;
+		soundEffect->m_is3D = true;
+		soundEffect->m_3DMinDistance = 200.0f;
+		soundEffect->m_3DMaxDistance = 2000.0f;
+		soundEffect->m_shouldPlay = true;
+	}
+
+	// Set background layer
+	m_entityManager->SetEntityLayer(entity, Entity::Layer::Background);
+
+	return entity;
+}
+/////////////////////////////////
 /////////////////////////////////

@@ -9,11 +9,16 @@
 #include "CursorSystem.h"
 #include "GameEngine.h"
 #include "FontManager.h"
+#include "SoundSystem.h"
+#include "Vec2.h"
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Window/VideoMode.hpp>
+#include <SFML/Audio/Listener.hpp>
 #include <memory>
 #include <string>
+#include <direct.h>
+#include <iostream>
 #include "Scene.h"
 #include "TestScene.h"
 #include "TileMapScene.h"
@@ -32,9 +37,9 @@
 GameEngine::GameEngine() {
 	// Setup the SFML window as borderless (fullscreen-windowed) to avoid exclusive fullscreen quirks
 	m_windowSize = sf::VideoMode::getDesktopMode().size;
-	//m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::Style::None);
+	m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::Style::None);
 	//m_window.setPosition(sf::Vector2i(0, 0));
-	m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::State::Fullscreen);
+	//m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::State::Fullscreen);
 
 	m_window.setFramerateLimit(1000);
 	//m_window.setVerticalSyncEnabled(true);
@@ -43,6 +48,23 @@ GameEngine::GameEngine() {
 	// Create a single engine-wide EntityManager and bind shared resources
 	m_entityManager = std::make_unique<EntityManager>(m_window);
 	m_entityManager->GetRenderSystem().SetFontManager(&m_fontManager);
+
+	// Debug: Print current working directory
+	char cwd[260];
+	if (_getcwd(cwd, sizeof(cwd)) != nullptr) {
+		std::cout << "[GameEngine] Current working directory: " << cwd << std::endl;
+	}
+
+	// Create and initialize the SoundSystem
+	m_soundSystem = std::make_unique<SoundSystem>();
+	m_soundSystem->Initialize();  // Check audio device and log diagnostics
+	m_soundSystem->InitializePool(*m_entityManager, 64);  // Initialize sound pool with 64 entities
+	m_soundSystem->SetMasterVolume(100.0f);  // Set master volume to 100% (0-100 scale)
+
+	// Audio listener setup completely disabled - causes music volume issues in SFML 3.x
+	// Spatial audio will use SFML defaults without explicit configuration
+
+	std::cout << "[GameEngine] Audio system initialized (using SFML defaults)" << std::endl;
 
 	// Try to load a default font for in-engine text (used by MainMenu and CText). Expect file at assets/fonts/tech.ttf
 	if (!m_fontManager.LoadFont("default", "assets/fonts/tech.ttf")) {
@@ -263,6 +285,11 @@ void GameEngine::Update(float deltaTime) {
 
 			// Ensure the scene's EntityManager processes game logic (tile system, pending entities)
 			m_currentScene->GetEntityManager().Update(deltaTime);
+
+			// Process sound effects using the SCENE's EntityManager (not global)
+			// This ensures we process sounds for entities in the current active scene
+			m_soundSystem->Process(m_currentScene->GetEntityManager(), deltaTime);
+			m_soundSystem->Update(deltaTime);
 
 			// Update the global cursor system
 			m_cursorSystem->Update(deltaTime);

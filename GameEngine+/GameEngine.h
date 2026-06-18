@@ -18,6 +18,7 @@
 #include "Utils/FPSCounter.h"
 #include "CursorSystem.h"
 #include "RenderQueue.h"
+#include "SoundSystem.h"
 
 #include <map>
 #include <string>
@@ -142,6 +143,7 @@ public:
 
 	FontManager	m_fontManager; // Font manager instance for managing fonts across the game, allowing for loading, retrieving, and unloading fonts in a centralized manner
 	std::unique_ptr<EntityManager>	m_entityManager; // Unique pointer to the central EntityManager owned by the engine, responsible for managing game entities and providing access to the entity system throughout the game
+	std::unique_ptr<SoundSystem> m_soundSystem; // Unique pointer to the SoundSystem owned by the engine, responsible for managing sound effects and audio playback
 	/////////////////////////////////
 
 
@@ -165,6 +167,13 @@ public:
 	
 	/////////////////////////////////
 	EntityManager& GetEntityManager() const { return *m_entityManager; } // Accessor for central entity manager, returns a reference to the EntityManager instance owned by the engine, allowing scenes and other game components to access and manage entities through the engine's central entity management system
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Accessor for the SoundSystem, allowing scenes to control audio playback
+	SoundSystem& GetSoundSystem() const { return *m_soundSystem; }
 	/////////////////////////////////
 
 

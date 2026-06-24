@@ -39,7 +39,8 @@ void SoundSystem::Initialize() {
 	// SFML 3.1 requires explicit device selection via sf::PlaybackDevice
 	auto devices = sf::PlaybackDevice::getAvailableDevices();
 	std::cout << "[SoundSystem] Available playback devices (" << devices.size() << "):" << std::endl;
-	for (const auto& d : devices)
+	
+	for (const auto& d : devices) 
 		std::cout << "  - " << d << std::endl;
 
 	auto defaultDevice = sf::PlaybackDevice::getDefaultDevice();
@@ -165,10 +166,9 @@ void SoundSystem::Process(EntityManager& em, float deltaTime) {
 			}
 
 			sound->m_sound = std::make_unique<sf::Sound>(*buffer);
-			// SFML volume is 0-100
-			// Internal m_volume is 0-100 (matches SFML scale)
-			// Master volume is 0-100, clamp final result to [0, 100]
-			float finalVolume = std::min(sound->m_volume * m_masterVolume / 100.f, 100.f);
+			// SFML 3 volume range is 1-100 (not 0-100)
+			// Internal m_volume should be in range 1-100 for proper SFML playback
+			float finalVolume = std::clamp(sound->m_volume, 1.0f, 100.0f);
 			sound->m_sound->setVolume(finalVolume);
 			// Enable/disable 3D spatialization based on component flag
 			sound->m_sound->setSpatializationEnabled(sound->m_is3D);
@@ -232,11 +232,15 @@ void SoundSystem::Process(EntityManager& em, float deltaTime) {
 		// std::cout << "[SoundSystem] WARNING: Found " << entities.size() << " entities but 0 CSoundEffect components" << std::endl;
 	}
 
+	// Culling is now handled at creation time via CanPlayNewSound check in CollisionSystem
+	// So we don't need to cull here anymore - this prevents cutting off sounds that were created
+	/*
 	// Check if we've exceeded max concurrent sounds and cull by priority
 	size_t activeSounds = CountActiveSounds(em);
 	if (activeSounds > m_maxConcurrentSounds) {
 		CullByPriority(em);
 	}
+	*/
 }
 /////////////////////////////////
 
@@ -265,8 +269,8 @@ void SoundSystem::Update(float deltaTime) {
 				sound->m_shouldPlay = false;
 				sound->m_fadeOutDuration = 0.0f;
 			} else {
-				// Linearly interpolate volume during fade-out
-				float fadedVolume = sound->m_volume * (1.0f - progress) * m_masterVolume;
+				// Linearly interpolate volume during fade-out (clamp to 1-100 for SFML 3)
+				float fadedVolume = std::max(1.0f, sound->m_volume * (1.0f - progress));
 				sound->m_sound->setVolume(fadedVolume);
 			}
 		}
@@ -297,7 +301,7 @@ void SoundSystem::SetMasterVolume(float volume) {
 			Entity* entity = entityPtr.get();
 			CSoundEffect* sound = entity->GetComponent<CSoundEffect>();
 			if (sound && sound->m_sound) {
-				float finalVolume = std::min(sound->m_volume * m_masterVolume * 100.f, 100.f);
+				float finalVolume = std::clamp(sound->m_volume, 1.0f, 100.0f);
 				sound->m_sound->setVolume(finalVolume);
 			}
 		}
@@ -320,6 +324,10 @@ void SoundSystem::SetMaxConcurrentSounds(size_t count) {
 // SetListenerPosition - Set the listener position for 3D audio
 void SoundSystem::SetListenerPosition(const Vec2& pos) {
 	m_listenerPosition = pos;
+	// Only update SFML listener if spatial audio is enabled
+	if (m_spatialAudioEnabled) {
+		sf::Listener::setPosition(sf::Vector3f(pos.x, pos.y, 0.0f));
+	}
 }
 /////////////////////////////////
 
@@ -447,44 +455,36 @@ sf::SoundBuffer* SoundSystem::GetOrLoadBuffer(const std::string& path) {
 /////////////////////////////////
 // ApplySpatialAudio - Apply spatial audio (distance attenuation, panning) to a sound
 void SoundSystem::ApplySpatialAudio(sf::Sound& sound, const CSoundEffect& soundCmp, const Vec2& entityPos) {
+	// Only apply spatial audio if enabled
+	if (!m_spatialAudioEnabled) {
+		// If spatial audio is disabled, just set full volume and no panning
+		float volume = soundCmp.m_volume;
+		volume = std::clamp(volume, 1.0f, 100.0f);
+		sound.setVolume(volume);
+		sound.setPan(0.0f);  // Center pan
+		return;
+	}
+
+	// Let SFML handle 3D audio positioning and spatialization
+	// The sound position is set relative to the listener (which is at 0,0,0 by default)
+	// so we set the sound position and SFML will apply attenuation and panning automatically
+
 	// Convert 2D position to 3D (z=0)
-	sf::Vector3f soundPos(entityPos.x, entityPos.y, 0.0f);
+	// Relative to listener: if listener is at m_listenerPosition, sound should be offset from that
+	sf::Vector3f soundPos(entityPos.x - m_listenerPosition.x, entityPos.y - m_listenerPosition.y, 0.0f);
 	sound.setPosition(soundPos);
 
-	// Calculate distance from listener to entity
-	Vec2 delta = entityPos - m_listenerPosition;
-	float distance = delta.Mag();
-
-	// Distance attenuation
-	float minDist = soundCmp.m_3DMinDistance;
-	float maxDist = soundCmp.m_3DMaxDistance;
-
-	// SFML volume is 0-100; m_volume and m_masterVolume are also 0-100
-	float volume = soundCmp.m_volume * m_masterVolume / 100.f;
-
-	// Apply distance attenuation only if 3D is enabled
-	if (distance > maxDist) {
-		volume = 0.0f; // Out of range, silent
-	} else if (distance > minDist) {
-		// Very gentle falloff - use inverse distance for more controlled attenuation
-		float normalizedDistance = (distance - minDist) / (maxDist - minDist);
-		// Use a very shallow curve: just reduce by normalized distance, not squared or sqrt
-		float falloff = 1.0f - (normalizedDistance * 0.5f);  // Only attenuate by 50% max
-		volume *= falloff;
-	}
-
-	// Clamp to SFML range
-	volume = std::min(volume, 100.f);
+	// Set the volume to the component's base volume
+	// SFML's spatialization will handle attenuation based on distance
+	float volume = soundCmp.m_volume;
+	volume = std::clamp(volume, 1.0f, 100.0f);
 	sound.setVolume(volume);
 
-	// Panning based on horizontal offset
-	if (delta.x != 0.0f) {
-		// -1 = left pan, +1 = right pan
-		float pan = std::clamp(delta.x / maxDist, -1.0f, 1.0f);
-		sound.setPan(pan);  // SFML 3.1 supports panning directly
-		// SFML doesn't have native panning in older versions; could be applied via stereo manipulation
-		// For now, this is calculated and applied
-	}
+	// SFML 3D audio with setSpatializationEnabled(true) will automatically:
+	// - Apply distance attenuation based on the sound position
+	// - Apply panning based on the horizontal offset
+	// - Use the min/max distance settings from the sound buffer if set
+	// We just need to set the position and let SFML handle the rest
 }
 /////////////////////////////////
 
@@ -540,6 +540,16 @@ size_t SoundSystem::CountActiveSounds(EntityManager& em) const {
 	}
 
 	return count;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// CanPlayNewSound - Check if we're below the max concurrent sound limit
+bool SoundSystem::CanPlayNewSound(EntityManager& em) const {
+	size_t activeCount = CountActiveSounds(em);
+	return activeCount < m_maxConcurrentSounds;
 }
 /////////////////////////////////
 

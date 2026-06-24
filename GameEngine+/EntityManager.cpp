@@ -25,6 +25,7 @@
 #include "CStatic.h"
 #include "Systems/TileSystem.h"
 #include "MusicSystem.h"
+#include "SoundSystem.h"
 /////////////////////////////////
 
 
@@ -35,6 +36,9 @@ EntityManager::EntityManager(sf::RenderWindow& window, float cellSize): m_window
 	// Initialize main systems with reference to this EntityManager
 	m_tileSystem = std::make_unique<TileSystem>(this);
 	m_musicSystem = std::make_unique<MusicSystem>(*this);
+	m_soundSystem = std::make_unique<SoundSystem>();
+	m_soundSystem->Initialize();
+	m_soundSystem->InitializePool(*this, 64);  // Initialize sound effect pool with 64 entities
 
 	// Store the ID of the thread that created this EntityManager instance for debugging purposes. This allows us to assert that certain methods are only called from the owning thread, which can help catch threading issues during development.
 	m_ownerThreadId = std::this_thread::get_id();
@@ -44,10 +48,11 @@ EntityManager::EntityManager(sf::RenderWindow& window, float cellSize): m_window
 
 
 /////////////////////////////////
-// Destructor for the EntityManager class. Ensures proper destruction order for forward-declared types by resetting the unique pointers to the main systems (TileSystem and MusicSystem) before the EntityManager itself is destroyed. 
+// Destructor for the EntityManager class. Ensures proper destruction order for forward-declared types by resetting the unique pointers to the main systems (TileSystem, MusicSystem, and SoundSystem) before the EntityManager itself is destroyed. 
 // This prevents potential issues with dangling pointers or incomplete types during destruction.
 EntityManager::~EntityManager() {
 	// ensure proper destruction order for forward-declared types
+	m_soundSystem.reset();
 	m_musicSystem.reset();
 	m_tileSystem.reset();
 }
@@ -372,6 +377,15 @@ void EntityManager::Update(float deltaTime) {
 	// Let MusicSystem reconcile component data with runtime sf::Music instances.
 	if (m_musicSystem)
 		m_musicSystem->Process();
+
+	// Let SoundSystem process sound effect components and apply spatial audio
+	if (m_soundSystem) {
+		m_soundSystem->Process(*this, deltaTime);
+		m_soundSystem->Update(deltaTime);
+	}
+
+	// Wire CollisionSystem to SoundSystem for explosion sound creation
+	m_collisionSystem.SetSoundSystem(m_soundSystem.get());
 
 	// Process tilemaps into tile entities before rebuilding spatial hash
 	if (m_tileSystem && m_hasPendingTileMaps) {

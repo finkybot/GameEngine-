@@ -16,6 +16,7 @@
 #include "../CSoundEffect.h"
 #include "../EntityType.h"
 #include "../EntityManager.h"
+#include "../SoundSystem.h"
 #include "../CStatic.h"
 #include <algorithm>
 #include <cmath>
@@ -159,8 +160,13 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 		const float explosionRadius = 5.0f;
 		Vec2 explosionPosition = collisionPoint - Vec2(explosionRadius, explosionRadius);
 
+		// Check if we can play a new sound before creating explosion with sound
+		bool canPlaySound = m_soundSystem ? m_soundSystem->CanPlayNewSound(*m_entityManager) : true;
+
 		// Use SpawnSystem if available, otherwise fall back to direct creation
 		if (m_spawnSystem) {
+			// Use default flags which include sound, or without sound if limit is reached
+			Spawn::ComponentFlags flags = canPlaySound ? Spawn::ComponentFlags::Default : (Spawn::ComponentFlags::HasVisual | Spawn::ComponentFlags::HasPhysics | Spawn::ComponentFlags::HasTransform | Spawn::ComponentFlags::HasCollision);
 			m_spawnSystem->SpawnExplosion(
 				explosionPosition.x, explosionPosition.y,
 				explosionVelocity.x, explosionVelocity.y,
@@ -168,7 +174,7 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 				static_cast<unsigned char>(blendedColor.y),
 				static_cast<unsigned char>(blendedColor.z),
 				200,  // alpha
-				Spawn::ComponentFlags::Default
+				flags
 			);
 		} else {
 			// Fallback: create explosion directly
@@ -180,15 +186,18 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 			explosion->SetColor(blendedColor.x, blendedColor.y, blendedColor.z, 200);
 			en->AddComponentPtr<CShape>(std::move(explosion));
 
-			auto soundEffect = en->AddComponent<CSoundEffect>();
-			soundEffect->m_Path = "assets/sounds/medium-explosion.ogg";
-			soundEffect->m_volume = 75.0f;
-			soundEffect->m_loop = false;
-			soundEffect->m_priority = SoundPriority::SFX;
-			soundEffect->m_is3D = true;
-			soundEffect->m_3DMinDistance = 200.0f;
-			soundEffect->m_3DMaxDistance = 2000.0f;
-			soundEffect->m_shouldPlay = true;
+			// Only add sound if we're below the limit
+			if (canPlaySound) {
+				auto soundEffect = en->AddComponent<CSoundEffect>();
+				soundEffect->m_Path = "assets/sounds/medium-explosion.ogg";
+				soundEffect->m_volume = 75.0f;
+				soundEffect->m_loop = false;
+				soundEffect->m_priority = SoundPriority::Critical;
+				soundEffect->m_is3D = true;
+				soundEffect->m_3DMinDistance = 200.0f;
+				soundEffect->m_3DMaxDistance = 2000.0f;
+				soundEffect->m_shouldPlay = true;
+			}
 		}
 
 		m_entityManager->KillEntity(entity1);

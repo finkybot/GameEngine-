@@ -85,10 +85,10 @@ void TestScene::Update(float deltaTime) {
 	// scene update logic
 	// Dynamic population control: maintain entities by spawning to replace dead ones
 	size_t currentEntityCount = m_entityManager.GetEntities().size();
-	if (currentEntityCount < targetEntityCount) {
+	if (currentEntityCount < m_targetEntityCount) {
 		// Spawn entities to maintain target population
 		// Spawn up to 4 entities per frame to replace those killed in collisions
-		int entitiesToSpawn = std::min(4, targetEntityCount - static_cast<int>(currentEntityCount));
+		int entitiesToSpawn = std::min(4, m_targetEntityCount - static_cast<int>(currentEntityCount));
 
 		for (int i = 0; i < entitiesToSpawn; ++i) {
 
@@ -108,7 +108,7 @@ void TestScene::Update(float deltaTime) {
 			float radius = m_radiusDistro(m_generator);
 			// direction already sampled above
 
-			if (direction == 1) {			   // Move rightward
+			if (direction == 1) {	// Move rightward
 				velocityX = velocityX * -1.0f; // Reverse velocity for rightward movement
 				spawnX = std::uniform_real_distribution<float>(-100.0f, 0.0f)(m_generator); // Just off left edge
 				spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.m_windowSize.y))(
@@ -135,6 +135,12 @@ void TestScene::Update(float deltaTime) {
 	m_entityManager.GetCollisionSystem().DetectAndResolve(
 		m_entityManager.GetEntities(), m_entityManager.GetSpatialHash(),
 		deltaTime); // Then do collision detection and resolution, which may mark entities as dead and spawn explosions.
+
+	// Set listener position for 3D spatial audio (at center of screen)
+	Vec2 listenerPos(m_window.getSize().x / 2.0f, m_window.getSize().y / 2.0f);
+	if (m_entityManager.GetSoundSystem()) {
+		m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
+	}
 
 	// Render ImGui UI (actual ImGui::Render called by GameEngine)
 	RenderGameInfoWindow(m_entityManager.GetEntities().size(), m_entityManager.GetDeathCountThisFrame(),
@@ -209,29 +215,24 @@ void TestScene::InitializeGame(sf::Vector2u windowSize) {
 	std::default_random_engine generator(randDevice());
 
 	// Initialize random number generator once (not every frame)
-	m_generator = std::default_random_engine(randDevice());		 // Random entity colours, in the brighter colour range
+	m_generator		=		std::default_random_engine(randDevice());		// Random entity colours, in the brighter colour range
+	m_xVelocity		=		std::uniform_int_distribution<int>(-80, -40);	// Slow movement speed
+	m_yVelocity		=		std::uniform_int_distribution<int>(-20, 20);	// Slow vertical speed
 
-	m_xVelocity = std::uniform_int_distribution<int>(-420, -60); // Faster movement speed
-	m_yVelocity = std::uniform_int_distribution<int>(-150, 150); // Faster movement speed
+	m_xDistro		=		std::uniform_int_distribution<int>(	20,	m_gameEngine.m_windowSize.x - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the left and a 5-pixel margin on the right to prevent immediate off-screen spawning
+	m_yDistro		=		std::uniform_int_distribution<int>(	20,	m_gameEngine.m_windowSize.y - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the top and a 5-pixel margin on the bottom to prevent immediate off-screen spawning
 
-	m_xDistro = std::uniform_int_distribution<int>(	20,	m_gameEngine.m_windowSize.x - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the left and a 5-pixel margin on the right to prevent immediate off-screen spawning
-	m_yDistro = std::uniform_int_distribution<int>(	20,	m_gameEngine.m_windowSize.y - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the top and a 5-pixel margin on the bottom to prevent immediate off-screen spawning
-
-	m_redVal = std::uniform_int_distribution<int>(100, 255);			// Brighter reds
-	m_greenVal = std::uniform_int_distribution<int>(100, 255);			// Brighter greens
-	m_blueVal = std::uniform_int_distribution<int>(100, 255);			// Brighter blues
-	m_alphaVal = std::uniform_int_distribution<int>(150, 255);			// More opaque
-
-	m_radiusDistro = std::uniform_real_distribution<float>(1.5f, 2.0f); // Slightly larger radius for better visibility
-
-	m_entityType = std::uniform_int_distribution<int>(0, 4);			// 5 team types
-
-	m_spawnZone = std::uniform_int_distribution<int>(0, 3);				// 4 quadrants
-
-	m_direction = std::uniform_int_distribution<int>(0, 1);				// 2 movement directions: leftward or rightward
+	m_redVal		=		std::uniform_int_distribution<int>(100, 255);			// Brighter reds
+	m_greenVal		=		std::uniform_int_distribution<int>(100, 255);			// Brighter greens
+	m_blueVal		=		std::uniform_int_distribution<int>(100, 255);			// Brighter blues
+	m_alphaVal		=		std::uniform_int_distribution<int>(150, 255);			// More opaque
+	m_radiusDistro	=		std::uniform_real_distribution<float>(3.5f, 6.0f);		// Slightly larger radius for better visibility
+	m_entityType	=		std::uniform_int_distribution<int>(0, 4);				// 5 team types
+	m_spawnZone		=		std::uniform_int_distribution<int>(0, 3);				// 4 quadrants
+	m_direction		=		std::uniform_int_distribution<int>(0, 1);				// 2 movement directions: leftward or rightward
 
 	// Spawn initial entities using targetEntityCount
-	for (int i = 0; i < targetEntityCount; ++i) {
+	for (int i = 0; i < m_targetEntityCount; ++i) {
 		// For bulk initialization, sample direction first then make left/right spawns use consistent teams
 		int direction = m_direction(generator);
 		unsigned int type = (direction == 1) ? 0u : 1u;
@@ -376,11 +377,11 @@ void TestScene::UpdateExplosions() {
 			bool soundStillPlaying = soundEffect && soundEffect->m_sound && soundEffect->m_state == CSoundEffect::State::Playing;
 
 			// Only destroy the entity if both the visual lifespan is over AND the sound has finished
-			if (elapsed.count() > 2900 && !soundStillPlaying) {
+			if (elapsed.count() > 4500 && !soundStillPlaying) {
 				entity->Destroy();
 			} else {
 				m_explosionCount++; // Increment explosion count for active explosions that have not yet expired
-				float fadeProgress = static_cast<float>(elapsed.count()) / 2900.0f;
+				float fadeProgress = static_cast<float>(elapsed.count()) / 4500.0f;
 				// Use a higher base alpha so explosions remain more visible as they expand.
 				const int maxAlpha = 220; // match CExplosion default alpha
 				int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));
@@ -388,17 +389,8 @@ void TestScene::UpdateExplosions() {
 				auto shape = entity->GetComponent<CShape>();
 				if (shape) {
 					if (auto* explosion = dynamic_cast<CExplosion*>(shape)) {
-						float xpos = entity->GetComponent<CTransform>()->m_position.x;
-						float radiusDifference = explosion->GetRadius();
 						explosion->SetRadius(explosion->GetRadius() * 1.004f); // Expand the explosion radius over time
-						radiusDifference =
-							explosion->GetRadius() -
-							radiusDifference; // Calculate the change in radius to adjust position for consistent center
-						Vec2 explosionPosition = entity->GetComponent<CTransform>()->m_position;
-						entity->GetComponent<CTransform>()->m_position = Vec2(
-							explosionPosition.x - radiusDifference,
-							explosionPosition.y -
-								radiusDifference); // Adjust the explosion's position to keep it centered as it expands, since SFML circles expand downwards and to the right from their position
+						// Origin is set in SetRadius to center the circle, so no position adjustment needed
 						sf::Color currentColor = explosion->GetColor();
 						explosion->SetColor(static_cast<float>(currentColor.r), static_cast<float>(currentColor.g),
 											static_cast<float>(currentColor.b), newAlpha);

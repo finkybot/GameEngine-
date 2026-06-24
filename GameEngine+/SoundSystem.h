@@ -54,6 +54,7 @@ private:
 	size_t m_maxConcurrentSounds = 32;
 	Vec2 m_listenerPosition = Vec2::Zero;
 	float m_lastExplosionTime = -10.0f;  // Track when the last explosion sound started playing
+	bool m_spatialAudioEnabled = true;   // Flag to disable spatial audio updates (e.g., in music visualizer)
 	/////////////////////////////////
 
 
@@ -94,6 +95,8 @@ public:
 	void SetMasterVolume(float volume);
 	void SetMaxConcurrentSounds(size_t count);
 	void SetListenerPosition(const Vec2& pos);
+	void SetSpatialAudioEnabled(bool enabled) { m_spatialAudioEnabled = enabled; }
+	bool IsSpatialAudioEnabled() const { return m_spatialAudioEnabled; }
 	/////////////////////////////////
 
 
@@ -111,6 +114,7 @@ public:
 	// Accessor methods
 	float GetMasterVolume() const { return m_masterVolume; }
 	size_t GetActiveSoundCount(EntityManager& em) const;
+	bool CanPlayNewSound(EntityManager& em) const;  // Check if we're below max concurrent sounds
 	/////////////////////////////////
 
 

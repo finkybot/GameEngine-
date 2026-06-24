@@ -105,7 +105,7 @@ private:
 
 	/////////////////////////////////
 	// Private member variables for the TestScene class. These include references to the GameEngine, EntityManager, and SFML window, as well as random distributions for entity properties and tracking variables for explosions and FPS.
-	const int targetEntityCount = 1000;
+	const int m_targetEntityCount = 500;
 	sf::Window& m_window; // Reference to the SFML window for rendering and event handling
 	int m_explosionCount = 0; // Number of active explosions currently playing, used for tracking and displaying explosion count in the game info window.
 	float m_fps = 0.0f; // Current frames per second (FPS).
@@ -124,7 +124,7 @@ private:
 	/////////////////////////////////
 	// Random distributions for entity properties
 	std::random_device m_randDevice;						// Random distributions for entity properties
-	std::default_random_engine m_generator;					// Random entity colours
+	std::default_random_engine m_generator;					// Random number generator for entity properties
 	std::uniform_int_distribution<int> m_xVelocity;			// x movement speed
 	std::uniform_int_distribution<int> m_yVelocity;			// y movement speed
 	std::uniform_int_distribution<int> m_xDistro;			// Spawn x axis distribution across the entire screen width for more even distribution of entities, preventing clustering at the left or right edges

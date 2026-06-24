@@ -9,6 +9,7 @@
 // Forward Declarations, Note I have includes and forward declarations in an unusual order here to minimize coupling and reduce compile times.
 class TileSystem; // Forward declaration of TileSystem.
 class MusicSystem; // Forward declaration of MusicSystem
+class SoundSystem; // Forward declaration of SoundSystem
 /////////////////////////////////
 
 
@@ -120,11 +121,12 @@ public:
 
 
 	/////////////////////////////////
-	// Accessor methods for the main systems managed by the EntityManager, including the PhysicsSystem, CollisionSystem, RenderSystem, and MusicSystem. These methods provide access to the systems for updating and rendering entities, as well as managing music playback.
+	// Accessor methods for the main systems managed by the EntityManager, including the PhysicsSystem, CollisionSystem, RenderSystem, MusicSystem, and SoundSystem. These methods provide access to the systems for updating and rendering entities, as well as managing music and sound playback.
 	PhysicsSystem& GetPhysicsSystem() { return m_physicsSystem; }
 	CollisionSystem& GetCollisionSystem() { return m_collisionSystem; }
 	RenderSystem& GetRenderSystem() { return m_renderSystem; }	
 	MusicSystem* GetMusicSystem() { return m_musicSystem.get(); } // Accessor for MusicSystem (may be nullptr)
+	SoundSystem* GetSoundSystem() { return m_soundSystem.get(); } // Accessor for SoundSystem (may be nullptr)
 	/////////////////////////////////
 
 
@@ -215,6 +217,7 @@ private:
 	RenderSystem m_renderSystem;
 	std::unique_ptr<TileSystem> m_tileSystem;
 	std::unique_ptr<MusicSystem> m_musicSystem; // system owning runtime sf::Music objects
+	std::unique_ptr<SoundSystem> m_soundSystem; // system managing sound effects with 3D spatial audio
 	bool m_hasPendingTileMaps = true;
 	/////////////////////////////////
 

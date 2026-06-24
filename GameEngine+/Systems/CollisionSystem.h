@@ -20,6 +20,7 @@
 // Forward declarations
 class Entity;
 class EntityManager;
+class SoundSystem;
 namespace Spawn { class SpawnSystem; }
 /////////////////////////////////
 
@@ -54,6 +55,11 @@ public:
 	void SetSpawnSystem(Spawn::SpawnSystem* spawnSystem) { m_spawnSystem = spawnSystem; }
 	/////////////////////////////////
 
+	/////////////////////////////////
+	// SetSoundSystem - Set the SoundSystem reference for checking concurrent sound limits
+	void SetSoundSystem(SoundSystem* soundSystem) { m_soundSystem = soundSystem; }
+	/////////////////////////////////
+
 
 
 	/////////////////////////////////
@@ -78,6 +84,11 @@ private:
 	/////////////////////////////////
 	// Pointer to the SpawnSystem for spawning explosions during collision resolution. Allows CollisionSystem to delegate explosion creation through SpawnSystem instead of directly creating entities.
 	Spawn::SpawnSystem* m_spawnSystem = nullptr;
+	/////////////////////////////////
+
+	/////////////////////////////////
+	// Pointer to the SoundSystem for checking concurrent sound limits before creating new explosion sounds.
+	SoundSystem* m_soundSystem = nullptr;
 	/////////////////////////////////
 
 

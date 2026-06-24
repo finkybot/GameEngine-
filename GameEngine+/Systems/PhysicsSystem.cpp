@@ -25,7 +25,7 @@
 // Update - Handles updating the positions of entities based on their velocities and the elapsed time (deltaTime), as well as handling boundary collisions with the window edges. This method should be called every frame to ensure that entities are moved according to their velocities 
 // and that they bounce off the window boundaries when they collide with them.
 void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float windowWidth,
-						   float windowHeight) {
+					   float windowHeight) {
 	// Parallel execution: process each entity's physics independently
 	std::for_each(std::execution::par, entities.begin(), entities.end(),
 				  [this, deltaTime, windowWidth, windowHeight](const std::unique_ptr<Entity>& entity) {
@@ -34,7 +34,7 @@ void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities,
 
 					  SlowEntity(
 						  entity.get(),
-						  0.9999f); // Apply a global slow factor to simulate friction (can be adjusted or made dynamic)
+						  0.998f); // Low friction - balls retain speed longer for natural collisions
 					  MoveEntity(entity.get(), deltaTime, windowWidth, windowHeight);
 				  });
 }

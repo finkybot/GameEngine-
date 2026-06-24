@@ -758,7 +758,7 @@ Entity* SpawnSystem::SpawnExplosion(float x, float y, float vx, float vy, unsign
 		soundEffect->m_Path = "assets/sounds/medium-explosion.ogg";
 		soundEffect->m_volume = 75.0f;
 		soundEffect->m_loop = false;
-		soundEffect->m_priority = SoundPriority::SFX;
+		soundEffect->m_priority = SoundPriority::Critical;
 		soundEffect->m_is3D = true;
 		soundEffect->m_3DMinDistance = 200.0f;
 		soundEffect->m_3DMaxDistance = 2000.0f;

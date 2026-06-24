@@ -22,6 +22,7 @@
 - Design the music component (CMusic) to be data-only, containing fields such as path, volume, loop, autoplay, and shouldPlay, with a MusicSystem managing playback and analysis.
 - Keep audio-reactive effects in MusicVisualizerScene; add UI features to MusicVisualizerScene: include a checkbox to toggle looping for the currently loaded track, and implement a song timer/seek display (playhead) in the music controls.
 - **Note:** For 2D games with music, set only the listener position and potentially direction, but carefully tune to avoid interference with audio output. SFML 3D audio listener direction and up vector can affect music volume output even though music is non-positional.
+- Control 3D sound in the GameEngine+ through the CSoundEffect component with m_is3D and m_isSpatialized flags, configured via SoundSystem::SetListenerPosition() and distance parameters m_3DMinDistance and m_3DMaxDistance. The SoundSystem applies spatial audio (distance attenuation and panning) when 3D is enabled.
 
 ## Future Work Priorities
 - Focus on developing an advanced level editor scene with chunking integration (highest priority - start soon).

@@ -41,7 +41,7 @@ GameEngine::GameEngine() {
 	//m_window.setPosition(sf::Vector2i(0, 0));
 	//m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::State::Fullscreen);
 
-	m_window.setFramerateLimit(1000);
+	m_window.setFramerateLimit(120);
 	//m_window.setVerticalSyncEnabled(true);
 	m_isRunning = true;
 
@@ -59,7 +59,10 @@ GameEngine::GameEngine() {
 	m_soundSystem = std::make_unique<SoundSystem>();
 	m_soundSystem->Initialize();  // Check audio device and log diagnostics
 	m_soundSystem->InitializePool(*m_entityManager, 64);  // Initialize sound pool with 64 entities
-	m_soundSystem->SetMasterVolume(100.0f);  // Set master volume to 100% (0-100 scale)
+	m_soundSystem->SetMasterVolume(70.0f);  // Set master volume to 70% (0-100 scale)
+
+	// Connect SoundSystem to CollisionSystem for sound limit checking
+	m_entityManager->GetCollisionSystem().SetSoundSystem(m_soundSystem.get());
 
 	// Audio listener setup completely disabled - causes music volume issues in SFML 3.x
 	// Spatial audio will use SFML defaults without explicit configuration
@@ -204,8 +207,7 @@ void GameEngine::Run() {
 
 	/* Main Loop, game logic is handled in here once per frame */
 	while (m_window.isOpen()) {
-		Update(
-			0.016f); // Update the scene with a fixed delta time (16ms for ~60 FPS), I can calculate actual delta time using the deltaClock for variable time steps
+		Update(0.016f); // Update the scene with a fixed delta time (16ms for ~60 FPS), I can calculate actual delta time using the deltaClock for variable time steps
 	}
 
 	// Ensure window closes cleanly when Run exits

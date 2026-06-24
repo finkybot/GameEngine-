@@ -1410,12 +1410,21 @@ void MusicVisualizerScene::HandleEvent(const std::optional<sf::Event>& event) {}
 
 
 
-// OnEnter and OnExit - these functions are called when the scene is entered or exited, respectively. For the MusicVisualizerScene, we don't have any specific setup or teardown 
-// that needs to occur when entering or exiting the scene, so we can just leave these empty for now. If we wanted to add any special behavior that should occur when the scene is 
-// entered (e.g., initializing certain variables, starting background music, etc.) or when it is exited (e.g., cleaning up resources, stopping music, etc.), we could implement 
-// that here.
-void MusicVisualizerScene::OnEnter() {}
-void MusicVisualizerScene::OnExit() {}
+// OnEnter and OnExit - these functions are called when the scene is entered or exited, respectively. For the MusicVisualizerScene, we disable spatial audio so that music
+// plays at full volume without distance attenuation, and re-enable it when exiting so other scenes can use 3D audio effects.
+void MusicVisualizerScene::OnEnter() {
+	// Disable spatial audio so music is not affected by listener position
+	if (auto soundSys = m_entityManager.GetSoundSystem()) {
+		soundSys->SetSpatialAudioEnabled(false);
+	}
+}
+
+void MusicVisualizerScene::OnExit() {
+	// Re-enable spatial audio when leaving the visualizer
+	if (auto soundSys = m_entityManager.GetSoundSystem()) {
+		soundSys->SetSpatialAudioEnabled(true);
+	}
+}
 /////////////////////////////////
 
 
@@ -1509,9 +1518,9 @@ void MusicVisualizerScene::LoadMusicFromPath(const std::string& path) {
 	if (!musicEntity)
 		return;
 
-	// Get here? then we have an entity to work with, so add a CMusic component with the given path and default settings (volume 100, start playing immediately).
+	// Get here? then we have an entity to work with, so add a CMusic component with the given path and default settings (volume 70, start playing immediately).
 	// Use the current m_loopEnabled setting from the UI for the loop state.
-	auto* musicComponent = musicEntity->AddComponent<CMusic>(path, 100.f, m_loopEnabled, true);
+	auto* musicComponent = musicEntity->AddComponent<CMusic>(path, 70.f, m_loopEnabled, true);
 	musicComponent->state = CMusic::State::Playing;
 	musicComponent->loop = m_loopEnabled; // Respect current UI loop setting
 	m_musicEntity = musicEntity;

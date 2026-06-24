@@ -213,8 +213,13 @@ private:
 	// GetOrCreateMusic - Helper method to get the existing sf::Music instance for an entity with a CMusic component, or create a new one if it doesn't exist. This method will handle loading the music file and configuring the sf::Music instance based on the properties of the CMusic component.
 	sf::Music* GetOrCreateMusic(Entity&	entity);
 	/////////////////////////////////
-	 
-	
+
+	/////////////////////////////////
+	// ApplySpatialAudioToMusic - Apply spatial audio (distance attenuation, panning) to a music track
+	void ApplySpatialAudioToMusic(sf::Music& music, const class CMusic& musicCmp, const class Vec2& entityPos);
+	/////////////////////////////////
+
+
 	/////////////////////////////////
 	// Spectral analysis storage (Goertzel bands)
 	// Map of entity ID to vector of latest calculated spectrum values for that entity's music track. This allows us to provide spectrum information for visualizations or gameplay mechanics that depend on the current spectral content of a music track, protected by m_levelsMutex.

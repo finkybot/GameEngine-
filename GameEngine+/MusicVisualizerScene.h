@@ -312,6 +312,15 @@ private:
 	bool m_requestRestart = false;
 	/////////////////////////////////
 
+	/////////////////////////////////
+	// 3D Audio positioning controls for music entity (experimenting with spatial audio)
+	// These will be initialized based on the actual window size in LoadMusicFromPath
+	float m_musicX = 0.0f;				// X position of music entity (initialized to screen center width / 2)
+	float m_musicY = 0.0f;				// Y position of music entity (initialized to screen center height / 2)
+	float m_musicMinDistance = 500.0f;		// Minimum distance for full volume (more generous range)
+	float m_musicMaxDistance = 5000.0f;	// Maximum distance for silence (larger range = gentler attenuation)
+	/////////////////////////////////
+
 
 
 	/////////////////////////////////

@@ -678,6 +678,34 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 				if (auto musicSys = m_entityManager.GetMusicSystem())
 					musicSys->Process();
 			} // Adjust volume
+
+			// 3D Audio positioning controls
+			ImGui::Separator();
+			ImGui::Text("3D Audio Position (Experimental)");
+
+			if (ImGui::SliderFloat("Music X Position", &m_musicX, 0.0f, static_cast<float>(m_window.getSize().x), "%.0f")) {
+				if (auto transform = m_musicEntity->GetComponent<CTransform>()) {
+					transform->m_position.x = m_musicX;
+				}
+			}
+
+			if (ImGui::SliderFloat("Music Y Position", &m_musicY, 0.0f, static_cast<float>(m_window.getSize().y), "%.0f")) {
+				if (auto transform = m_musicEntity->GetComponent<CTransform>()) {
+					transform->m_position.y = m_musicY;
+				}
+			}
+
+			if (ImGui::SliderFloat("Min Distance##music", &m_musicMinDistance, 100.0f, 2000.0f, "%.0f")) {
+				if (auto musicCmp = m_musicEntity->GetComponent<CMusic>()) {
+					musicCmp->m_3DMinDistance = m_musicMinDistance;
+				}
+			}
+
+			if (ImGui::SliderFloat("Max Distance##music", &m_musicMaxDistance, 500.0f, 10000.0f, "%.0f")) {
+				if (auto musicCmp = m_musicEntity->GetComponent<CMusic>()) {
+					musicCmp->m_3DMaxDistance = m_musicMaxDistance;
+				}
+			}
 		}
 	}
 
@@ -1223,6 +1251,12 @@ MusicVisualizerScene::~MusicVisualizerScene() {
 // and renders the ImGui interface for music loading and playback controls. It also handles initialization of the current directory for the file browser and manages 
 // the state of the spawn system and equalizer bars based on user interactions and music analysis.
 void MusicVisualizerScene::Update(float deltaTime) {
+	// Set listener position for 3D spatial audio (at center of screen)
+	Vec2 listenerPos(m_window.getSize().x / 2.0f, m_window.getSize().y / 2.0f);
+	if (m_entityManager.GetSoundSystem()) {
+		m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
+	}
+
 	// Minimal update: process explosions and audio-reactive spawns similar to TileMapEditorScene
 	// Pause visual updates when music is paused so effects stop on pause
 	bool musicPaused = false;
@@ -1410,21 +1444,10 @@ void MusicVisualizerScene::HandleEvent(const std::optional<sf::Event>& event) {}
 
 
 
-// OnEnter and OnExit - these functions are called when the scene is entered or exited, respectively. For the MusicVisualizerScene, we disable spatial audio so that music
-// plays at full volume without distance attenuation, and re-enable it when exiting so other scenes can use 3D audio effects.
-void MusicVisualizerScene::OnEnter() {
-	// Disable spatial audio so music is not affected by listener position
-	if (auto soundSys = m_entityManager.GetSoundSystem()) {
-		soundSys->SetSpatialAudioEnabled(false);
-	}
-}
-
-void MusicVisualizerScene::OnExit() {
-	// Re-enable spatial audio when leaving the visualizer
-	if (auto soundSys = m_entityManager.GetSoundSystem()) {
-		soundSys->SetSpatialAudioEnabled(true);
-	}
-}
+// OnEnter and OnExit - these functions are called when the scene is entered or exited, respectively. For the MusicVisualizerScene,
+// we now keep spatial audio enabled so users can experiment with 3D positioning of the music through the GUI controls.
+void MusicVisualizerScene::OnEnter() {}
+void MusicVisualizerScene::OnExit() {}
 /////////////////////////////////
 
 
@@ -1523,6 +1546,20 @@ void MusicVisualizerScene::LoadMusicFromPath(const std::string& path) {
 	auto* musicComponent = musicEntity->AddComponent<CMusic>(path, 70.f, m_loopEnabled, true);
 	musicComponent->state = CMusic::State::Playing;
 	musicComponent->loop = m_loopEnabled; // Respect current UI loop setting
+
+	// Calculate the actual screen center and initialize music position to listener position
+	m_musicX = m_window.getSize().x / 2.0f;
+	m_musicY = m_window.getSize().y / 2.0f;
+
+	// Add CTransform so music entity can have a 3D position for spatial audio, starting at listener position
+	auto* transform = musicEntity->AddComponent<CTransform>(Vec2(m_musicX, m_musicY), Vec2::Zero);
+
+	// Initialize GUI member variables from component defaults
+	if (auto musicCmp = musicEntity->GetComponent<CMusic>()) {
+		m_musicMinDistance = musicCmp->m_3DMinDistance;
+		m_musicMaxDistance = musicCmp->m_3DMaxDistance;
+	}
+
 	m_musicEntity = musicEntity;
 	m_entityManager.ProcessPending();
 

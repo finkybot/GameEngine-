@@ -10,6 +10,7 @@
 #include "MusicSystem.h"
 #include "EntityManager.h"
 #include "CMusic.h"
+#include "CTransform.h"
 #include "DebugStack.h"
 
 #include <SFML/Audio.hpp>
@@ -481,6 +482,11 @@ void MusicSystem::Process() {
 		music->setVolume(musicComp->volume);
 		music->setLooping(musicComp->loop);
 
+		// Apply spatial audio if the entity has a transform component
+		if (auto* transform = entity->GetComponent<CTransform>()) {
+			ApplySpatialAudioToMusic(*music, *musicComp, transform->m_position);
+		}
+
 		//std::cout << "Time left to play for music " << music->getDuration().asSeconds() - music->getPlayingOffset().asSeconds() << ": " << std::endl;
 		// Check if music has naturally finished (stopped by reaching end, not by user)
 		if (!musicComp->loop && music->getDuration().asSeconds() - music->getPlayingOffset().asSeconds() < 0.01f) {
@@ -788,3 +794,31 @@ sf::Music* MusicSystem::GetOrCreateMusic(Entity& entity) {
 	return musicPtr;
 }
 /////////////////////////////////
+
+
+
+/////////////////////////////////
+// ApplySpatialAudioToMusic - Apply spatial audio (distance attenuation, panning) to music
+void MusicSystem::ApplySpatialAudioToMusic(sf::Music& music, const CMusic& musicCmp, const Vec2& entityPos) {
+	// Apply spatial positioning to the music track
+	// Convert 2D position to 3D (z=0), relative to listener at origin
+	sf::Vector3f soundPos(entityPos.x, entityPos.y, 0.0f);
+	music.setPosition(soundPos);
+
+	// Set distance parameters for attenuation curve
+	music.setMinDistance(musicCmp.m_3DMinDistance);
+	music.setMaxDistance(musicCmp.m_3DMaxDistance);
+
+	// Set the volume to the component's base volume
+	// SFML's spatialization will handle attenuation based on distance
+	float volume = musicCmp.volume;
+	volume = std::clamp(volume, 1.0f, 100.0f);
+	music.setVolume(volume);
+
+	// SFML 3D audio will automatically:
+	// - Apply distance attenuation based on the music position using min/max distance
+	// - Apply panning based on the horizontal offset
+	// We set the position, distance parameters, and let SFML handle the rest
+}
+/////////////////////////////////
+

@@ -474,6 +474,10 @@ void SoundSystem::ApplySpatialAudio(sf::Sound& sound, const CSoundEffect& soundC
 	sf::Vector3f soundPos(entityPos.x - m_listenerPosition.x, entityPos.y - m_listenerPosition.y, 0.0f);
 	sound.setPosition(soundPos);
 
+	// Set distance parameters for attenuation curve
+	sound.setMinDistance(soundCmp.m_3DMinDistance);
+	sound.setMaxDistance(soundCmp.m_3DMaxDistance);
+
 	// Set the volume to the component's base volume
 	// SFML's spatialization will handle attenuation based on distance
 	float volume = soundCmp.m_volume;
@@ -481,12 +485,11 @@ void SoundSystem::ApplySpatialAudio(sf::Sound& sound, const CSoundEffect& soundC
 	sound.setVolume(volume);
 
 	// SFML 3D audio with setSpatializationEnabled(true) will automatically:
-	// - Apply distance attenuation based on the sound position
+	// - Apply distance attenuation based on the sound position using min/max distance
 	// - Apply panning based on the horizontal offset
-	// - Use the min/max distance settings from the sound buffer if set
-	// We just need to set the position and let SFML handle the rest
+	// We set the position, distance parameters, and let SFML handle the rest
 }
-/////////////////////////////////
+//////////////////////////////////////////////////////////////////
 
 
 

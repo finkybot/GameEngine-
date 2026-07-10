@@ -26,9 +26,11 @@
 #include "MusicVisualizerScene.h"
 #include "LevelEditorScene.h"
 #include "MainMenuScene.h"
+#include "PathTestScene.h"
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 #include <cstdlib>
+#include "MainThreadTasks.h"
 /////////////////////////////////
 
 
@@ -181,6 +183,7 @@ void GameEngine::Run() {
 	AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, m_window, *m_entityManager));			// Adding TileMapEditor
 	AddScene("MusicVisualizer", std::make_shared<MusicVisualizerScene>(*this, m_window, *m_entityManager));		// Adding MusicVisualizer	
 	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, m_window, *m_entityManager));				// Adding LevelEditor
+	AddScene("PathTestScene", std::make_shared<PathTestScene>(*this, m_window, *m_entityManager));				// Adding PathTestScene
 
 	ChangeScene("MainMenu");
 
@@ -295,6 +298,14 @@ void GameEngine::Update(float deltaTime) {
 
 			// Update the global cursor system
 			m_cursorSystem->Update(deltaTime);
+
+			// Execute any main-thread GL/upload tasks queued by worker threads. These must run while the
+			// main thread's OpenGL context is current to avoid context activation errors.
+			std::vector<std::function<void()>> _mainThreadTasks;
+			MainThreadTaskQueue::Instance().Drain(_mainThreadTasks);
+			for (auto &t : _mainThreadTasks) {
+				try { t(); } catch (...) {}
+			}
 
 			// Engine render pass ordering:
 			// 1) Entity shapes (direct render for now to avoid queue lifetime issues with sprites)

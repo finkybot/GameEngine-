@@ -166,6 +166,9 @@ private:
 	// Display values for each preallocated bar (smoothed)
 	std::vector<float> m_eqDisplayValues;
 
+	/////////////////////////////////
+	// Cached spectrum to avoid brief visual pauses when a frame has no fresh spectrum data
+	std::vector<float> m_lastSpectrumBands;
 
 
 	/////////////////////////////////
@@ -286,7 +289,7 @@ private:
 	/////////////////////////////////
 	// Loop checkbox and playhead state
 	bool m_loopEnabled = true;
-	float m_playhead = 0.0f; // current playhead position in seconds
+	float m_playhead = 0.0f; // current track playhead position in seconds
 	float m_duration = 0.0f; // current track duration in seconds
 	/////////////////////////////////
 
@@ -296,6 +299,8 @@ private:
 	// Playhead drag state: pause on drag, resume on release
 	bool m_playheadActive = false;
 	bool m_wasPlayingBeforeSeek = false;
+	bool m_seekPending = false;		// Set while dragging; apply seek once on release
+	float m_pendingSeekPos = 0.0f;	// Deferred target position in seconds
 	/////////////////////////////////
 
 
@@ -312,6 +317,8 @@ private:
 	bool m_requestRestart = false;
 	/////////////////////////////////
 
+
+
 	/////////////////////////////////
 	// 3D Audio positioning controls for music entity (experimenting with spatial audio)
 	// These will be initialized based on the actual window size in LoadMusicFromPath
@@ -319,6 +326,16 @@ private:
 	float m_musicY = 0.0f;				// Y position of music entity (initialized to screen center height / 2)
 	float m_musicMinDistance = 500.0f;		// Minimum distance for full volume (more generous range)
 	float m_musicMaxDistance = 5000.0f;	// Maximum distance for silence (larger range = gentler attenuation)
+	/////////////////////////////////
+	 
+	
+
+	/////////////////////////////////
+	// Audio-reactive spawn system controls
+	float m_reactivitySensitivity = 1.0f;	// Multiplier for how responsive spawns are to audio level
+	float m_velocityScale = 1.0f;			// Multiplier for entity velocity scaling
+	float m_burstIntensity = 1.0f;			// Extra burst spawns on detected beats
+	float m_beatThreshold = 0.3f;			// Threshold for beat detection (0.0 to 1.0)
 	/////////////////////////////////
 
 

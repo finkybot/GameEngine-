@@ -12,6 +12,7 @@
 #include <list>
 #include <mutex>
 #include <optional>
+#include <unordered_set>
 #include <string>
 
 #include "TileMap.h"
@@ -37,10 +38,18 @@ class TextureAtlas;
 /////////////////////////////////
 // Chunk struct represents a section of the tile map, containing tile data and metadata for rendering and collision. 
 // Each chunk corresponds to a specific area of the game world and can be loaded/unloaded independently to optimize performance and memory usage.
+//						|
+//						|___________________________________________________________________________________
 struct Chunk {
+	/////////////////////////////////
+	// Public member variables for the Chunk struct, including chunk coordinates, size, tile data, rendering information, and generated entities for collision.
 	int chunkX = 0,	chunkY = 0; // chunk coordinates (e.g., chunkX = 0, chunkY = 0 is the origin chunk)
 	int width = 0, height = 0; // chunk size in tiles (e.g., 16x16 tiles per chunk)
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	float tileSize = 32.0f; // size of each tile in pixels (for rendering and collision)
 	// per-layer storage: tilesPerLayer[layer][y * width + x]
 	int numLayers = 1;
@@ -48,18 +57,35 @@ struct Chunk {
 	std::vector<char> dirty; // per-layer dirty flags
 	std::vector<char> readyForRendering; // per-layer ready flags
 	std::vector<uint32_t> editVersion; // per-layer edit versions
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Entities generated for this chunk's merged collision rectangles (Tile static entities)
 	std::vector<Entity*> generatedEntities;
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	std::vector<float> cpuVertexBuffer; // CPU-side vertex buffer for the chunk's tiles, used for rendering.
 	std::vector<sf::VertexArray> vertexArrays; // one vertex array per layer
 	std::shared_ptr<sf::Texture> vertexTexture; // texture used by the vertexArrays (if any)
 
 	std::vector<sf::VertexArray> tempVertexArraysForRendering; // temporary storage per-layer for alpha-modulated vertex data during enqueue
+	/////////////////////////////////
 
+
+	/////////////////////////////////
+	// Default constructor for the Chunk struct, initializes member variables to default values.
 	Chunk() = default;
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Parameterized constructor for the Chunk struct, initializes member variables based on provided parameters and sets up per-layer storage for tiles and rendering information.
 	Chunk(int x, int y, int width, int height, float tileSize, int numLayers)
 		: chunkX(x), chunkY(y), width(width), height(height), tileSize(tileSize) {
 		numLayers = std::max(1, numLayers);
@@ -76,7 +102,11 @@ struct Chunk {
 		tempVertexArraysForRendering.resize(numLayers);
 		for (auto &va : tempVertexArraysForRendering) va.setPrimitiveType(sf::PrimitiveType::Triangles);
 	}
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Backwards compat helpers for single-layer access
 	int GetTileSingleLayer(int x, int y) const { return (tilesPerLayer.empty() ? 0 : tilesPerLayer[0][y * width + x]); }
 	void SetTileSingleLayer(int x, int y, int v) { if (!tilesPerLayer.empty()) tilesPerLayer[0][y * width + x] = v; }
@@ -125,6 +155,10 @@ public:
 	void LoadAllSavedChunks();
 	void ClearAllLoadedChunks();
 
+	// Load a TileMap JSON file into the chunked world. This will replace current in-memory chunks with
+	// the data from the file. Returns true on success and writes an optional error message to outErr.
+	bool LoadLevelFromFile(const std::string& path, std::string* outErr = nullptr);
+
 	// Scan saved chunk filenames on disk and return the bounding box of all saved chunks in world pixels.
 	// Returns false if no saved chunks exist. Does not load tile data.
 	bool GetSavedChunkBounds(float& outMinX, float& outMinY, float& outMaxX, float& outMaxY) const;
@@ -147,6 +181,11 @@ public:
 
 	void SetUnselectedLayerAlpha(float a) { m_unselectedLayerAlpha = std::clamp(a, 0.0f, 1.0f); }
 	float GetUnselectedLayerAlpha() const { return m_unselectedLayerAlpha; }
+
+	// Accessors for chunk dimensions
+	int GetChunkWidth() const { return m_chunkWidth; }
+	int GetChunkHeight() const { return m_chunkHeight; }
+	float GetTileSize() const { return m_tileSize; }
 	/////////////////////////////////
 
 
@@ -168,6 +207,7 @@ private:
 	void EnqueueLoadChunk(int chunkX, int chunkY, int layer);
 	void FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue);
 	void RebuildChunkEntities(Chunk& chunk); // Rebuilds merged collider entities for a chunk; call after tile edits.
+	void ScheduleChunkForRebuild(Chunk& chunk); // Schedule chunk for main-thread-only GPU/collider rebuild
 	void EvictIfNeeded();
 	/////////////////////////////////
 	 
@@ -223,6 +263,11 @@ private:
 	int m_activeLayer = 0; // drawing: which layer is fully opaque
 	float m_unselectedLayerAlpha = 0.3f; // opacity for unselected layers (0..1)
 	/////////////////////////////////
+
+	// Queue of chunks that need GPU-side vertex rebuilds or collider rebuilds. Only the main thread
+	// should perform the actual SFML/OpenGL work. These structures are guarded by m_mutex.
+	std::vector<long long> m_rebuildQueue; // chunk keys scheduled for rebuild
+	std::unordered_set<long long> m_rebuildSet; // quick membership check to avoid duplicate enqueues
 
 
 

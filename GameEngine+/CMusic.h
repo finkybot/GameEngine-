@@ -41,6 +41,9 @@ public:
 	bool autoPlay =		false; // whether the music should automatically play when the component is added to an entity (this can be used in conjunction with playOnStart for more control over when the music starts)
 	State state = State::Stopped; // current playback state of the music (stopped, playing, or paused)
 
+	// SFML music object pointer (owned and managed by MusicSystem)
+	sf::Music* m_music = nullptr;  // pointer to the actual SFML music object for playback
+
 	// 3D spatial audio parameters (for experimenting with audio positioning in visualizer)
 	float m_3DMinDistance = 500.0f;		// minimum distance for 3D audio attenuation (distance at which the music is at full volume)
 	float m_3DMaxDistance = 5000.0f;	// maximum distance for 3D audio attenuation (distance beyond which the music is inaudible)

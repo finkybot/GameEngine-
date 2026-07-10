@@ -138,6 +138,7 @@ void kiss_fft_free(kiss_fft_cfg* cfg) {
 /////////////////////////////////
 
 
+
 /////////////////////////////////
 // kiss_fft - This function performs the FFT using the provided configuration and input/output buffers. It first checks for null 
 // pointers, then allocates a temporary buffer to hold the input data. It copies the input data into the buffer, zero-padding if necessary, 
@@ -434,7 +435,7 @@ void MusicSystem::Update(float deltaSeconds) {}
 // Process - This method is called every frame to update the music playback state and manage the analysis thread. It starts 
 // the analysis thread if it hasn't been started yet, cleans up active music instances for entities that no longer have a 
 // CMusic component, and processes all entities with a CMusic component to control playback and update playhead snapshots 
-// for analysis. Audio analysis runs on a background thread (AnalysisThreadFunc) at ~30 Hz.
+// for analysis. Audio analysis runs on a background thread (AnalysisThreadFunc) at ~60 Hz.
 void MusicSystem::Process() {
 	// Start the analysis thread the first time Process()e.g. run the thread if it hasn't been started yet.
 	// The analysis thread will run in the background at ~30 Hz, reading playhead snapshots written by Process(),
@@ -454,12 +455,12 @@ void MusicSystem::Process() {
 	for (auto it = m_activeMusic.begin(); it != m_activeMusic.end();) {
 		if (liveIds.find(it->first) == liveIds.end()) {
 			if (it->second)
-				it->second->stop();
-			{
-    std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
-				m_buffers.erase(it->first);
-				m_levels.erase(it->first);
-			}
+				it->second->stop(); // Stop the music if it's still playing
+
+			// Remove the associated analysis buffer and level
+			std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+			m_buffers.erase(it->first);
+			m_levels.erase(it->first);
 			it = m_activeMusic.erase(it);
 		} else {
 			++it;
@@ -533,11 +534,13 @@ void MusicSystem::Process() {
 // performs FFT or Goertzel analysis, and stores results in m_levels / m_spectra.
 void MusicSystem::AnalysisThreadFunc() {
 	using namespace std::chrono_literals;
+	std::unordered_map<size_t, float> lastAnalyzedSeconds;
+	std::unordered_map<size_t, long long> lastReadCursorSamples;
 	while (!m_analysisStop.load(std::memory_order_relaxed)) {
-		// Wait up to ~33 ms (~30 Hz) for a wake signal or timeout
+		// Wait up to ~16 ms (~60 Hz) for a wake signal or timeout
 		{
 			std::unique_lock<std::mutex> lk(m_analysisCvMutex);
-			m_analysisCv.wait_for(lk, 33ms);
+			m_analysisCv.wait_for(lk, 16ms);
 		}
 		if (m_analysisStop.load(std::memory_order_relaxed))
 			break;
@@ -563,15 +566,14 @@ void MusicSystem::AnalysisThreadFunc() {
 		// Make a local copy of the EQ center frequencies for use in this analysis iteration. This allows the main thread to modify the center 
 		// frequencies without affecting the analysis thread until the next iteration, and avoids holding the levels mutex while performing analysis.
 		std::vector<float> eqCenterFreqs;
-		{
-			std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
-			eqBandCount = m_eqBandCount;
-			spectrumSmoothing = m_spectrumSmoothing;
-			useFFT = m_useFFT;
-			fftSize = m_fftSize;
-			eqCenterFreqs = m_eqCenterFreqs;
-		}
-
+		
+		std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+		eqBandCount = m_eqBandCount;
+		spectrumSmoothing = m_spectrumSmoothing;
+		useFFT = m_useFFT;
+		fftSize = m_fftSize;
+		eqCenterFreqs = m_eqCenterFreqs;
+		
 		// For each active music track, read a window of audio samples around the playhead position, compute the RMS level and spectrum, and store the results. 
 		// I use the playhead snapshot to know where to read from each track's sound file, while the buffer snapshot is used to access the sound files without 
 		// holding locks during analysis.
@@ -581,24 +583,69 @@ void MusicSystem::AnalysisThreadFunc() {
 			if (pit == playheadSnap.end()) continue;
 			float seconds = pit->second;
 
+			// If playhead hasn't moved meaningfully since last analysis, skip this pass.
+			// This avoids repeated seek/read/decode work (especially noticeable on very large files or paused playback).
+			auto lastIt = lastAnalyzedSeconds.find(id);
+			if (lastIt != lastAnalyzedSeconds.end()) {
+				if (std::fabs(seconds - lastIt->second) < 0.002f) {
+					continue;
+				}
+			}
+			lastAnalyzedSeconds[id] = seconds;
+
 			unsigned int sampleRate = soundFile->getSampleRate();
 			unsigned int channels = soundFile->getChannelCount();
 			size_t totalSamples = static_cast<size_t>(soundFile->getSampleCount());
 
-			const size_t windowPerChannel = 1024;
+			if (sampleRate == 0 || channels == 0) continue;
+
+			// Keep analysis window close to the analysis tick duration so decode cursor stays aligned
+			// with playback progression and avoids recurring deep re-seeks on long tracks.
+			const float analysisHz = 60.0f;
+			size_t windowPerChannel = static_cast<size_t>(std::max(256.0f, std::round(static_cast<float>(sampleRate) / analysisHz)));
 			size_t windowSamples = windowPerChannel * channels;
-			if (windowSamples == 0 || sampleRate == 0 || channels == 0) continue;
+			if (windowSamples == 0) continue;
 
 			// Compute analysis window around playhead
-			size_t center = static_cast<size_t>(seconds * static_cast<float>(sampleRate)) * channels;
-			size_t start = (center > windowSamples / 2) ? (center - windowSamples / 2) : 0;
-			if (totalSamples > 0 && start + windowSamples > totalSamples)
-				start = totalSamples > windowSamples ? totalSamples - windowSamples : 0;
+			long long center = static_cast<long long>(seconds * static_cast<float>(sampleRate)) * static_cast<long long>(channels);
+			long long start = (center > static_cast<long long>(windowSamples / 2)) ? (center - static_cast<long long>(windowSamples / 2)) : 0;
+			if (totalSamples > 0 && static_cast<size_t>(start) + windowSamples > totalSamples)
+				start = totalSamples > windowSamples ? static_cast<long long>(totalSamples - windowSamples) : 0;
+			if (start < 0) start = 0;
+
+			// Avoid expensive deep seeks every analysis tick: read sequentially when playhead movement is continuous,
+			// and only seek on startup / large jumps (e.g., user scrub).
+			bool needSeek = true;
+			auto cursorIt = lastReadCursorSamples.find(id);
+			if (cursorIt != lastReadCursorSamples.end()) {
+				long long expected = cursorIt->second;
+				long long delta = std::llabs(start - expected);
+				if (delta <= static_cast<long long>(windowSamples * 4)) {
+					needSeek = false;
+				}
+			}
+
+			if (needSeek) {
+				soundFile->seek(static_cast<size_t>(start));
+				lastReadCursorSamples[id] = start;
+			} else if (cursorIt != lastReadCursorSamples.end() && cursorIt->second < start) {
+				// Advance by reading/discarding a small amount to catch up without expensive absolute seek.
+				long long toSkip = start - cursorIt->second;
+				const size_t scratchCap = 8192;
+				std::vector<short> scratch(static_cast<size_t>(std::min<long long>(toSkip, scratchCap)), 0);
+				while (toSkip > 0) {
+					size_t chunk = static_cast<size_t>(std::min<long long>(toSkip, static_cast<long long>(scratch.size())));
+					size_t skipped = soundFile->read(scratch.data(), chunk);
+					if (skipped == 0) break;
+					toSkip -= static_cast<long long>(skipped);
+					cursorIt->second += static_cast<long long>(skipped);
+				}
+			}
 
 			std::vector<short> sampleBuf(windowSamples, 0);
-			soundFile->seek(start);
 			size_t readCount = soundFile->read(sampleBuf.data(), windowSamples);
 			const short* samples = sampleBuf.data();
+			lastReadCursorSamples[id] += static_cast<long long>(readCount);
 
 			// RMS level
 			double rmsSum = 0.0;
@@ -754,14 +801,24 @@ sf::Music* MusicSystem::GetOrCreateMusic(Entity& entity) {
 	if (!musicComp)
 		return nullptr;
 
+	// If music pointer already exists, return it
+	if (musicComp->m_music)
+		return musicComp->m_music;
+
 	size_t id = entity.GetId();
 	auto it = m_activeMusic.find(id);
-	if (it != m_activeMusic.end())
-		return it->second.get();
+	if (it != m_activeMusic.end()) {
+		// Already in map, just set the component pointer and return
+		musicComp->m_music = it->second.get();
+		return musicComp->m_music;
+	}
 
 	auto newMusic = std::make_unique<sf::Music>();
 	sf::Music* musicPtr = newMusic.get();
 	m_activeMusic.emplace(id, std::move(newMusic));
+
+	// Store pointer in component for direct access
+	musicComp->m_music = musicPtr;
 
 	if (!musicComp->path.empty()) {
 		if (!musicPtr->openFromFile(Utf8ToPath(musicComp->path))) {
@@ -775,7 +832,7 @@ sf::Music* MusicSystem::GetOrCreateMusic(Entity& entity) {
 	}
 
 	{
-        std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
+		std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 		m_levels[id] = 0.0f;
 	}
 

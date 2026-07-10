@@ -21,6 +21,8 @@
 
 /////////////////////////////////
 // CCircle component - represents a circle shape with properties and methods for drawing, movement, and collision handling
+//						|
+//						|___________________________________________________________________________________
 class CCircle : public CShape {
 	/////////////////////////////////
 	// Public data members for CCircle

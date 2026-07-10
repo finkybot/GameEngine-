@@ -174,7 +174,14 @@ void ChunkManager::RebuildAllChunksFromTileset() {
 	std::shared_ptr<TextureAtlas> atlasPtr;
 	if (!m_tilesetKey.empty()) {
 		auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
-		if (atlasOpt.has_value() && *atlasOpt) atlasPtr = *atlasOpt;
+		if (atlasOpt.has_value() && *atlasOpt) {
+			atlasPtr = *atlasOpt;
+			std::cout << "ChunkManager::RebuildAllChunksFromTileset - Atlas '" << m_tilesetKey << "' loaded successfully\n";
+		} else {
+			std::cout << "ChunkManager::RebuildAllChunksFromTileset - Atlas '" << m_tilesetKey << "' NOT FOUND!\n";
+		}
+	} else {
+		std::cout << "ChunkManager::RebuildAllChunksFromTileset - No tileset key set\n";
 	}
 
 	std::lock_guard<std::mutex> lock(m_mutex);
@@ -508,8 +515,8 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 	chunk.dirty[layerIndex]        = 1;
 	chunk.editVersion[layerIndex]++;
 
-	// Debug log for paints so we can confirm SetTileAt is being called and values are applied
-	std::cout << "ChunkManager::SetTileAt chunk=(" << chunk.chunkX << "," << chunk.chunkY << ") local=(" << localX << "," << localY << ") layer=" << layerIndex << " val=" << tileValue << " prev=" << prevValue << "\n";
+	// Debug log for paints (disabled by default - uncomment to enable)
+	// std::cout << "ChunkManager::SetTileAt chunk=(" << chunk.chunkX << "," << chunk.chunkY << ") local=(" << localX << "," << localY << ") layer=" << layerIndex << " val=" << tileValue << " prev=" << prevValue << "\n";
 
 	// O(1) LRU touch via iterator index
 	auto lruIt = m_lruIndex.find(key);
@@ -517,17 +524,10 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 	m_lruList.push_front(key);
 	m_lruIndex[key] = m_lruList.begin();
 
-	// Rebuild vertex array
-	std::shared_ptr<TextureAtlas> atlasPtr;
-	if (!m_tilesetKey.empty()) {
-		auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
-		if (atlasOpt.has_value() && *atlasOpt) atlasPtr = *atlasOpt;
-	}
-	BuildChunkVertexArray(chunk, atlasPtr);
-	// Make chunk visible for rendering immediately after we rebuild its vertex array
+	// Defer expensive GPU/SFML dependent work: schedule this chunk for rebuild on the main thread.
+	ScheduleChunkForRebuild(chunk);
+	// Mark layer ready for rendering logically (actual vertex arrays will be prepared on main thread)
 	chunk.readyForRendering[layerIndex] = 1;
-	// Rebuild collider entities so removed tiles don't leave grey rectangles behind
-	RebuildChunkEntities(chunk);
 
 	// Immediately persist to disk — delete the file if the chunk is entirely empty so
 	// GetSavedChunkBounds only counts chunks that actually contain tiles.
@@ -648,6 +648,32 @@ void ChunkManager::UpdateMainThread() {
 	for (const auto& pending : pendingChunksCopy) {
 		const auto& [chunkX, chunkY, layer, tileData, version] = pending;
 		FinalizeLoadedChunk(chunkX, chunkY, layer, tileData, version);
+	}
+
+	// Process scheduled rebuilds (GPU / SFML dependent work) on the main thread.
+	std::vector<long long> rebuilds;
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		if (!m_rebuildQueue.empty()) {
+			rebuilds.swap(m_rebuildQueue);
+			for (auto k : rebuilds) m_rebuildSet.erase(k);
+		}
+	}
+	for (long long key : rebuilds) {
+		std::lock_guard<std::mutex> lock(m_mutex);
+		auto it = m_chunks.find(key);
+		if (it == m_chunks.end()) continue;
+		Chunk& c = it->second;
+		// Rebuild vertex arrays and colliders for all layers of this chunk using the main-thread-only API
+		std::shared_ptr<TextureAtlas> atlasPtr;
+		if (!m_tilesetKey.empty()) {
+			auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
+			if (atlasOpt.has_value() && *atlasOpt) atlasPtr = *atlasOpt;
+		}
+		BuildChunkVertexArray(c, atlasPtr);
+		RebuildChunkEntities(c);
+		// mark ready
+		for (int L = 0; L < c.numLayers; ++L) c.readyForRendering[L] = 1;
 	}
 }
 /////////////////////////////////
@@ -823,6 +849,20 @@ void ChunkManager::RebuildChunkEntities(Chunk& c) {
 /////////////////////////////////
 
 
+/////////////////////////////////
+// ScheduleChunkForRebuild - Mark a chunk as requiring GPU/collider rebuild on the main thread.
+void ChunkManager::ScheduleChunkForRebuild(Chunk& c) {
+	long long key = GetChunkKey(c.chunkX, c.chunkY);
+	// NOTE: callers (e.g. SetTileAt) may already hold m_mutex. Do not re-lock here
+	// to avoid deadlock / std::system_error from double-locking a non-recursive mutex.
+	if (m_rebuildSet.find(key) == m_rebuildSet.end()) {
+		m_rebuildSet.insert(key);
+		m_rebuildQueue.push_back(key);
+	}
+}
+/////////////////////////////////
+
+
 
 /////////////////////////////////
 // FinalizeLoadedChunk
@@ -850,13 +890,10 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::v
 		chunk.dirty[layer] = 0;
 		chunk.readyForRendering[layer] = 1;
 	}
-	// Build GPU vertex arrays for this chunk layer on the main thread
-	std::shared_ptr<TextureAtlas> atlasPtr;
-	if (!m_tilesetKey.empty()) {
-		auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
-		if (atlasOpt.has_value() && *atlasOpt) atlasPtr = *atlasOpt;
-	}
-	BuildChunkVertexArray(chunk, atlasPtr);
+	// Defer GPU / SFML dependent work: schedule a rebuild on the main thread instead of building vertex arrays here.
+	// This avoids touching SFML/OpenGL from background loader threads.
+	// Note: FinalizeLoadedChunk runs on the main thread via UpdateMainThread normally; we still schedule to be safe.
+	ScheduleChunkForRebuild(chunk);
 	// O(1) LRU touch
 	{
 		auto lruIt = m_lruIndex.find(key);
@@ -910,6 +947,86 @@ void ChunkManager::EvictIfNeeded() {
 }
 /////////////////////////////////
 
+
+
+/////////////////////////////////
+// LoadLevelFromFile - Load a TileMap JSON file into memory and replace active chunks.
+bool ChunkManager::LoadLevelFromFile(const std::string& path, std::string* outErr) {
+	auto loaded = TileMap::LoadFromJSON(path, outErr);
+	if (!loaded.has_value()) return false;
+	TileMap map = std::move(*loaded);
+
+	const int newLayerCount = std::max(1, (int)map.layers.size());
+	std::unordered_map<long long, Chunk> newChunks;
+
+	const int W = map.width;
+	const int H = map.height;
+	for (int ly = 0; ly < newLayerCount; ++ly) {
+		for (int y = 0; y < H; ++y) {
+			for (int x = 0; x < W; ++x) {
+				int val = 0;
+				if (!map.layers.empty()) {
+					if (ly < (int)map.layers.size()) {
+						const auto& tiles = map.layers[ly].tiles;
+						size_t idx = (size_t)y * (size_t)W + (size_t)x;
+						if (idx < tiles.size()) val = tiles[idx];
+					}
+				} else if (ly == 0) {
+					val = map.GetTile(x, y);
+				}
+
+				const int chunkX = FloorDiv(x, m_chunkWidth);
+				const int chunkY = FloorDiv(y, m_chunkHeight);
+				const long long key = GetChunkKey(chunkX, chunkY);
+
+				auto it = newChunks.find(key);
+				if (it == newChunks.end()) {
+					auto emplaced = newChunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize, newLayerCount));
+					it = emplaced.first;
+				}
+
+				Chunk& c = it->second;
+				const int localX = x - chunkX * m_chunkWidth;
+				const int localY = y - chunkY * m_chunkHeight;
+				if (localX < 0 || localX >= c.width || localY < 0 || localY >= c.height) continue;
+				c.tilesPerLayer[ly][localY * c.width + localX] = val;
+				c.dirty[ly] = 0;
+			}
+		}
+	}
+
+	{
+		std::lock_guard<std::mutex> lock(m_mutex);
+		try {
+			EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+			for (auto& pr : m_chunks) {
+				Chunk& c = pr.second;
+				for (Entity* ge : c.generatedEntities) if (ge) em.SafeKillEntity(ge);
+				c.generatedEntities.clear();
+			}
+		} catch(...) {}
+
+		m_numLayers = newLayerCount;
+		m_chunks.swap(newChunks);
+		m_lruList.clear();
+		m_lruIndex.clear();
+		m_rebuildQueue.clear();
+		m_rebuildSet.clear();
+
+		for (auto& pr : m_chunks) {
+			const long long k = pr.first;
+			m_lruList.push_front(k);
+			m_lruIndex[k] = m_lruList.begin();
+			m_rebuildQueue.push_back(k);
+			m_rebuildSet.insert(k);
+		}
+
+		if (!map.tilesetKey.empty()) m_tilesetKey = map.tilesetKey;
+	}
+
+	return true;
+}
+/////////////////////////////////
 
 
 /////////////////////////////////

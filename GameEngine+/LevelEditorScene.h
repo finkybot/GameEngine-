@@ -62,6 +62,7 @@ private:
 	void EnsureVisibleChunks(); // Calculate which chunks intersect the current camera view plus a margin, and ensure those chunks are loaded and ready for rendering. This method will use the camera's position and viewport size to determine which chunks are needed, and will call the chunk manager to load any missing chunks.
 	void ApplyMainCameraView(); //  Apply the main camera's view to the render window before rendering the world. This method will retrieve the main camera's position and viewport settings, and set the SFML view accordingly so that the rendered chunks are displayed in the correct position and scale on the screen.
 	void ProcessInput(); // Process user input for camera controls (e.g., panning) and tile editing (e.g., painting/erasing tiles). This method will handle mouse input for painting tiles based on the current brush value, as well as middle mouse dragging for panning the camera. It will also take into account whether ImGui is capturing the mouse to avoid modifying the map when interacting with the UI.
+	void SaveLevelMetadata(); // Save the current level's metadata (tileset, layers) to meta.txt
 	void RefreshMapBounds(); // Recompute m_mapMin/m_mapMax/m_haveBounds from saved chunk files on disk. Called after any paint or erase operation so bounds grow with new tiles and shrink when tiles are removed.
 	void LevelManagerWindow(float x, float y, float	alpha); // Show a window in ImGui for managing levels, including creating new levels, selecting existing levels, and deleting levels. This method will provide a user interface for managing the different levels in the game, allowing users to easily switch between levels and perform level management tasks without leaving the level editor.
 	void BoundsInfoWindow(float x, float y, float alpha); // Show map bounds info in an ImGui window for debugging purposes. This method will display the current map bounds (m_mapMin and m_mapMax) in an ImGui window, providing feedback to the user about the extent of the world they are editing and helping with debugging and level design.
@@ -177,6 +178,7 @@ private:
 	char m_tilesetPathBuf[512] = "";
 	int m_tilesetTileW = 32;
 	int m_tilesetTileH = 32;
+	std::string m_currentTilesetPath = "";  // Track the currently loaded tileset path for saving to metadata
 	/////////////////////////////////
 
 

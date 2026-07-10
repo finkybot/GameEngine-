@@ -46,7 +46,8 @@ enum class Pattern {
 	MultiRing,			 // Multiple concentric rings
 	Starburst,			 // Rays emanating from center
 	Helix,				 // Double helix pattern
-	Equalizer			 // Spawn columns based on audio spectrum
+	Equalizer,			 // Spawn columns based on audio spectrum
+	TripyTunnel			 // Trippy EDM tunnel: beat-reactive symmetrical burst with morphing shapes
 };
 /////////////////////////////////
 
@@ -172,6 +173,26 @@ public:
 	bool IsEnabled() const { return m_enabled; }
 	/////////////////////////////////
 
+	/////////////////////////////////
+	// Audio reactivity control methods
+	void SetReactivitySensitivity(float sensitivity) { m_reactivitySensitivity = std::clamp(sensitivity, 0.1f, 5.0f); }
+	void SetVelocityScale(float scale) { m_velocityScale = std::clamp(scale, 0.1f, 3.0f); }
+	void SetBurstIntensity(float intensity) { m_burstIntensity = std::clamp(intensity, 0.0f, 3.0f); }
+	void SetBeatThreshold(float threshold) { m_beatThreshold = std::clamp(threshold, 0.05f, 1.0f); }
+
+	float GetReactivitySensitivity() const { return m_reactivitySensitivity; }
+	float GetVelocityScale() const { return m_velocityScale; }
+	float GetBurstIntensity() const { return m_burstIntensity; }
+	float GetBeatThreshold() const { return m_beatThreshold; }
+	bool WasBeatDetected() const { return m_beatDetected; }
+
+	// TripyTunnel movement controls
+	void SetTunnelMoveSpeed(float speed) { m_tunnelMoveSpeed = std::clamp(speed, 10.0f, 500.0f); }
+	void SetTunnelWanderInterval(float interval) { m_tunnelWanderInterval = std::clamp(interval, 0.5f, 10.0f); }
+	float GetTunnelMoveSpeed() const { return m_tunnelMoveSpeed; }
+	float GetTunnelWanderInterval() const { return m_tunnelWanderInterval; }
+	/////////////////////////////////
+
 
 
 	/////////////////////////////////
@@ -230,12 +251,30 @@ private:
 	/////////////////////////////////
 		 
 		
+
 	/////////////////////////////////
 	// Global enabled flag for the entire spawn system, allowing for quick toggling of all spawning activity without modifying individual spawner configurations. The m_globalTime variable can be used to track accumulated time for animated effects or patterns that require timing, 
 	// while m_musicEntityId stores the ID of the music entity used for audio-reactive patterns.
 	bool m_enabled = false;
 	float m_globalTime = 0.0f; 
 	size_t m_musicEntityId = 0;
+
+	// Audio reactivity parameters
+	float m_reactivitySensitivity = 1.0f;	// How sensitive the effects are to level changes (1.0 = normal)
+	float m_velocityScale = 1.0f;			// Multiplier for velocity scaling with level
+	float m_burstIntensity = 1.0f;			// Intensity of beat bursts
+	float m_prevLevel = 0.0f;				// Previous frame's level for beat detection
+	float m_beatThreshold = 0.3f;			// How much level needs to increase to trigger a beat
+	bool m_beatDetected = false;			// Whether a beat was detected this frame
+
+	// TripyTunnel movement tracking for smooth wandering
+	float m_tunnelCenterX = 0.0f;			// Current tunnel center X position
+	float m_tunnelCenterY = 0.0f;			// Current tunnel center Y position
+	float m_tunnelTargetX = 0.0f;			// Target X for smooth movement
+	float m_tunnelTargetY = 0.0f;			// Target Y for smooth movement
+	float m_tunnelMoveSpeed = 100.0f;		// Pixels per second for smooth movement
+	float m_tunnelWanderTimer = 0.0f;		// Timer for generating new waypoints
+	float m_tunnelWanderInterval = 3.0f;	// Interval in seconds between new waypoints
 	/////////////////////////////////
 };
 /////////////////////////////////

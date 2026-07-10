@@ -358,8 +358,10 @@ bool SpawnSystem::SaveToFile(const std::filesystem::path& path, std::string& out
 			return "Starburst";
 		case Pattern::Helix:
 			return "Helix";
-        case Pattern::Equalizer:
+		case Pattern::Equalizer:
 			return "Equalizer";
+		case Pattern::TripyTunnel:
+			return "TripyTunnel";
 		default:
 			return "Random";
 		}
@@ -437,9 +439,51 @@ void SpawnSystem::Update(float deltaTime, float level) {
 	// Update global time for any time-based patterns/effects
 	m_globalTime += deltaTime;
 
+	// Update TripyTunnel center movement for smooth wandering
+	m_tunnelWanderTimer += deltaTime;
+	if (m_tunnelWanderTimer >= m_tunnelWanderInterval) {
+		// Generate a new random target waypoint within screen bounds
+		if (m_window) {
+			float windowWidth = (float)m_window->getSize().x;
+			float windowHeight = (float)m_window->getSize().y;
+			// Wander within a 70% margin of screen (stay away from edges)
+			float margin = 0.15f;
+			m_tunnelTargetX = windowWidth * (margin + (std::rand() / (float)RAND_MAX) * (1.0f - 2.0f * margin));
+			m_tunnelTargetY = windowHeight * (margin + (std::rand() / (float)RAND_MAX) * (1.0f - 2.0f * margin));
+			m_tunnelWanderTimer = 0.0f;
+		}
+	}
+
+	// Smoothly move tunnel center towards target
+	float dx = m_tunnelTargetX - m_tunnelCenterX;
+	float dy = m_tunnelTargetY - m_tunnelCenterY;
+	float distance = std::sqrtf(dx * dx + dy * dy);
+	if (distance > 1.0f) {  // Only move if distance is significant
+		float moveStep = m_tunnelMoveSpeed * deltaTime;
+		if (moveStep < distance) {
+			// Move towards target
+			m_tunnelCenterX += (dx / distance) * moveStep;
+			m_tunnelCenterY += (dy / distance) * moveStep;
+		} else {
+			// Reached target
+			m_tunnelCenterX = m_tunnelTargetX;
+			m_tunnelCenterY = m_tunnelTargetY;
+		}
+	}
+
+	// Beat detection: check if level increased significantly from previous frame
+	m_beatDetected = false;
+	if (level > m_prevLevel + m_beatThreshold) {
+		m_beatDetected = true;
+	}
+	m_prevLevel = level;
+
+	// Clamp level to 0-1 range
+	float clampedLevel = std::clamp(level, 0.0f, 1.0f);
+
 	// Iterate through each spawner config and manage spawning logic based on type and pattern
 	for (auto& config : m_configs) {
-        // If an Equalizer pattern is present, it may be handled externally (MusicVisualizerScene)
+		// If an Equalizer pattern is present, it may be handled externally (MusicVisualizerScene)
 		// to avoid spawning per-frame. Skip Equalizer here to defer to the scene-managed pool.
 		if (config.pattern == Pattern::Equalizer)
 			continue;
@@ -448,20 +492,31 @@ void SpawnSystem::Update(float deltaTime, float level) {
 		float& timer = m_spawnTimers[config.id];
 		timer += deltaTime;
 
+		// Calculate dynamic spawn rate multiplier based on level (louder = more spawns)
+		// At level 0: rate * 0.3x, at level 1: rate * (1 + reactivitySensitivity)
+		float rateMultiplier = 0.3f + clampedLevel * (1.0f + m_reactivitySensitivity);
+
 		// Determine spawning logic based on spawner type
 		if (config.type == Type::Burst) {
 			// Burst: spawn burstCount entities when level exceeds threshold and cooldown has elapsed
+			// On beats, spawn extra burst entities
 			if (timer >= config.rate && level >= config.threshold) {
-				for (int i = 0; i < config.burstCount; ++i)
-					SpawnEntity(config, level);
+				int spawnCount = config.burstCount;
+				if (m_beatDetected) {
+					spawnCount += (int)(config.burstCount * m_burstIntensity); // Extra spawns on beat
+				}
+				for (int i = 0; i < spawnCount; ++i)
+					SpawnEntity(config, clampedLevel);
 				timer = 0.0f;
 			}
 		} else if (config.type == Type::Continuous) { // type == Type::Continuous
 			// Continuous: spawn at rate (spawns/sec) while level exceeds threshold
+			// Rate scales dynamically with music level for more energy
 			if (level >= config.threshold) {
-				float interval = 1.0f / config.rate;
+				float adjustedRate = config.rate * rateMultiplier;
+				float interval = 1.0f / adjustedRate;
 				while (timer >= interval) {
-					SpawnEntity(config, level);
+					SpawnEntity(config, clampedLevel);
 					timer -= interval;
 				}
 			}
@@ -469,7 +524,7 @@ void SpawnSystem::Update(float deltaTime, float level) {
 			// Periodic: spawn at regular intervals regardless of level
 			float interval = 1.0f / config.rate;
 			while (timer >= interval) {
-				SpawnEntity(config, level);
+				SpawnEntity(config, clampedLevel);
 				timer -= interval;
 			}
 		}
@@ -533,13 +588,24 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 	// Circular: spawn on a circle around the center, with angle advancing each spawn
 	case Pattern::Circular: {
 		spawnSize = 12.0f + 8.0f * sinf(angle * 3.0f);
-		r = 128 + (int)(127.0f * sinf(angle + 0.0f));
-		g = 128 + (int)(127.0f * sinf(angle + 2.0f));
-		b = 128 + (int)(127.0f * sinf(angle + 4.0f));
+		// Boost color intensity on louder parts
+		float saturation = 0.6f + 0.4f * lvl;
+		float brightness = 0.8f + 0.2f * lvl;
+		int ar = 128 + (int)(127.0f * sinf(angle + 0.0f));
+		int ag = 128 + (int)(127.0f * sinf(angle + 2.0f));
+		int ab = 128 + (int)(127.0f * sinf(angle + 4.0f));
+		r = (int)(ar * saturation * brightness);
+		if (r > 255) r = 255;
+		g = (int)(ag * saturation * brightness);
+		if (g > 255) g = 255;
+		b = (int)(ab * saturation * brightness);
+		if (b > 255) b = 255;
 		x = centerX + cfg.spawnRadius * cosf(angle);
 		y = centerY + cfg.spawnRadius * sinf(angle);
-		xVelocity = -30.0f * sinf(angle);
-		yVelocity = -40.0f - 10.0f * cosf(angle);
+		// Enhanced velocity with reactivity scale
+		float velocityMultiplier = 0.5f + lvl * m_velocityScale;
+		xVelocity = -30.0f * sinf(angle) * velocityMultiplier;
+		yVelocity = -40.0f - 10.0f * cosf(angle) * velocityMultiplier;
 		angle += cfg.circularSpeed;
 		if (angle > 6.28318f)
 			angle -= 6.28318f;
@@ -553,18 +619,17 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 		int ag = 128 + (int)(127.0f * sinf(angle + 2.0f));
 		int ab = 128 + (int)(127.0f * sinf(angle + 4.0f));
 		r = (int)(ar * brightness);
-		if (r > 255)
-			r = 255;
+		if (r > 255) r = 255;
 		g = (int)(ag * brightness);
-		if (g > 255)
-			g = 255;
+		if (g > 255) g = 255;
 		b = (int)(ab * brightness);
-		if (b > 255)
-			b = 255;
+		if (b > 255) b = 255;
 		x = centerX + cfg.spawnRadius * cosf(angle);
 		y = centerY + cfg.spawnRadius * sinf(angle);
-		xVelocity = -20.0f * sinf(angle) * (0.5f + lvl);
-		yVelocity = -30.0f - 40.0f * lvl;
+		// Enhanced velocity scaling with reactivity
+		float velocityMultiplier = 0.5f + lvl * m_velocityScale;
+		xVelocity = -20.0f * sinf(angle) * velocityMultiplier;
+		yVelocity = -30.0f - 40.0f * lvl * velocityMultiplier;
 		angle += cfg.circularSpeed;
 		if (angle > 6.28318f)
 			angle -= 6.28318f;
@@ -574,11 +639,16 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 	case Pattern::Spiral: {
 		spawnSize = cfg.sizeMin + (cfg.sizeMax - cfg.sizeMin) * (srad / cfg.spawnRadius);
 		float hue = fmodf(angle * 57.2957795f, 360.0f);
-		HSVtoRGB(hue, 1.0f, 1.0f, r, g, b);
+		// Enhance saturation and brightness on strong levels
+		float saturation = 0.6f + 0.4f * lvl;
+		float brightness = 0.7f + 0.3f * lvl;
+		HSVtoRGB(hue, saturation, brightness, r, g, b);
 		x = centerX + srad * cosf(angle);
 		y = centerY + srad * sinf(angle);
-		xVelocity = 20.0f * cosf(angle) + 10.0f * (lvl * 2.0f - 1.0f);
-		yVelocity = 20.0f * sinf(angle) - 20.0f;
+		// Velocity enhanced with level and reactivity
+		float velocityMultiplier = 1.0f + lvl * m_velocityScale;
+		xVelocity = 20.0f * cosf(angle) * velocityMultiplier + 10.0f * (lvl * 2.0f - 1.0f);
+		yVelocity = 20.0f * sinf(angle) * velocityMultiplier - 20.0f;
 		angle += cfg.circularSpeed;
 		srad += cfg.spiralExpansion;
 		if (srad > cfg.spawnRadius)
@@ -590,13 +660,22 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 	// Firework: spawn in a burst outward from the center with random angle, speed, and color, scaled by level
 	case Pattern::Firework: {
 		spawnSize = cfg.sizeMin + (cfg.sizeMax - cfg.sizeMin) * lvl;
+		// More vibrant colors on strong beats
+		float saturation = 0.7f + 0.3f * lvl;
 		float hue = 30.0f + (std::rand() % 40);
-		HSVtoRGB(hue, 0.9f, 1.0f, r, g, b);
+		if (m_beatDetected) {
+			hue = fmodf(hue + m_globalTime * 180.0f, 360.0f); // Pulse color on beats
+		}
+		HSVtoRGB(hue, saturation, 1.0f, r, g, b);
 		float startDist = 10.0f + (std::rand() % 30);
 		float ang = ((float)std::rand() / (float)RAND_MAX) * 6.28318f;
 		x = centerX + startDist * cosf(ang);
 		y = centerY + startDist * sinf(ang);
-		float speed = 80.0f + (std::rand() % 120) + lvl * 100.0f;
+		float baseSpeed = 80.0f + (std::rand() % 120);
+		float speed = baseSpeed + lvl * 100.0f * m_velocityScale;
+		if (m_beatDetected) {
+			speed *= (1.0f + m_burstIntensity); // Extra energy on beats
+		}
 		xVelocity = speed * cosf(ang);
 		yVelocity = speed * sinf(ang) - 30.0f;
 	} break;
@@ -697,12 +776,85 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 			angle -= 6.28318f;
 		count++;
 	} break;
+
+	// Trippy Tunnel: Beat-reactive symmetrical pattern with morphing shapes and kaleidoscopic effects
+	case Pattern::TripyTunnel: {
+		// Kaleidoscopic symmetry: spawn multiple entities at symmetric angles
+		int symmetry = cfg.ringCount > 0 ? cfg.ringCount : 6;  // Use ringCount for symmetry (default 6)
+
+		// Determine which "arm" of symmetry we're spawning (0 to symmetry-1)
+		int armIndex = count % symmetry;
+		float baseAngle = (6.28318f / symmetry) * armIndex + m_globalTime * cfg.circularSpeed;
+
+		// Determine spawn ring based on burstCount cycling
+		int ringIndex = count / symmetry;
+
+		// Tunnel spiral: rings move outward or inward based on beat
+		float ringDistance = cfg.spawnRadius * 0.3f + (ringIndex % 4) * cfg.spawnRadius * 0.15f;
+
+		// On beats: expand outward dramatically; otherwise: gentle inward spiral
+		if (m_beatDetected) {
+			ringDistance *= (1.0f + m_burstIntensity * 0.5f);
+		} else {
+			ringDistance *= 0.9f;  // Gentle contraction
+		}
+
+		// Position on tunnel ring, spawning around the wandering tunnel center
+		x = m_tunnelCenterX + ringDistance * cosf(baseAngle);
+		y = m_tunnelCenterY + ringDistance * sinf(baseAngle);
+
+		// Shape morphing based on ring index: Circle → Square → Triangle → Circle
+		int shapeType = ringIndex % 3;  // 0=circle, 1=square, 2=triangle (use circle for now)
+
+		// Size varies: larger on beats, smaller between
+		float sizeVariation = m_beatDetected ? 1.5f : 0.8f;
+		spawnSize = (cfg.sizeMin + cfg.sizeMax) * 0.5f * sizeVariation;
+
+		// Color cycling: hue rotates based on global time + ring index
+		float hue = fmodf(m_globalTime * 100.0f + ringIndex * 30.0f, 360.0f);
+		float saturation = 0.95f + 0.05f * lvl;  // Much more saturated for vibrant colors (0.95-1.0)
+		float brightness = 0.9f + 0.1f * (m_beatDetected ? 1.0f : lvl);  // Brighter overall (0.9-1.0)
+		HSVtoRGB(hue, saturation, brightness, r, g, b);
+
+		// Velocity: outward burst on beats, gentle spiral otherwise
+		float radialVelocity = m_beatDetected ? (150.0f + lvl * 100.0f) : 20.0f;
+		xVelocity = radialVelocity * cosf(baseAngle) + cfg.circularSpeed * 20.0f * -sinf(baseAngle);
+		yVelocity = radialVelocity * sinf(baseAngle) + cfg.circularSpeed * 20.0f * cosf(baseAngle);
+
+		count++;
+	} break;
 	}
 
 	// Create the explosion shape component with the determined size and color, and add it to the entity along with a transform component for position and velocity
-	auto circle = std::make_unique<CExplosion>(spawnSize);
-	circle->SetColor((float)r, (float)g, (float)b, 220);
-	entity->AddComponentPtr<CShape>(std::move(circle));
+	// Vary shape based on level - more interesting shapes when music is loud
+	std::unique_ptr<CShape> shape;
+
+	// Pick shape based on level and randomness for variety
+	int shapeChoice = (int)(lvl * 3.0f) + (std::rand() % 2);
+	switch (shapeChoice) {
+	case 0:
+	case 1: {
+		// Circle (most common)
+		auto circle = std::make_unique<CExplosion>(spawnSize);
+		circle->SetColor((float)r, (float)g, (float)b, 220);
+		shape = std::move(circle);
+	} break;
+	case 2: {
+		// Square (medium intensity)
+		auto square = std::make_unique<CRectangle>(spawnSize * 1.2f, spawnSize * 1.2f);
+		square->SetColor((float)r, (float)g, (float)b, 220);
+		shape = std::move(square);
+	} break;
+	case 3:
+	default: {
+		// Triangle-like or larger circle (high intensity)
+		auto circle = std::make_unique<CExplosion>(spawnSize * 1.5f);
+		circle->SetColor((float)r, (float)g, (float)b, 255);
+		shape = std::move(circle);
+	} break;
+	}
+
+	entity->AddComponentPtr<CShape>(std::move(shape));
 	entity->AddComponent<CTransform>(Vec2(x, y), Vec2(xVelocity, yVelocity));
 
 	// Add sound effect component for explosion sound (if enabled in config)

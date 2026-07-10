@@ -95,6 +95,7 @@ public:
 	void SetMasterVolume(float volume);
 	void SetMaxConcurrentSounds(size_t count);
 	void SetListenerPosition(const Vec2& pos);
+	Vec2 GetListenerPosition() const { return m_listenerPosition; }
 	void SetSpatialAudioEnabled(bool enabled) { m_spatialAudioEnabled = enabled; }
 	bool IsSpatialAudioEnabled() const { return m_spatialAudioEnabled; }
 	/////////////////////////////////

@@ -136,6 +136,10 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 						// copy into UI buffer
 						ImStrncpy(m_tilesetKeyBuf, val.c_str(), sizeof(m_tilesetKeyBuf));
 					}
+					else if (key == "tilesetPath") {
+						// Restore tileset path for saving later
+						m_currentTilesetPath = val;
+					}
 				}
 			}
 		} catch(...) {}
@@ -697,6 +701,7 @@ void LevelEditorScene::Render() {
 			m_chunkManager.RebuildAllChunksFromTileset();
 			m_chunkManager.UpdateMainThread();
 			m_chunkManager.RebuildAllChunksFromTileset();
+			SaveLevelMetadata();  // Save tileset to meta.txt
 			m_selectedTileIndex = 0;
 		}
 	}
@@ -838,9 +843,10 @@ void LevelEditorScene::AtlasBrowserWindow() {
 						}
 					}
 					if (m_gameEngine.GetTextureManager().LoadAtlas(key, s_selected_file, m_tilesetTileW,
-																   m_tilesetTileH)) {
+																	   m_tilesetTileH)) {
 						m_chunkManager.SetTilesetKey(key);
 						m_chunkManager.RebuildAllChunksFromTileset();
+						SaveLevelMetadata();  // Save tileset to meta.txt
 						std::cout << "Loaded atlas: " << s_selected_file << " key='" << key << "'" << std::endl;
 						// copy key into ui buffer
 						ImStrncpy(m_tilesetKeyBuf, key.c_str(), sizeof(m_tilesetKeyBuf));
@@ -868,6 +874,8 @@ void LevelEditorScene::TilesetKeyWindow() {
 	if (ImGui::Button("Set Key")) {
 		m_chunkManager.SetTilesetKey(std::string(m_tilesetKeyBuf));
 		m_chunkManager.RebuildAllChunksFromTileset();
+		SaveLevelMetadata();  // Save tileset to meta.txt
+		std::cout << "LevelEditorScene: Set tileset to '" << m_tilesetKeyBuf << "' and saved metadata\n";
 	}
 
 	ImGui::Separator();
@@ -1404,6 +1412,9 @@ void LevelEditorScene::AtlasLoadWorker(std::string key, std::string path, int w,
 		std::lock_guard<std::mutex> threadLock(m_atlasLoadMutex);
 		m_atlasLoadSuccess = ok;
 		m_atlasLoadFinished = true;
+		if (ok) {
+			m_currentTilesetPath = path;  // Save the path for metadata
+		}
 		m_atlasLoadMessage = ok ? std::string("Loaded: ") + path : std::string("Failed: ") + path;
 	}
 	m_atlasLoading = false;
@@ -1463,4 +1474,49 @@ void LevelEditorScene::ProcessInput() {
 		m_gameEngine.ChangeScene("MainMenu");
 	}
 }
+
+/////////////////////////////////
+// SaveLevelMetadata - Saves the current level's metadata (tileset, layers, etc.) to meta.txt
+void LevelEditorScene::SaveLevelMetadata() {
+	if (m_currentLevelName.empty()) return;  // No level loaded, can't save
+
+	namespace fs = std::filesystem;
+	std::error_code ec;
+	fs::path base;
+#ifdef _MSC_VER
+	char* envBuf = nullptr; size_t len = 0;
+	if (_dupenv_s(&envBuf, &len, "APPDATA") == 0 && envBuf && envBuf[0] != '\0') {
+		base = fs::path(envBuf) / "GameEnginePlus" / "levels";
+	} else {
+		base = fs::path("levels");
+	}
+	free(envBuf);
+#else
+	const char* appdata = std::getenv("APPDATA");
+	if (appdata && appdata[0] != '\0') base = fs::path(appdata) / "GameEnginePlus" / "levels";
+	else base = fs::path("levels");
+#endif
+
+	try {
+		fs::path metaPath = base / m_currentLevelName / "meta.txt";
+		std::ofstream meta(metaPath.string(), std::ios::trunc);
+		if (meta) {
+			meta << "tileset=" << m_tilesetKeyBuf << "\n";
+			if (!m_currentTilesetPath.empty()) {
+				meta << "tilesetPath=" << m_currentTilesetPath << "\n";
+			}
+			// Write layer names
+			meta << "layers=";
+			for (size_t i = 0; i < m_layerNames.size(); ++i) {
+				if (i > 0) meta << ",";
+				meta << m_layerNames[i];
+			}
+			meta << "\n";
+			std::cout << "LevelEditorScene: Saved metadata to " << metaPath.string() << "\n";
+		}
+	} catch(...) {
+		std::cerr << "LevelEditorScene: Failed to save metadata\n";
+	}
+}
+/////////////////////////////////
 /////////////////////////////////

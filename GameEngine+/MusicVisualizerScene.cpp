@@ -125,6 +125,7 @@ void MusicVisualizerScene::InitializeEqualizerBars(size_t visualCount) {
 		// Prefer CLayer component for render layer; add it so systems can query layer cheaply
 		be->AddComponent<CLayer>(CLayer::Layer::Foreground);
 		be->AddComponent<CTransform>(Vec2(bx, by), Vec2::Zero);
+		m_entityManager.SetEntityLayer(be, Entity::Layer::Mid);
 	}
     m_entityManager.ProcessPending();
     // Resize display values to match pool
@@ -222,15 +223,13 @@ void MusicVisualizerScene::UpdateEqualizerBars(const std::vector<float>& bands) 
 		
 		// Update rectangle size and color/alpha
         // Attempt to resize rectangle shape and update color
-        if (auto rectShape = dynamic_cast<CRectangle*>(shape)) {
+		if (auto rectShape = dynamic_cast<CRectangle*>(shape)) {
 			rectShape->SetSize(bwidth, bheight);
 			int alpha = static_cast<int>(200.0f * std::min(1.0f, level + 0.1f));
 			if (alpha < 40) alpha = 40; // ensure minimum visibility
 			rectShape->SetColor(128.0f + 127.0f * (i / static_cast<float>(m)), 128.0f + 127.0f * level, 200.0f, alpha);
 		}
-        xf->m_position = Vec2(bx, by);
-        // ensure visualizer entities remain in Mid layer so background/scene elements appear behind them
-		m_entityManager.SetEntityLayer(e, Entity::Layer::Mid);
+		xf->m_position = Vec2(bx, by);
 	}
     (void)0; // diagnostics removed
 }
@@ -363,18 +362,17 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 	if (!(GImGui && GImGui->WithinFrameScope))
 		return;
 
-	// Position the Audio Reactive window in the bottom-right corner with a fixed size
-	ImVec2 winSize(340, 500);
+	// Position the Audio Reactive window in the bottom-right corner with a fixed size (first time only)
+	ImVec2 winSize(380, 520);
 	ImVec2 pos((float)m_window.getSize().x - winSize.x - 10.0f, (float)m_window.getSize().y - winSize.y - 10.0f);
-    
-	// Set next window position and size with ImGuiCond_Always to ensure it stays in the corner and doesn't get moved by user
-	ImGui::SetNextWindowPos(pos, ImGuiCond_Always);
-	ImGui::SetNextWindowSize(winSize, ImGuiCond_Always);
+
+	// Set next window position and size only on first appearance (ImGuiCond_FirstUseEver), allowing user to move/resize after that
+	ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize(winSize, ImGuiCond_FirstUseEver);
 	
 	// allow semi-transparent background for this overlay window
 	ImGui::SetNextWindowBgAlpha(0.55f);
-	ImGui::Begin("Audio Reactive", nullptr,
-				 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize);
+	ImGui::Begin("Audio Reactive", nullptr, ImGuiWindowFlags_None);
 	// make contents scrollable if they overflow
 	ImGui::BeginChild("AudioReactiveScroll", ImVec2(0, 0), false, ImGuiWindowFlags_None);
 
@@ -426,7 +424,7 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 		// Pattern selector (all new patterns)
 		const char* patternItems[] = {
 			"Random",	 "Circular", "Level-scaled Circular", "Spiral", "Firework", "Figure-8", "Wave", "Multi-Ring",
-			"Starburst", "Helix"};
+			"Starburst", "Helix", "Equalizer", "Trippy Tunnel"};
 		int patternIdx = static_cast<int>(spawnConfigs[0].pattern);
 		if (ImGui::Combo("Spawn Pattern", &patternIdx, patternItems, IM_ARRAYSIZE(patternItems))) {
 			spawnConfigs[0].pattern = static_cast<Spawn::Pattern>(patternIdx);
@@ -435,6 +433,9 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 		// Threshold (used by Burst/Continuous)
 		if (spawnConfigs[0].type != Spawn::Type::Periodic) {
 			ImGui::SliderFloat("Threshold", &spawnConfigs[0].threshold, 0.0001f, 0.5f, "%.4f");
+			if (spawnConfigs[0].threshold > 0.1f) {
+				ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "Warning: High threshold may prevent spawning!");
+			}
 		} else {
 			ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1), "Threshold: ignored (Periodic)");
 		}
@@ -456,7 +457,8 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 		auto pat = spawnConfigs[0].pattern;
 		bool needsRotation = (pat == Spawn::Pattern::Circular || pat == Spawn::Pattern::LevelScaledCircular ||
 							  pat == Spawn::Pattern::Spiral || pat == Spawn::Pattern::Figure8 ||
-							  pat == Spawn::Pattern::MultiRing || pat == Spawn::Pattern::Helix);
+							  pat == Spawn::Pattern::MultiRing || pat == Spawn::Pattern::Helix ||
+							  pat == Spawn::Pattern::TripyTunnel);
 
 		// Show rotation speed control if the selected pattern involves rotation. This allows users to adjust how fast the circular/spiral 
 		// patterns rotate around the center, which can create different visual effects and better sync with the music.
@@ -467,13 +469,30 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 		// allowing for tighter or looser spirals based on user preference.
 		if (pat == Spawn::Pattern::Spiral)
 			ImGui::SliderFloat("Spiral Expansion", &spawnConfigs[0].spiralExpansion, 0.1f, 20.0f, "%.1f");
-		// Show ring count control if MultiRing pattern is selected. This allows users to choose how many concentric rings of spawns are created, 
-		// which can create more complex and visually interesting patterns that still react to the music.
-		if (pat == Spawn::Pattern::MultiRing)
-			ImGui::SliderInt("Ring Count", &spawnConfigs[0].ringCount, 2, 8);
+		// Show ring count control if MultiRing or TripyTunnel pattern is selected. For TripyTunnel, this controls symmetry arms (kaleidoscope effect).
+		if (pat == Spawn::Pattern::MultiRing || pat == Spawn::Pattern::TripyTunnel) {
+			int label = (pat == Spawn::Pattern::TripyTunnel) ? 4 : 1;  // 4-8 for tunnel, 2-8 for rings
+			int minVal = (pat == Spawn::Pattern::TripyTunnel) ? 4 : 2;
+			const char* labelText = (pat == Spawn::Pattern::TripyTunnel) ? "Symmetry Arms" : "Ring Count";
+			ImGui::SliderInt(labelText, &spawnConfigs[0].ringCount, minVal, 8);
+		}
+
+		// TripyTunnel-specific movement controls
+		if (pat == Spawn::Pattern::TripyTunnel) {
+			ImGui::Separator();
+			ImGui::Text("Tunnel Movement:");
+			float moveSpeed = m_spawnSystem->GetTunnelMoveSpeed();
+			if (ImGui::SliderFloat("Move Speed (px/s)", &moveSpeed, 10.0f, 500.0f, "%.0f")) {
+				m_spawnSystem->SetTunnelMoveSpeed(moveSpeed);
+			}
+			float wanderInterval = m_spawnSystem->GetTunnelWanderInterval();
+			if (ImGui::SliderFloat("Wander Interval (s)", &wanderInterval, 0.5f, 10.0f, "%.1f")) {
+				m_spawnSystem->SetTunnelWanderInterval(wanderInterval);
+			}
+		}
 
 		ImGui::Separator();
-       ImGui::Text("Spawners: %d", (int)m_spawnSystem->GetConfigs().size());
+	   ImGui::Text("Spawners: %d", (int)m_spawnSystem->GetConfigs().size());
 
         // Equalizer visual controls: visual bar count is independent from spectrum band count
 		if (auto ms = m_entityManager.GetMusicSystem()) {
@@ -485,9 +504,9 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 			// the equalizer visualization and how spectrum bands are mapped to them. It can be more or less than the actual spectrum band count 
 			// for creative visual effects.
 			int visualBars = m_visualBarCount;
-			if (ImGui::SliderInt("Visual Bars", &visualBars, 10, 256)) {
+			if (ImGui::SliderInt("Visual Bars", &visualBars, 10, 128)) {
 				if (visualBars < 1) visualBars = 1;
-				if (visualBars > 256) visualBars = 256;
+				if (visualBars > 128) visualBars = 128;
 				if (visualBars != m_visualBarCount) {
 					m_visualBarCount = visualBars;
 					InitializeEqualizerBars(static_cast<size_t>(m_visualBarCount));
@@ -591,19 +610,55 @@ void MusicVisualizerScene::DrawAudioReactiveWindow() {
 		ImGui::TextUnformatted("No spawners configured.");
 	}
 
+	// Audio-Reactive Effect Controls
+	ImGui::Separator();
+	ImGui::Text("Audio-Reactive Effects");
+	ImGui::SliderFloat("Reactivity Sens##audio", &m_reactivitySensitivity, 0.1f, 5.0f, "%.2f");
+	ImGui::SliderFloat("Velocity Scale##audio", &m_velocityScale, 0.1f, 3.0f, "%.2f");
+	ImGui::SliderFloat("Burst Intensity##audio", &m_burstIntensity, 0.0f, 3.0f, "%.2f");
+	ImGui::SliderFloat("Beat Threshold##audio", &m_beatThreshold, 0.05f, 1.0f, "%.2f");
+
+	// Debug: Display current reactivity values in SpawnSystem
+	if (m_spawnSystem) {
+		ImGui::TextColored(ImVec4(0.2f, 1.0f, 0.2f, 1.0f), "SpawnSystem Reactivity:");
+		ImGui::Text("  Sens: %.2f | Vel: %.2f | Burst: %.2f | Beat: %.2f", 
+			m_spawnSystem->GetReactivitySensitivity(),
+			m_spawnSystem->GetVelocityScale(),
+			m_spawnSystem->GetBurstIntensity(),
+			m_spawnSystem->GetBeatThreshold());
+	}
+
 	// Show current music level for reference
 	float level = 0.0f;
 	bool hasBuffer = false;
 	if (m_musicEntity) {
 		if (auto ms = m_entityManager.GetMusicSystem()) {
-			ms->Process();
+			// Avoid calling Process() from UI code; Update() already processes once per frame.
 			level = ms->GetLevel(m_musicEntity->GetId());
 			hasBuffer = ms->HasAnalysisBuffer(m_musicEntity->GetId());
 		}
 	}
-    ImGui::Text("Level: %.4f", level);
+	ImGui::Text("Level: %.4f", level);
 	ImGui::SameLine();
 	ImGui::TextUnformatted(hasBuffer ? "(analyzing)" : "(no analysis)");
+
+	// Debug: Show calculated rate multiplier
+	if (m_spawnSystem) {
+		float clampedLevel = std::clamp(level, 0.0f, 1.0f);
+		float rateMultiplier = 0.3f + clampedLevel * (1.0f + m_reactivitySensitivity);
+		float velocityMultiplier = 0.5f + clampedLevel * m_velocityScale;
+		ImGui::TextColored(ImVec4(0.2f, 1.0f, 1.0f, 1.0f), "Multipliers: Rate=%.2fx | Vel=%.2fx", 
+			rateMultiplier, velocityMultiplier);
+
+		// Check if level is below threshold
+		auto& configs = m_spawnSystem->GetConfigs();
+		if (!configs.empty()) {
+			if (level < configs[0].threshold) {
+				ImGui::TextColored(ImVec4(1.0f, 0.5f, 0.0f, 1.0f), 
+					"Note: Level (%.4f) below threshold (%.4f) - no spawning!", level, configs[0].threshold);
+			}
+		}
+	}
 
 	// end scrollable child and window
 	ImGui::EndChild();
@@ -645,7 +700,7 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 			if (ImGui::Button("Play")) {
 				musicCmp->state = CMusic::State::Playing;
 				std::cout << "[MusicVisualizer] Play pressed for entity "  << (m_musicEntity ? m_musicEntity->GetId() : 0) << std::endl;
-				
+
 				// If the track has ended and looping is disabled, request a restart next update
 				if (auto musicSys = m_entityManager.GetMusicSystem()) {
 					float pos = musicSys->GetPlayingOffset(m_musicEntity->GetId());
@@ -711,13 +766,12 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 
 	// Loop toggle and playhead / seek
 	if (m_musicEntity) {
-		if (auto musicSys = m_entityManager.GetMusicSystem()) {
-			m_playhead = musicSys->GetPlayingOffset(m_musicEntity->GetId());
-			m_duration = musicSys->GetDuration(m_musicEntity->GetId());
-		}
-
-		// Sync m_loopEnabled with component state first (in case it changed externally)
 		if (auto musicCmp = m_musicEntity->GetComponent<CMusic>()) {
+			// Access music through MusicSystem to avoid race conditions
+			if (auto musicSys = m_entityManager.GetMusicSystem()) {
+				m_playhead = musicSys->GetPlayingOffset(m_musicEntity->GetId());
+				m_duration = musicSys->GetDuration(m_musicEntity->GetId());
+			}
 			m_loopEnabled = musicCmp->loop;
 		}
 
@@ -739,16 +793,10 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 			// Detect drag start/end using IsItemActive
 			bool sliderActive = ImGui::IsItemActive();
 
-			// On drag start, if music is playing, pause it and remember to resume on drag end. On drag end, if we paused for the drag, resume playback.
+			// On drag start, if music is playing, pause it and remember to resume on drag end.
 			if (sliderActive && !m_playheadActive) {
-				
-				// Drag just started - record playing state and pause (I want to stop the sound sample from playing while dragging the playhead, as it
-				// will likely repeat the same sample over and over (sounds like game crashes!!!! anyone)
 				if (auto cm = m_musicEntity->GetComponent<CMusic>()) {
-					m_wasPlayingBeforeSeek =
-						(cm->state == CMusic::State::Playing); // record the music playing state before seek
-
-					// If it was playing, pause it while dragging the playhead to prevent repeated sound samples during seek (which sound like ass)
+					m_wasPlayingBeforeSeek = (cm->state == CMusic::State::Playing);
 					if (m_wasPlayingBeforeSeek) {
 						cm->state = CMusic::State::Paused;
 						if (auto musicSys = m_entityManager.GetMusicSystem())
@@ -756,8 +804,23 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 					}
 				}
 			}
-			// otherwise check if the slider is not active but play ahead is
-			else if (!sliderActive && m_playheadActive) {
+
+			// While dragging, only update UI state and defer actual seek until release.
+			if (sliderActive && newPos != m_playhead) {
+				m_pendingSeekPos = newPos;
+				m_seekPending = true;
+				m_playhead = newPos;
+			}
+
+			// On drag end, apply one seek and then resume playback if needed.
+			if (!sliderActive && m_playheadActive) {
+				if (m_seekPending) {
+					if (auto musicSys = m_entityManager.GetMusicSystem()) {
+						musicSys->Seek(m_musicEntity->GetId(), m_pendingSeekPos);
+					}
+					m_seekPending = false;
+				}
+
 				if (m_wasPlayingBeforeSeek) {
 					if (auto musCmp = m_musicEntity->GetComponent<CMusic>()) {
 						musCmp->state = CMusic::State::Playing;
@@ -765,20 +828,14 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 							musicSys->Process();
 					}
 				}
-			} 
-			// Set the playhead active state, true if we are currently dragging the playhead, and false after we let go, using this to provide a pause on drag
+			}
+
+			// Set the playhead active state, true if we are currently dragging the playhead, and false after release.
 			m_playheadActive = sliderActive;
 
 			// Display the current playhead position and duration
 			ImGui::SameLine();
 			ImGui::Text("/ %.2fs", m_duration);
-
-			// Seek while dragging (or on any change)
-			if (newPos != m_playhead) {
-				if (auto musicSys = m_entityManager.GetMusicSystem())
-					musicSys->Seek(m_musicEntity->GetId(), newPos);
-				m_playhead = newPos;
-			}
 		} else {
 			ImGui::TextUnformatted("Playhead: n/a");
 		}
@@ -795,7 +852,7 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 void MusicVisualizerScene::ShowOpenFileBrowser() {
 	ImGui::SameLine(); // Keep the "Browse..." button on the same line as the previous UI elements
 
-	// Try and create abutton to open the file browser popup
+	// Try and create a button to open the file browser popup
 	if (ImGui::Button("Browse...")) {
 		m_showOpenDialog = true;
 		ImGui::OpenPopup("Open Audio File");
@@ -925,6 +982,7 @@ void MusicVisualizerScene::ShowOpenFileBrowser() {
 			queryLower.clear();
 		}
 
+		// Iterate through the directory entries and display them in the list. Apply the search filter to only show entries that match the query. Handle any exceptions that may occur
 		for (auto& ent : entries) {
 			// Apply search filter (case-insensitive substring). If empty, show all.
 			// Validate the entry path before attempting to call filename() on it
@@ -1251,11 +1309,12 @@ MusicVisualizerScene::~MusicVisualizerScene() {
 // and renders the ImGui interface for music loading and playback controls. It also handles initialization of the current directory for the file browser and manages 
 // the state of the spawn system and equalizer bars based on user interactions and music analysis.
 void MusicVisualizerScene::Update(float deltaTime) {
-	// Set listener position for 3D spatial audio (at center of screen)
-	Vec2 listenerPos(m_window.getSize().x / 2.0f, m_window.getSize().y / 2.0f);
-	if (m_entityManager.GetSoundSystem()) {
-		m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
-	}
+
+	// *** Deprecated: Listener position is now set in OnEnter and does not need to be updated every frame. Keeping this code commented out for reference.
+	//Vec2 listenerPos(m_window.getSize().x / 2.0f, m_window.getSize().y / 2.0f);
+	//if (m_entityManager.GetSoundSystem()) {
+	//	m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
+	//}
 
 	// Minimal update: process explosions and audio-reactive spawns similar to TileMapEditorScene
 	// Pause visual updates when music is paused so effects stop on pause
@@ -1325,8 +1384,7 @@ void MusicVisualizerScene::Update(float deltaTime) {
 	// Draw ImGui UI for music loading and playback controls. This is done in Update so it is rendered within the main Music Visualizer, which makes more fucking sense.
 	if (GImGui && GImGui->WithinFrameScope) {
 		ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_Once);
-		ImGui::Begin("Music Visualizer", nullptr,
-					 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_AlwaysAutoResize);
+		ImGui::Begin("Music Visualizer", nullptr, ImGuiWindowFlags_None);
 		ImGui::Text("Music Visualizer - FPS: %.1f", m_fps);
 
 		// Music loader UI.. keep inside the Music Visualizer window so it is not placed in the default debug window
@@ -1361,16 +1419,35 @@ void MusicVisualizerScene::Update(float deltaTime) {
 				ms->Process();
                levelForSpawn = ms->GetLevel(m_musicEntity->GetId());
                 // Update equalizer bars from latest spectrum (if enabled and available)
-			   if (m_spawnSystem && m_spawnSystem->IsEnabled() && m_EqualizerActive) {
+			   if (m_EqualizerActive) {
 					std::vector<float> bands;
+					auto& pool = m_entityManager.GetEntities(EntityType::Equalizer);
+					if (pool.empty()) {
+						InitializeEqualizerBars(static_cast<size_t>(m_visualBarCount));
+					}
 
-					// Try to get per-band spectrum data; if not available, fall back to overall level for all bars
-					if (ms->GetSpectrum(m_musicEntity->GetId(), bands)) {
+					if (musicPaused) {
+						// When paused, decay bars to zero instead of continuing reactive updates.
+						size_t poolSize = pool.size();
+						if (poolSize == 0) poolSize = ms->GetSpectrumBandCount();
+						if (poolSize == 0) poolSize = 8;
+						bands.assign(poolSize, 0.0f);
 						UpdateEqualizerBars(bands);
+						m_lastSpectrumBands.clear();
+					} else if (ms->GetSpectrum(m_musicEntity->GetId(), bands)) {
+						// Try to get per-band spectrum data; cache it for continuity across brief analyzer gaps
+						m_lastSpectrumBands = bands;
+						UpdateEqualizerBars(bands);
+					} else if (!m_lastSpectrumBands.empty()) {
+						// If analyzer misses a frame, gently decay cached spectrum instead of hard-freezing it.
+						float decay = std::clamp(deltaTime * 6.0f, 0.0f, 1.0f);
+						for (float& v : m_lastSpectrumBands) {
+							v = std::max(0.0f, v * (1.0f - decay));
+						}
+						UpdateEqualizerBars(m_lastSpectrumBands);
 					} else {
-						// No per-band spectrum available; fall back to overall level so bars still react
+						// No per-band spectrum available yet; fall back to overall level so bars still react
 						float lvl = ms->GetLevel(m_musicEntity->GetId());
-						auto& pool = m_entityManager.GetEntities(EntityType::Equalizer);
 						size_t poolSize = pool.size();
 						if (poolSize == 0) poolSize = ms->GetSpectrumBandCount();
 						if (poolSize == 0) poolSize = 8;
@@ -1383,8 +1460,15 @@ void MusicVisualizerScene::Update(float deltaTime) {
 				}
 			}
 		}
-        // Inform spawn system which music entity to use for audio-reactive patterns
+		// Inform spawn system which music entity to use for audio-reactive patterns
 		if (m_musicEntity) m_spawnSystem->SetMusicEntityId(m_musicEntity->GetId());
+
+		// Apply reactivity controls to spawn system before updating
+		m_spawnSystem->SetReactivitySensitivity(m_reactivitySensitivity);
+		m_spawnSystem->SetVelocityScale(m_velocityScale);
+		m_spawnSystem->SetBurstIntensity(m_burstIntensity);
+		m_spawnSystem->SetBeatThreshold(m_beatThreshold);
+
 		m_spawnSystem->Update(deltaTime, levelForSpawn);
 	}
 
@@ -1446,8 +1530,26 @@ void MusicVisualizerScene::HandleEvent(const std::optional<sf::Event>& event) {}
 
 // OnEnter and OnExit - these functions are called when the scene is entered or exited, respectively. For the MusicVisualizerScene,
 // we now keep spatial audio enabled so users can experiment with 3D positioning of the music through the GUI controls.
-void MusicVisualizerScene::OnEnter() {}
-void MusicVisualizerScene::OnExit() {}
+void MusicVisualizerScene::OnEnter() {
+	// Initialize the listener position to the screen center so 3D sounds are positioned correctly from the start
+	Vec2 listenerPos(m_window.getSize().x / 2.0f, m_window.getSize().y / 2.0f);
+	if (m_entityManager.GetSoundSystem()) {
+		m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void MusicVisualizerScene::OnExit() 
+{
+	if (m_musicEntity) {
+		m_entityManager.KillEntity(m_musicEntity);
+		m_entityManager.Update(0.0f);
+		m_musicEntity = nullptr;
+	}
+}
 /////////////////////////////////
 
 
@@ -1600,29 +1702,32 @@ void MusicVisualizerScene::UpdateExplosions() {
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
 				now - entity->m_creationTime); // Calculate how long the explosion has been alive in milliseconds
 
-			// If the explosion has been alive for more than 1200 milliseconds, destroy it to remove it from the scene
-			if (elapsed.count() >1200) {
+			// If the explosion has been alive for more than 9800 milliseconds, destroy it to remove it from the scene
+			if (elapsed.count() >9800) {
 				entity->Destroy();
 			} else { // Otherwise, update its visual properties to create a fading effect as it ages
 				++m_explosionCount;
-                float fadeProgress = static_cast<float>(elapsed.count()) / 1200.0f;
+                float fadeProgress = static_cast<float>(elapsed.count()) / 9800.0f;
 				const int maxAlpha = 60;
 				int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));
 
 				auto shape = entity->GetComponent<CShape>();
 
 
-				// If the entity has a CShape component and it is an explosion shape, update its radius and color to create the visual effect. We increase the radius slightly to create a nice expansion effect,
+				// If the entity has a CShape component, update its visual properties to create fade/expansion effects.
 				if (shape) {
 					if (auto* explosion = dynamic_cast<CExplosion*>(shape)) {
-						float radiusDifference = explosion->GetRadius();
 						explosion->SetRadius(explosion->GetRadius() * 1.004f);
-						radiusDifference = explosion->GetRadius() - radiusDifference;
-						Vec2 explosionPosition = entity->GetComponent<CTransform>()->m_position;
-						entity->GetComponent<CTransform>()->m_position = Vec2(explosionPosition.x, explosionPosition.y);
 						sf::Color currentColor = explosion->GetColor();
 						explosion->SetColor(static_cast<float>(currentColor.r), static_cast<float>(currentColor.g),
 											static_cast<float>(currentColor.b), newAlpha);
+					} else if (auto* rect = dynamic_cast<CRectangle*>(shape)) {
+						float w = rect->GetWidth() * 1.003f;
+						float h = rect->GetHeight() * 1.003f;
+						rect->SetSize(w, h);
+						sf::Color currentColor = rect->GetColor();
+						rect->SetColor(static_cast<float>(currentColor.r), static_cast<float>(currentColor.g),
+								  static_cast<float>(currentColor.b), newAlpha);
 					}
 				}
 			}

@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <iostream>
 #include <thread>
+#include <set>
 #include <SFML/Graphics/RectangleShape.hpp>
 /////////////////////////////////
 
@@ -85,8 +86,50 @@ void ChunkManager::ClearAllLoadedChunks() {
 // LoadAllSavedChunks - Scans the base directory for saved chunk files and enqueues them for loading in the background thread. 
 // Each chunk file is expected to be named in the format "chunk_X_Y.dat" where X and Y are the chunk coordinates.
 void ChunkManager::LoadAllSavedChunks() {
-	if (m_basePath.empty()) return;
+	if (m_basePath.empty()) {
+		std::cout << "[ChunkManager] ERROR: m_basePath is empty!\n";
+		return;
+	}
+	std::cout << "[ChunkManager] LoadAllSavedChunks from: " << m_basePath << "\n";
+	std::cout << "[ChunkManager] m_numLayers = " << m_numLayers << "\n";
 	try {
+		int fileCount = 0;
+		std::set<std::pair<int, int>> chunksToCreate;  // Track unique (cx, cy) pairs
+		std::vector<std::string> filenames;
+
+		// First pass: discover all chunk files and which chunks need to be created
+		for (auto &p : fs::directory_iterator(m_basePath)) {
+			if (!p.is_regular_file()) continue;
+			std::string fname = p.path().filename().string();
+			filenames.push_back(fname);
+			if (fname.rfind("chunk_", 0) != 0) continue;
+			fileCount++;
+			// parse chunk_<layer>_<cx>_<cy>.dat
+			std::string body = fname.substr(6); // after "chunk_"
+			size_t us1 = body.find('_');
+			size_t us2 = body.find('_', us1 + 1);
+			size_t dot = body.find('.');
+			if (us1 == std::string::npos || us2 == std::string::npos || dot == std::string::npos) continue;
+			int layer = std::stoi(body.substr(0, us1));
+			int cx = std::stoi(body.substr(us1+1, us2 - (us1+1)));
+			int cy = std::stoi(body.substr(us2+1, dot - (us2+1)));
+			chunksToCreate.insert({cx, cy});
+		}
+
+		// Second pass: create all chunks that need to exist
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			for (const auto& [cx, cy] : chunksToCreate) {
+				long long key = GetChunkKey(cx, cy);
+				if (m_chunks.find(key) == m_chunks.end()) {
+					// Create chunk with all layers
+					m_chunks[key] = Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers);
+					std::cout << "[ChunkManager] Created chunk (" << cx << "," << cy << ")\n";
+				}
+			}
+		}
+
+		// Third pass: enqueue load jobs for all discovered files
 		for (auto &p : fs::directory_iterator(m_basePath)) {
 			if (!p.is_regular_file()) continue;
 			std::string fname = p.path().filename().string();
@@ -100,9 +143,89 @@ void ChunkManager::LoadAllSavedChunks() {
 			int layer = std::stoi(body.substr(0, us1));
 			int cx = std::stoi(body.substr(us1+1, us2 - (us1+1)));
 			int cy = std::stoi(body.substr(us2+1, dot - (us2+1)));
+			std::cout << "  Enqueuing: " << fname << " (layer=" << layer << " cx=" << cx << " cy=" << cy << ")\n";
 			EnqueueLoadChunk(cx, cy, layer);
 		}
-	} catch(...) {}
+		std::cout << "[ChunkManager] Total chunk files found: " << fileCount << "\n";
+		if (fileCount == 0) {
+			std::cout << "[ChunkManager] WARNING: No chunk files found! All files in directory:\n";
+			for (const auto& f : filenames) {
+				std::cout << "  - " << f << "\n";
+			}
+		}
+	} catch(const std::exception& e) {
+		std::cout << "[ChunkManager] Exception in LoadAllSavedChunks: " << e.what() << "\n";
+	} catch(...) {
+		std::cout << "[ChunkManager] Unknown exception in LoadAllSavedChunks\n";
+	}
+}
+
+/////////////////////////////////
+// DebugPrintLayer1 - Print layer 1 (obstacle layer) as a grid of 0s and 1s for all loaded chunks
+void ChunkManager::DebugPrintLayer1() const {
+	std::cout << "\n========== DEBUG: Layer 1 (Obstacle Layer) Visualization ==========\n";
+	std::cout.flush();
+
+	if (m_chunks.empty()) {
+		std::cout << "No chunks loaded!\n";
+		std::cout.flush();
+		return;
+	}
+
+	std::cout << "Total chunks loaded: " << m_chunks.size() << "\n";
+	std::cout.flush();
+
+	// Find bounds
+	int minCx = INT_MAX, maxCx = INT_MIN;
+	int minCy = INT_MAX, maxCy = INT_MIN;
+	for (const auto& [key, chunk] : m_chunks) {
+		minCx = std::min(minCx, chunk.chunkX);
+		maxCx = std::max(maxCx, chunk.chunkX);
+		minCy = std::min(minCy, chunk.chunkY);
+		maxCy = std::max(maxCy, chunk.chunkY);
+	}
+
+	std::cout << "Chunk bounds: cx=" << minCx << ".." << maxCx << " cy=" << minCy << ".." << maxCy << "\n\n";
+	std::cout.flush();
+
+	// Print each chunk
+	for (int cy = minCy; cy <= maxCy; ++cy) {
+		for (int cx = minCx; cx <= maxCx; ++cx) {
+			auto key = (static_cast<long long>(cx) << 32) | static_cast<unsigned int>(cy);
+			auto it = m_chunks.find(key);
+
+			if (it == m_chunks.end()) {
+				std::cout << "[Chunk (" << cx << "," << cy << ") NOT LOADED]\n";
+				std::cout.flush();
+				continue;
+			}
+
+			const Chunk& chunk = it->second;
+			std::cout << "[Chunk (" << cx << "," << cy << ") Layer 1]:\n";
+
+			if (chunk.tilesPerLayer.size() <= 1) {
+				std::cout << "  (No layer 1 data - size=" << chunk.tilesPerLayer.size() << ")\n\n";
+				std::cout.flush();
+				continue;
+			}
+
+			const auto& layer1 = chunk.tilesPerLayer[1];
+
+			// Print as grid
+			for (int y = 0; y < chunk.height; ++y) {
+				std::cout << "  ";
+				for (int x = 0; x < chunk.width; ++x) {
+					int tileValue = layer1[y * chunk.width + x];
+					std::cout << (tileValue != 0 ? "1" : "0");
+				}
+				std::cout << "\n";
+			}
+			std::cout << "\n";
+			std::cout.flush();
+		}
+	}
+	std::cout << "========== END DEBUG ==========\n\n";
+	std::cout.flush();
 }
 /////////////////////////////////
 
@@ -141,6 +264,27 @@ bool ChunkManager::GetSavedChunkBounds(float& outMinX, float& outMinY, float& ou
 		}
 	} catch (...) {}
 	return found;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// GetMinChunkCoords - Get the minimum chunk coordinates from loaded chunks
+void ChunkManager::GetMinChunkCoords(int& outMinCx, int& outMinCy) const {
+	outMinCx = 0;
+	outMinCy = 0;
+
+	if (m_chunks.empty()) return;
+
+	outMinCx = INT_MAX;
+	outMinCy = INT_MAX;
+	for (const auto& [key, chunk] : m_chunks) {
+		outMinCx = std::min(outMinCx, chunk.chunkX);
+		outMinCy = std::min(outMinCy, chunk.chunkY);
+	}
+	if (outMinCx == INT_MAX) outMinCx = 0;
+	if (outMinCy == INT_MAX) outMinCy = 0;
 }
 /////////////////////////////////
 
@@ -219,8 +363,9 @@ void ChunkManager::BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<Tex
 				int v = 0;
 				if (L < (int)chunk.tilesPerLayer.size()) v = chunk.tilesPerLayer[L][y * chunk.width + x];
 				if (v == 0) continue;
-				const float px = (baseX + x) * ts;
-				const float py = (baseY + y) * ts;
+				// Snap tile positions to whole pixels to prevent sub-pixel jitter and seam artifacts
+				const float px = std::round((baseX + x) * ts);
+				const float py = std::round((baseY + y) * ts);
 
 				bool usedTexture = false;
 				sf::Vector2f uv00, uv11;
@@ -235,23 +380,25 @@ void ChunkManager::BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<Tex
 				}
 
 				if (usedTexture && chunk.vertexTexture) {
-					va.append({ {px,      py      }, sf::Color::White, uv00 });
-					va.append({ {px + ts, py      }, sf::Color::White, {uv11.x, uv00.y} });
-					va.append({ {px + ts, py + ts }, sf::Color::White, uv11 });
-					va.append({ {px,      py      }, sf::Color::White, uv00 });
-					va.append({ {px + ts, py + ts }, sf::Color::White, uv11 });
-					va.append({ {px,      py + ts }, sf::Color::White, {uv00.x, uv11.y} });
+					const float snapTs = std::round(ts);  // Round tile size to whole pixels for consistent rendering
+					va.append({ {px,           py           }, sf::Color::White, uv00 });
+					va.append({ {px + snapTs, py           }, sf::Color::White, {uv11.x, uv00.y} });
+					va.append({ {px + snapTs, py + snapTs }, sf::Color::White, uv11 });
+					va.append({ {px,           py           }, sf::Color::White, uv00 });
+					va.append({ {px + snapTs, py + snapTs }, sf::Color::White, uv11 });
+					va.append({ {px,           py + snapTs }, sf::Color::White, {uv00.x, uv11.y} });
 				} else {
 					// Fallback color for tiles without texture. In-editor, show an opaque placeholder so painted tiles are visible even
 					// when a tileset isn't loaded. If a tileset key is configured we keep transparent fallback so cleared tiles show through.
+					const float snapTs = std::round(ts);  // Round tile size to whole pixels for consistent rendering
 					uint8_t alpha = atlas ? 0u : 255u;
 					sf::Color fallback(120, 120, 120, alpha);
-					va.append({ {px,      py      }, fallback });
-					va.append({ {px + ts, py      }, fallback });
-					va.append({ {px + ts, py + ts }, fallback });
-					va.append({ {px,      py      }, fallback });
-					va.append({ {px + ts, py + ts }, fallback });
-					va.append({ {px,      py + ts }, fallback });
+					va.append({ {px,           py           }, fallback });
+					va.append({ {px + snapTs, py           }, fallback });
+					va.append({ {px + snapTs, py + snapTs }, fallback });
+					va.append({ {px,           py           }, fallback });
+					va.append({ {px + snapTs, py + snapTs }, fallback });
+					va.append({ {px,           py + snapTs }, fallback });
 				}
 			}
 		}
@@ -849,6 +996,7 @@ void ChunkManager::RebuildChunkEntities(Chunk& c) {
 /////////////////////////////////
 
 
+
 /////////////////////////////////
 // ScheduleChunkForRebuild - Mark a chunk as requiring GPU/collider rebuild on the main thread.
 void ChunkManager::ScheduleChunkForRebuild(Chunk& c) {
@@ -1027,6 +1175,7 @@ bool ChunkManager::LoadLevelFromFile(const std::string& path, std::string* outEr
 	return true;
 }
 /////////////////////////////////
+
 
 
 /////////////////////////////////

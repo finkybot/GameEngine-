@@ -35,8 +35,8 @@ using Path = std::vector<Vec2>;
 /////////////////////////////////
 // Pathfinder - A system responsible for finding paths in a tile-based world using A* algorithm. It operates on a chunked world managed by ChunkManager, 
 // allowing for efficient pathfinding across large maps.
-//						|
-//						|___________________________________________________________________________________
+//								|
+//								|_______________________________________________________________________
 class Pathfinder {
 	/////////////////////////////////
 	// Public interface for the PathfinderSystem class, including methods for finding paths and managing chunk data.

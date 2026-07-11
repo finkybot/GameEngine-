@@ -116,10 +116,15 @@ struct Chunk {
 
 
 /////////////////////////////////
-// ChunkManager class declaration. This class manages the lifecycle of chunks, including loading from disk, saving to disk, generating vertex buffers for rendering, and managing memory usage through an LRU eviction policy.
+// ChunkManager class declaration. This class manages the lifecycle of chunks, including loading from disk, saving to disk, 
+// generating vertex buffers for rendering, and managing memory usage through an LRU eviction policy.
+//								|
+//								|_______________________________________________________________________
 class ChunkManager {
 	/////////////////////////////////
-	// Public interface for the ChunkManager class, including methods for getting and setting tile values, ensuring chunks are loaded for a given area, updating the main thread with loaded chunks, saving chunks to disk, and managing configuration such as base path and tileset key.
+	// Public interface for the ChunkManager class, including methods for getting and setting tile values, ensuring chunks are 
+	// loaded for a given area, updating the main thread with loaded chunks, saving chunks to disk, and managing configuration 
+	// such as base path and tileset key.
 public:
 	/////////////////////////////////
 	// Constructor and destructor for the ChunkManager class
@@ -130,7 +135,8 @@ public:
 
 	
 	/////////////////////////////////
-	// Public methods for getting and setting tile values, ensuring chunks are loaded for a given area, updating the main thread with loaded chunks, saving chunks to disk, and managing configuration such as base path and tileset key.
+	// Public methods for getting and setting tile values, ensuring chunks are loaded for a given area, updating the main thread 
+	// with loaded chunks, saving chunks to disk, and managing configuration such as base path and tileset key.
 	// layerIndex defaults to 0 (main layer) for backward compatibility
 	int GetTileAt(int tileX, int tileY, int layerIndex = 0);
 	int SetTileAt(int tileX, int tileY, int tileValue, int layerIndex = 0);
@@ -139,49 +145,153 @@ public:
 	
 
 	/////////////////////////////////
-	// Methods for ensuring chunks are loaded, updating the main thread, and saving chunks to disk.
-	void EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, int tileY1, int marginChunks); // Ensure all chunks that intersect the specified tile rectangle (tileX0, tileY0, tileX1, tileY1) are loaded and ready for rendering.
-	void UpdateMainThread(); // Call this from the main thread to perform any necessary updates, such as processing dirty chunks or preparing vertex buffers for rendering.
-	void SaveAllChunks(); // Save all dirty chunks to disk in the specified directory. Each chunk will be saved as a separate file named "chunk_X_Y.dat" where X and Y are the chunk coordinates.
+	// EnsureChunksInTileRect - Ensure all chunks that intersect the specified tile rectangle (tileX0, tileY0, tileX1, tileY1) are 
+	// loaded and ready for rendering. The marginChunks parameter allows for loading additional chunks around the specified rectangle 
+	// to prevent visual gaps during rendering.
+	void EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, int tileY1, int marginChunks);
+	/////////////////////////////////
 
-	void SetBasePath(const std::string& basePath); // Set the base directory path where chunk files will be saved and loaded from.
+
+
+	/////////////////////////////////
+	// UpdateMainThread - Called from the main thread to process any chunks that have finished loading in the background.
+	void UpdateMainThread(); 
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// SaveAllChunks - Save all dirty chunks to disk in the specified directory. Each chunk will be saved as a separate file named 
+	// "chunk_X_Y.dat" where X and Y are the chunk coordinates.
+	void SaveAllChunks();
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// SetBasePath - Set the base directory path for chunk files. This path is used for loading and saving chunk data to disk.
+	void SetBasePath(const std::string& basePath);
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// GetBasePath - Get the current base directory path for chunk files.
 	std::string GetBasePath() const { return m_basePath; }
 	/////////////////////////////////
-	
+
 
 
 	/////////////////////////////////
 	// Load all saved chunk files from disk into memory (called on startup)
 	void LoadAllSavedChunks();
-	void ClearAllLoadedChunks();
+	/////////////////////////////////
 
-	// Load a TileMap JSON file into the chunked world. This will replace current in-memory chunks with
+
+
+	/////////////////////////////////
+	// ClearAllLoadedChunks - Remove all loaded chunks from memory without saving; used when switching levels or resetting the world.
+	void ClearAllLoadedChunks();
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// DebugPrintLayer1 - DEBUG: Print layer 1 obstacle grid to console for debugging purposes. This function outputs the tile values of 
+	// layer 1 for all loaded chunks to the console, allowing developers to inspect the current state of the level's obstacles.
+	void DebugPrintLayer1() const;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// LoadLevelFromFile - Load a TileMap JSON file into the chunked world. This will replace current in-memory chunks with
 	// the data from the file. Returns true on success and writes an optional error message to outErr.
 	bool LoadLevelFromFile(const std::string& path, std::string* outErr = nullptr);
+	/////////////////////////////////
 
-	// Scan saved chunk filenames on disk and return the bounding box of all saved chunks in world pixels.
+
+
+	/////////////////////////////////
+	// GetSavedChunkBounds - Scan saved chunk filenames on disk and return the bounding box of all saved chunks in world pixels.
 	// Returns false if no saved chunks exist. Does not load tile data.
 	bool GetSavedChunkBounds(float& outMinX, float& outMinY, float& outMaxX, float& outMaxY) const;
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// GetMinChunkCoords - Get the minimum loaded chunk coordinates (for coordinate system offset in pathfinding)
+	void GetMinChunkCoords(int& outMinCx, int& outMinCy) const;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// SetTilesetKey - Set the key for the tileset atlas used to texture chunk vertex arrays. This allows the ChunkManager to use a 
+	// specific tileset for rendering.
 	void SetTilesetKey(const std::string& key) { m_tilesetKey = key; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// GetTilesetKey - Get the current key for the tileset atlas used to texture chunk vertex arrays.
 	std::string GetTilesetKey() const { return m_tilesetKey; }
-	void SetMaxLoadedChunks(size_t maxChunks) {	m_maxLoadedChunks = maxChunks; } // Set the maximum number of chunks that can be loaded in memory at once. If the limit is exceeded, least recently used chunks will be unloaded.
 	/////////////////////////////////
 
 
 
 	/////////////////////////////////
-	// Expose active layer control to callers (which may be editor UI)
+	// SetMaxLoadedChunks - Set the maximum number of chunks that can be loaded in memory at once. If the limit is exceeded, least recently used chunks will be unloaded.
+	void SetMaxLoadedChunks(size_t maxChunks) {	m_maxLoadedChunks = maxChunks; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// SetActiveLayer - Set the active layer for editing or rendering. This allows the caller to control which layer is currently active.
 	void SetActiveLayer(int layer) { m_activeLayer = std::max(0, std::min(layer, m_numLayers-1)); }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// GetActiveLayer - Get the current active layer for editing or rendering.
 	int GetActiveLayer() const { return m_activeLayer; }
+	/////////////////////////////////
 
-	// Allow changing number of layers at runtime based on level meta
+
+
+	/////////////////////////////////
+	// SetNumLayers - Allow changing number of layers at runtime based on level meta
 	void SetNumLayers(int n) { m_numLayers = std::max(1, n); }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// GetNumLayers - Get the current number of layers in the chunk manager.
 	int GetNumLayers() const { return m_numLayers; }
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// SetUnselectedLayerAlpha - Set the alpha value for unselected layers, controlling their transparency in the editor or renderer.
 	void SetUnselectedLayerAlpha(float a) { m_unselectedLayerAlpha = std::clamp(a, 0.0f, 1.0f); }
-	float GetUnselectedLayerAlpha() const { return m_unselectedLayerAlpha; }
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// GetUnselectedLayerAlpha - Get the current alpha value for unselected layers, allowing the caller to inspect the transparency setting.
+	float GetUnselectedLayerAlpha() const { return m_unselectedLayerAlpha; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Accessors for chunk dimensions
 	int GetChunkWidth() const { return m_chunkWidth; }
 	int GetChunkHeight() const { return m_chunkHeight; }
@@ -214,14 +324,14 @@ private:
 	
 
 	/////////////////////////////////
-	// Builds the vertex array for a chunk using the given atlas (may be nullptr for colour fallback)
+	// BuildChunkVertexArray - Builds the vertex array for a chunk using the given atlas (may be nullptr for colour fallback)
 	static void BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<TextureAtlas>& atlas);
 	/////////////////////////////////
 	 
 
 	
 	/////////////////////////////////
-	// Helper function to combine chunkX and chunkY into a single key for the chunks map
+	// GetChunkKey - Helper function to combine chunkX and chunkY into a single key for the chunks map
 	static long long GetChunkKey(int chunkX, int chunkY) {
 		return (static_cast<long long>(chunkX) << 32) | static_cast<unsigned int>(chunkY);
 	}
@@ -230,7 +340,8 @@ private:
 
 
 	/////////////////////////////////
-	// Helper function for floor division of integers, since C++ integer division truncates towards zero. This ensures that negative coordinates are handled correctly when determining chunk coordinates from tile coordinates.
+	// FloorDiv - Helper function for floor division of integers, since C++ integer division truncates towards zero. This ensures 
+	// that negative coordinates are handled correctly when determining chunk coordinates from tile coordinates.
 	static inline int FloorDiv(int a, int b) { 
 		return (int)std::floor(static_cast<double>(a) / static_cast<double>(b));
 	}
@@ -245,29 +356,50 @@ private:
 
 
 	/////////////////////////////////
-	// Private member variables for the ChunkManager class, including configuration for chunk size and tile size, base path for chunk files, maximum loaded chunks, data structures for managing loaded chunks and LRU eviction, and synchronization primitives for thread safety.
+	// Private member variables for the ChunkManager class, including configuration for chunk size and tile size, base path for chunk 
+	// files, maximum loaded chunks, data structures for managing loaded chunks and LRU eviction, and synchronization primitives for 
+	// thread safety.
 	int m_chunkWidth; // Width of each chunk in tiles
 	int m_chunkHeight; // Height of each chunk in tiles
 	float m_tileSize;  // Size of each tile in pixels
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Configuration for file paths and maximum loaded chunks
 	std::string m_basePath = "levels/"; // Base directory path for chunk files
 	size_t m_maxLoadedChunks = 256; // Maximum number of chunks that can be loaded in memory at once
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Data structures for managing loaded chunks and LRU eviction
 	std::mutex m_mutex;	// Mutex to protect access to the chunks map and LRU list across threads
 	std::unordered_map<long long, Chunk> _GUARDED_BY(m_mutex) m_chunks; // Map of loaded chunks, keyed by a combined chunkX and chunkY value (e.g., (chunkX << 32) | chunkY)
 	std::list<long long> _GUARDED_BY(m_mutex) m_lruList; // List to track the least recently used chunks for eviction (stores chunk keys)
 	std::unordered_map<long long, std::list<long long>::iterator> _GUARDED_BY(m_mutex) m_lruIndex; // O(1) iterator lookup into m_lruList
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Configuration for rendering and layer management
 	std::string m_tilesetKey; // optional tileset atlas key used to texture chunk vertex arrays
 	int m_numLayers = 1; // number of layers per chunk (background, main, upper)
 	int m_activeLayer = 0; // drawing: which layer is fully opaque
 	float m_unselectedLayerAlpha = 0.3f; // opacity for unselected layers (0..1)
 	/////////////////////////////////
 
+
+
+	/////////////////////////////////
 	// Queue of chunks that need GPU-side vertex rebuilds or collider rebuilds. Only the main thread
 	// should perform the actual SFML/OpenGL work. These structures are guarded by m_mutex.
 	std::vector<long long> m_rebuildQueue; // chunk keys scheduled for rebuild
 	std::unordered_set<long long> m_rebuildSet; // quick membership check to avoid duplicate enqueues
+	/////////////////////////////////
 
 
 
@@ -275,9 +407,17 @@ private:
 	// Public methods for drawing chunks and registering/unregistering chunk colliders with the EntityManager.
 public:
 	/////////////////////////////////
-	// Draw all chunks that intersect the provided view. This will perform a short copy of visible chunk data under the mutex and then draw them without holding the lock to minimize contention.
-	void DrawChunks(sf::RenderWindow& window, const sf::View& view); // DEPRECATED: Use EnqueueChunks instead
-	void EnqueueChunks(RenderQueue& queue, const sf::View& view); // Enqueue all visible chunks to the render queue
+	// DrawChunks - Draw all chunks that intersect the provided view. This will perform a short copy of visible chunk data under 
+	// the mutex and then draw them without holding the lock to minimize contention; *** DEPRECATED: Use EnqueueChunks instead ***
+	void DrawChunks(sf::RenderWindow& window, const sf::View& view); 
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// EnqueueChunks - Enqueue all visible chunks to the render queue for rendering. This method will determine which chunks are visible
+	void EnqueueChunks(RenderQueue& queue, const sf::View& view);
+	/////////////////////////////////
 
 
 

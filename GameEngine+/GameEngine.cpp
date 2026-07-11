@@ -132,6 +132,8 @@ void GameEngine::ChangeScene(const std::string& sceneName) {
 		// notify previous scene it's exiting
 		if (m_currentScene) {
 			try { m_currentScene->OnExit(); } catch (...) {}
+			// Allow the scene to release any loaded resources (textures, atlases, large buffers)
+			try { m_currentScene->UnloadResources(); } catch (...) {}
 		}
 
 		// Clear all entities from the previous scene before activating the new one

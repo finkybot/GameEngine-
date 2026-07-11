@@ -24,6 +24,16 @@
 - **Note:** For 2D games with music, set only the listener position and potentially direction, but carefully tune to avoid interference with audio output. SFML 3D audio listener direction and up vector can affect music volume output even though music is non-positional.
 - Control 3D sound in the GameEngine+ through the CSoundEffect component with m_is3D and m_isSpatialized flags, configured via SoundSystem::SetListenerPosition() and distance parameters m_3DMinDistance and m_3DMaxDistance. The SoundSystem applies spatial audio (distance attenuation and panning) when 3D is enabled. The audio system is now fully functional with spatial positioning, attenuation curves, and interactive GUI controls in MusicVisualizerScene.
 
+## Dialog System
+- Implement a dialog system with the following features:
+  - NPC-specific dialogs stored in JSON format at %APPDATA%\GameEnginePlus\dialogs\<npcId>.json.
+  - Choices that persist/disappear after selection.
+  - Random text variations for dynamic engagement.
+  - Node-based architecture with a condition/action system for dynamic branching.
+  - Utilize an ECS-style DialogSystem component.
+  - **No voice acting initially.**
+- Implementation is deferred but should start soon. Approach: START WITH JSON + basic ImGui viewer. Will hand-write JSON, load/test in DialogTestScene. Add GUI node editor later if needed (using imnodes library if adopted). Do NOT start with visual node editor GUI.
+
 ## Future Work Priorities
 - Focus on developing an advanced level editor scene with chunking integration (highest priority - start soon).
 - Plan for sound/audio integration (scheduled for tomorrow or later).

@@ -36,8 +36,8 @@ struct PathJobResult {
 /////////////////////////////////
 // PathFinderSystem - A system responsible for managing pathfinding requests and results in the game engine. It interacts with the Pathfinder 
 // class to find paths in a tile-based world and updates entities with CPathRequest and CPath components accordingly.
-//						|
-//						|___________________________________________________________________________________
+//								|
+//								|_______________________________________________________________________
 class PathFindingSystem {
 	/////////////////////////////////
 	// Public interface for the PathFindingSystem class, including methods for updating the system and finding paths synchronously.

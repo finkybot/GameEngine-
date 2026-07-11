@@ -223,7 +223,7 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	cam->m_isActive = true;
 	cam->m_viewportWidth = (float)m_window.getSize().x;
 	cam->m_viewportHeight = (float)m_window.getSize().y;
-	cam->m_smoothness = 6.0f; // fairly snappy smoothing
+	cam->m_smoothness = 0.0f; // Disable smoothing - editor controls camera directly via panning and clamping
 
 	// Ensure initial world area is larger than the screen so the user can pan around.
 	// Make the logical map area 3x the screen size centered on the camera.
@@ -328,7 +328,30 @@ void LevelEditorScene::OnExit() {
 	try {
 		m_chunkManager.UnregisterChunkColliders(GetEntityManager());
 	} catch (...) {}
+	std::cout << "[LevelEditorScene] OnExit: Saving all chunks...\n";
 	m_chunkManager.SaveAllChunks();
+	std::cout << "[LevelEditorScene] OnExit: Chunks saved.\n";
+}
+// UnloadResources - free large resources held by the editor when it is no longer active.
+void LevelEditorScene::UnloadResources() {
+	try {
+		// Ensure any collider entities are unregistered
+		m_chunkManager.UnregisterChunkColliders(GetEntityManager());
+	} catch (...) {}
+	try {
+		// Persist and then clear chunk data to free memory
+		m_chunkManager.SaveAllChunks();
+	} catch (...) {}
+	try {
+		m_chunkManager.ClearAllLoadedChunks();
+	} catch (...) {}
+	try {
+		// Unload tileset atlas if one is set for this level/editor
+		std::string key = std::string(m_tilesetKeyBuf);
+		if (!key.empty()) {
+			m_gameEngine.GetTextureManager().UnloadAtlas(key);
+		}
+	} catch (...) {}
 }
 /////////////////////////////////
 
@@ -1454,10 +1477,12 @@ void LevelEditorScene::ApplyMainCameraView() {
 	}
 	cam->m_position = newPos;
 
-	// Snap camera to half-pixel boundaries to reduce shimmer/jitter when rendering
-	// This ensures that the view center aligns with rasterization boundaries
-	float snapX = std::round(newPos.x * 2.0f) * 0.5f;
-	float snapY = std::round(newPos.y * 2.0f) * 0.5f;
+	// Snap camera to sub-pixel grid based on zoom level to reduce shimmer/jitter when rendering
+	// At zoom levels 2.0x or higher, snap to tile alignment (32 pixels). Otherwise snap to half-pixel.
+	// This ensures that the view center aligns with rasterization boundaries and remains stable during camera movement.
+	float snapGrid = (cam->m_zoom >= 2.0f) ? 32.0f : 0.5f;  // Snap to tile grid at 2x+ zoom, else half-pixel
+	float snapX = std::round(newPos.x / snapGrid) * snapGrid;
+	float snapY = std::round(newPos.y / snapGrid) * snapGrid;
 
 	v.setCenter(sf::Vector2f(snapX, snapY));
 	m_window.setView(v);

@@ -1,3 +1,14 @@
+/////////////////////////////////
+// PathTestScene.cpp - Implementation of the PathTestScene class, which is a scene for testing pathfinding in a tile-based game engine. 
+// This scene manages the camera, chunk loading, and pathfinding logic, allowing users to interactively test pathfinding algorithms by 
+// setting start and goal points on the map. The scene also handles rendering of the map, pathfinding results, and debug overlays using 
+// ImGui for user interface elements.
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Includes
 #include "PathTestScene.h"
 #include "GameEngine.h"
 #include "CTransform.h"
@@ -9,30 +20,51 @@
 #include <fstream>
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
 #include <Windows.h>
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Namespace alias for filesystem
 namespace fs = std::filesystem;
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// PathTestScene implementation
 PathTestScene::PathTestScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
 	: Scene(engine, entityManager), m_window(win), m_chunkManager(32, 32, 32.0f), 
 	  m_pathSystem(m_chunkManager, entityManager) {}
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Destructor for the PathTestScene class. Ensures that all chunks are saved to disk when the scene is destroyed.
 PathTestScene::~PathTestScene() {
 	m_chunkManager.SaveAllChunks();
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// InitializeGame - Initializes the game scene, setting up the camera entity, map bounds, and scanning for available levels.
 void PathTestScene::InitializeGame(sf::Vector2u /*windowSize*/) {
-	// Create camera entity (like LevelEditor)
+	// Create  and setup a camera entity, similar to the LevelEditorScene
 	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Default);
 	m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
-	auto cam = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
-	cam->m_isMainCamera = true;
-	cam->m_isActive = true;
-	cam->m_viewportWidth = (float)m_window.getSize().x;
-	cam->m_viewportHeight = (float)m_window.getSize().y;
-	cam->m_smoothness = 8.0f;
+	auto camera = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
+	camera->m_isMainCamera = true;
+	camera->m_isActive = true;
+	camera->m_viewportWidth = (float)m_window.getSize().x;
+	camera->m_viewportHeight = (float)m_window.getSize().y;
+	camera->m_smoothness = 0.0f; // Disable smoothing - camera is controlled directly via panning and bounds clamping
 
-	// Initialize with a reasonable bounds
+	// Initialize map bounds
 	m_mapMin = Vec2(-512, -512);
 	m_mapMax = Vec2(512, 512);
 	m_haveBounds = false;
@@ -44,7 +76,12 @@ void PathTestScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	m_chunkManager.SetBasePath("levels/chunks");
 	m_chunkManager.SetMaxLoadedChunks(256);
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// ScanLevelFiles - Scans the APPDATA/GameEnginePlus/levels directory for available levels, checking for directories that contain a "chunks" subdirectory.
 void PathTestScene::ScanLevelFiles() {
 	m_availableLevels.clear();
 
@@ -52,16 +89,20 @@ void PathTestScene::ScanLevelFiles() {
 	std::error_code ec;
 	fs::path base;
 
+	// Determine the base path for levels based on the operating system
 #ifdef _MSC_VER
-	char* appdata_buf = nullptr;
-	size_t len = 0;
+	char* appdata_buf = nullptr; // Create a buffer to hold the APPDATA path
+	size_t len = 0;				 // Variable to hold the length of the APPDATA path
+
+	// Use _dupenv_s to safely retrieve the APPDATA environment variable on Windows
+	// if found and not empty, _dupenv_s allocates memory for appdata_buf, which must be FREED LATER (REMEMBER TO FREE, NO SERIOUSLY REMEMBER TO FREE)
 	if (_dupenv_s(&appdata_buf, &len, "APPDATA") == 0 && appdata_buf) {
 		base = fs::path(appdata_buf) / "GameEnginePlus" / "levels";
-		free(appdata_buf);
+		free(appdata_buf); // Free the allocated memory for appdata_buf after use to avoid memory leaks (I REMEMBERED, actually AI did it for me... thanks I guess)
 	} else {
 		base = fs::path("levels");
 	}
-#else
+#else // For non-Windows platforms, use std::getenv to retrieve the APPDATA environment variable
 	const char* appdata = std::getenv("APPDATA");
 	if (appdata && appdata[0] != '\0') {
 		base = fs::path(appdata) / "GameEnginePlus" / "levels";
@@ -70,6 +111,7 @@ void PathTestScene::ScanLevelFiles() {
 	}
 #endif
 
+	// Iterate through the directories in the base path and check for the presence of a "chunks" subdirectory
 	try {
 		if (fs::exists(base, ec) && !ec) {
 			for (auto& entry : fs::directory_iterator(base, ec)) {
@@ -77,7 +119,7 @@ void PathTestScene::ScanLevelFiles() {
 					// Check if this directory has a "chunks" subdirectory
 					auto chunksDir = entry.path() / "chunks";
 					if (fs::exists(chunksDir)) {
-						m_availableLevels.push_back(entry.path().filename().string());
+						m_availableLevels.push_back(entry.path().filename().string()); // Add the level name to the available levels list
 					}
 				}
 			}
@@ -85,19 +127,30 @@ void PathTestScene::ScanLevelFiles() {
 	} catch (...) {
 	}
 
+	// Sort the available levels alphabetically for easier selection in the UI
 	std::sort(m_availableLevels.begin(), m_availableLevels.end());
 }
 
+
+
+/////////////////////////////////
+// SwitchToLevel - Switches the current level to the specified level name, loading the appropriate tileset and layers based on metadata in "meta.txt".
 bool PathTestScene::SwitchToLevel(const std::string& name) {
 	m_currentLevelName = name;
 
+	// Determine the base path for levels based on the operating system
 	fs::path base;
+	// Windows environment variable retrieval is different from other platforms, so we handle it separately, like above we will use
+	// _dupenv_s to safely retrieve the APPDATA environment variable on Windows, and std::getenv for other platforms, so remember to 
+	// free the allocated memory for appdata_buf on Windows after use.
 #ifdef _MSC_VER
-	char* appdata_buf = nullptr;
-	size_t len = 0;
+	char* appdata_buf = nullptr; // buffer
+	size_t len = 0;				 // length
+
+	// Use _dupenv_s to safely retrieve the APPDATA environment variable on Windows
 	if (_dupenv_s(&appdata_buf, &len, "APPDATA") == 0 && appdata_buf) {
 		base = fs::path(appdata_buf) / "GameEnginePlus" / "levels";
-		free(appdata_buf);
+		free(appdata_buf); // Free the allocated memory for appdata_buf after use
 	} else {
 		base = fs::path("levels");
 	}
@@ -231,6 +284,13 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 
 	m_chunkManager.RebuildAllChunksFromTileset();
 
+	// DEBUG: Print layer 1 obstacle grid AFTER everything is loaded and rebuilt
+	std::cout << "\n[PathTestScene] About to call DebugPrintLayer1...\n";
+	std::cout.flush();
+	m_chunkManager.DebugPrintLayer1();
+	std::cout.flush();
+	std::cout << "[PathTestScene] Done with DebugPrintLayer1\n";
+
 	// Get bounds and debug info
 	float dMinX, dMinY, dMaxX, dMaxY;
 	bool hasBounds = m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY);
@@ -268,7 +328,13 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 
 	return true;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// EnsureVisibleChunks - Ensures that all chunks within the camera's view, plus a margin, are loaded. This method calculates the tile coordinates of 
+// the visible area based on the camera's position and zoom level, and requests the ChunkManager to load any chunks that fall within this area.
 void PathTestScene::EnsureVisibleChunks() {
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (!camOpt) return;
@@ -283,7 +349,12 @@ void PathTestScene::EnsureVisibleChunks() {
 	int ty1 = (int)std::ceil((cam->m_position.y + halfH) / m_tileSize);
 	m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, 2);
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// ApplyMainCameraView - Applies the main camera's view to the SFML render window. This method retrieves the main camera's position, zoom, and viewport size,
 void PathTestScene::ApplyMainCameraView() {
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (!camOpt) return;
@@ -318,14 +389,21 @@ void PathTestScene::ApplyMainCameraView() {
 
 	cam->m_position = newPos;
 
-	// Snap to half-pixel to reduce shimmer
-	float snapX = std::round(newPos.x * 2.0f) * 0.5f;
-	float snapY = std::round(newPos.y * 2.0f) * 0.5f;
+	// Snap camera to sub-pixel grid based on zoom level to reduce shimmer/jitter when rendering
+	// At zoom levels 2.0x or higher, snap to tile alignment (32 pixels). Otherwise snap to half-pixel.
+	float snapGrid = (cam->m_zoom >= 2.0f) ? 32.0f : 0.5f;  // Snap to tile grid at 2x+ zoom, else half-pixel
+	float snapX = std::round(newPos.x / snapGrid) * snapGrid;
+	float snapY = std::round(newPos.y / snapGrid) * snapGrid;
 
 	v.setCenter(sf::Vector2f(snapX, snapY));
 	m_window.setView(v);
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Update - Updates the scene state, including camera movement, chunk loading, and pathfinding. This method is called every frame with the elapsed time since the last update.
 void PathTestScene::Update(float deltaTime) {
 	// Update camera
 	if (m_cameraEntity) {
@@ -367,66 +445,161 @@ void PathTestScene::Update(float deltaTime) {
 
 	ImGui::Text("Click: LMB=start, RMB=goal");
 	ImGui::End();
+
+	// Handle middle-mouse panning similar to LevelEditorScene
+	{
+		// Poll mouse/button states via InputController
+		bool isMiddleDown = m_gameEngine.GetInputController().IsMouseButtonDown(sf::Mouse::Button::Middle);
+		sf::Vector2i mousePos = sf::Mouse::getPosition(m_window);
+		if (isMiddleDown && !m_panning) {
+			m_panning = true;
+			m_panStart = mousePos;
+			// record current camera position
+			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+			if (camOpt) {
+				m_camPanStart = (*camOpt)->m_position;
+			}
+		}
+		if (!isMiddleDown && m_panning) {
+			m_panning = false; // end panning
+		}
+		if (m_panning) {
+			sf::Vector2i delta = mousePos - m_panStart;
+			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+			if (camOpt) {
+				Vec2 newPos = m_camPanStart - Vec2((float)delta.x, (float)delta.y);
+				// clamp to bounds if available
+				CCamera* cam = *camOpt;
+				float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
+				float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
+				if (m_haveBounds) {
+					float minCx = m_mapMin.x + halfW;
+					float maxCx = m_mapMax.x - halfW;
+					float minCy = m_mapMin.y + halfH;
+					float maxCy = m_mapMax.y - halfH;
+					if (minCx <= maxCx) newPos.x = std::clamp(newPos.x, minCx, maxCx);
+					else newPos.x = (m_mapMin.x + m_mapMax.x) * 0.5f;
+					if (minCy <= maxCy) newPos.y = std::clamp(newPos.y, minCy, maxCy);
+					else newPos.y = (m_mapMin.y + m_mapMax.y) * 0.5f;
+				}
+				(*camOpt)->m_position = newPos;
+				// Update camera entity transform too
+				if (m_cameraEntity) {
+					if (auto t = m_cameraEntity->GetComponent<CTransform>()) {
+						t->m_position = newPos;
+					}
+				}
+			}
+		}
+	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// Render - Renders the scene, including the loaded chunks and any debug overlays such as start/goal markers and paths. This method is called every frame after Update.
 void PathTestScene::Render() {
+	// Save the world view
+	sf::View worldView = m_window.getView();
+
 	// Enqueue chunks
-	m_chunkManager.EnqueueChunks(m_renderQueue, m_window.getView());
+	m_chunkManager.EnqueueChunks(m_renderQueue, worldView);
 
-	// Draw debug overlay (paths, markers) BEFORE flushing, while world view is active
-	RenderDebugOverlay();
-
-	// Flush render queue
+	// Flush render queue first so world tiles are drawn
 	m_renderQueue.Flush(m_window);
+
+	// Draw debug overlay (paths, markers) in world view
+	m_window.setView(worldView);
+	RenderDebugOverlay();
 
 	// Reset view for UI
 	m_window.setView(m_window.getDefaultView());
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// RenderDebugOverlay - Renders debug overlays for the pathfinding test, including start and goal markers, as well as the computed path if available.
 void PathTestScene::RenderDebugOverlay() {
-	// Draw start/goal markers
-	if (m_manualStartSet) {
-		sf::CircleShape startMarker(8.0f);
-		startMarker.setFillColor(sf::Color::Blue);
-		startMarker.setOrigin(sf::Vector2f(8.0f, 8.0f));
-		startMarker.setPosition(sf::Vector2f(m_manualStart.x, m_manualStart.y));
-		m_window.draw(startMarker);
-	}
+	const float outerRadius = 12.0f;
+	const float innerRadius = 8.0f;
+	const float pathOutlineThickness = 6.0f;
+	const float pathCoreThickness = 3.0f;
 
-	if (m_manualGoalSet) {
-		sf::CircleShape goalMarker(8.0f);
-		goalMarker.setFillColor(sf::Color::Magenta);
-		goalMarker.setOrigin(sf::Vector2f(8.0f, 8.0f));
-		goalMarker.setPosition(sf::Vector2f(m_manualGoal.x, m_manualGoal.y));
-		m_window.draw(goalMarker);
-	}
-
-	// Draw path - convert from pathfinder coordinates back to world space
+	// Draw path as thick outlined segments
 	if (m_manualPath.has_value() && !m_manualPath->empty()) {
-		sf::Color pathColor = m_manualPathComplete ? sf::Color::Green : sf::Color::Yellow;
-		sf::VertexArray va(sf::PrimitiveType::Lines);
+		sf::Color coreColor = m_manualPathComplete ? sf::Color::Green : sf::Color::Yellow;
+		sf::Color outlineColor = sf::Color::Black;
 
-		// Get chunk offset
-		float chunkMinX = m_mapMin.x;
-		float chunkMinY = m_mapMin.y;
-
+		// Path waypoints are already in world pixel coordinates
 		for (size_t i = 1; i < m_manualPath->size(); ++i) {
-			// The pathfinder returns coordinates in local tile space, need to add chunk offset
 			auto& a = (*m_manualPath)[i - 1];
 			auto& b = (*m_manualPath)[i];
 
-			// Adjust back to world space
-			Vec2 a_world = a + Vec2(chunkMinX, chunkMinY);
-			Vec2 b_world = b + Vec2(chunkMinX, chunkMinY);
+			// a and b are already in world pixel coordinates from PathFinder
+			sf::Vector2f pa(a.x, a.y);
+			sf::Vector2f pb(b.x, b.y);
+			sf::Vector2f diff(pb.x - pa.x, pb.y - pa.y);
+			float length = std::sqrt(diff.x * diff.x + diff.y * diff.y);
+			if (length <= 0.001f) continue;
 
-			va.append(sf::Vertex(sf::Vector2f(a_world.x, a_world.y), pathColor));
-			va.append(sf::Vertex(sf::Vector2f(b_world.x, b_world.y), pathColor));
+			float angle = std::atan2(diff.y, diff.x) * 180.0f / 3.14159265f;
+			sf::Vector2f mid((pa.x + pb.x) * 0.5f, (pa.y + pb.y) * 0.5f);
+
+			sf::RectangleShape outlineSeg(sf::Vector2f(length, pathOutlineThickness));
+			outlineSeg.setOrigin(sf::Vector2f(length * 0.5f, pathOutlineThickness * 0.5f));
+			outlineSeg.setPosition(mid);
+			outlineSeg.setRotation(sf::degrees(angle));
+			outlineSeg.setFillColor(outlineColor);
+			m_window.draw(outlineSeg);
+
+			sf::RectangleShape coreSeg(sf::Vector2f(length, pathCoreThickness));
+			coreSeg.setOrigin(sf::Vector2f(length * 0.5f, pathCoreThickness * 0.5f));
+			coreSeg.setPosition(mid);
+			coreSeg.setRotation(sf::degrees(angle));
+			coreSeg.setFillColor(coreColor);
+			m_window.draw(coreSeg);
 		}
+	}
 
-		m_window.draw(va);
+	// Draw start/goal markers with outlines
+	if (m_manualStartSet) {
+		sf::CircleShape startOutline(outerRadius);
+		startOutline.setFillColor(sf::Color::Black);
+		startOutline.setOrigin(sf::Vector2f(outerRadius, outerRadius));
+		startOutline.setPosition(sf::Vector2f(m_manualStart.x, m_manualStart.y));
+		m_window.draw(startOutline);
+
+		sf::CircleShape startCore(innerRadius);
+		startCore.setFillColor(sf::Color::Blue);
+		startCore.setOrigin(sf::Vector2f(innerRadius, innerRadius));
+		startCore.setPosition(sf::Vector2f(m_manualStart.x, m_manualStart.y));
+		m_window.draw(startCore);
+	}
+
+	if (m_manualGoalSet) {
+		sf::CircleShape goalOutline(outerRadius);
+		goalOutline.setFillColor(sf::Color::Black);
+		goalOutline.setOrigin(sf::Vector2f(outerRadius, outerRadius));
+		goalOutline.setPosition(sf::Vector2f(m_manualGoal.x, m_manualGoal.y));
+		m_window.draw(goalOutline);
+
+		sf::CircleShape goalCore(innerRadius);
+		goalCore.setFillColor(sf::Color::Magenta);
+		goalCore.setOrigin(sf::Vector2f(innerRadius, innerRadius));
+		goalCore.setPosition(sf::Vector2f(m_manualGoal.x, m_manualGoal.y));
+		m_window.draw(goalCore);
 	}
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// HandleEvent - Handles input events for the scene, including mouse clicks to set start and goal points for pathfinding. This method converts 
+// screen coordinates to world coordinates based on the camera's position and zoom level.
 void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 	if (!event.has_value()) return;
 
@@ -478,10 +651,19 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 		float chunkMinY = m_mapMin.y;
 
 		// Convert world coordinates to tile coordinates, accounting for chunk offset
-		int sx = static_cast<int>(std::floor((m_manualStart.x - chunkMinX) / ts));
-		int sy = static_cast<int>(std::floor((m_manualStart.y - chunkMinY) / ts));
-		int gx = static_cast<int>(std::floor((m_manualGoal.x - chunkMinX) / ts));
-		int gy = static_cast<int>(std::floor((m_manualGoal.y - chunkMinY) / ts));
+		// Convert world coordinates to absolute world tile coordinates
+		// Do NOT subtract chunkMin - pathfinder expects absolute world tiles
+		int sx = static_cast<int>(std::floor(m_manualStart.x / ts));
+		int sy = static_cast<int>(std::floor(m_manualStart.y / ts));
+		int gx = static_cast<int>(std::floor(m_manualGoal.x / ts));
+		int gy = static_cast<int>(std::floor(m_manualGoal.y / ts));
+
+		std::cout << "[PathTestScene] Mouse clicks:\n";
+		std::cout << "  Start world: (" << m_manualStart.x << "," << m_manualStart.y << ")\n";
+		std::cout << "  Goal world: (" << m_manualGoal.x << "," << m_manualGoal.y << ")\n";
+		std::cout << "  Tile size=" << ts << "\n";
+		std::cout << "  Start tile (absolute world): (" << sx << "," << sy << ")\n";
+		std::cout << "  Goal tile (absolute world): (" << gx << "," << gy << ")\n";
 
 		m_manualPath = m_pathSystem.FindPathSync(sx, sy, gx, gy);
 		m_manualPathComplete = m_manualPath.has_value();
@@ -496,6 +678,35 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 	prevLeftDown = leftMouseDown;
 	prevRightDown = rightMouseDown;
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
 void PathTestScene::OnEnter() {}
 void PathTestScene::OnExit() {}
+/////////////////////////////////
+ 
+ 
+
+/////////////////////////////////
+// UnloadResources - free large resources held by the path test scene when it is no longer active.
+void PathTestScene::UnloadResources() {
+	try {
+		m_chunkManager.UnregisterChunkColliders(GetEntityManager());
+	} catch (...) {}
+	try {
+		m_chunkManager.SaveAllChunks();
+	} catch (...) {}
+	try {
+		m_chunkManager.ClearAllLoadedChunks();
+	} catch (...) {}
+	try {
+		// Unload any atlas used by the chunk manager
+		std::string key = m_chunkManager.GetTilesetKey();
+		if (!key.empty()) {
+			m_gameEngine.GetTextureManager().UnloadAtlas(key);
+		}
+	} catch (...) {}
+}
+/////////////////////////////////

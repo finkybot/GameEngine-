@@ -39,84 +39,131 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 	const int chunkH = m_chunkManager.GetChunkHeight();
 	if (chunkW <= 0 || chunkH <= 0) return std::nullopt;
 
+	// Get the chunk coordinate offset (minimum chunk coordinates)
+	int minChunkX = 0, minChunkY = 0;
+	m_chunkManager.GetMinChunkCoords(minChunkX, minChunkY);
+
 	auto floorDiv = [](int a, int b) {
 		if (a >= 0) return a / b;
 		return -(((-a) + b - 1) / b);
 	};
 
-	const int startChunkX = floorDiv(startTileX, chunkW);
-	const int startChunkY = floorDiv(startTileY, chunkH);
-	const int goalChunkX = floorDiv(goalTileX, chunkW);
-	const int goalChunkY = floorDiv(goalTileY, chunkH);
+	// Tile coordinates are relative to world minimum and in tile-space.
+	// Convert to world chunk coordinates by accounting for the map origin.
+	// Chunk coords = floorDiv(tile, chunkSize) + minChunk
+	// But we also need to account for the world origin offset in the tile calculation.
+	// Since tiles are calculated as (worldPos - minWorldPos) / tileSize,
+	// and chunks are calculated as worldPos / (chunkSize * tileSize),
+	// we need to use: chunkCoord = minChunkCoord + floorDiv(tileCoord, chunkSize)
+
+	const int startChunkX = minChunkX + floorDiv(startTileX, chunkW);
+	const int startChunkY = minChunkY + floorDiv(startTileY, chunkH);
+	const int goalChunkX = minChunkX + floorDiv(goalTileX, chunkW);
+	const int goalChunkY = minChunkY + floorDiv(goalTileY, chunkH);
 
 	std::vector<std::pair<int,int>> chunkPath;
 	if (!FindChunkPath(startTileX, startTileY, goalTileX, goalTileY, chunkPath)) {
-		// fallback to simple rectangle A* if chunk pathing fails; then for simplicity reuse the earlier rectangle A* by calling this function with same bounds
-		// (We'll just run the simple A* over bounding rectangle)
+		std::cout << "[PathFinder] Chunk pathfinding failed from (" << startTileX << "," << startTileY 
+				  << ") to (" << goalTileX << "," << goalTileY << "). Using fallback bounding-box A*.\n";
+
+		// Fallback: create a virtual chunk covering the bounding rectangle and use LocalAStar
+		// This ensures 8-directional diagonal movement with optimal heuristics
 		const int minX = std::min(startTileX, goalTileX);
 		const int minY = std::min(startTileY, goalTileY);
 		const int maxX = std::max(startTileX, goalTileX);
 		const int maxY = std::max(startTileY, goalTileY);
 
-		// Compute the width and height of the bounding rectangle
 		const int width = maxX - minX + 1;
 		const int height = maxY - minY + 1;
 
-		// Limit the maximum number of cells to prevent excessive memory usage
-		const int maxCells = 200000;
-		
-		// If the bounding rectangle is too large, return std::nullopt to indicate failure
-		if (width <= 0 || height <= 0 || (width * height) > maxCells) return std::nullopt;
+		// Limit to prevent excessive memory allocation
+		const int maxCells = 1000000; // Increased from 200000 to support longer paths
+		if (width <= 0 || height <= 0 || (width * height) > maxCells) {
+			std::cout << "[PathFinder] Bounding box too large: " << width << "x" << height << " = " << (width * height) << " cells\n";
+			return std::nullopt;
+		}
 
-		// A* search on the bounding rectangle, using a 1D array to represent the 2D grid
-		// Helper to convert 2D coordinates to 1D index
-		const auto index		= [&](int x, int y) { return (y - minY) * width + (x - minX); };
-		const int startIndex	= index(startTileX, startTileY);
-		const int goalIndex		= index(goalTileX, goalTileY);
-		constexpr float INF		= std::numeric_limits<float>::infinity();
+		// Check if start/goal are walkable (check layer 1 only - obstacles)
+		int startTile = m_chunkManager.GetTileAt(startTileX, startTileY, 1);
+		int goalTile = m_chunkManager.GetTileAt(goalTileX, goalTileY, 1);
+		std::cout << "[PathFinder] Checking start (" << startTileX << "," << startTileY << ") layer 1 tile=" << startTile << "\n";
+		std::cout << "[PathFinder] Checking goal (" << goalTileX << "," << goalTileY << ") layer 1 tile=" << goalTile << "\n";
+		if (startTile != 0) {
+			std::cout << "[PathFinder] Start tile is blocked by obstacle (value=" << startTile << ")\n";
+			return std::nullopt;
+		}
+		if (goalTile != 0) {
+			std::cout << "[PathFinder] Goal tile is blocked by obstacle (value=" << goalTile << ")\n";
+			return std::nullopt;
+		}
 
-		// Initialize the gCosts, parent indices, and closed set
-		std::vector<float> gCosts(width * height, INF);
-		std::vector<int> parent(width * height, -1);
-		std::vector<char> closed(width * height, 0);
+		// Create a virtual chunk covering the bounding rectangle
+		float tileSize = 32.0f;
+		{
+			std::lock_guard<std::mutex> lock(m_chunkManager.GetMutex());
+			auto &chunks = m_chunkManager.GetChunks();
+			if (!chunks.empty()) tileSize = chunks.begin()->second.tileSize;
+		}
 
-		// Priority queue for the open set, ordered by f-cost (g + h)
-		std::priority_queue<PQItem, std::vector<PQItem>, std::greater<PQItem>> open;
-		// Heuristic function: Manhattan distance to the goal
-		auto heuristic = [&](int tx, int ty) { return static_cast<float>(std::abs(tx - goalTileX) + std::abs(ty - goalTileY)); };
-		
-		
-		// Check if the start or goal tiles are blocked (non-zero tile value)
-		if (m_chunkManager.GetTileAt(startTileX, startTileY) != 0) return std::nullopt;
-		if (m_chunkManager.GetTileAt(goalTileX, goalTileY) != 0) return std::nullopt;
+		// Create virtual chunk with correct number of layers
+		int numLayers = m_chunkManager.GetNumLayers();
+		Chunk virtualChunk(0, 0, width, height, tileSize, numLayers);
 
-		// We ok to continue so initialize the starting node
-		gCosts[startIndex] = 0.0f; open.push({heuristic(startTileX, startTileY), startIndex});
-		const int dirs[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}; // 4 cardinal directions
-		bool found = false; // Flag to indicate if a path to the goal has been found
-
-
-		// Main A* loop: continue until the open set is empty or the goal is found
-		while (!open.empty()) {
-			auto [f, cur] = open.top(); open.pop();
-			if (closed[cur]) continue; closed[cur] = 1;
-			if (cur == goalIndex) { found = true; break; }
-			int cx = (cur % width) + minX; int cy = (cur / width) + minY;
-			for (auto &d : dirs) {
-				int nx = cx + d[0]; int ny = cy + d[1];
-				if (nx < minX || nx > maxX || ny < minY || ny > maxY) continue;
-				int ni = index(nx, ny); if (closed[ni]) continue;
-				int tv = m_chunkManager.GetTileAt(nx, ny); if (tv != 0) continue;
-				float ng = gCosts[cur] + 1.0f;
-				if (ng < gCosts[ni]) { gCosts[ni] = ng; parent[ni] = cur; open.push({ng + heuristic(nx, ny), ni}); }
+		// Populate tile data from the chunk manager - copy ALL layers
+		for (int y = minY; y <= maxY; ++y) {
+			for (int x = minX; x <= maxX; ++x) {
+				int localX = x - minX;
+				int localY = y - minY;
+				// Copy all layers from the chunk manager to the virtual chunk
+				for (int layer = 0; layer < numLayers; ++layer) {
+					int tileValue = m_chunkManager.GetTileAt(x, y, layer);
+					virtualChunk.tilesPerLayer[layer][localY * width + localX] = tileValue;
+				}
 			}
 		}
-		if (!found) return std::nullopt;
-		std::vector<Vec2> out; int p = goalIndex; float tileSize = 32.0f;
-		{ std::lock_guard<std::mutex> lock(m_chunkManager.GetMutex()); auto &chunks = m_chunkManager.GetChunks(); if (!chunks.empty()) tileSize = chunks.begin()->second.tileSize; }
-		while (p != -1) { int tx = (p % width) + minX; int ty = (p / width) + minY; float wx = tx * tileSize + tileSize * 0.5f; float wy = ty * tileSize + tileSize * 0.5f; out.emplace_back(wx, wy); p = parent[p]; }
-		std::reverse(out.begin(), out.end()); return out;
+
+		// DEBUG: Check virtual chunk layer 1 (obstacle layer)
+		{
+			int layer1NonZero = 0;
+			if (virtualChunk.tilesPerLayer.size() > 1) {
+				for (int t : virtualChunk.tilesPerLayer[1]) {
+					if (t != 0) layer1NonZero++;
+				}
+			}
+			std::cout << "[PathFinder] Virtual chunk layer 1 has " << layer1NonZero << " non-zero tiles\n";
+		}
+
+		// Call LocalAStar with local coordinates (relative to the virtual chunk)
+		int localStartX = startTileX - minX;
+		int localStartY = startTileY - minY;
+		int localGoalX = goalTileX - minX;
+		int localGoalY = goalTileY - minY;
+
+		auto result = LocalAStar(virtualChunk, localStartX, localStartY, localGoalX, localGoalY);
+		if (result.has_value() && !result->empty()) {
+			std::cout << "[PathFinder] Fallback LocalAStar succeeded with " << result->size() << " waypoints\n";
+
+			// Note: LocalAStar will have computed positions based on chunkX=0, chunkY=0, so positions are already correct world-space coordinates since local (tx,ty)
+			// gets converted as:	worldTx = 0*width + tx = tx,	which is what we want (minX+tx converted to world space). We need to verify this is correct...
+			// LocalAStar does:		wx = worldTx * tileSize + tileSize*0.5 with	chunkX=0: worldTx = 0 * width + tx = tx (ranges 0 to width-1)
+			// But we want:			worldTx = minX + tx (absolute world tile)
+			// So we need to offset all returned positions!
+			
+			float offsetX = minX * tileSize;
+			float offsetY = minY * tileSize;
+			for (auto& pos : *result) {
+				pos.x += offsetX;
+				pos.y += offsetY;
+			}
+		} else if (!result.has_value()) {
+			// Debug: LocalAStar failed due to invalid input or other error
+			std::cout << "[PathFinder] Fallback LocalAStar also failed!\n";
+		}
+		return result;
 	}
+
+	// Debug : print chunk path
+	std::cout << "[PathFinder] Chunk pathfinding succeeded, found " << chunkPath.size() << " chunks\n";
 
 	// Stitch local paths across chunkPath
 	std::vector<Vec2> finalPath;
@@ -131,12 +178,22 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 	// current start tile coords
 	int curTx = startTileX, curTy = startTileY;
 
+	std::cout << "[PathFinder] Starting path stitching with chunkW=" << chunkW << " chunkH=" << chunkH << "\n";
+	std::cout << "[PathFinder] Start world tile: (" << startTileX << "," << startTileY << ")\n";
+	std::cout << "[PathFinder] Chunk path: ";
+	for (auto& c : chunkPath) std::cout << "(" << c.first << "," << c.second << ") ";
+	std::cout << "\n";
+
 	for (size_t i = 0; i < chunkPath.size(); ++i) {
 		int cx = chunkPath[i].first;
 		int cy = chunkPath[i].second;
 		// compute local coords
 		int localStartX = curTx - cx * chunkW;
 		int localStartY = curTy - cy * chunkH;
+
+		std::cout << "[PathFinder] Iteration " << i << ": chunk (" << cx << "," << cy << ") "
+				  << "curTx,curTy=(" << curTx << "," << curTy << ") "
+				  << "localStart=(" << localStartX << "," << localStartY << ")\n";
 
 		if (i + 1 == chunkPath.size()) {
 			// last chunk: target is goal
@@ -150,6 +207,8 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 				auto it = chunks.find((static_cast<long long>(cx) << 32) | static_cast<unsigned int>(cy));
 				if (it == chunks.end()) return std::nullopt;
 				chunkCopy = it->second;
+				std::cout << "[PathFinder] Chunk (" << cx << "," << cy << ") Layer 0: " << chunkCopy.tilesPerLayer[0].size() 
+						  << ", Layer 1: " << (chunkCopy.tilesPerLayer.size() > 1 ? chunkCopy.tilesPerLayer[1].size() : 0) << "\n";
 			}
 			auto seg = LocalAStar(chunkCopy, localStartX, localStartY, localGoalX, localGoalY);
 			if (!seg.has_value()) return std::nullopt;
@@ -163,46 +222,151 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 			int ny = chunkPath[i+1].second;
 			// scan shared border for candidate crossing tiles
 			int dx = nx - cx; int dy = ny - cy;
+			std::cout << "[PathFinder] Looking for portal: dx=" << dx << " dy=" << dy << "\n";
 			float bestDist = std::numeric_limits<float>::infinity();
-			int bestAx= -1, bestAy = -1, bestBx = -1, bestBy = -1;
+			int bestAx= INT_MIN, bestAy = INT_MIN, bestBx = INT_MIN, bestBy = INT_MIN;
 			// preferred point is current position center
 			Vec2 pref = tileCenter(curTx, curTy);
-			if (dx != 0) {
+
+			// For diagonal moves, we need to find a corner crossing point
+			if (dx != 0 && dy != 0) {
+				// Diagonal move: check the corner tiles where both chunks meet
+				int cornerAx = cx * chunkW + (dx > 0 ? (chunkW - 1) : 0);
+				int cornerAy = cy * chunkH + (dy > 0 ? (chunkH - 1) : 0);
+				int cornerBx = nx * chunkW + (dx > 0 ? 0 : (chunkW - 1));
+				int cornerBy = ny * chunkH + (dy > 0 ? 0 : (chunkH - 1));
+
+				// Check both layer 0 (surface) and layer 1 (obstacles) for corners
+				int l0a = m_chunkManager.GetTileAt(cornerAx, cornerAy, 0);  // Layer 0
+				int l1a = m_chunkManager.GetTileAt(cornerAx, cornerAy, 1);  // Layer 1
+				int l0b = m_chunkManager.GetTileAt(cornerBx, cornerBy, 0);  // Layer 0
+				int l1b = m_chunkManager.GetTileAt(cornerBx, cornerBy, 1);  // Layer 1
+
+				// Both corners must have surface and no obstacles
+				if ((l0a != 0 && l1a == 0) && (l0b != 0 && l1b == 0)) {
+					// Also check that we can actually cross diagonally (not blocked by orthogonal neighbors)
+					int orth1x = cornerAx + dx; int orth1y = cornerAy;
+					int orth2x = cornerAx; int orth2y = cornerAy + dy;
+					int o1_l0 = m_chunkManager.GetTileAt(orth1x, orth1y, 0);
+					int o1_l1 = m_chunkManager.GetTileAt(orth1x, orth1y, 1);
+					int o2_l0 = m_chunkManager.GetTileAt(orth2x, orth2y, 0);
+					int o2_l1 = m_chunkManager.GetTileAt(orth2x, orth2y, 1);
+					// At least one orthogonal neighbor must be walkable
+					bool orth1Walkable = (o1_l0 != 0 && o1_l1 == 0);
+					bool orth2Walkable = (o2_l0 != 0 && o2_l1 == 0);
+					if (orth1Walkable || orth2Walkable) {
+						bestAx = cornerAx; bestAy = cornerAy;
+						bestBx = cornerBx; bestBy = cornerBy;
+						bestDist = 0; // Perfect corner match
+					}
+				}
+
+				// If diagonal corner crossing not possible, fall back to orthogonal edges
+				if (bestAx == INT_MIN) {
+					// Try horizontal edge
+					int edgeAx = cx * chunkW + (dx > 0 ? (chunkW - 1) : 0);
+					int edgeBx = nx * chunkW + (dx > 0 ? 0 : (chunkW - 1));
+					for (int irow = 0; irow < chunkH; ++irow) {
+						int ay = cy * chunkH + irow;
+						int by = ny * chunkH + irow; // FIXED: by should be in chunk ny, not cy!
+						int va = m_chunkManager.GetTileAt(edgeAx, ay, 1);  // Layer 1
+						int vb = m_chunkManager.GetTileAt(edgeBx, by, 1);  // Layer 1
+						if (va == 0 && vb == 0) {
+							Vec2 ca = tileCenter(edgeAx, ay);
+							float dxp = ca.x - pref.x; float dyp = ca.y - pref.y;
+							float dist = dxp*dxp + dyp*dyp;
+							if (dist < bestDist) { bestDist = dist; bestAx = edgeAx; bestAy = ay; bestBx = edgeBx; bestBy = by; }
+						}
+					}
+
+					// Try vertical edge  
+					if (bestAx == INT_MIN || bestDist > 1000000) {
+						int edgeAy = cy * chunkH + (dy > 0 ? (chunkH - 1) : 0);
+						int edgeBy = ny * chunkH + (dy > 0 ? 0 : (chunkH - 1));
+						for (int icol = 0; icol < chunkW; ++icol) {
+							int ax = cx * chunkW + icol;
+							int bx = nx * chunkW + icol; // FIXED: bx should be in chunk nx, not cx!
+							int va = m_chunkManager.GetTileAt(ax, edgeAy, 1);  // Layer 1
+							int vb = m_chunkManager.GetTileAt(bx, edgeBy, 1);  // Layer 1
+							if (va == 0 && vb == 0) {
+								Vec2 ca = tileCenter(ax, edgeAy);
+								float dxp = ca.x - pref.x; float dyp = ca.y - pref.y;
+								float dist = dxp*dxp + dyp*dyp;
+								if (dist < bestDist) { bestDist = dist; bestAx = ax; bestAy = edgeAy; bestBx = bx; bestBy = edgeBy; }
+							}
+						}
+					}
+				}
+			} else if (dx != 0) {
+				// Horizontal move only
 				int edgeAx = cx * chunkW + (dx > 0 ? (chunkW - 1) : 0);
 				int edgeBx = nx * chunkW + (dx > 0 ? 0 : (chunkW - 1));
+				int portalCount = 0;
 				for (int irow = 0; irow < chunkH; ++irow) {
 					int ay = cy * chunkH + irow;
 					int by = ay;
-					int va = m_chunkManager.GetTileAt(edgeAx, ay);
-					int vb = m_chunkManager.GetTileAt(edgeBx, by);
-					if (va == 0 && vb == 0) {
+					// Check both layer 0 (surface) and layer 1 (obstacles)
+					int l0a = m_chunkManager.GetTileAt(edgeAx, ay, 0);  // Layer 0
+					int l1a = m_chunkManager.GetTileAt(edgeAx, ay, 1);  // Layer 1
+					int l0b = m_chunkManager.GetTileAt(edgeBx, by, 0);  // Layer 0
+					int l1b = m_chunkManager.GetTileAt(edgeBx, by, 1);  // Layer 1
+					// Valid crossing if: both have surface (layer 0) AND neither has obstacle (layer 1)
+					if ((l0a != 0 && l1a == 0) && (l0b != 0 && l1b == 0)) {
+						portalCount++;
 						Vec2 ca = tileCenter(edgeAx, ay);
 						float dxp = ca.x - pref.x; float dyp = ca.y - pref.y;
 						float dist = dxp*dxp + dyp*dyp;
 						if (dist < bestDist) { bestDist = dist; bestAx = edgeAx; bestAy = ay; bestBx = edgeBx; bestBy = by; }
 					}
 				}
-			} else {
+				if (bestDist > 1000000 && portalCount > 0) {
+					std::cout << "[PathFinder] Horizontal edge search: found " << portalCount << " possible crossings, selected none (too far)\n";
+				} else if (portalCount == 0) {
+					std::cout << "[PathFinder] Horizontal edge search: no crossing points available (all blocked)\n";
+				} else {
+					std::cout << "[PathFinder] Horizontal edge search: found " << portalCount << " crossings, selected best at (" << bestAx << "," << bestAy << ")\n";
+				}
+			} else if (dy != 0) {
+				// Vertical move only
 				int edgeAy = cy * chunkH + (dy > 0 ? (chunkH - 1) : 0);
 				int edgeBy = ny * chunkH + (dy > 0 ? 0 : (chunkH - 1));
+				int portalCount = 0;
 				for (int icol = 0; icol < chunkW; ++icol) {
 					int ax = cx * chunkW + icol;
 					int bx = nx * chunkW + icol;
-					int va = m_chunkManager.GetTileAt(ax, edgeAy);
-					int vb = m_chunkManager.GetTileAt(bx, edgeBy);
-					if (va == 0 && vb == 0) {
+					// Check both layer 0 (surface) and layer 1 (obstacles)
+					int l0a = m_chunkManager.GetTileAt(ax, edgeAy, 0);  // Layer 0
+					int l1a = m_chunkManager.GetTileAt(ax, edgeAy, 1);  // Layer 1
+					int l0b = m_chunkManager.GetTileAt(bx, edgeBy, 0);  // Layer 0
+					int l1b = m_chunkManager.GetTileAt(bx, edgeBy, 1);  // Layer 1
+					// Valid crossing if: both have surface (layer 0) AND neither has obstacle (layer 1)
+					if ((l0a != 0 && l1a == 0) && (l0b != 0 && l1b == 0)) {
+						portalCount++;
 						Vec2 ca = tileCenter(ax, edgeAy);
 						float dxp = ca.x - pref.x; float dyp = ca.y - pref.y;
 						float dist = dxp*dxp + dyp*dyp;
 						if (dist < bestDist) { bestDist = dist; bestAx = ax; bestAy = edgeAy; bestBx = bx; bestBy = edgeBy; }
 					}
 				}
+				if (bestDist > 1000000) {
+					std::cout << "[PathFinder] Vertical edge search: found " << portalCount << " possible crossings, selected none\n";
+				}
 			}
-			if (bestAx == -1) return std::nullopt; // no portal found
+			if (bestAx == INT_MIN) return std::nullopt; // no portal found
 
 			// compute local coords in current chunk
 			int exitLocalX = bestAx - cx * chunkW;
 			int exitLocalY = bestAy - cy * chunkH;
+
+			std::cout << "[PathFinder] Chunk (" << cx << "," << cy << ") -> (" << (nx) << "," << (ny) 
+					  << ") portal at world (" << bestAx << "," << bestAy << ") local exit (" 
+					  << exitLocalX << "," << exitLocalY << ") start (" << localStartX << "," 
+					  << localStartY << ")\n";
+
+			// Entry point in next chunk for debugging
+			std::cout << "[PathFinder]   Entry in next chunk: bestBx=" << bestBx << " bestBy=" << bestBy 
+					  << " (next chunk " << nx << "," << ny << " range X=" << (nx*chunkW) << ".." 
+					  << (nx*chunkW + chunkW - 1) << " Y=" << (ny*chunkH) << ".." << (ny*chunkH + chunkH - 1) << ")\n";
 
 			// fetch chunk copy
 			Chunk chunkCopy;
@@ -210,17 +374,42 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 				std::lock_guard<std::mutex> lock(m_chunkManager.GetMutex());
 				auto &chunks = m_chunkManager.GetChunks();
 				auto it = chunks.find((static_cast<long long>(cx) << 32) | static_cast<unsigned int>(cy));
-				if (it == chunks.end()) return std::nullopt;
+				if (it == chunks.end()) {
+					std::cout << "[PathFinder] ERROR: Chunk (" << cx << "," << cy << ") not loaded!\n";
+					return std::nullopt;
+				}
 				chunkCopy = it->second;
 			}
 
+			// TEMP DEBUG: check layer 0 and 1 data
+			{
+				int layer0NonZero = 0, layer1NonZero = 0;
+				if (chunkCopy.tilesPerLayer.size() > 0) {
+					for (int t : chunkCopy.tilesPerLayer[0]) {
+						if (t != 0) layer0NonZero++;
+					}
+				}
+				if (chunkCopy.tilesPerLayer.size() > 1) {
+					for (int t : chunkCopy.tilesPerLayer[1]) {
+						if (t != 0) layer1NonZero++;
+					}
+				}
+				std::cout << "[PathFinder] Chunk (" << cx << "," << cy << ") Layer 0: " << layer0NonZero << ", Layer 1: " << layer1NonZero << " non-zero tiles\n";
+			}
+			std::cout << "[PathFinder] Calling LocalAStar with localStart=(" << localStartX << "," << localStartY 
+					  << ") localExit=(" << exitLocalX << "," << exitLocalY << ")\n";
+
 			auto seg = LocalAStar(chunkCopy, localStartX, localStartY, exitLocalX, exitLocalY);
-			if (!seg.has_value()) return std::nullopt;
+			if (!seg.has_value()) {
+				std::cout << "[PathFinder] ERROR: LocalAStar failed in chunk (" << cx << "," << cy << ")\n";
+				return std::nullopt;
+			}
 			if (!finalPath.empty() && !seg->empty()) seg->erase(seg->begin());
 			finalPath.insert(finalPath.end(), seg->begin(), seg->end());
 
 			// set next chunk start as the corresponding tile in next chunk (bestBx,bestBy)
 			curTx = bestBx; curTy = bestBy;
+			std::cout << "[PathFinder]   Updated curTx,curTy to (" << curTx << "," << curTy << ")\n";
 		}
 	}
 
@@ -232,6 +421,7 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 
 /////////////////////////////////
 // FindChunkPath - High-level A* pathfinding on the chunk graph, returning a list of chunk coordinates that form the path from the
+// start to goal chunks. Tiles sx,sy,gx,gy are absolute world-space tile coordinates.
 bool Pathfinder::FindChunkPath(int sx, int sy, int gx, int gy, std::vector<std::pair<int, int>>& outChunks) {
 	outChunks.clear();
 	const int cw = m_chunkManager.GetChunkWidth();
@@ -244,6 +434,7 @@ bool Pathfinder::FindChunkPath(int sx, int sy, int gx, int gy, std::vector<std::
 		return -(((-a) + b - 1) / b);
 	};
 
+	// Convert absolute world tiles directly to chunk coordinates
 	const int scx = floorDiv(sx, cw);
 	const int scy = floorDiv(sy, ch);
 	const int gcx = floorDiv(gx, cw);
@@ -284,6 +475,13 @@ bool Pathfinder::FindChunkPath(int sx, int sy, int gx, int gy, std::vector<std::
 		int dy = ny - cy;
 		if (std::abs(dx) > 1 || std::abs(dy) > 1) return false;
 
+		// Helper: check if a tile is blocked (layer 1 only - obstacle layer)
+		auto isBlocked = [this](int tx, int ty) {
+			// Only check layer 1 (main/obstacle layer)
+			int v = m_chunkManager.GetTileAt(tx, ty, 1);
+			return v != 0;  // Blocked if layer 1 has a tile
+		};
+
 		// orthogonal neighbor
 		if (std::abs(dx) + std::abs(dy) == 1) {
 			if (dx != 0) {
@@ -294,9 +492,7 @@ bool Pathfinder::FindChunkPath(int sx, int sy, int gx, int gy, std::vector<std::
 					int ay = cy * ch + i;
 					int txA = edgeX_A;
 					int txB = edgeX_B;
-					int va = m_chunkManager.GetTileAt(txA, ay);
-					int vb = m_chunkManager.GetTileAt(txB, ay);
-					if (va == 0 && vb == 0) return true;
+					if (!isBlocked(txA, ay) && !isBlocked(txB, ay)) return true;
 				}
 			} else {
 				// horizontal strip along x
@@ -305,9 +501,7 @@ bool Pathfinder::FindChunkPath(int sx, int sy, int gx, int gy, std::vector<std::
 				for (int i = 0; i < cw; ++i) {
 					int ax = cx * cw + i;
 					int bx = nx * cw + i;
-					int va = m_chunkManager.GetTileAt(ax, edgeY_A);
-					int vb = m_chunkManager.GetTileAt(bx, edgeY_B);
-					if (va == 0 && vb == 0) return true;
+					if (!isBlocked(ax, edgeY_A) && !isBlocked(bx, edgeY_B)) return true;
 				}
 			}
 			return false;
@@ -319,15 +513,11 @@ bool Pathfinder::FindChunkPath(int sx, int sy, int gx, int gy, std::vector<std::
 			int ay = cy * ch + (dy > 0 ? (ch - 1) : 0);
 			int bx = nx * cw + (dx > 0 ? 0 : (cw - 1));
 			int by = ny * ch + (dy > 0 ? 0 : (ch - 1));
-			int va = m_chunkManager.GetTileAt(ax, ay);
-			int vb = m_chunkManager.GetTileAt(bx, by);
-			if (va != 0 || vb != 0) return false;
+			if (isBlocked(ax, ay) || isBlocked(bx, by)) return false;
 			// prevent corner-cut across blocked orthogonals: require at least one adjacent orthogonal tile free
 			int orth1x = ax + dx; int orth1y = ay; // tile across horizontal
 			int orth2x = ax; int orth2y = ay + dy; // tile across vertical
-			int o1 = m_chunkManager.GetTileAt(orth1x, orth1y);
-			int o2 = m_chunkManager.GetTileAt(orth2x, orth2y);
-			if (o1 == 0 || o2 == 0) return true;
+			if (!isBlocked(orth1x, orth1y) || !isBlocked(orth2x, orth2y)) return true;
 			return false;
 		}
 
@@ -376,8 +566,14 @@ bool Pathfinder::FindChunkPath(int sx, int sy, int gx, int gy, std::vector<std::
 std::optional<std::vector<Vec2>> Pathfinder::LocalAStar(const Chunk& chunk, int sx, int sy, int gx, int gy) {
 	const int w = chunk.width;
 	const int h = chunk.height;
-	if (sx < 0 || sx >= w || sy < 0 || sy >= h) return std::nullopt;
-	if (gx < 0 || gx >= w || gy < 0 || gy >= h) return std::nullopt;
+	if (sx < 0 || sx >= w || sy < 0 || sy >= h) {
+		std::cout << "[LocalAStar] Start out of bounds: (" << sx << "," << sy << ") in " << w << "x" << h << " chunk\n";
+		return std::nullopt;
+	}
+	if (gx < 0 || gx >= w || gy < 0 || gy >= h) {
+		std::cout << "[LocalAStar] Goal out of bounds: (" << gx << "," << gy << ") in " << w << "x" << h << " chunk\n";
+		return std::nullopt;
+	}
 
 	auto idx = [&](int x, int y) { return y * w + x; };
 	const int start = idx(sx, sy);
@@ -400,13 +596,40 @@ std::optional<std::vector<Vec2>> Pathfinder::LocalAStar(const Chunk& chunk, int 
 		return static_cast<float>((mx - mn) + mn * SQRT2);
 	};
 
-	// walkable check using chunk's primary layer
+	// walkable check for collision detection
+	// A tile is walkable if: layer 0 has a tile (surface exists) AND layer 1 is empty (no obstacle)
 	auto walkable = [&](int x, int y) {
-		int v = chunk.GetTileSingleLayer(x, y);
-		return v == 0;
+		// Check if coordinates are in bounds
+		if (x < 0 || x >= chunk.width || y < 0 || y >= chunk.height) return false;
+
+		// Check layer 0 (background/surface) - must have a tile to walk on
+		bool hasLayer0 = false;
+		if (!chunk.tilesPerLayer.empty()) {
+			int v0 = chunk.tilesPerLayer[0][y * chunk.width + x];
+			hasLayer0 = (v0 != 0);
+		}
+
+		// Check layer 1 (obstacles) - must NOT have a tile
+		bool layer1Clear = true;
+		if (chunk.tilesPerLayer.size() > 1) {
+			int v1 = chunk.tilesPerLayer[1][y * chunk.width + x];
+			layer1Clear = (v1 == 0);
+		}
+
+		bool result = hasLayer0 && layer1Clear;
+		static bool printed = false;
+		if (!printed && (x == sx || x == gx) && (y == sy || y == gy)) {
+			std::cout << "[LocalAStar] At (" << x << "," << y << ") layer0=" << (hasLayer0 ? 1 : 0) 
+					  << " layer1=" << (!layer1Clear ? 1 : 0) << " walkable=" << result << "\n";
+			printed = true;
+		}
+		return result;  // Walkable only if layer 0 exists AND layer 1 is empty
 	};
 
-	if (!walkable(sx, sy) || !walkable(gx, gy)) return std::nullopt;
+	if (!walkable(sx, sy) || !walkable(gx, gy)) {
+		std::cout << "[LocalAStar] Start or goal is not walkable\n";
+		return std::nullopt;
+	}
 
 	g[start] = 0.0f;
 	open.push({heuristic(sx, sy), start});
@@ -414,11 +637,13 @@ std::optional<std::vector<Vec2>> Pathfinder::LocalAStar(const Chunk& chunk, int 
 	// 8-directional moves (dx,dy)
 	const int dirs8[8][2] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
 	bool found = false;
+	int nodesExpanded = 0;
 
 	while (!open.empty()) {
 		auto [f, cur] = open.top(); open.pop();
 		if (closed[cur]) continue;
 		closed[cur] = 1;
+		nodesExpanded++;
 		if (cur == goal) { found = true; break; }
 		int cx = cur % w;
 		int cy = cur / w;
@@ -443,7 +668,10 @@ std::optional<std::vector<Vec2>> Pathfinder::LocalAStar(const Chunk& chunk, int 
 		}
 	}
 
-	if (!found) return std::nullopt;
+	if (!found) {
+		std::cout << "[LocalAStar] Failed to find path. Expanded " << nodesExpanded << " nodes in " << w << "x" << h << " chunk\n";
+		return std::nullopt;
+	}
 
 	// reconstruct path as world-space points (tile centers)
 	std::vector<Vec2> out;
@@ -467,15 +695,18 @@ std::optional<std::vector<Vec2>> Pathfinder::LocalAStar(const Chunk& chunk, int 
 
 
 /////////////////////////////////
-// EnsureChunksForPath - Ensures that the necessary chunks are loaded for pathfinding between the start and goal tile coordinates.
+// EnsureChunksForPath - Ensures that the necessary chunks are loaded for pathfinding between the start and goal tiles.
+// sx, sy, gx, gy are absolute world-space tile coordinates.
 void Pathfinder::EnsureChunksForPath(int sx, int sy, int gx, int gy) {
 	const int cw = m_chunkManager.GetChunkWidth();
 	const int ch = m_chunkManager.GetChunkHeight();
 	if (cw <= 0 || ch <= 0) return;
+
 	auto floorDiv = [](int a, int b) {
 		if (a >= 0) return a / b;
 		return -(((-a) + b - 1) / b);
 	};
+
 	int scx = floorDiv(sx, cw);
 	int scy = floorDiv(sy, ch);
 	int gcx = floorDiv(gx, cw);

@@ -22,14 +22,6 @@
 
 
 /////////////////////////////////
-// Type alias for priority queue items used in A* search. Each item is a pair consisting of the f-cost (float) and the index (int) of the node in the search 
-// space. The f-cost is used to prioritize nodes in the open set, with lower f-costs being processed first.
-using PQItem = std::pair<float, int>;
-/////////////////////////////////
-
-
-
-/////////////////////////////////
 // FindPath - Finds a path from the start tile to the goal tile using A* algorithm. Returns an optional Path containing world positions if a path is found,
 std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goalTileX, int goalTileY) {
 	// Hierarchical pathfinding: find chunk-level path then local A* per chunk
@@ -422,12 +414,19 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 /////////////////////////////////
 // FindChunkPath - High-level A* pathfinding on the chunk graph, returning a list of chunk coordinates that form the path from the
 // start to goal chunks. Tiles sx,sy,gx,gy are absolute world-space tile coordinates.
-bool Pathfinder::FindChunkPath(int sx, int sy, int gx, int gy, std::vector<std::pair<int, int>>& outChunks) {
-	outChunks.clear();
-	const int cw = m_chunkManager.GetChunkWidth();
-	const int ch = m_chunkManager.GetChunkHeight();
-	if (cw <= 0 || ch <= 0) return false;
+bool Pathfinder::FindChunkPath(int startX, int startY, int goalX, int goalY, std::vector<std::pair<int, int>>& outChunks) {
 
+	// Ensure the output chunks vector is empty before starting
+	outChunks.clear();
+
+	// Lets store a local cache of chunk dimensions from the chunk manager
+	const int chunkW = m_chunkManager.GetChunkWidth();
+	const int chunkH = m_chunkManager.GetChunkHeight();
+
+	// Guard against invalid chunk dimensions
+	if (chunkW <= 0 || chunkH <= 0) return false;
+
+	// Internal helper to perform floor division for negative coordinates, ensuring correct chunk mapping 
 	auto floorDiv = [](int a, int b) {
 		if (b <= 0) return 0;
 		if (a >= 0) return a / b;
@@ -435,107 +434,106 @@ bool Pathfinder::FindChunkPath(int sx, int sy, int gx, int gy, std::vector<std::
 	};
 
 	// Convert absolute world tiles directly to chunk coordinates
-	const int scx = floorDiv(sx, cw);
-	const int scy = floorDiv(sy, ch);
-	const int gcx = floorDiv(gx, cw);
-	const int gcy = floorDiv(gy, ch);
+	const int startChunkX = floorDiv(startX, chunkW);
+	const int startChunkY = floorDiv(startY, chunkH);
+	const int goalChunkX = floorDiv(goalX, chunkW);
+	const int goalChunkY = floorDiv(goalY, chunkH);
 
-	if (scx == gcx && scy == gcy) {
-		outChunks.emplace_back(scx, scy);
+	// If the start and goal chunks are the same, we can return immediately with that chunk
+	if (startChunkX == goalChunkX && startChunkY == goalChunkY) {
+		outChunks.emplace_back(startChunkX, startChunkY);
 		return true;
 	}
 
+	// Compute a unique key for coordinates (x,y) to use in hash maps.
 	auto keyFor = [](int x, int y) {
-		return (static_cast<long long>(x) << 32) | static_cast<unsigned int>(y);
+		// Use a 64-bit integer to combine x and y into a unique key; 
+		// Shift x to the upper 32 bits and y to the lower 32 bits.
+		return (static_cast<long long>(x) << 32) | static_cast<unsigned int>(y); 
 	};
 
+	// Heuristic function for A* search: Manhattan distance between two chunk coordinates.
 	struct Node { int x,y; float g; long long parent; };
 	std::unordered_map<long long, Node> nodes;
+	
+	using PQItem = std::pair<float, long long>; // PQItem is a pair consisting of the f-cost (float) and a unique key (long long)
+												// representing a node in the search space. The f-cost is used to prioritize nodes
+												// in the open set, with lower f-costs being processed first.
 
-	using PQItem = std::pair<float, long long>; // f, key
+	// Priority queue for the open set in A* search, ordered by f-cost (g + h). The std::greater comparator ensures that the 
+	// lowest f-cost is processed first.
 	std::priority_queue<PQItem, std::vector<PQItem>, std::greater<PQItem>> open;
 
+	// **** LAMBDA START: pushNode ****
+	// Lambda function to push a node into the open set if it is either new or has a lower g-cost than previously recorded.
 	auto pushNode = [&](int x, int y, float g, long long parent) {
 		long long k = keyFor(x,y);
 		auto it = nodes.find(k);
 		if (it == nodes.end() || g < it->second.g) {
 			nodes[k] = {x,y,g,parent};
-			float h = HeuristicChunk(x,y,gcx,gcy);
+			float h = HeuristicChunk(x,y,goalChunkX,goalChunkY);
 			open.push({g + h, k});
 		}
 	};
+	// **** LAMBDA END: pushNode ****
 
-	pushNode(scx, scy, 0.0f, -1);
+	pushNode(startChunkX, startChunkY, 0.0f, -1);
 
-	const int dirs[8][2] = {{1,0},{-1,0},{0,1},{0,-1},{1,1},{1,-1},{-1,1},{-1,-1}};
-
+	// **** LAMBDA START: chunkHasConnection ****
+	// Lambda function to determine if two chunks (cx,cy) and (nx,ny) are connected, meaning there is a valid path between them.
 	auto chunkHasConnection = [&](int cx, int cy, int nx, int ny) {
 		// check adjacency (orthogonal or diagonal)
 		int dx = nx - cx;
 		int dy = ny - cy;
 		if (std::abs(dx) > 1 || std::abs(dy) > 1) return false;
 
-		// Helper: check if a tile is blocked (layer 1 only - obstacle layer)
+
+		// *** LAMBDA START: isBlocked ***
+		// Helper: check if a tile is blocked (layer 1 only - obstacle layer); we're doing lambda inception here
 		auto isBlocked = [this](int tx, int ty) {
 			// Only check layer 1 (main/obstacle layer)
-			int v = m_chunkManager.GetTileAt(tx, ty, 1);
-			return v != 0;  // Blocked if layer 1 has a tile
+			int tileValue = m_chunkManager.GetTileAt(tx, ty, 1);
+			return tileValue != 0;  // Blocked if layer 1 has a tile
 		};
+		// *** LAMBDA END: isBlocked ***
 
-		// orthogonal neighbor
-		if (std::abs(dx) + std::abs(dy) == 1) {
-			if (dx != 0) {
-				// vertical strip along y
-				int edgeX_A = cx * cw + (dx > 0 ? (cw - 1) : 0);
-				int edgeX_B = nx * cw + (dx > 0 ? 0 : (cw - 1));
-				for (int i = 0; i < ch; ++i) {
-					int ay = cy * ch + i;
-					int txA = edgeX_A;
-					int txB = edgeX_B;
-					if (!isBlocked(txA, ay) && !isBlocked(txB, ay)) return true;
-				}
-			} else {
-				// horizontal strip along x
-				int edgeY_A = cy * ch + (dy > 0 ? (ch - 1) : 0);
-				int edgeY_B = ny * ch + (dy > 0 ? 0 : (ch - 1));
-				for (int i = 0; i < cw; ++i) {
-					int ax = cx * cw + i;
-					int bx = nx * cw + i;
-					if (!isBlocked(ax, edgeY_A) && !isBlocked(bx, edgeY_B)) return true;
-				}
-			}
-			return false;
-		}
+		// Check orthogonal neighbor connection first
+		bool retFlag;
+		bool retVal = CheckOrthogonalNeighbour(dx, dy, cx, chunkW, nx, chunkH, cy, isBlocked, ny, retFlag);
+		if (retFlag) return retVal;
 
-		// diagonal neighbor: check corner-adjacent tile pair and avoid corner-cut across blocked orthogonals
-		if (std::abs(dx) == 1 && std::abs(dy) == 1) {
-			int ax = cx * cw + (dx > 0 ? (cw - 1) : 0);
-			int ay = cy * ch + (dy > 0 ? (ch - 1) : 0);
-			int bx = nx * cw + (dx > 0 ? 0 : (cw - 1));
-			int by = ny * ch + (dy > 0 ? 0 : (ch - 1));
-			if (isBlocked(ax, ay) || isBlocked(bx, by)) return false;
-			// prevent corner-cut across blocked orthogonals: require at least one adjacent orthogonal tile free
-			int orth1x = ax + dx; int orth1y = ay; // tile across horizontal
-			int orth2x = ax; int orth2y = ay + dy; // tile across vertical
-			if (!isBlocked(orth1x, orth1y) || !isBlocked(orth2x, orth2y)) return true;
-			return false;
-		}
+		retVal = CheckDiagonalNeighbour(dx, dy, cx, chunkW, cy, chunkH, nx, ny, isBlocked, retFlag);
+		if (retFlag) return retVal;
 
+		// If neither orthogonal nor diagonal checks were applicable, return false (no connection).
 		return false;
 	};
+	// **** LAMBDA END: chunkHasConnection ****
 
+	// A* search setup
 	std::unordered_map<long long, bool> closed;
 	bool found = false;
-	long long goalKey = keyFor(gcx, gcy);
+	long long goalKey = keyFor(goalChunkX, goalChunkY);
 
 	const float DIAG = std::sqrt(2.0f);
+	
+	// Main A* Search loop, processing nodes in the open set until either the goal is found or the open set is exhausted.
 	while (!open.empty()) {
-		auto [f, k] = open.top(); open.pop();
+		auto [f, k] = open.top(); 
+		open.pop();
+
+		auto& node = nodes[k];
+		float h = HeuristicChunk(node.x, node.y, goalChunkX, goalChunkY);
+
+		if (f != node.g + h)
+			continue; // Skip if f-cost is outdated
+
 		if (closed[k]) continue;
 		closed[k] = true;
+
 		const Node cur = nodes[k];
 		if (k == goalKey) { found = true; break; }
-		for (auto &d : dirs) {
+		for (auto &d : m_dirs) {
 			int nx = cur.x + d[0];
 			int ny = cur.y + d[1];
 			if (!chunkHasConnection(cur.x, cur.y, nx, ny)) continue;
@@ -556,6 +554,76 @@ bool Pathfinder::FindChunkPath(int sx, int sy, int gx, int gy, std::vector<std::
 	}
 	std::reverse(outChunks.begin(), outChunks.end());
 	return true;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// CheckDiagonalNeighbour - Check if two diagonal chunks have a valid crossing point (at least one pair of adjacent walkable tiles)
+bool Pathfinder::CheckDiagonalNeighbour(int dx, int dy, int cx, const int chunkW, int cy, const int chunkH, int nx,
+										int ny, std::function<bool(int, int)> isBlocked, bool& retFlag) {
+	retFlag = true;
+	// diagonal neighbor: check corner-adjacent tile pair and avoid corner-cut across blocked orthogonals
+	if (std::abs(dx) == 1 && std::abs(dy) == 1) {
+		int ax = cx * chunkW + (dx > 0 ? (chunkW - 1) : 0);
+		int ay = cy * chunkH + (dy > 0 ? (chunkH - 1) : 0);
+		int bx = nx * chunkW + (dx > 0 ? 0 : (chunkW - 1));
+		int by = ny * chunkH + (dy > 0 ? 0 : (chunkH - 1));
+
+		if (isBlocked(ax, ay) || isBlocked(bx, by))
+			return false;
+		// prevent corner-cut across blocked orthogonals: require at least one adjacent orthogonal tile free
+		int orth1x = ax + dx;
+		int orth1y = ay; // tile across horizontal
+		int orth2x = ax;
+		int orth2y = ay + dy; // tile across vertical
+		if (!isBlocked(orth1x, orth1y) || !isBlocked(orth2x, orth2y))
+			return true;
+		return false;
+	}
+	retFlag = false;
+	return {};
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// CheckOrthogonalNeighbour - Check if two orthogonal chunks have at least one pair of adjacent walkable tiles along their shared edge
+bool Pathfinder::CheckOrthogonalNeighbour(int dx, int dy, int cx, const int chunkW, int nx, const int chunkH, int cy,
+										  std::function<bool(int, int)> isBlocked, int ny, bool& retFlag) {
+	retFlag = true;
+	// orthogonal neighbor, check the entire edge between the two chunks for at least one pair of adjacent tiles
+	// that are both walkable (layer 1 empty).
+	if (std::abs(dx) + std::abs(dy) == 1) {
+		if (dx != 0) {
+			// vertical strip along y
+			int edgeX_A = cx * chunkW + (dx > 0 ? (chunkW - 1) : 0);
+			int edgeX_B = nx * chunkW + (dx > 0 ? 0 : (chunkW - 1));
+
+			for (int i = 0; i < chunkH; ++i) {
+				int ay = cy * chunkH + i;
+				int txA = edgeX_A;
+				int txB = edgeX_B;
+				if (!isBlocked(txA, ay) && !isBlocked(txB, ay))
+					return true;
+			}
+		} else {
+			// horizontal strip along x
+			int edgeY_A = cy * chunkH + (dy > 0 ? (chunkH - 1) : 0);
+			int edgeY_B = ny * chunkH + (dy > 0 ? 0 : (chunkH - 1));
+			for (int i = 0; i < chunkW; ++i) {
+				int ax = cx * chunkW + i;
+				int bx = nx * chunkW + i;
+				if (!isBlocked(ax, edgeY_A) && !isBlocked(bx, edgeY_B))
+					return true;
+			}
+		}
+		return false;
+	}
+	retFlag = false;
+	return {};
 }
 /////////////////////////////////
 

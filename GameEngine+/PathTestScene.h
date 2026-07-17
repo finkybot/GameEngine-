@@ -136,5 +136,14 @@ private:
 	// Rendering
 	void RenderDebugOverlay();
 	/////////////////////////////////
+
+
+
+
+	/////////////////////////////////
+	// Movement system test: small square entity that follows paths on right-click
+	Entity* m_movementTester = nullptr;				// Red square entity for testing path following
+	bool m_movementTestActive = false;				// Whether movement testing is currently active
+	/////////////////////////////////
 };
-/////////////////////////////////
+

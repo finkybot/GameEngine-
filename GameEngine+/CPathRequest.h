@@ -53,3 +53,25 @@ struct CPath : public Component {
 	/////////////////////////////////
 };
 /////////////////////////////////
+
+
+
+
+/////////////////////////////////
+// CPathFollower component - Tracks movement state for entities following paths.
+// Add this component to enable path following. Set isActive=true to start movement.
+// The MovementSystem will advance the entity along CPath::points each frame.
+// When the last waypoint is reached, isActive is set to false automatically.
+struct CPathFollower : public Component {
+	/////////////////////////////////
+	// Public member variables for the CPathFollower component
+	float speed = 50.0f;						// movement speed in pixels per second
+	int currentWaypointIndex = 0;				// index of current target waypoint
+	bool isActive = false;						// controls whether movement is active
+	float distanceSinceLastFrame = 0.0f;		// accumulates sub-frame movement for precision
+
+	CPathFollower() = default;
+	explicit CPathFollower(float spd) : speed(spd) {}
+	/////////////////////////////////
+};
+/////////////////////////////////

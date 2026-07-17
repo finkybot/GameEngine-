@@ -133,7 +133,22 @@ public:
 	/////////////////////////////////
 
 
+			
+	/////////////////////////////////
+	// DrawInfo struct is used to store information about a chunk's vertex array and texture for rendering. It includes the vertex 
+	// array, texture, rendering readiness, chunk coordinates, dimensions, and tile size.
+	struct DrawInfo {
+		sf::VertexArray vertexArray;
+		std::shared_ptr<sf::Texture> vertexTexture;
+
+		bool readyForRendering = false;
+		int chunkX = 0, chunkY = 0, width = 0, height = 0;
+		float tileSize = 32.f;
+	};
+	/////////////////////////////////
+
 	
+
 	/////////////////////////////////
 	// Public methods for getting and setting tile values, ensuring chunks are loaded for a given area, updating the main thread 
 	// with loaded chunks, saving chunks to disk, and managing configuration such as base path and tileset key.
@@ -223,6 +238,14 @@ public:
 	/////////////////////////////////
 	// GetMinChunkCoords - Get the minimum loaded chunk coordinates (for coordinate system offset in pathfinding)
 	void GetMinChunkCoords(int& outMinCx, int& outMinCy) const;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// ShiftChunksToPositiveCoords - Shift all loaded chunks so that minChunkX >= 0 and minChunkY >= 0.
+	// Saves shifted chunks to disk. This is useful for level editors to ensure pathfinding doesn't cross negative boundaries.
+	void ShiftChunksToPositiveCoords();
 	/////////////////////////////////
 
 
@@ -340,10 +363,13 @@ private:
 
 
 	/////////////////////////////////
-	// FloorDiv - Helper function for floor division of integers, since C++ integer division truncates towards zero. This ensures 
-	// that negative coordinates are handled correctly when determining chunk coordinates from tile coordinates.
+	// FloorDiv - Helper function to perform floor division of two integers, ensuring that the result is rounded down to the nearest integer. 
+	// This is useful for calculating chunk coordinates from tile coordinates. Note :- For optimal performance, there is no actual floor 
+	// division operator in C++, so we implement it manually. The function asserts that the divisor is positive to avoid undefined behavior.
 	static inline int FloorDiv(int a, int b) { 
-		return (int)std::floor(static_cast<double>(a) / static_cast<double>(b));
+		assert(b > 0); // Ensure divisor is positive
+		if (a >= 0) return a / b;
+		return -(((-a) + (b - 1)) / b);
 	}
 	/////////////////////////////////
 
@@ -378,18 +404,18 @@ private:
 	// Data structures for managing loaded chunks and LRU eviction
 	std::mutex m_mutex;	// Mutex to protect access to the chunks map and LRU list across threads
 	std::unordered_map<long long, Chunk> _GUARDED_BY(m_mutex) m_chunks; // Map of loaded chunks, keyed by a combined chunkX and chunkY value (e.g., (chunkX << 32) | chunkY)
-	std::list<long long> _GUARDED_BY(m_mutex) m_lruList; // List to track the least recently used chunks for eviction (stores chunk keys)
+	std::list<long long> _GUARDED_BY(m_mutex) m_lruList;				// LRU (Least Recently Used) chunks for eviction (stores 64bit chunk keys)
 	std::unordered_map<long long, std::list<long long>::iterator> _GUARDED_BY(m_mutex) m_lruIndex; // O(1) iterator lookup into m_lruList
 	/////////////////////////////////
 
 
 
 	/////////////////////////////////
-	// Configuration for rendering and layer management
-	std::string m_tilesetKey; // optional tileset atlas key used to texture chunk vertex arrays
-	int m_numLayers = 1; // number of layers per chunk (background, main, upper)
-	int m_activeLayer = 0; // drawing: which layer is fully opaque
-	float m_unselectedLayerAlpha = 0.3f; // opacity for unselected layers (0..1)
+	// Rendering and layer management
+	std::string m_tilesetKey;				// optional tileset atlas key used to texture chunk vertex arrays
+	int m_numLayers = 1;					// number of layers per chunk (background, main, upper)
+	int m_activeLayer = 0;					// drawing: which layer is fully opaque
+	float m_unselectedLayerAlpha = 0.3f;	// opacity for unselected layers (0..1)
 	/////////////////////////////////
 
 

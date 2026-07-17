@@ -14,6 +14,7 @@
 #include "CTransform.h"
 #include "CPathRequest.h"
 #include "CCamera.h"
+#include "CRectangle.h"
 #include "imgui/imgui.h"
 #include <iostream>
 #include <filesystem>
@@ -71,6 +72,23 @@ void PathTestScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 
 	// Scan available levels
 	ScanLevelFiles();
+
+	// Create movement test entity (small red square for path following demonstration)
+	m_movementTester = GetEntityManager().AddEntity(EntityType::Default);
+	std::cout << "[PathTestScene::InitializeGame] Created movement tester, entity pointer: " << m_movementTester << std::endl;
+	if (m_movementTester) {
+		// Place test entity at camera origin (0, 0) so it's always visible initially
+		m_movementTester->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
+		auto rect = std::make_unique<CRectangle>(16.0f, 16.0f);
+		rect->SetColor(255.0f, 0.0f, 0.0f, 200);  // Red square
+		m_movementTester->AddComponentPtr<CShape>(std::move(rect));
+		m_movementTester->AddComponent<CPathFollower>(100.0f);  // 100 pixels per second
+		std::cout << "[PathTestScene] Movement tester entity created at (0, 0) - watch the center of the screen!" << std::endl;
+		std::cout << "[PathTestScene] Entity alive: " << (m_movementTester->IsAlive() ? "YES" : "NO") << std::endl;
+		std::cout << "[PathTestScene] Has CShape: " << (m_movementTester->GetComponent<CShape>() ? "YES" : "NO") << std::endl;
+	} else {
+		std::cout << "[PathTestScene::InitializeGame] FAILED to create movement tester entity!" << std::endl;
+	}
 
 	// Set initial base path (will be overridden when level is loaded)
 	m_chunkManager.SetBasePath("levels/chunks");
@@ -136,6 +154,7 @@ void PathTestScene::ScanLevelFiles() {
 /////////////////////////////////
 // SwitchToLevel - Switches the current level to the specified level name, loading the appropriate tileset and layers based on metadata in "meta.txt".
 bool PathTestScene::SwitchToLevel(const std::string& name) {
+	std::cout << "[PathTestScene::SwitchToLevel] CALLED with level: " << name << "\n";
 	m_currentLevelName = name;
 
 	// Determine the base path for levels based on the operating system
@@ -255,15 +274,15 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 	m_chunkManager.SetUnselectedLayerAlpha(1.0f);
 
 	// Debug: log layer info
-	std::cout << "DEBUG: Loaded level '" << name << "' with " << layers.size() << " layers: ";
-	for (size_t i = 0; i < layers.size(); ++i) {
-		std::cout << layers[i];
-		if (i < layers.size() - 1) std::cout << ", ";
-	}
-	std::cout << std::endl;
-	std::cout << "  Tileset key: '" << tilesetKey << "'\n";
-	std::cout << "  Active layer: " << m_chunkManager.GetActiveLayer() << std::endl;
-	std::cout << "  Unselected alpha: " << m_chunkManager.GetUnselectedLayerAlpha() << std::endl;
+	//std::cout << "DEBUG: Loaded level '" << name << "' with " << layers.size() << " layers: ";
+	//for (size_t i = 0; i < layers.size(); ++i) {
+	//	std::cout << layers[i];
+	//	if (i < layers.size() - 1) std::cout << ", ";
+	//}
+	//std::cout << std::endl;
+	//std::cout << "  Tileset key: '" << tilesetKey << "'\n";
+	//std::cout << "  Active layer: " << m_chunkManager.GetActiveLayer() << std::endl;
+	//std::cout << "  Unselected alpha: " << m_chunkManager.GetUnselectedLayerAlpha() << std::endl;
 
 	// Clear all previously loaded chunks and flush any pending load jobs
 	// We need to process UpdateMainThread several times to drain all pending finalizations
@@ -283,6 +302,21 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 	}
 
 	m_chunkManager.RebuildAllChunksFromTileset();
+
+	// IMMEDIATE FIX: Reposition test entity to a reasonable default level center
+	// This ensures the entity is visible regardless of whether GetSavedChunkBounds works
+	if (m_movementTester) {
+		if (auto testTransform = m_movementTester->GetComponent<CTransform>()) {
+			Vec2 quickCenter(0.0f, -1536.0f);  // Default level center for most levels
+			testTransform->m_position = quickCenter;
+			std::cout << "  [PathTestScene] Repositioned test entity to quick center: (" << quickCenter.x << ", " << quickCenter.y << ")\n";
+
+			// Disable movement
+			if (auto follower = m_movementTester->GetComponent<CPathFollower>()) {
+				follower->isActive = false;
+			}
+		}
+	}
 
 	// DEBUG: Print layer 1 obstacle grid AFTER everything is loaded and rebuilt
 	std::cout << "\n[PathTestScene] About to call DebugPrintLayer1...\n";
@@ -313,6 +347,7 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		m_mapMin = Vec2(dMinX, dMinY);
 		m_mapMax = Vec2(dMaxX, dMaxY);
 		m_haveBounds = true;
+		std::cout << "  [SwitchToLevel] Bounds detected, checking test entity repositioning...\n";
 
 		// Center camera on level
 		if (m_cameraEntity) {
@@ -322,6 +357,33 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 				tr->m_position = center;
 				cam->m_position = center;
 				std::cout << "  Camera centered at (" << center.x << "," << center.y << ")\n";
+
+				// Also reposition the test entity to the center so it's visible after level load
+				if (m_movementTester) {
+					std::cout << "  [PathTestScene] m_movementTester exists, attempting repositioning...\n";
+					if (auto testTransform = m_movementTester->GetComponent<CTransform>()) {
+						testTransform->m_position = center;
+						std::cout << "  [PathTestScene] SUCCESS: Test entity repositioned to level center (" << center.x << ", " << center.y << ")\n";
+
+						// IMPORTANT: Disable any active movement so it doesn't move away from center
+						if (auto follower = m_movementTester->GetComponent<CPathFollower>()) {
+							follower->isActive = false;
+							std::cout << "  [PathTestScene] Disabled movement to keep entity at level center\n";
+						}
+					} else {
+						std::cout << "  [PathTestScene] ERROR: m_movementTester has no CTransform component!\n";
+					}
+				} else {
+					std::cout << "  [PathTestScene] ERROR: m_movementTester is NULL!\n";
+				}
+
+				// Reset manual pathfinding state for the new level
+				m_manualStartSet = false;
+				m_manualGoalSet = false;
+				m_manualPathComplete = false;
+				m_manualStart = Vec2(0, 0);
+				m_manualGoal = Vec2(0, 0);
+				std::cout << "  [PathTestScene] Manual pathfinding state reset for new level\n";
 			}
 		}
 	}
@@ -513,8 +575,8 @@ void PathTestScene::Render() {
 	m_window.setView(worldView);
 	RenderDebugOverlay();
 
-	// Reset view for UI
-	m_window.setView(m_window.getDefaultView());
+	// NOTE: Do NOT reset view here - entity shapes need to be rendered in world view too!
+	// The view will be reset by the engine after all rendering is complete
 }
 /////////////////////////////////
 
@@ -608,6 +670,8 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 	if (!camOpt) return;
 	CCamera* cam = *camOpt;
 
+	//std::cout << "[PathTestScene::HandleEvent] Processing event\n";
+
 	// Use polling-style input like TileMapScene does
 	sf::Vector2i mousePixelPos = sf::Mouse::getPosition(m_window);
 
@@ -639,12 +703,14 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 		// Set start point
 		m_manualStart = mouseWorld;
 		m_manualStartSet = true;
-	} else if (rightClicked && m_manualStartSet) {
-		// Set goal and compute path
+
+	} else if (leftClicked && m_manualStartSet) {
+		// Left click with start already set: Set goal and compute path
 		m_manualGoal = mouseWorld;
 		m_manualGoalSet = true;
+		//std::cout << "[PathTestScene::HandleEvent] Left-click path computation triggered\n";
 
-		float ts = m_chunkManager.GetTileSize();
+		float tileSize = m_chunkManager.GetTileSize();
 
 		// Get chunk bounds to determine offset
 		float chunkMinX = m_mapMin.x;
@@ -653,25 +719,70 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 		// Convert world coordinates to tile coordinates, accounting for chunk offset
 		// Convert world coordinates to absolute world tile coordinates
 		// Do NOT subtract chunkMin - pathfinder expects absolute world tiles
-		int sx = static_cast<int>(std::floor(m_manualStart.x / ts));
-		int sy = static_cast<int>(std::floor(m_manualStart.y / ts));
-		int gx = static_cast<int>(std::floor(m_manualGoal.x / ts));
-		int gy = static_cast<int>(std::floor(m_manualGoal.y / ts));
 
-		std::cout << "[PathTestScene] Mouse clicks:\n";
-		std::cout << "  Start world: (" << m_manualStart.x << "," << m_manualStart.y << ")\n";
-		std::cout << "  Goal world: (" << m_manualGoal.x << "," << m_manualGoal.y << ")\n";
-		std::cout << "  Tile size=" << ts << "\n";
-		std::cout << "  Start tile (absolute world): (" << sx << "," << sy << ")\n";
-		std::cout << "  Goal tile (absolute world): (" << gx << "," << gy << ")\n";
+		int startX = static_cast<int>(std::floor(m_manualStart.x / tileSize));
+		int startY = static_cast<int>(std::floor(m_manualStart.y / tileSize));
+		int goalX = static_cast<int>(std::floor(m_manualGoal.x / tileSize));
+		int goalY = static_cast<int>(std::floor(m_manualGoal.y / tileSize));
 
-		m_manualPath = m_pathSystem.FindPathSync(sx, sy, gx, gy);
+		m_manualPath = m_pathSystem.FindPathSync(startX, startY, goalX, goalY);
+		m_manualPathComplete = m_manualPath.has_value();
+		//std::cout << "[PathTestScene::HandleEvent] Path computed: complete=" << m_manualPathComplete << " waypoints=" << (m_manualPath.has_value() ? m_manualPath->size() : 0) << "\n";
+	}
+	if (rightClicked && m_manualStartSet) {
+		// Set goal and compute path
+		m_manualGoal = mouseWorld;
+		m_manualGoalSet = true;
+
+		float tileSize = m_chunkManager.GetTileSize();
+
+		// Get chunk bounds to determine offset
+		float chunkMinX = m_mapMin.x;
+		float chunkMinY = m_mapMin.y;
+
+		// Convert world coordinates to tile coordinates, accounting for chunk offset
+		// Convert world coordinates to absolute world tile coordinates
+		// Do NOT subtract chunkMin - pathfinder expects absolute world tiles
+
+		int startX	= static_cast<int>(std::floor(m_manualStart.x	/ tileSize));
+		int startY	= static_cast<int>(std::floor(m_manualStart.y	/ tileSize));
+		int goalX	= static_cast<int>(std::floor(m_manualGoal.x	/ tileSize));
+		int goalY	= static_cast<int>(std::floor(m_manualGoal.y	/ tileSize));
+
+		m_manualPath = m_pathSystem.FindPathSync(startX, startY, goalX, goalY);
 		m_manualPathComplete = m_manualPath.has_value();
 
-		if (m_manualPathComplete) {
-			std::cout << "PathTestScene: Path found (" << m_manualPath->size() << " waypoints)\n";
-		} else {
-			std::cout << "PathTestScene: Path NOT found\n";
+		// Activate movement testing with the computed path
+		if (m_manualPathComplete && m_movementTester) {
+			// The pathfinder returns Vec2 positions that are already in world space
+			// NO need to multiply by tileSize again
+			std::vector<Vec2> worldPath = *m_manualPath;
+
+			// Place tester at the FIRST WAYPOINT (not the click position)
+			// The pathfinder returns waypoints at tile centers, so start from there for alignment
+			if (worldPath.size() > 0) {
+				if (auto* transform = m_movementTester->GetComponent<CTransform>()) {
+					transform->m_position = worldPath[0];
+					//std::cout << "[PathTestScene] Moving test entity to first waypoint: (" << worldPath[0].x << ", " << worldPath[0].y << ")" << std::endl;
+				}
+			}
+
+			// Assign the path and activate movement
+			auto* path = m_movementTester->GetComponent<CPath>();
+			if (!path) {
+				path = m_movementTester->AddComponent<CPath>();
+			}
+			path->points = worldPath;
+			path->complete = true;
+			//std::cout << "[PathTestScene] Path assigned with " << worldPath.size() << " waypoints" << std::endl;
+
+			// Reset and activate the follower
+			if (auto* follower = m_movementTester->GetComponent<CPathFollower>()) {
+				follower->currentWaypointIndex = 0;
+				follower->isActive = true;
+				m_movementTestActive = true;
+				//std::cout << "[PathTestScene] Movement activated! Entity will travel to goal." << std::endl;
+			}
 		}
 	}
 

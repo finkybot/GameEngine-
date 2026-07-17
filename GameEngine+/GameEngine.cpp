@@ -79,6 +79,9 @@ GameEngine::GameEngine() {
 	m_cursorSystem = std::make_unique<CursorSystem>(); // Initialize the cursor system with the game window
 	m_cursorSystem->Initialize(&m_window);
 
+	// Initialize MovementSystem for path following
+	m_movementSystem = std::make_unique<MovementSystem>();
+
 	// Initialize FileManager with current working directory for asset loading
 	m_fileManager.SetBasePath(".");
 
@@ -290,6 +293,9 @@ void GameEngine::Update(float deltaTime) {
 			// Let the scene update (handles ImGui update and input)... Use the actual frame time measured above so scenes get accurate timing for FPS and logic.
 			m_currentScene->Update(frameTime.asSeconds());
 
+			// Update movement BEFORE entity manager so new paths can be used immediately
+			m_movementSystem->Update(m_currentScene->GetEntityManager().GetEntities(), deltaTime);
+
 			// Ensure the scene's EntityManager processes game logic (tile system, pending entities)
 			m_currentScene->GetEntityManager().Update(deltaTime);
 
@@ -310,10 +316,10 @@ void GameEngine::Update(float deltaTime) {
 			}
 
 			// Engine render pass ordering:
-			// 1) Entity shapes (direct render for now to avoid queue lifetime issues with sprites)
-			m_currentScene->GetEntityManager().RenderShapes();
-			// 2) Scene overlays
+			// 1) Scene overlays (render chunks and world elements first)
 			m_currentScene->Render();
+			// 2) Entity shapes (on top of scene overlays)
+			m_currentScene->GetEntityManager().RenderShapes();
 			// 3) Flush queued overlays and shapes
 			m_renderQueue.Flush(m_window);
 			// 4) Entity text (direct render after queue flush so text appears on top)
@@ -331,10 +337,74 @@ void GameEngine::Update(float deltaTime) {
 
 		// Render ImGui on top of everything (ImGui::SFML::Render without args uses current target)
 		if (ImGui::GetCurrentContext() && (m_currentScene == nullptr || m_currentScene->IsImGuiEnabled())) {
-			ImGui::SFML::Render(m_window);
-		}
+					ImGui::SFML::Render(m_window);
+					}
 
-		m_window.display();
-	}
-}
-/////////////////////////////////
+					m_window.display();
+				}
+			}
+			/////////////////////////////////
+
+
+
+
+			/////////////////////////////////
+			// MovementSystem implementation
+			#include "Entity.h"
+			#include "CPathRequest.h"
+			#include "CTransform.h"
+			#include <cmath>
+
+			void MovementSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime) {
+				// Iterate through all entities in the scene
+				for (const auto& ent : entities) {
+					if (!ent || !ent->IsAlive()) continue;
+
+					// Skip if entity doesn't have a path follower or it's not active
+					auto* follower = ent->GetComponent<CPathFollower>();
+					if (!follower || !follower->isActive) continue;
+
+					// Skip if entity doesn't have a path with waypoints
+					auto* path = ent->GetComponent<CPath>();
+					if (!path || path->points.empty()) {
+						follower->isActive = false;
+						continue;
+					}
+
+					// Skip if entity doesn't have a transform
+					auto* transform = ent->GetComponent<CTransform>();
+					if (!transform) continue;
+
+					// Ensure waypoint index is valid
+					if (follower->currentWaypointIndex >= (int)path->points.size()) {
+						follower->currentWaypointIndex = (int)path->points.size() - 1;
+					}
+
+					// Get the current waypoint target
+					const Vec2& currentWaypoint = path->points[follower->currentWaypointIndex];
+					Vec2 direction = (currentWaypoint - transform->m_position);
+					float distanceToWaypoint = direction.Mag();
+
+					// Check if we've arrived at the current waypoint
+					if (distanceToWaypoint < WAYPOINT_ARRIVAL_THRESHOLD) {
+						// Move to next waypoint
+						follower->currentWaypointIndex++;
+
+						// Check if we've reached the end of the path
+						if (follower->currentWaypointIndex >= (int)path->points.size()) {
+							// Path complete: mark as inactive but keep components for reuse
+							follower->isActive = false;
+							continue;
+						}
+					}
+
+					// Move towards the current waypoint if there's distance to cover
+					if (distanceToWaypoint > 0.001f) {
+						// Normalize direction and apply speed
+						direction.Normalize();
+						float moveDistance = follower->speed * deltaTime;
+						transform->m_position = transform->m_position + (direction * moveDistance);
+					}
+				}
+			}
+			/////////////////////////////////

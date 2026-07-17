@@ -29,10 +29,11 @@
   - NPC-specific dialogs stored in JSON format at %APPDATA%\GameEnginePlus\dialogs\<npcId>.json.
   - Choices that persist/disappear after selection.
   - Random text variations for dynamic engagement.
-  - Node-based architecture with a condition/action system for dynamic branching.
+  - Node-based architecture with interconnected dialogue nodes that include choices, conditions, and actions for dynamic branching.
   - Utilize an ECS-style DialogSystem component.
   - **No voice acting initially.**
 - Implementation is deferred but should start soon. Approach: START WITH JSON + basic ImGui viewer. Will hand-write JSON, load/test in DialogTestScene. Add GUI node editor later if needed (using imnodes library if adopted). Do NOT start with visual node editor GUI.
+- **JSON Schema Reference:** `GameEngine+/DIALOGUE_SYSTEM_SCHEMA.md` - Complete schema with example Elder Sage dialogue tree, field definitions, conditions, and actions for when implementation begins.
 
 ## Future Work Priorities
 - Focus on developing an advanced level editor scene with chunking integration (highest priority - start soon).

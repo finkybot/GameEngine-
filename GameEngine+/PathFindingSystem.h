@@ -82,6 +82,8 @@ private:
 	ChunkManager& m_chunks;
 	EntityManager& m_entities;
 	Pathfinder m_pathfinder; // implements hierarchical A*
+
+	const int m_dirs8[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
 	/////////////////////////////////
 
 
@@ -130,6 +132,18 @@ private:
 	/////////////////////////////////
 	// ApplyResults - Pops completed pathfinding results from the queue and attaches CPath components to entities on the main thread.
 	void ApplyResults();
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Helper methods for refactored Update function
+	void PushFailureResult(size_t entityId, uint32_t requestId, std::vector<size_t>& finished);
+	void PushSuccessResult(size_t entityId, uint32_t requestId, const std::vector<Vec2>& path, std::vector<size_t>& finished);
+	Entity* FindEntityById(size_t entId);
+	bool GetChunkCopy(int chunkX, int chunkY, Chunk& outChunk);
+	void GetEntityTilePos(Entity* entity, int& outTileX, int& outTileY);
+	Vec2 GetEntityGoalWorld(Entity* entity);
 	/////////////////////////////////
 };
 /////////////////////////////////

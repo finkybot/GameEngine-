@@ -171,7 +171,11 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	m_chunkManager.LoadAllSavedChunks();
 	m_chunkManager.UpdateMainThread();
 	m_chunkManager.RebuildAllChunksFromTileset();
-	// After loading, refresh bounds and report
+
+	// Shift all chunks so they have positive coordinates (fixes pathfinding issues crossing boundaries)
+	m_chunkManager.ShiftChunksToPositiveCoords();
+
+	// After loading and shifting, refresh bounds and report
 	RefreshMapBounds();
 	float dMinX, dMinY, dMaxX, dMaxY;
 	if (m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
@@ -332,7 +336,13 @@ void LevelEditorScene::OnExit() {
 	m_chunkManager.SaveAllChunks();
 	std::cout << "[LevelEditorScene] OnExit: Chunks saved.\n";
 }
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // UnloadResources - free large resources held by the editor when it is no longer active.
+// 
 void LevelEditorScene::UnloadResources() {
 	try {
 		// Ensure any collider entities are unregistered
@@ -552,14 +562,14 @@ void LevelEditorScene::Update(float deltaTime) {
 				if (!m_levelSelected) {
 					m_exportMessage = "Select or create a level before editing.";
 				} else {
-					std::cout << "DEBUG: Painting tiles in rect (" << tx0 << "," << ty0 << ") to (" 
-						<< tx1 << "," << ty1 << ") with value " << m_brushValue 
-						<< " on layer " << m_activeLayer << std::endl;
+					// Silently paint tiles - no debug spam
 					for (int ty = ty0; ty <= ty1; ++ty) {
 						for (int tx = tx0; tx <= tx1; ++tx) {
-			m_chunkManager.SetTileAt(tx, ty, m_brushValue, m_activeLayer); // paint selection on active layer
-				// Debug log to help trace painting
-				std::cout << "Paint request tx=" << tx << " ty=" << ty << " layer=" << m_activeLayer << " val=" << m_brushValue << "\n";
+							// Prevent placing tiles at negative coordinates
+							if (tx < 0 || ty < 0) {
+								continue;
+							}
+							m_chunkManager.SetTileAt(tx, ty, m_brushValue, m_activeLayer); // paint selection on active layer
 						}
 					}
 					// Refresh fixed bounds from disk (covers both expand on paint and shrink on erase)
@@ -605,6 +615,10 @@ void LevelEditorScene::Update(float deltaTime) {
 			} else {
 				for (int ty = ty0; ty <= ty1; ++ty) {
 					for (int tx = tx0; tx <= tx1; ++tx) {
+						// Prevent erasing at negative coordinates
+						if (tx < 0 || ty < 0) {
+							continue;
+						}
 						m_chunkManager.SetTileAt(tx, ty, 0, m_activeLayer); // erase selection on active layer
 					}
 				}
@@ -676,6 +690,33 @@ void LevelEditorScene::Render() {
 	ImGui::Begin("Tileset Browser", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
 	// Level management moved to dedicated window
+
+	// Display current mouse world coordinates and tile coordinates
+	{
+		sf::Vector2i mousePixelPos = sf::Mouse::getPosition(m_window);
+		sf::Vector2f mouseWorldPos = m_window.mapPixelToCoords(mousePixelPos, m_window.getView());
+		int mouseTileX = (int)std::floor(mouseWorldPos.x / m_tileSize);
+		int mouseTileY = (int)std::floor(mouseWorldPos.y / m_tileSize);
+
+		ImGui::SeparatorText("Mouse Position");
+		ImGui::Text("World: (%.1f, %.1f)", mouseWorldPos.x, mouseWorldPos.y);
+		ImGui::Text("Tile:  (%d, %d)", mouseTileX, mouseTileY);
+	}
+
+	ImGui::Separator();
+
+	// Display camera position and zoom level
+	{
+		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+		if (camOpt) {
+			CCamera* cam = *camOpt;
+			ImGui::SeparatorText("Camera");
+			ImGui::Text("Position: (%.1f, %.1f)", cam->m_position.x, cam->m_position.y);
+			ImGui::Text("Zoom:     %.2fx", cam->m_zoom);
+		}
+	}
+
+	ImGui::Separator();
 
 	// Fetch atlas once for UI usage (preview + brush). Declared here so later preview code can use it.
 	auto atlasOpt = m_gameEngine.GetTextureManager().GetAtlas(std::string(m_tilesetKeyBuf));

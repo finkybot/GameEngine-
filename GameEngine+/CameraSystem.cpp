@@ -78,6 +78,21 @@ void CameraSystem::Update(float deltaTime, EntityManager& entityManager) {
 				}
 			}
 		}
+
+		// Ensure camera position is clamped within positive bounds it shouldn't go negative, or below half the viewport size (to avoid showing empty space)
+		if (auto camera = entity->GetComponent<CCamera>()) {
+			if (camera->m_isActive) {
+				float halfW = camera->m_viewportWidth * 0.5f * camera->m_zoom; // Calculate half the viewport width in world units
+				float halfH = camera->m_viewportHeight * 0.5f * camera->m_zoom; // Calculate half the viewport height in world units
+
+				// now ensure the camera's position is not less than half the viewport size, effectively clamping it to positive coordinates
+				// Why? Because at the momement i can create map chunks in negative coordinates, and the camera can pan into them,
+				// and its causing issues with path finding and other systems that assume the camera is always in positive coordinates. 
+				// This is a temporary fix until I implement proper world bounds.
+				camera->m_position.x = std::max(camera->m_position.x, halfW);
+				camera->m_position.y = std::max(camera->m_position.y, halfH);
+			}
+		}
 	}
 }
 /////////////////////////////////

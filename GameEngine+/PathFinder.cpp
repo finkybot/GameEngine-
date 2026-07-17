@@ -78,14 +78,14 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 		// Check if start/goal are walkable (check layer 1 only - obstacles)
 		int startTile = m_chunkManager.GetTileAt(startTileX, startTileY, 1);
 		int goalTile = m_chunkManager.GetTileAt(goalTileX, goalTileY, 1);
-		std::cout << "[PathFinder] Checking start (" << startTileX << "," << startTileY << ") layer 1 tile=" << startTile << "\n";
-		std::cout << "[PathFinder] Checking goal (" << goalTileX << "," << goalTileY << ") layer 1 tile=" << goalTile << "\n";
+		//std::cout << "[PathFinder] Checking start (" << startTileX << "," << startTileY << ") layer 1 tile=" << startTile << "\n";
+		//std::cout << "[PathFinder] Checking goal (" << goalTileX << "," << goalTileY << ") layer 1 tile=" << goalTile << "\n";
 		if (startTile != 0) {
-			std::cout << "[PathFinder] Start tile is blocked by obstacle (value=" << startTile << ")\n";
+			//std::cout << "[PathFinder] Start tile is blocked by obstacle (value=" << startTile << ")\n";
 			return std::nullopt;
 		}
 		if (goalTile != 0) {
-			std::cout << "[PathFinder] Goal tile is blocked by obstacle (value=" << goalTile << ")\n";
+			//std::cout << "[PathFinder] Goal tile is blocked by obstacle (value=" << goalTile << ")\n";
 			return std::nullopt;
 		}
 
@@ -122,7 +122,7 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 					if (t != 0) layer1NonZero++;
 				}
 			}
-			std::cout << "[PathFinder] Virtual chunk layer 1 has " << layer1NonZero << " non-zero tiles\n";
+			//std::cout << "[PathFinder] Virtual chunk layer 1 has " << layer1NonZero << " non-zero tiles\n";
 		}
 
 		// Call LocalAStar with local coordinates (relative to the virtual chunk)
@@ -133,7 +133,7 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 
 		auto result = LocalAStar(virtualChunk, localStartX, localStartY, localGoalX, localGoalY);
 		if (result.has_value() && !result->empty()) {
-			std::cout << "[PathFinder] Fallback LocalAStar succeeded with " << result->size() << " waypoints\n";
+			//std::cout << "[PathFinder] Fallback LocalAStar succeeded with " << result->size() << " waypoints\n";
 
 			// Note: LocalAStar will have computed positions based on chunkX=0, chunkY=0, so positions are already correct world-space coordinates since local (tx,ty)
 			// gets converted as:	worldTx = 0*width + tx = tx,	which is what we want (minX+tx converted to world space). We need to verify this is correct...
@@ -155,7 +155,7 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 	}
 
 	// Debug : print chunk path
-	std::cout << "[PathFinder] Chunk pathfinding succeeded, found " << chunkPath.size() << " chunks\n";
+	//std::cout << "[PathFinder] Chunk pathfinding succeeded, found " << chunkPath.size() << " chunks\n";
 
 	// Stitch local paths across chunkPath
 	std::vector<Vec2> finalPath;
@@ -170,11 +170,11 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 	// current start tile coords
 	int curTx = startTileX, curTy = startTileY;
 
-	std::cout << "[PathFinder] Starting path stitching with chunkW=" << chunkW << " chunkH=" << chunkH << "\n";
-	std::cout << "[PathFinder] Start world tile: (" << startTileX << "," << startTileY << ")\n";
-	std::cout << "[PathFinder] Chunk path: ";
-	for (auto& c : chunkPath) std::cout << "(" << c.first << "," << c.second << ") ";
-	std::cout << "\n";
+	//std::cout << "[PathFinder] Starting path stitching with chunkW=" << chunkW << " chunkH=" << chunkH << "\n";
+	//std::cout << "[PathFinder] Start world tile: (" << startTileX << "," << startTileY << ")\n";
+	//std::cout << "[PathFinder] Chunk path: ";
+	//for (auto& c : chunkPath) std::cout << "(" << c.first << "," << c.second << ") ";
+	//std::cout << "\n";
 
 	for (size_t i = 0; i < chunkPath.size(); ++i) {
 		int cx = chunkPath[i].first;
@@ -183,9 +183,9 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 		int localStartX = curTx - cx * chunkW;
 		int localStartY = curTy - cy * chunkH;
 
-		std::cout << "[PathFinder] Iteration " << i << ": chunk (" << cx << "," << cy << ") "
-				  << "curTx,curTy=(" << curTx << "," << curTy << ") "
-				  << "localStart=(" << localStartX << "," << localStartY << ")\n";
+		//std::cout << "[PathFinder] Iteration " << i << ": chunk (" << cx << "," << cy << ") "
+		//		  << "curTx,curTy=(" << curTx << "," << curTy << ") "
+		//		  << "localStart=(" << localStartX << "," << localStartY << ")\n";
 
 		if (i + 1 == chunkPath.size()) {
 			// last chunk: target is goal
@@ -199,8 +199,8 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 				auto it = chunks.find((static_cast<long long>(cx) << 32) | static_cast<unsigned int>(cy));
 				if (it == chunks.end()) return std::nullopt;
 				chunkCopy = it->second;
-				std::cout << "[PathFinder] Chunk (" << cx << "," << cy << ") Layer 0: " << chunkCopy.tilesPerLayer[0].size() 
-						  << ", Layer 1: " << (chunkCopy.tilesPerLayer.size() > 1 ? chunkCopy.tilesPerLayer[1].size() : 0) << "\n";
+				//std::cout << "[PathFinder] Chunk (" << cx << "," << cy << ") Layer 0: " << chunkCopy.tilesPerLayer[0].size() 
+				//		  << ", Layer 1: " << (chunkCopy.tilesPerLayer.size() > 1 ? chunkCopy.tilesPerLayer[1].size() : 0) << "\n";
 			}
 			auto seg = LocalAStar(chunkCopy, localStartX, localStartY, localGoalX, localGoalY);
 			if (!seg.has_value()) return std::nullopt;
@@ -214,7 +214,7 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 			int ny = chunkPath[i+1].second;
 			// scan shared border for candidate crossing tiles
 			int dx = nx - cx; int dy = ny - cy;
-			std::cout << "[PathFinder] Looking for portal: dx=" << dx << " dy=" << dy << "\n";
+			//std::cout << "[PathFinder] Looking for portal: dx=" << dx << " dy=" << dy << "\n";
 			float bestDist = std::numeric_limits<float>::infinity();
 			int bestAx= INT_MIN, bestAy = INT_MIN, bestBx = INT_MIN, bestBy = INT_MIN;
 			// preferred point is current position center
@@ -311,13 +311,13 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 						if (dist < bestDist) { bestDist = dist; bestAx = edgeAx; bestAy = ay; bestBx = edgeBx; bestBy = by; }
 					}
 				}
-				if (bestDist > 1000000 && portalCount > 0) {
-					std::cout << "[PathFinder] Horizontal edge search: found " << portalCount << " possible crossings, selected none (too far)\n";
-				} else if (portalCount == 0) {
-					std::cout << "[PathFinder] Horizontal edge search: no crossing points available (all blocked)\n";
-				} else {
-					std::cout << "[PathFinder] Horizontal edge search: found " << portalCount << " crossings, selected best at (" << bestAx << "," << bestAy << ")\n";
-				}
+				//if (bestDist > 1000000 && portalCount > 0) {
+				//	std::cout << "[PathFinder] Horizontal edge search: found " << portalCount << " possible crossings, selected none (too far)\n";
+				//} else if (portalCount == 0) {
+				//	std::cout << "[PathFinder] Horizontal edge search: no crossing points available (all blocked)\n";
+				//} else {
+				//	std::cout << "[PathFinder] Horizontal edge search: found " << portalCount << " crossings, selected best at (" << bestAx << "," << bestAy << ")\n";
+				//}
 			} else if (dy != 0) {
 				// Vertical move only
 				int edgeAy = cy * chunkH + (dy > 0 ? (chunkH - 1) : 0);
@@ -340,9 +340,9 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 						if (dist < bestDist) { bestDist = dist; bestAx = ax; bestAy = edgeAy; bestBx = bx; bestBy = edgeBy; }
 					}
 				}
-				if (bestDist > 1000000) {
-					std::cout << "[PathFinder] Vertical edge search: found " << portalCount << " possible crossings, selected none\n";
-				}
+				//if (bestDist > 1000000) {
+				//	std::cout << "[PathFinder] Vertical edge search: found " << portalCount << " possible crossings, selected none\n";
+				//}
 			}
 			if (bestAx == INT_MIN) return std::nullopt; // no portal found
 
@@ -350,15 +350,15 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 			int exitLocalX = bestAx - cx * chunkW;
 			int exitLocalY = bestAy - cy * chunkH;
 
-			std::cout << "[PathFinder] Chunk (" << cx << "," << cy << ") -> (" << (nx) << "," << (ny) 
-					  << ") portal at world (" << bestAx << "," << bestAy << ") local exit (" 
-					  << exitLocalX << "," << exitLocalY << ") start (" << localStartX << "," 
-					  << localStartY << ")\n";
+			//std::cout << "[PathFinder] Chunk (" << cx << "," << cy << ") -> (" << (nx) << "," << (ny) 
+			//		  << ") portal at world (" << bestAx << "," << bestAy << ") local exit (" 
+			//		  << exitLocalX << "," << exitLocalY << ") start (" << localStartX << "," 
+			//		  << localStartY << ")\n";
 
 			// Entry point in next chunk for debugging
-			std::cout << "[PathFinder]   Entry in next chunk: bestBx=" << bestBx << " bestBy=" << bestBy 
-					  << " (next chunk " << nx << "," << ny << " range X=" << (nx*chunkW) << ".." 
-					  << (nx*chunkW + chunkW - 1) << " Y=" << (ny*chunkH) << ".." << (ny*chunkH + chunkH - 1) << ")\n";
+			//std::cout << "[PathFinder]   Entry in next chunk: bestBx=" << bestBx << " bestBy=" << bestBy 
+			//		  << " (next chunk " << nx << "," << ny << " range X=" << (nx*chunkW) << ".." 
+			//		  << (nx*chunkW + chunkW - 1) << " Y=" << (ny*chunkH) << ".." << (ny*chunkH + chunkH - 1) << ")\n";
 
 			// fetch chunk copy
 			Chunk chunkCopy;
@@ -367,7 +367,7 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 				auto &chunks = m_chunkManager.GetChunks();
 				auto it = chunks.find((static_cast<long long>(cx) << 32) | static_cast<unsigned int>(cy));
 				if (it == chunks.end()) {
-					std::cout << "[PathFinder] ERROR: Chunk (" << cx << "," << cy << ") not loaded!\n";
+					//std::cout << "[PathFinder] ERROR: Chunk (" << cx << "," << cy << ") not loaded!\n";
 					return std::nullopt;
 				}
 				chunkCopy = it->second;
@@ -386,14 +386,14 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 						if (t != 0) layer1NonZero++;
 					}
 				}
-				std::cout << "[PathFinder] Chunk (" << cx << "," << cy << ") Layer 0: " << layer0NonZero << ", Layer 1: " << layer1NonZero << " non-zero tiles\n";
+				//std::cout << "[PathFinder] Chunk (" << cx << "," << cy << ") Layer 0: " << layer0NonZero << ", Layer 1: " << layer1NonZero << " non-zero tiles\n";
 			}
-			std::cout << "[PathFinder] Calling LocalAStar with localStart=(" << localStartX << "," << localStartY 
-					  << ") localExit=(" << exitLocalX << "," << exitLocalY << ")\n";
+			//std::cout << "[PathFinder] Calling LocalAStar with localStart=(" << localStartX << "," << localStartY 
+			//		  << ") localExit=(" << exitLocalX << "," << exitLocalY << ")\n";
 
 			auto seg = LocalAStar(chunkCopy, localStartX, localStartY, exitLocalX, exitLocalY);
 			if (!seg.has_value()) {
-				std::cout << "[PathFinder] ERROR: LocalAStar failed in chunk (" << cx << "," << cy << ")\n";
+				//std::cout << "[PathFinder] ERROR: LocalAStar failed in chunk (" << cx << "," << cy << ")\n";
 				return std::nullopt;
 			}
 			if (!finalPath.empty() && !seg->empty()) seg->erase(seg->begin());
@@ -401,7 +401,7 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 
 			// set next chunk start as the corresponding tile in next chunk (bestBx,bestBy)
 			curTx = bestBx; curTy = bestBy;
-			std::cout << "[PathFinder]   Updated curTx,curTy to (" << curTx << "," << curTy << ")\n";
+			//std::cout << "[PathFinder]   Updated curTx,curTy to (" << curTx << "," << curTy << ")\n";
 		}
 	}
 
@@ -635,11 +635,11 @@ std::optional<std::vector<Vec2>> Pathfinder::LocalAStar(const Chunk& chunk, int 
 	const int w = chunk.width;
 	const int h = chunk.height;
 	if (sx < 0 || sx >= w || sy < 0 || sy >= h) {
-		std::cout << "[LocalAStar] Start out of bounds: (" << sx << "," << sy << ") in " << w << "x" << h << " chunk\n";
+		//std::cout << "[LocalAStar] Start out of bounds: (" << sx << "," << sy << ") in " << w << "x" << h << " chunk\n";
 		return std::nullopt;
 	}
 	if (gx < 0 || gx >= w || gy < 0 || gy >= h) {
-		std::cout << "[LocalAStar] Goal out of bounds: (" << gx << "," << gy << ") in " << w << "x" << h << " chunk\n";
+		//std::cout << "[LocalAStar] Goal out of bounds: (" << gx << "," << gy << ") in " << w << "x" << h << " chunk\n";
 		return std::nullopt;
 	}
 
@@ -685,17 +685,17 @@ std::optional<std::vector<Vec2>> Pathfinder::LocalAStar(const Chunk& chunk, int 
 		}
 
 		bool result = hasLayer0 && layer1Clear;
-		static bool printed = false;
-		if (!printed && (x == sx || x == gx) && (y == sy || y == gy)) {
-			std::cout << "[LocalAStar] At (" << x << "," << y << ") layer0=" << (hasLayer0 ? 1 : 0) 
-					  << " layer1=" << (!layer1Clear ? 1 : 0) << " walkable=" << result << "\n";
-			printed = true;
-		}
+		//static bool printed = false;
+		//if (!printed && (x == sx || x == gx) && (y == sy || y == gy)) {
+		//	std::cout << "[LocalAStar] At (" << x << "," << y << ") layer0=" << (hasLayer0 ? 1 : 0) 
+		//			  << " layer1=" << (!layer1Clear ? 1 : 0) << " walkable=" << result << "\n";
+		//	printed = true;
+		//}
 		return result;  // Walkable only if layer 0 exists AND layer 1 is empty
 	};
 
 	if (!walkable(sx, sy) || !walkable(gx, gy)) {
-		std::cout << "[LocalAStar] Start or goal is not walkable\n";
+		//std::cout << "[LocalAStar] Start or goal is not walkable\n";
 		return std::nullopt;
 	}
 
@@ -737,7 +737,7 @@ std::optional<std::vector<Vec2>> Pathfinder::LocalAStar(const Chunk& chunk, int 
 	}
 
 	if (!found) {
-		std::cout << "[LocalAStar] Failed to find path. Expanded " << nodesExpanded << " nodes in " << w << "x" << h << " chunk\n";
+		//std::cout << "[LocalAStar] Failed to find path. Expanded " << nodesExpanded << " nodes in " << w << "x" << h << " chunk\n";
 		return std::nullopt;
 	}
 
@@ -775,19 +775,23 @@ void Pathfinder::EnsureChunksForPath(int sx, int sy, int gx, int gy) {
 		return -(((-a) + b - 1) / b);
 	};
 
+	// Set the chunk coords for start and goal tiles
 	int scx = floorDiv(sx, cw);
 	int scy = floorDiv(sy, ch);
 	int gcx = floorDiv(gx, cw);
 	int gcy = floorDiv(gy, ch);
+
+	// Set a bounding box of chunks that covers both start and goal chunks
 	int minChunkX = std::min(scx, gcx);
 	int minChunkY = std::min(scy, gcy);
 	int maxChunkX = std::max(scx, gcx);
 	int maxChunkY = std::max(scy, gcy);
 
+	// Convert chunk coordinates back to tile coordinates for the bounding box
 	int minTileX = minChunkX * cw;
 	int minTileY = minChunkY * ch;
-	int maxTileX = (maxChunkX + 1) * cw - 1;
-	int maxTileY = (maxChunkY + 1) * ch - 1;
+	int maxTileX = (maxChunkX + 1) * cw - 1; // Inclusive max tile coordinate
+	int maxTileY = (maxChunkY + 1) * ch - 1; // Inclusive max tile coordinate
 	// Request a margin of 1 chunk around path area
 	m_chunkManager.EnsureChunksInTileRect(minTileX, minTileY, maxTileX, maxTileY, 1);
 }
@@ -796,14 +800,20 @@ void Pathfinder::EnsureChunksForPath(int sx, int sy, int gx, int gy) {
 
 
 /////////////////////////////////
-// HeuristicChunk - Calculates the heuristic cost between two chunks based on their coordinates. This function is used in the A* algorithm 
-// to estimate the cost of reaching the goal chunk from the current chunk.
+// HeuristicChunk - Calculates the heuristic cost between two chunks based on their coordinates.
 float Pathfinder::HeuristicChunk(int cx, int cy, int tx, int ty) const {
+	// Use diagonal distance heuristic for chunk-to-chunk movement	
 	const float SQRT2 = std::sqrt(2.0f);
+
+	// Calculate the differences in x and y coordinates between the current chunk and the target chunk
 	int dx = std::abs(cx - tx);
 	int dy = std::abs(cy - ty);
+	
+	// Calculate the minimum and maximum of the differences to apply the diagonal distance heuristic
 	int mn = std::min(dx, dy);
 	int mx = std::max(dx, dy);
+
+	// Return the heuristic cost as a float, combining the straight and diagonal distances
 	return static_cast<float>((mx - mn) + mn * SQRT2);
 }
 /////////////////////////////////

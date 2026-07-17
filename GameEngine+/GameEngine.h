@@ -23,6 +23,19 @@
 #include <map>
 #include <string>
 #include <iostream>
+#include <vector>
+#include <memory>
+
+// MovementSystem class definition (inline to avoid include path issues)
+class Entity;
+class MovementSystem {
+public:
+	MovementSystem() = default;
+	~MovementSystem() = default;
+	void Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime);
+private:
+	static constexpr float WAYPOINT_ARRIVAL_THRESHOLD = 5.0f;
+};
 
 class Scene; // Forward declaration of Scene class to avoid circular dependency with GameEngine
 /////////////////////////////////
@@ -144,6 +157,7 @@ public:
 	FontManager	m_fontManager; // Font manager instance for managing fonts across the game, allowing for loading, retrieving, and unloading fonts in a centralized manner
 	std::unique_ptr<EntityManager>	m_entityManager; // Unique pointer to the central EntityManager owned by the engine, responsible for managing game entities and providing access to the entity system throughout the game
 	std::unique_ptr<SoundSystem> m_soundSystem; // Unique pointer to the SoundSystem owned by the engine, responsible for managing sound effects and audio playback
+	std::unique_ptr<MovementSystem> m_movementSystem; // Unique pointer to the MovementSystem owned by the engine, responsible for moving entities along computed paths
 	/////////////////////////////////
 
 
@@ -174,6 +188,14 @@ public:
 	/////////////////////////////////
 	// Accessor for the SoundSystem, allowing scenes to control audio playback
 	SoundSystem& GetSoundSystem() const { return *m_soundSystem; }
+	/////////////////////////////////
+
+
+
+
+	/////////////////////////////////
+	// Accessor for the MovementSystem, allowing scenes and systems to move entities along paths
+	MovementSystem& GetMovementSystem() { return *m_movementSystem; }
 	/////////////////////////////////
 
 

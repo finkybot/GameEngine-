@@ -186,14 +186,11 @@
     <ClCompile Include="PathFindingSystem.cpp">
       <Filter>Source Files\Systems</Filter>
     </ClCompile>
-    <ClCompile Include="MainThreadTasks.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="PathTestScene.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Scenes</Filter>
     </ClCompile>
-    <ClCompile Include="PathTestScene_new.cpp">
-      <Filter>Source Files</Filter>
+    <ClCompile Include="MainThreadTasks.cpp">
+      <Filter>Source Files\Misc</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -413,6 +410,9 @@
     <ClInclude Include="MainThreadTasks.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="GameEngine+\MovementSystem.h">
+      <Filter>Header Files\Systems</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="GameEngine+.rc">
@@ -425,5 +425,6 @@
     <None Include=".clang-format" />
     <None Include="assets\spawners\default.json" />
     <None Include="RENDER_QUEUE_PHASE1.md" />
+    <None Include="DIALOGUE_SYSTEM_SCHEMA.md" />
   </ItemGroup>
 </Project>

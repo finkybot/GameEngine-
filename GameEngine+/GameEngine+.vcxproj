@@ -175,7 +175,6 @@
     <ClCompile Include="PathFinder.cpp" />
     <ClCompile Include="PathFindingSystem.cpp" />
     <ClCompile Include="PathTestScene.cpp" />
-    <ClCompile Include="PathTestScene_new.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="SoundSystem.cpp" />
     <ClCompile Include="Systems\CollisionSystem.cpp" />
@@ -221,6 +220,7 @@
     <ClInclude Include="FileManager.h" />
     <ClInclude Include="FontManager.h" />
     <ClInclude Include="GameController.h" />
+    <ClInclude Include="GameEngine+\MovementSystem.h" />
     <ClInclude Include="GameEngine.h" />
     <ClInclude Include="ImageManagementSystem.h" />
     <ClInclude Include="imgui\backends\imgui_impl_dx9.h" />
@@ -272,6 +272,7 @@
   <ItemGroup>
     <None Include=".clang-format" />
     <None Include="assets\spawners\default.json" />
+    <None Include="DIALOGUE_SYSTEM_SCHEMA.md" />
     <None Include="GameEngine+.vcxproj.filters" />
     <None Include="imgui.ini" />
     <None Include="RENDER_QUEUE_PHASE1.md" />

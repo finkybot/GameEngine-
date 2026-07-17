@@ -134,17 +134,51 @@ void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const 
 // RenderShapes - Render only shapes for all alive entities. This method iterates through the entities, checks if they are alive, and renders their shape components if present. It organizes rendering by layers to ensure correct draw order and attempts to batch textured 
 // entities by their atlas to reduce draw calls.
 void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& entities, sf::RenderWindow& window) {
+	// DEBUG: Log entity count (every frame)
+	static int frameCount = 0;
+	frameCount++;
+	if (frameCount == 60 || frameCount % 60 == 0) {  // First time and every 60 frames
+		//std::cout << "[RenderSystem::RenderShapes] Processing " << entities.size() << " entities (frame " << frameCount << ")\n";
+		int shapeCount = 0;
+		int aliveCount = 0;
+		for (const auto& entity : entities) {
+			if (!entity) {
+				std::cout << "  WARNING: null entity in vector!\n";
+				continue;
+			}
+			if (entity->IsAlive()) {
+				aliveCount++;
+				if (entity->GetComponent<CShape>()) {
+					shapeCount++;
+					//if (auto tf = entity->GetComponent<CTransform>()) {
+					//	std::cout << "  - Alive entity with shape at (" << tf->m_position.x << ", " << tf->m_position.y << ")\n";
+					//}
+				}
+			}
+		}
+		//std::cout << "  Alive: " << aliveCount << ", With shapes: " << shapeCount << "\n";
+	}
 	// Render in logical layers: Background -> Mid -> Foreground -> Overlay
-    // Build per-layer buckets to avoid querying GetLayer() frequently in tight loop
+	// Build per-layer buckets to avoid querying GetLayer() frequently in tight loop
 	std::array<std::vector<Entity*>, 4> buckets;
 	for (const auto& entity : entities) {
 		if (!entity->IsAlive())
 			continue;
+		// Skip tile entities - they are collision/debug entities, not gameplay entities
+		// Skip both TileMap (high-level tilemap data) and Tile (individual collision rectangles)
+		if (entity->GetType() == EntityType::TileMap || entity->GetType() == EntityType::Tile) {
+			continue;
+		}
 		int layerIdx = static_cast<int>(entity->GetLayer());
 		if (layerIdx < 0) layerIdx = 0;
 		if (layerIdx > 3) layerIdx = 3;
 		buckets[layerIdx].push_back(entity.get());
+
+		//if (auto shape = entity->GetComponent<CShape>()) {
+		//	std::cout << "[RenderSystem::RenderShapes] Adding entity with CShape to bucket (layer " << layerIdx << ")\n";
+		//}
 	}
+
 	for (int layer = 0; layer <= 3; ++layer) {
       // Batch textured entities by their atlas to reduce draw calls.
 		// Map key: raw TextureAtlas* pointer. Value: pair(shared_ptr<TextureAtlas>, vector<Entity*>)
@@ -158,6 +192,8 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 					// Can't render textured entity without transform - skip
 					continue;
 				}
+
+				// Attempt to get the atlas for this entity's texture. If successful, add to batch; otherwise, fall back to immediate render.
 				auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(tex->atlasKey);
 				if (atlasOpt.has_value()) {
 					auto atlasPtr = *atlasOpt;
@@ -168,16 +204,18 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 							// Good candidate for batching
 							auto key = static_cast<void*>(atlasPtr.get());
 							auto &entry = batches[key];
+							
+							// Store the shared_ptr<TextureAtlas> in the first element of the pair if not already set
 							if (!entry.first) entry.first = atlasPtr;
 							entry.second.push_back(e);
 							continue; // handled by batching later
 						}
 					}
 				}
-			}
-			// Not eligible for batching - render immediately (shapes or missing/invalid atlas)
-			RenderEntity(e, window);
-		}
+					}
+					// Not eligible for batching - render immediately (shapes or missing/invalid atlas)
+					RenderEntity(e, window);
+				}
 
 		// For each atlas batch, create a vertex array (triangles) and draw once using the atlas texture
 		for (auto &kv : batches) {
@@ -190,6 +228,7 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 			sf::VertexArray va(sf::PrimitiveType::Triangles);
 			va.clear();
 
+			// Build vertex array for all entities in this batch
 			for (Entity* e : entitiesForAtlas) {
 				auto tex = e->GetComponent<CTexture>();
 				auto transform = e->GetComponent<CTransform>();
@@ -197,6 +236,7 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 				auto rectOpt = atlasPtr->GetSfFloatRectForTile((size_t)tex->tileIndex);
 				if (!rectOpt.has_value()) continue;
 				sf::FloatRect fr = *rectOpt;
+				
 				// Determine tile area
 				if (tex->areaW > 0.0f && tex->areaH > 0.0f) {
 					int atlasW = atlasPtr->TileWidth();
@@ -214,6 +254,8 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 						va.append(sf::Vertex(sf::Vector2f(x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y + fr.size.y)));
 						continue;
 					}
+
+					// Calculate how many tiles fit in the specified area and create quads for each tile
                     int tilesX = static_cast<int>(std::round(tex->areaW / static_cast<float>(atlasW)));
 					int tilesY = static_cast<int>(std::round(tex->areaH / static_cast<float>(atlasH)));
 					for (int ty = 0; ty < tilesY; ++ty) {
@@ -239,7 +281,7 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 					va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
 					va.append(sf::Vertex(sf::Vector2f(x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y + fr.size.y)));
 				}
-				}
+			}
 
 			if (va.getVertexCount() > 0) {
 				sf::RenderStates states;
@@ -260,6 +302,9 @@ void RenderSystem::RenderText(const std::vector<std::unique_ptr<Entity>>& entiti
 		return;
 	for (const auto& entity : entities) {
 		if (!entity->IsAlive())
+			continue;
+		// Skip tile entities - they are collision/debug entities, not gameplay entities
+		if (entity->GetType() == EntityType::TileMap || entity->GetType() == EntityType::Tile)
 			continue;
 		RenderTextEntity(entity.get(), window);
 	}

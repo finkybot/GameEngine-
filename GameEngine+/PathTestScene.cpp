@@ -58,6 +58,7 @@ void PathTestScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	// Create  and setup a camera entity, similar to the LevelEditorScene
 	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Default);
 	m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
+	
 	auto camera = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
 	camera->m_isMainCamera = true;
 	camera->m_isActive = true;
@@ -76,13 +77,15 @@ void PathTestScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	// Create movement test entity (small red square for path following demonstration)
 	m_movementTester = GetEntityManager().AddEntity(EntityType::Default);
 	std::cout << "[PathTestScene::InitializeGame] Created movement tester, entity pointer: " << m_movementTester << std::endl;
+	
+	// Add components to the movement tester entity
 	if (m_movementTester) {
 		// Place test entity at camera origin (0, 0) so it's always visible initially
 		m_movementTester->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
 		auto rect = std::make_unique<CRectangle>(16.0f, 16.0f);
 		rect->SetColor(255.0f, 0.0f, 0.0f, 200);  // Red square
 		m_movementTester->AddComponentPtr<CShape>(std::move(rect));
-		m_movementTester->AddComponent<CPathFollower>(100.0f);  // 100 pixels per second
+		m_movementTester->AddComponent<CPathFollower>(300.0f);  // 300 pixels per second
 		std::cout << "[PathTestScene] Movement tester entity created at (0, 0) - watch the center of the screen!" << std::endl;
 		std::cout << "[PathTestScene] Entity alive: " << (m_movementTester->IsAlive() ? "YES" : "NO") << std::endl;
 		std::cout << "[PathTestScene] Has CShape: " << (m_movementTester->GetComponent<CShape>() ? "YES" : "NO") << std::endl;
@@ -193,20 +196,27 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		auto metaPath = base / name / "meta.txt";
 		try {
 			std::ifstream meta(metaPath.string());
+
+			// Parse key=value pairs from meta.txt
 			if (meta) {
+				// Read each line and split on '=' to get key-value pairs
 				std::string line;
 				while (std::getline(meta, line)) {
 					auto eq = line.find('=');
-					if (eq == std::string::npos) continue;
+					if (eq == std::string::npos) continue; // Skip lines without '='
+					
+					// Trim whitespace from key and value
 					std::string key = line.substr(0, eq);
 					std::string val = line.substr(eq + 1);
+
+					// set tileset and layers based on key-value pairs
 					if (key == "tileset") {
 						tilesetKey = val;
 					} else if (key == "tilesetPath") {
 						tilesetPath = val;
 					} else if (key == "layers") {
-						layers.clear();
-						// comma separated
+						layers.clear(); // clear default layers and use the ones specified in meta.txt
+						// We split the value on commas to get individual layer names and add them to the layers vector
 						size_t start = 0;
 						while (start < val.size()) {
 							auto comma = val.find(',', start);
@@ -222,19 +232,20 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		}
 	}
 
+	// Set tileset key in chunk manager and load tileset if specified
 	if (!tilesetKey.empty()) {
 		m_chunkManager.SetTilesetKey(tilesetKey);
 
 		// If we have a tileset path from metadata, load it
 		if (!tilesetPath.empty()) {
-			auto& tm = GameEngine::GetInstance().GetTextureManager();
+			auto& textMan = GameEngine::GetInstance().GetTextureManager();
 			// Check if already loaded
-			auto atlasOpt = tm.GetAtlas(tilesetKey);
+			auto atlasOpt = textMan.GetAtlas(tilesetKey);
 			if (!atlasOpt.has_value() || !*atlasOpt) {
 				std::cout << "PathTestScene: Loading tileset '" << tilesetKey << "' from " << tilesetPath << "\n";
 				// Use the stored tile size
 				int tileSize = (int)m_chunkManager.GetTileSize();
-				tm.LoadAtlas(tilesetKey, tilesetPath, tileSize, tileSize);
+				textMan.LoadAtlas(tilesetKey, tilesetPath, tileSize, tileSize);
 			}
 		} else {
 			// Fallback: Try common locations if no path in metadata
@@ -272,17 +283,6 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 	m_chunkManager.SetActiveLayer(std::min(1, (int)layers.size() - 1));
 	// Render unselected layers at full opacity so all layers are visible
 	m_chunkManager.SetUnselectedLayerAlpha(1.0f);
-
-	// Debug: log layer info
-	//std::cout << "DEBUG: Loaded level '" << name << "' with " << layers.size() << " layers: ";
-	//for (size_t i = 0; i < layers.size(); ++i) {
-	//	std::cout << layers[i];
-	//	if (i < layers.size() - 1) std::cout << ", ";
-	//}
-	//std::cout << std::endl;
-	//std::cout << "  Tileset key: '" << tilesetKey << "'\n";
-	//std::cout << "  Active layer: " << m_chunkManager.GetActiveLayer() << std::endl;
-	//std::cout << "  Unselected alpha: " << m_chunkManager.GetUnselectedLayerAlpha() << std::endl;
 
 	// Clear all previously loaded chunks and flush any pending load jobs
 	// We need to process UpdateMainThread several times to drain all pending finalizations
@@ -402,14 +402,20 @@ void PathTestScene::EnsureVisibleChunks() {
 	if (!camOpt) return;
 	CCamera* cam = *camOpt;
 
+
 	// Ensure chunks within camera view + margin are loaded
 	float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
 	float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
+
+
 	int tx0 = (int)std::floor((cam->m_position.x - halfW) / m_tileSize);
 	int ty0 = (int)std::floor((cam->m_position.y - halfH) / m_tileSize);
 	int tx1 = (int)std::ceil((cam->m_position.x + halfW) / m_tileSize);
 	int ty1 = (int)std::ceil((cam->m_position.y + halfH) / m_tileSize);
 	m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, 2);
+
+	// 3. Evict chunks outside radius
+	//m_chunkManager.EvictChunksOutsideRadius(tx0, tx1, ty0, ty1);
 }
 /////////////////////////////////
 
@@ -474,6 +480,7 @@ void PathTestScene::Update(float deltaTime) {
 
 	// Ensure visible chunks are loaded
 	EnsureVisibleChunks();
+	//m_chunkManager.UpdateStreaming(m_cameraEntity);
 	m_chunkManager.UpdateMainThread();
 
 	// Apply camera view
@@ -795,7 +802,12 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 
 /////////////////////////////////
 void PathTestScene::OnEnter() {}
-void PathTestScene::OnExit() {}
+void PathTestScene::OnExit() {
+	// Unload resources when exiting the scene
+	UnloadResources();
+	std::cout << "[PathTestScene] OnExit called, resources unloaded." << std::endl;
+	m_cameraEntity->GetComponent<CTransform>()->m_position = Vec2::Zero;
+}
 /////////////////////////////////
  
  

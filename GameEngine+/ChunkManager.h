@@ -148,6 +148,13 @@ public:
 	/////////////////////////////////
 
 	
+	/////////////////////////////////
+	// Public member variables for the ChunkManager class for world mask for collision, pathfinding, and other gameplay mechanics. 
+	// Each value corresponds to a specific tile's collision properties.
+	std::vector<uint8_t> worldMask;
+	int worldMaskWidth = 0, worldMaskHeight = 0;
+
+
 
 	/////////////////////////////////
 	// Public methods for getting and setting tile values, ensuring chunks are loaded for a given area, updating the main thread 
@@ -155,6 +162,14 @@ public:
 	// layerIndex defaults to 0 (main layer) for backward compatibility
 	int GetTileAt(int tileX, int tileY, int layerIndex = 0);
 	int SetTileAt(int tileX, int tileY, int tileValue, int layerIndex = 0);
+	/////////////////////////////////
+	
+	
+
+	/////////////////////////////////
+	// LRU
+	void TouchChunkLRU(long long key);
+	void RemoveChunkFromLRU(long long key);
 	/////////////////////////////////
 
 	
@@ -214,7 +229,7 @@ public:
 	/////////////////////////////////
 	// DebugPrintLayer1 - DEBUG: Print layer 1 obstacle grid to console for debugging purposes. This function outputs the tile values of 
 	// layer 1 for all loaded chunks to the console, allowing developers to inspect the current state of the level's obstacles.
-	void DebugPrintLayer1() const;
+	void DebugPrintLayer1();
 	/////////////////////////////////
 
 
@@ -440,9 +455,33 @@ public:
 
 
 
+
+	/////////////////////////////////
+	// UpdateStreaming - Update streaming of chunks based on the current view (load/unload as needed). This method will determine which 
+	// chunks are visible in the current view and ensure they are loaded, while also evicting any chunks that are no longer needed.
+	void UpdateStreaming(const sf::View& view); // Update streaming of chunks based on the current view (load/unload as needed)
+	/////////////////////////////////
+
+
+
 	/////////////////////////////////
 	// EnqueueChunks - Enqueue all visible chunks to the render queue for rendering. This method will determine which chunks are visible
 	void EnqueueChunks(RenderQueue& queue, const sf::View& view);
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// EnsureChunkLoaded - Ensure a specific chunk is loaded and ready for rendering. If the chunk is not already loaded, it will be enqueued 
+	// for loading.
+	void EnsureChunkLoaded(int cx, int cy);
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// EvictChunksOutsideRadius - Evict chunks that are outside the specified radius from the given chunk coordinates.
+	void EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int maxCy); 
 	/////////////////////////////////
 
 

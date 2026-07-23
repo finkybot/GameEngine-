@@ -23,9 +23,10 @@ enum class EntityType {
 	Explosion = 5,
 	TileMap = 6,
 	Tile = 7,
+	Chunk = 8,
 
-	Default = 8,
-	Equalizer = 9
+	Default = 9,
+	Equalizer = 10
 };
 /////////////////////////////////
 

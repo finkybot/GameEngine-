@@ -97,15 +97,15 @@ private:
 	std::atomic<bool> m_shutdown{false};
 
 	// Incremental search state per-entity
-	struct ChunkNode { int x,y; float g; long long parent; };
+	struct ChunkNode { int x,y; float g; uint64_t parent; };
 	struct ActiveSearch {
 		size_t entityId;
 		uint32_t requestId = 0;
 		int scx, scy, gcx, gcy; // chunk coords
-		std::unordered_map<long long, ChunkNode> nodes;
-		std::priority_queue<std::pair<float,long long>, std::vector<std::pair<float,long long>>, std::greater<std::pair<float,long long>>> open; // f, key
-		std::unordered_map<long long, bool> closed;
-		long long goalKey = -1;
+		std::unordered_map<uint64_t, ChunkNode> nodes;
+		std::priority_queue<std::pair<float,uint64_t>, std::vector<std::pair<float,uint64_t>>, std::greater<std::pair<float,uint64_t>>> open; // f, key
+		std::unordered_map<uint64_t, bool> closed;
+		uint64_t goalKey = -1;
 		bool found = false;
 	};
 

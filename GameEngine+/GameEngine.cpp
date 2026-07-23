@@ -13,6 +13,7 @@
 #include "Vec2.h"
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
+#include <SFML/Graphics.hpp>
 #include <SFML/Window/VideoMode.hpp>
 #include <SFML/Audio/Listener.hpp>
 #include <memory>
@@ -142,6 +143,10 @@ void GameEngine::ChangeScene(const std::string& sceneName) {
 		// Clear all entities from the previous scene before activating the new one
 		if (m_entityManager) m_entityManager->ClearAll();
 
+		// Reset the view to default before switching scenes to avoid any leftover zoom or pan from the previous scene
+		m_window.setView(m_window.getDefaultView());
+
+		// Set the new scene as the current active scene
 		m_currentScene = it->second;
 
 		// initialize the new scene so it has window size, input controller, and resources set up

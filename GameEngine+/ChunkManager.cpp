@@ -62,6 +62,18 @@ ChunkManager::ChunkManager(int chunkWidth, int chunkHeight, float tileSize, int 
 
 
 
+/////////////////////////////////
+// Destructor - currently does not have any special cleanup logic, but we could add it if needed in the future (e.g., to save dirty chunks before exiting)
+ChunkManager::~ChunkManager() {
+	SaveAllChunks(); // Ensure all dirty chunks are saved to disk when the ChunkManager is destroyed to prevent data loss.
+	std::lock_guard<std::mutex> lock(s_pendingMutex); // Lock the mutex to safely clear the pending chunks queue
+	s_pendingChunks.clear();						  // Clear the pending chunks queue to free memory
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // ClearAllLoadedChunks - remove all loaded chunks from memory without saving; used when switching levels
 void ChunkManager::ClearAllLoadedChunks() {
 	std::lock_guard<std::mutex> lk(m_mutex);
@@ -78,7 +90,7 @@ void ChunkManager::ClearAllLoadedChunks() {
 	m_lruIndex.clear();
 	m_lruList.clear();
 }
-///////////////////////////////
+/////////////////////////////////
 
 
 
@@ -104,11 +116,13 @@ void ChunkManager::LoadAllSavedChunks() {
 			filenames.push_back(fname);
 			if (fname.rfind("chunk_", 0) != 0) continue;
 			fileCount++;
+			
 			// parse chunk_<layer>_<cx>_<cy>.dat
 			std::string body = fname.substr(6); // after "chunk_"
 			size_t us1 = body.find('_');
 			size_t us2 = body.find('_', us1 + 1);
 			size_t dot = body.find('.');
+			
 			if (us1 == std::string::npos || us2 == std::string::npos || dot == std::string::npos) continue;
 			int layer = std::stoi(body.substr(0, us1));
 			int cx = std::stoi(body.substr(us1+1, us2 - (us1+1)));
@@ -159,10 +173,13 @@ void ChunkManager::LoadAllSavedChunks() {
 		std::cout << "[ChunkManager] Unknown exception in LoadAllSavedChunks\n";
 	}
 }
+/////////////////////////////////
+
+
 
 /////////////////////////////////
 // DebugPrintLayer1 - Print layer 1 (obstacle layer) as a grid of 0s and 1s for all loaded chunks
-void ChunkManager::DebugPrintLayer1() const {
+void ChunkManager::DebugPrintLayer1() {
 	std::cout << "\n========== DEBUG: Layer 1 (Obstacle Layer) Visualization ==========\n";
 	std::cout.flush();
 
@@ -216,7 +233,9 @@ void ChunkManager::DebugPrintLayer1() const {
 				std::cout << "  ";
 				for (int x = 0; x < chunk.width; ++x) {
 					int tileValue = layer1[y * chunk.width + x];
-					std::cout << (tileValue != 0 ? "1" : "0");
+					//std::cout << (tileValue != 0 ? "1" : "0");
+					worldMask.push_back((tileValue != 0) ? 1 : 0); // Store in worldMask for potential further processing
+					std::cout << (worldMask.back() ? "1" : "0");
 				}
 				std::cout << "\n";
 			}
@@ -662,6 +681,29 @@ void ChunkManager::DrawChunks(sf::RenderWindow& window, const sf::View& view) {
 
 
 /////////////////////////////////
+// UpdateStreaming - Placeholder for future streaming logic. Currently does nothing, but can be extended to implement dynamic 
+// loading/unloading of chunks based on the view.
+void ChunkManager::UpdateStreaming(const sf::View& view)
+{
+	// 1. Convert view bounds → chunk coords
+	int minCx = floor((view.getCenter().x - view.getSize().x * 0.5f) / (m_chunkWidth * m_tileSize));
+	int maxCx = floor((view.getCenter().x + view.getSize().x * 0.5f) / (m_chunkWidth * m_tileSize));
+	int minCy = floor((view.getCenter().y - view.getSize().y * 0.5f) / (m_chunkHeight * m_tileSize));
+	int maxCy = floor((view.getCenter().y + view.getSize().y * 0.5f) / (m_chunkHeight * m_tileSize));
+
+	// 2. For each chunk in bounds → ensure loaded
+	for (int cy = minCy; cy <= maxCy; ++cy)
+		for (int cx = minCx; cx <= maxCx; ++cx)
+			EnsureChunkLoaded(cx, cy);
+
+	// 3. Evict chunks outside radius
+	EvictChunksOutsideRadius(minCx, maxCx, minCy, maxCy);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // EnqueueChunks - Enqueue all visible chunks to the render queue with depth-based sorting
 // This is the ECS-aligned rendering method that replaces DrawChunks for use with the render queue
 void ChunkManager::EnqueueChunks(RenderQueue& queue, const sf::View& view) {
@@ -731,11 +773,68 @@ void ChunkManager::EnqueueChunks(RenderQueue& queue, const sf::View& view) {
 
 
 /////////////////////////////////
-// Destructor - currently does not have any special cleanup logic, but we could add it if needed in the future (e.g., to save dirty chunks before exiting)
-ChunkManager::~ChunkManager() { 
-	SaveAllChunks(); // Ensure all dirty chunks are saved to disk when the ChunkManager is destroyed to prevent data loss.
-	std::lock_guard<std::mutex> lock(s_pendingMutex); // Lock the mutex to safely clear the pending chunks queue
-	s_pendingChunks.clear();						  // Clear the pending chunks queue to free memory	
+// EnsureChunkLoaded - Ensures that the chunk at (cx, cy) is loaded. If it is not already loaded, it will be enqueued 
+// for loading in the background thread.
+void ChunkManager::EnsureChunkLoaded(int cx, int cy) {
+	std::lock_guard<std::mutex> lk(m_mutex);
+
+	long long key = GetChunkKey(cx, cy);
+
+	// Already loaded or already created
+	if (m_chunks.find(key) != m_chunks.end()) return;
+
+	// Create empty chunk with correct dimensions
+	m_chunks[key] = Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers);
+
+	// Enqueue background load for each layer
+	for (int layer = 0; layer < m_numLayers; ++layer)
+		EnqueueLoadChunk(cx, cy, layer);
+
+	// Mark as recently used (for LRU)
+	TouchChunkLRU(key);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// EvictChunksOutsideRadius - Evicts chunks that are outside the specified chunk coordinate bounds (minCx, maxCx, minCy, maxCy).
+void ChunkManager::EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int maxCy) {
+	std::lock_guard<std::mutex> lk(m_mutex);
+
+	std::vector<long long> toRemove;
+
+	for (auto& [key, chunk] : m_chunks) {
+		int cx = chunk.chunkX;
+		int cy = chunk.chunkY;
+
+		bool outside = cx < minCx || cx > maxCx || cy < minCy || cy > maxCy;
+		if (outside)	std::cout << "[ChunkManager] Checking chunk (" << cx << "," << cy << ") against bounds (" << minCx << ","
+													<< maxCx << "," << minCy << "," << maxCy << ") - outside=" << outside << "\n";
+		if (outside)
+		{
+			toRemove.push_back(key);
+		}
+		}
+			
+
+	// Remove chunks safely
+	EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+
+	for (long long key : toRemove) {
+		Chunk& c = m_chunks[key];
+
+		// Kill generated entities
+		for (Entity* ge : c.generatedEntities)
+			if (ge)
+				em.SafeKillEntity(ge);
+
+		// Remove from LRU
+		RemoveChunkFromLRU(key);
+
+		// Remove chunk
+		m_chunks.erase(key);
+	}
 }
 /////////////////////////////////
 
@@ -810,6 +909,7 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 	// std::cout << "ChunkManager::SetTileAt chunk=(" << chunk.chunkX << "," << chunk.chunkY << ") local=(" << localX << "," << localY << ") layer=" << layerIndex << " val=" << tileValue << " prev=" << prevValue << "\n";
 
 	// O(1) LRU touch via iterator index
+	// Move the chunk to the front of the LRU list to mark it as recently used. If the chunk is already in the LRU list, we remove it from its current position and reinsert it at the front.
 	auto lruIt = m_lruIndex.find(key);
 	if (lruIt != m_lruIndex.end()) m_lruList.erase(lruIt->second);
 	m_lruList.push_front(key);
@@ -847,6 +947,45 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 		} catch (...) {}
 	}
 	return prevValue;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// RemoveChunkFromLRU - Removes the chunk with the specified key from the LRU (Least Recently Used) list. This is called when a chunk is evicted to ensure 
+// it is no longer tracked in the LRU.
+void ChunkManager::RemoveChunkFromLRU(long long key) {
+	auto it = m_lruIndex.find(key);
+	if (it == m_lruIndex.end())
+		return; // Chunk not in LRU list
+
+	// Erase the node from the list
+	m_lruList.erase(it->second);
+
+	// Remove the index entry
+	m_lruIndex.erase(it);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// TouchChunkLRU - Updates the LRU (Least Recently Used) list to mark the chunk with the specified key as recently used. If the chunk is already in the LRU list, 
+// it is moved to the front; otherwise, it is added to the front.
+void ChunkManager::TouchChunkLRU(long long key) {
+	// If key already exists in LRU, move it to the front
+	auto it = m_lruIndex.find(key);
+	if (it != m_lruIndex.end()) {
+		// Move existing entry to front
+		m_lruList.splice(m_lruList.begin(), m_lruList, it->second);
+		it->second = m_lruList.begin();
+		return;
+	}
+
+	// Otherwise insert new entry at front
+	m_lruList.push_front(key);
+	m_lruIndex[key] = m_lruList.begin();
 }
 /////////////////////////////////
 
@@ -1115,38 +1254,65 @@ void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY, int layer) {
 /////////////////////////////////
 // RebuildChunkEntities - Rebuilds the collider entities for a chunk based on its current tile data. This should be called whenever the tile data changes to ensure that the 
 // colliders match the visual representation of the chunk.
-void ChunkManager::RebuildChunkEntities(Chunk& c) {
+void ChunkManager::RebuildChunkEntities(Chunk& chunk) {
 	// First, safely kill any existing entities that were generated for this chunk to avoid leaving orphaned entities in the world. We use SafeKillEntity to ensure that we 
 	// don't attempt to access entities that may have already been destroyed.
 	try {
 		EntityManager& em = GameEngine::GetInstance().GetEntityManager();
-		for (Entity* ge : c.generatedEntities) {
+		for (Entity* ge : chunk.generatedEntities) {
 			if (ge) em.SafeKillEntity(ge);
 		}
-		c.generatedEntities.clear();
-		std::vector<char> used(c.width * c.height, 0);
-		for (int y = 0; y < c.height; ++y) {
-			for (int x = 0; x < c.width; ++x) {
-				int idx = y * c.width + x;
-				if (used[idx]) continue;
+
+		// Clear the list of generated entities for this chunk so we can repopulate it with new colliders based on the current tile data.
+		chunk.generatedEntities.clear();
+
+		// Create a 2D array to track which tiles have already been processed into colliders. This prevents creating multiple colliders for the same contiguous area of tiles.
+		std::vector<char> used(chunk.width * chunk.height, 0);
+		for (int y = 0; y < chunk.height; ++y) {
+			for (int x = 0; x < chunk.width; ++x) {
+				int index = y * chunk.width + x;
+				
+				// Skip tiles that have already been processed into colliders
+				if (used[index]) continue;
+				
+				// Get the tile value at this position. If the tile value is 0, (no tile) so skip.
 				int val = 0;
-				if (!c.tilesPerLayer.empty()) val = c.tilesPerLayer[0][idx];
+				if (!chunk.tilesPerLayer.empty()) val = chunk.tilesPerLayer[0][index];
 				if (val == 0) continue;
-				int w = 1;
-				while (x + w < c.width && (!c.tilesPerLayer.empty() && c.tilesPerLayer[0][y * c.width + (x + w)] == val) && !used[y * c.width + (x + w)]) ++w;
-				int h = 1;
-				bool canExtend = true;
-				while (y + h < c.height && canExtend) {
-					for (int xi = 0; xi < w; ++xi) {
-						if ((!c.tilesPerLayer.empty() && c.tilesPerLayer[0][(y + h) * c.width + (x + xi)] != val) || used[(y + h) * c.width + (x + xi)]) { canExtend = false; break; }
-					}
-					if (canExtend) ++h;
+				
+				// Determine the width of the contiguous area of tiles with the same value starting from (x, y). We expand to the right until we hit a different tile value or the edge of the chunk. 
+				int width = 1;
+				while (x + width < chunk.width &&
+					   (!chunk.tilesPerLayer.empty() && chunk.tilesPerLayer[0][y * chunk.width + (x + width)] == val) 
+						&& !used[y * chunk.width + (x + width)]) {
+					++width;
 				}
-				for (int yy = 0; yy < h; ++yy) for (int xx = 0; xx < w; ++xx) used[(y + yy) * c.width + (x + xx)] = 1;
-				float tileW = c.tileSize * w;
-				float tileH = c.tileSize * h;
-				float posX = (c.chunkX * c.width + x) * c.tileSize;
-				float posY = (c.chunkY * c.height + y) * c.tileSize;
+
+				// Determine the height of the contiguous area of tiles with the same value starting from (x, y). We expand downward until we hit a different tile value or the edge of the chunk.
+				int height = 1;
+				bool canExtend = true;
+				while (y + height < chunk.height && canExtend) {
+					for (int xi = 0; xi < width; ++xi) {
+						if ((!chunk.tilesPerLayer.empty() && chunk.tilesPerLayer[0][(y + height) * chunk.width + (x + xi)] != val) || used[(y + height) * chunk.width + (x + xi)]) { canExtend = false; break; }
+					}
+					if (canExtend) ++height;
+				}
+
+				// Mark all tiles in the contiguous area as used so we don't process them again
+				for (int yy = 0; yy < height; ++yy) {
+					for (int xx = 0; xx < width; ++xx) { 
+						used[(y + yy) * chunk.width + (x + xx)] = 1; 
+					}
+				}
+
+				
+				// Calculate the world position and size of the collider based on the chunk's position, tile size, and the dimensions of the contiguous area.
+				float tileW = chunk.tileSize * width;
+				float tileH = chunk.tileSize * height;
+				float posX = (chunk.chunkX * chunk.width + x) * chunk.tileSize;
+				float posY = (chunk.chunkY * chunk.height + y) * chunk.tileSize;
+				
+				// Create a new entity for this contiguous area of tiles. The entity will have a transform component, a rectangle shape component, and a static component to indicate it is not dynamic.
 				Entity* ent = em.AddEntity(EntityType::Tile);
 				if (ent) {
 					ent->AddComponent<CTransform>(Vec2(posX, posY), Vec2::Zero);
@@ -1154,7 +1320,7 @@ void ChunkManager::RebuildChunkEntities(Chunk& c) {
 					rect->SetColor(160.0f, 160.0f, 160.0f, 200);
 					ent->AddComponentPtr<CShape>(std::move(rect));
 					ent->AddComponent<CStatic>();
-					c.generatedEntities.push_back(ent);
+					chunk.generatedEntities.push_back(ent);
 				}
 			}
 		}

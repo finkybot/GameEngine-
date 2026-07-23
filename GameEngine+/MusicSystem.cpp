@@ -535,7 +535,7 @@ void MusicSystem::Process() {
 void MusicSystem::AnalysisThreadFunc() {
 	using namespace std::chrono_literals;
 	std::unordered_map<size_t, float> lastAnalyzedSeconds;
-	std::unordered_map<size_t, long long> lastReadCursorSamples;
+	std::unordered_map<size_t, uint64_t> lastReadCursorSamples;
 	while (!m_analysisStop.load(std::memory_order_relaxed)) {
 		// Wait up to ~16 ms (~60 Hz) for a wake signal or timeout
 		{
@@ -607,10 +607,10 @@ void MusicSystem::AnalysisThreadFunc() {
 			if (windowSamples == 0) continue;
 
 			// Compute analysis window around playhead
-			long long center = static_cast<long long>(seconds * static_cast<float>(sampleRate)) * static_cast<long long>(channels);
-			long long start = (center > static_cast<long long>(windowSamples / 2)) ? (center - static_cast<long long>(windowSamples / 2)) : 0;
+			uint64_t center = static_cast<uint64_t>(seconds * static_cast<float>(sampleRate)) * static_cast<uint64_t>(channels);
+			uint64_t start = (center > static_cast<uint64_t>(windowSamples / 2)) ? (center - static_cast<uint64_t>(windowSamples / 2)) : 0;
 			if (totalSamples > 0 && static_cast<size_t>(start) + windowSamples > totalSamples)
-				start = totalSamples > windowSamples ? static_cast<long long>(totalSamples - windowSamples) : 0;
+				start = totalSamples > windowSamples ? static_cast<uint64_t>(totalSamples - windowSamples) : 0;
 			if (start < 0) start = 0;
 
 			// Avoid expensive deep seeks every analysis tick: read sequentially when playhead movement is continuous,
@@ -618,9 +618,9 @@ void MusicSystem::AnalysisThreadFunc() {
 			bool needSeek = true;
 			auto cursorIt = lastReadCursorSamples.find(id);
 			if (cursorIt != lastReadCursorSamples.end()) {
-				long long expected = cursorIt->second;
-				long long delta = std::llabs(start - expected);
-				if (delta <= static_cast<long long>(windowSamples * 4)) {
+				uint64_t expected = cursorIt->second;
+				uint64_t delta = std::llabs(start - expected);
+				if (delta <= static_cast<uint64_t>(windowSamples * 4)) {
 					needSeek = false;
 				}
 			}
@@ -630,22 +630,22 @@ void MusicSystem::AnalysisThreadFunc() {
 				lastReadCursorSamples[id] = start;
 			} else if (cursorIt != lastReadCursorSamples.end() && cursorIt->second < start) {
 				// Advance by reading/discarding a small amount to catch up without expensive absolute seek.
-				long long toSkip = start - cursorIt->second;
+				uint64_t toSkip = start - cursorIt->second;
 				const size_t scratchCap = 8192;
-				std::vector<short> scratch(static_cast<size_t>(std::min<long long>(toSkip, scratchCap)), 0);
+				std::vector<short> scratch(static_cast<size_t>(std::min<uint64_t>(toSkip, scratchCap)), 0);
 				while (toSkip > 0) {
-					size_t chunk = static_cast<size_t>(std::min<long long>(toSkip, static_cast<long long>(scratch.size())));
+					size_t chunk = static_cast<size_t>(std::min<uint64_t>(toSkip, static_cast<uint64_t>(scratch.size())));
 					size_t skipped = soundFile->read(scratch.data(), chunk);
 					if (skipped == 0) break;
-					toSkip -= static_cast<long long>(skipped);
-					cursorIt->second += static_cast<long long>(skipped);
+					toSkip -= static_cast<uint64_t>(skipped);
+					cursorIt->second += static_cast<uint64_t>(skipped);
 				}
 			}
 
 			std::vector<short> sampleBuf(windowSamples, 0);
 			size_t readCount = soundFile->read(sampleBuf.data(), windowSamples);
 			const short* samples = sampleBuf.data();
-			lastReadCursorSamples[id] += static_cast<long long>(readCount);
+			lastReadCursorSamples[id] += static_cast<uint64_t>(readCount);
 
 			// RMS level
 			double rmsSum = 0.0;
@@ -662,13 +662,13 @@ void MusicSystem::AnalysisThreadFunc() {
 			if (useFFT && fftSize > 0) {
 				int N = fftSize;
 				std::vector<float> mono(static_cast<size_t>(N), 0.0f);
-				long long centerSample = static_cast<long long>(seconds * static_cast<float>(sampleRate));
-				long long startSample  = centerSample - static_cast<long long>(N / 2);
-				long long bufStartSample = static_cast<long long>(start / channels);
+				uint64_t centerSample = static_cast<uint64_t>(seconds * static_cast<float>(sampleRate));
+				uint64_t startSample  = centerSample - static_cast<uint64_t>(N / 2);
+				uint64_t bufStartSample = static_cast<uint64_t>(start / channels);
 				
 				// Convert to mono
 				for (int i = 0; i < N; ++i) {
-					long long localIdx = (startSample + i) - bufStartSample;
+					uint64_t localIdx = (startSample + i) - bufStartSample;
 					if (localIdx < 0 || static_cast<size_t>(localIdx) >= readCount / channels) continue;
 					size_t base = static_cast<size_t>(localIdx) * channels;
 					float acc = 0.0f;

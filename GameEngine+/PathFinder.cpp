@@ -196,7 +196,7 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 			{
 				std::lock_guard<std::mutex> lock(m_chunkManager.GetMutex());
 				auto &chunks = m_chunkManager.GetChunks();
-				auto it = chunks.find((static_cast<long long>(cx) << 32) | static_cast<unsigned int>(cy));
+				auto it = chunks.find((static_cast<uint64_t>(cx) << 32) | static_cast<unsigned int>(cy));
 				if (it == chunks.end()) return std::nullopt;
 				chunkCopy = it->second;
 				//std::cout << "[PathFinder] Chunk (" << cx << "," << cy << ") Layer 0: " << chunkCopy.tilesPerLayer[0].size() 
@@ -365,7 +365,7 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 			{
 				std::lock_guard<std::mutex> lock(m_chunkManager.GetMutex());
 				auto &chunks = m_chunkManager.GetChunks();
-				auto it = chunks.find((static_cast<long long>(cx) << 32) | static_cast<unsigned int>(cy));
+				auto it = chunks.find((static_cast<uint64_t>(cx) << 32) | static_cast<unsigned int>(cy));
 				if (it == chunks.end()) {
 					//std::cout << "[PathFinder] ERROR: Chunk (" << cx << "," << cy << ") not loaded!\n";
 					return std::nullopt;
@@ -449,14 +449,14 @@ bool Pathfinder::FindChunkPath(int startX, int startY, int goalX, int goalY, std
 	auto keyFor = [](int x, int y) {
 		// Use a 64-bit integer to combine x and y into a unique key; 
 		// Shift x to the upper 32 bits and y to the lower 32 bits.
-		return (static_cast<long long>(x) << 32) | static_cast<unsigned int>(y); 
+		return (static_cast<uint64_t>(x) << 32) | static_cast<unsigned int>(y); 
 	};
 
 	// Heuristic function for A* search: Manhattan distance between two chunk coordinates.
-	struct Node { int x,y; float g; long long parent; };
-	std::unordered_map<long long, Node> nodes;
+	struct Node { int x,y; float g; uint64_t parent; };
+	std::unordered_map<uint64_t, Node> nodes;
 	
-	using PQItem = std::pair<float, long long>; // PQItem is a pair consisting of the f-cost (float) and a unique key (long long)
+	using PQItem = std::pair<float, uint64_t>; // PQItem is a pair consisting of the f-cost (float) and a unique key (uint64_t)
 												// representing a node in the search space. The f-cost is used to prioritize nodes
 												// in the open set, with lower f-costs being processed first.
 
@@ -466,8 +466,8 @@ bool Pathfinder::FindChunkPath(int startX, int startY, int goalX, int goalY, std
 
 	// **** LAMBDA START: pushNode ****
 	// Lambda function to push a node into the open set if it is either new or has a lower g-cost than previously recorded.
-	auto pushNode = [&](int x, int y, float g, long long parent) {
-		long long k = keyFor(x,y);
+	auto pushNode = [&](int x, int y, float g, uint64_t parent) {
+		uint64_t k = keyFor(x,y);
 		auto it = nodes.find(k);
 		if (it == nodes.end() || g < it->second.g) {
 			nodes[k] = {x,y,g,parent};
@@ -511,9 +511,9 @@ bool Pathfinder::FindChunkPath(int startX, int startY, int goalX, int goalY, std
 	// **** LAMBDA END: chunkHasConnection ****
 
 	// A* search setup
-	std::unordered_map<long long, bool> closed;
+	std::unordered_map<uint64_t, bool> closed;
 	bool found = false;
-	long long goalKey = keyFor(goalChunkX, goalChunkY);
+	uint64_t goalKey = keyFor(goalChunkX, goalChunkY);
 
 	const float DIAG = std::sqrt(2.0f);
 	
@@ -545,7 +545,7 @@ bool Pathfinder::FindChunkPath(int startX, int startY, int goalX, int goalY, std
 	if (!found) return false;
 
 	// reconstruct path
-	long long curK = goalKey;
+	uint64_t curK = goalKey;
 	while (curK != -1) {
 		auto it = nodes.find(curK);
 		if (it == nodes.end()) break;
@@ -771,8 +771,10 @@ void Pathfinder::EnsureChunksForPath(int sx, int sy, int gx, int gy) {
 	if (cw <= 0 || ch <= 0) return;
 
 	auto floorDiv = [](int a, int b) {
-		if (a >= 0) return a / b;
-		return -(((-a) + b - 1) / b);
+		//if (a >= 0) return a / b;
+		//return -(((-a) + b - 1) / b);
+		int q = a / b;
+		return (a % b && ((a ^ b) < 0)) ? q - 1 : q;
 	};
 
 	// Set the chunk coords for start and goal tiles
@@ -792,6 +794,7 @@ void Pathfinder::EnsureChunksForPath(int sx, int sy, int gx, int gy) {
 	int minTileY = minChunkY * ch;
 	int maxTileX = (maxChunkX + 1) * cw - 1; // Inclusive max tile coordinate
 	int maxTileY = (maxChunkY + 1) * ch - 1; // Inclusive max tile coordinate
+	
 	// Request a margin of 1 chunk around path area
 	m_chunkManager.EnsureChunksInTileRect(minTileX, minTileY, maxTileX, maxTileY, 1);
 }

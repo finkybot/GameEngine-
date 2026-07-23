@@ -148,6 +148,7 @@
   <ItemGroup>
     <ClCompile Include="CameraSystem.cpp" />
     <ClCompile Include="ChunkManager.cpp" />
+    <ClCompile Include="ChunkManagerV2.cpp" />
     <ClCompile Include="CursorSystem.cpp" />
     <ClCompile Include="DebugStack.cpp" />
     <ClCompile Include="Entity.cpp" />
@@ -195,9 +196,11 @@
     <ClInclude Include="AssetManager.h" />
     <ClInclude Include="CameraSystem.h" />
     <ClInclude Include="CCamera.h" />
+    <ClInclude Include="CChunkComponent.h" />
     <ClInclude Include="CCircle.h" />
     <ClInclude Include="CExplosion.h" />
     <ClInclude Include="ChunkManager.h" />
+    <ClInclude Include="ChunkManagerV2.h" />
     <ClInclude Include="CLayer.h" />
     <ClInclude Include="CMusic.h" />
     <ClInclude Include="CName.h" />
@@ -236,6 +239,7 @@
     <ClInclude Include="Includes.h" />
     <ClInclude Include="InputAction.h" />
     <ClInclude Include="InputController.h" />
+    <ClInclude Include="json.hpp" />
     <ClInclude Include="LevelEditorScene.h" />
     <ClInclude Include="MainMenuScene.h" />
     <ClInclude Include="MainThreadTasks.h" />

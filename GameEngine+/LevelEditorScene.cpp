@@ -553,8 +553,8 @@ void LevelEditorScene::Update(float deltaTime) {
 			// clamp loop if you want (optional)
 			// Safety: avoid processing excessively large selections that could hang the editor.
 			const int maxSelectionTiles = 1024 * 1024; // 1M tiles
-			long long selW = (long long)tx1 - (long long)tx0 + 1;
-			long long selH = (long long)ty1 - (long long)ty0 + 1;
+			uint64_t selW = (uint64_t)tx1 - (uint64_t)tx0 + 1;
+			uint64_t selH = (uint64_t)ty1 - (uint64_t)ty0 + 1;
 			if (selW <= 0 || selH <= 0) { /* nothing */; }
 			else if (selW * selH > maxSelectionTiles) {
 				std::cerr << "Selection too large (" << selW*selH << " tiles) - operation ignored" << std::endl;
@@ -606,8 +606,8 @@ void LevelEditorScene::Update(float deltaTime) {
 			
 			// Safety: avoid processing excessively large selections that could hang the editor.
 			const int maxSelectionTiles = 1024 * 1024; // 1M tiles
-			long long selW2 = (long long)tx1 - (long long)tx0 + 1;
-			long long selH2 = (long long)ty1 - (long long)ty0 + 1;
+			uint64_t selW2 = (uint64_t)tx1 - (uint64_t)tx0 + 1;
+			uint64_t selH2 = (uint64_t)ty1 - (uint64_t)ty0 + 1;
 			
 			if (selW2 <= 0 || selH2 <= 0) { /* nothing */; }
 			else if (selW2 * selH2 > maxSelectionTiles) {

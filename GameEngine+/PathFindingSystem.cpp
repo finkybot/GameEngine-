@@ -39,16 +39,10 @@ PathFindingSystem::~PathFindingSystem() {
 void PathFindingSystem::Update(float deltaTime) {
 	(void) deltaTime; // currently unused, but may be used for future time-based logic, i'll void it for now.
 
-	// Begin by processing any pending pathfinding requests from entities. This will handle new requests and set up the necessary 
-	// data structures for incremental searches. Our active searches are stored in a map keyed by entity ID, allowing us to manage 
-	// multiple concurrent searches efficiently.	
+	// Process any new pathfinding requests from entities with CPathRequest components, creating ActiveSearch instances for each new request.
 	ProcessRequests();
 
-	// The main for loop iterates over all active searches, stepping through each search with a budget of nodes to process per frame.
-	// We also collect finished entity IDs to clean up after iteration, ensuring that completed searches are removed from the active 
-	// searches map.
-	// Setup a vector to collect finished entity IDs for cleanup after iteration then iterate over the active searches, stepping through 
-	// each search with a budget of nodes to process per frame.
+	// 
 	std::vector<size_t> finished; 
 	for (auto &searchPair : m_activeSearches) {
 		size_t entId = searchPair.first;
@@ -69,7 +63,7 @@ void PathFindingSystem::Update(float deltaTime) {
 			// If it has, we continue to the next iteration.
 			auto top = search.open.top(); 
 			search.open.pop();
-			long long key = top.second;
+			uint64_t key = top.second;
 			if (search.closed[key]) continue;
 			
 			// If the node has not been closed, we mark it as closed and retrieve the corresponding 
@@ -87,7 +81,7 @@ void PathFindingSystem::Update(float deltaTime) {
 			if (key == search.goalKey) {
 				// Reconstruct the chunk path from the goal node back to the start node using the parent pointers in the nodes map.
 				std::vector<std::pair<int,int>> chunkPath;
-				long long currentKey = key;
+				uint64_t currentKey = key;
 				while (currentKey != -1) { /* -1 indicates the start node */
 					auto cNode = search.nodes.find(currentKey);
 					if (cNode == search.nodes.end()) break; // should not happen
@@ -318,7 +312,7 @@ void PathFindingSystem::Update(float deltaTime) {
 
 				// Check if the neighbor chunk is connected to the current chunk. If not, we skip this neighbor.
 				if (!chunkHasConnection(cur.x, cur.y, nx, ny)) continue;
-				long long nk = (static_cast<long long>(nx) << 32) | static_cast<unsigned int>(ny);
+				uint64_t nk = (static_cast<uint64_t>(nx) << 32) | static_cast<unsigned int>(ny);
 				auto nit = search.nodes.find(nk);
 				float moveCost = (std::abs(d[0]) + std::abs(d[1]) == 2) ? std::sqrt(2.0f) : 1.0f;
 				float ng = cur.g + moveCost;
@@ -331,7 +325,7 @@ void PathFindingSystem::Update(float deltaTime) {
 					search.open.push({ng + h, nk});
 					// produce partial chunk-path preview: reconstruct current best path to this neighbor
 					std::vector<std::pair<int,int>> previewChunks;
-					long long curK = nk;
+					uint64_t curK = nk;
 
 					// Reconstruct the current best path to this neighbor by following parent pointers in the nodes map.
 					while (curK != -1) {
@@ -432,10 +426,10 @@ void PathFindingSystem::ProcessRequests() {
 		as->entityId = id;
 		as->requestId = req->requestId;
 		as->scx = scx; as->scy = scy; as->gcx = gcx; as->gcy = gcy;
-		auto keyFor = [](int x, int y) { return (static_cast<long long>(x) << 32) | static_cast<unsigned int>(y); };
-		long long k = keyFor(scx, scy);
+		auto keyFor = [](int x, int y) { return (static_cast<uint64_t>(x) << 32) | static_cast<unsigned int>(y); };
+		uint64_t k = keyFor(scx, scy);
 		as->goalKey = keyFor(gcx, gcy);
-		as->nodes[k] = {scx, scy, 0.0f, -1};
+		as->nodes[k] = {scx, scy, 0.0f, static_cast<uint64_t>(-1)};
 		float h = m_pathfinder.HeuristicChunk(scx, scy, gcx, gcy);
 		as->open.push({h, k});
 		m_activeSearches[id] = std::move(as);
@@ -501,7 +495,7 @@ Entity* PathFindingSystem::FindEntityById(size_t entId) {
 bool PathFindingSystem::GetChunkCopy(int chunkX, int chunkY, Chunk& outChunk) {
 	std::lock_guard<std::mutex> lk(m_chunks.GetMutex());
 	auto& chunks = m_chunks.GetChunks();
-	long long keyk = (static_cast<long long>(chunkX) << 32) | static_cast<unsigned int>(chunkY);
+	uint64_t keyk = (static_cast<uint64_t>(chunkX) << 32) | static_cast<unsigned int>(chunkY);
 	auto itc = chunks.find(keyk);
 	if (itc == chunks.end()) return false;
 	outChunk = itc->second;

@@ -41,11 +41,13 @@ private:
 	friend class EntityManager; 
 	/////////////////////////////////
 	// Private member variables for entity state management, tagged with m_ prefix to indicate member variables
-	const size_t m_id = 0;
+	const size_t m_id = 0; // Unique identifier for the entity, assigned by the EntityManager
 	EntityType m_type = EntityType::Default;
 	bool m_alive = true;
 	std::map<std::type_index, std::unique_ptr<Component>> m_components;
 	Vec2 m_previousPosition = Vec2::Zero;
+
+	size_t m_ownerId =	0; // Optional owner ID for the entity, can be used to track ownership or relationships between entities
 	/////////////////////////////////
 
 
@@ -64,6 +66,14 @@ public:
     // Rendering layer for the entity. Default to Mid so most entities draw in the main layer. Backward-compatible with new CLayer component: 
 	// if CLayer exists, renderer will prefer it; otherwise these accessors provide a fallback stored on the entity.
 	enum class Layer { Background = 0, Mid = 1, Foreground = 2, Overlay = 3 };
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Getter and Setter for the owner ID of the entity. This can be used to track ownership or relationships between entities, such as a projectile being owned by a player entity.
+	size_t GetOwnerId() const { return m_ownerId; }
+	void SetOwnerId(size_t ownerId) { m_ownerId = ownerId; }
 	/////////////////////////////////
 
 

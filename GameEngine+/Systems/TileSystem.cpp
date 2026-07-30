@@ -11,6 +11,7 @@
 #include "../CStatic.h"
 #include "../CTexture.h"
 #include "../GameEngine.h"
+#include "CColliderRect.h"
 /////////////////////////////////
 
 
@@ -49,20 +50,17 @@ void TileSystem::Process() {
 			}
 		}
 
-		// Ensure spatial hash aligns with tile size
-		//m_entityManager->GetSpatialHash() = SpatialHashGrid<Entity>(tileComp->GetTileSize());
-
-
 		// Get a reference to the TileMap data from the CTileMap component
 		TileMap& map = tileComp->map;
-		// Get the texture atlas for the tileset key, if available' I'll use this to attach a texture component
-		//auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(map.tilesetKey);
-		//TextureAtlas* atlasPtr = atlasOpt.has_value() ? atlasOpt.value().get() : nullptr;
 
-		// Gonna do some local caching here 
+		// Gonna do some local caching here, this is so we don't have to keep dereferencing the map object in the loops below
 		int width = map.width;
 		int height = map.height;
 		float tileSize = map.tileSize;
+
+		// Get the texture atlas for the tileset key from the TextureManager. If the atlas is not found, we will handle it gracefully by using a nullptr.
+		auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(map.tilesetKey);
+		auto atlasPtr = atlasOpt.has_value() ? atlasOpt.value().get() : nullptr;
 
 		// Define a struct to represent a run of solid tiles in a row
 		struct Run {
@@ -71,8 +69,8 @@ void TileSystem::Process() {
 			int value;
 		};
 
-		// Run length encoding - step 1: merge horizontal runs of solid tiles into rectangles
-		// Create a 2D vector to store runs of solid tiles for each row in the tilemap
+		// Run length encoding (replacing an O(n^2) algorithm with a more efficient O(n) algorithm for merging solid tiles into rectangles)
+		// Lets start by creating a 2D vector to store runs of solid tiles for each row in the tilemap
 		std::vector<std::vector<Run>> runs(height);
 
 		// Build horizontal runs of solid tiles for each row in the tilemap. Each run represents a contiguous sequence of solid tiles with the same non-zero value.
@@ -99,6 +97,8 @@ void TileSystem::Process() {
 		// Step 2: merge vertical runs of solid tiles into rectangles
 		for (int y = 0; y < height; ++y) {
 			auto& rowRuns = runs[y];
+
+			int maxHeightUsed = 1; // Initialize the maximum height of the rectangle to 1 (the current row)
 
 			for (auto& run : rowRuns) {
 				int h = 1;
@@ -130,6 +130,7 @@ void TileSystem::Process() {
 				float tileW = run.width * tileSize;
 				float tileH = h * tileSize;
 
+				// Create a new entity of type Tile to represent the merged rectangle of solid tiles
 				Entity* tileEntity = m_entityManager->AddEntity(EntityType::Tile);
 				tileEntity->SetOwnerId(entity->GetId()); // Set owner ID to the tilemap entity for reference
 
@@ -143,13 +144,6 @@ void TileSystem::Process() {
 						// Calculate the atlas index based on the tile value. The atlas index is derived from the tile value, which is assumed to be 1-based (0 indicates an empty tile). 
 						// Therefore, we subtract 1 from the tile value to get the corresponding 0-based index for the texture atlas.
 						int atlasIndex = run.value - 1;
-						
-						auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(map.tilesetKey);
-						auto atlasPtr = atlasOpt.has_value() ? atlasOpt.value().get() : nullptr;
-
-						//int tileVal = tileData[idx];
-						//int atlasIndex = tileVal > 0 ? (tileVal - 1) : 0;
-						
 							
 						// Check if the atlas pointer is valid and the index is within bounds
 						if (atlasPtr && atlasIndex >= 0 && (size_t)atlasIndex < atlasPtr->TileCount()) {
@@ -157,37 +151,33 @@ void TileSystem::Process() {
 							tileEntity->AddComponent<CTexture>(map.tilesetKey, atlasIndex, tileW, tileH);
 							textureAttached = true;
 								
-							// Debug log
-							std::cout << "TileSystem: attached texture atlas='" << map.tilesetKey
-										<< "' index=" << atlasIndex << " at (" << posX << "," << posY
-										<< ") size=" << tileW << "x" << tileH << "\n";
-							} else {
-							std::cout << "TileSystem: atlas index out of range or atlas missing for key='"
-										<< map.tilesetKey << "' index=" << atlasIndex << "\n";
-							}
-					} else {
-					std::cout << "TileSystem: atlas not found for key='" << map.tilesetKey << "'\n";
-					}
-			
+							// Debug log: // SPAM SPAM SPAM
+							std::cout << "TileSystem: attached texture atlas='" << map.tilesetKey << "' index=" << atlasIndex << " at (" << posX << "," << posY
+																												<< ") size=" << tileW << "x" << tileH << "\n";
+							} else { // SPAM SPAM SPAM
+							std::cout << "TileSystem: atlas index out of range or atlas missing for key='" << map.tilesetKey << "' index=" << atlasIndex << "\n";
+							} // SPAM SPAM SPAM
+					} 			
 
-					// Fallback shape for collision visualization if no texture is available
-					// If texture is attached, still add a CShape but mark it invisible so it doesn't draw over the sprite.
-					//auto rect = std::make_unique<CRectangle>(tileW, tileH);
-					//rect->SetColor(160.0f, 160.0f, 160.0f, 200);
-					//tileEntity->AddComponentPtr<CShape>(std::move(rect));
-					
+					// If no texture was attached then add a collider rectangle component to the tile entity to represent the solid area for collision detection. 
+					// This ensures that even if a texture is not available, the tile entity will still have a physical presence in the game world for collision purposes.
 					if (!textureAttached) {
-						auto rect = std::make_unique<CRectangle>(tileW, tileH);
-						rect->SetColor(160.0f, 160.0f, 160.0f, 200);
-						tileEntity->AddComponentPtr<CShape>(std::move(rect));
+						tileEntity->AddComponent<CColliderRect>(tileW, tileH);
+						//auto rect = std::make_unique<CRectangle>(tileW, tileH);
+						//rect->SetColor(160.0f, 160.0f, 160.0f, 200);
+						//tileEntity->AddComponentPtr<CShape>(std::move(rect));
 					}
-				}
-			}
+
+					tileEntity->AddComponent<CStatic>(); // Add a static component to indicate that this entity is static (not moving)	
+					maxHeightUsed = std::max(maxHeightUsed,	h); // Update the maximum height used for this rectangle, in case we need to skip rows that were merged into it
+			} // <-- end of run loop
+
+			y += maxHeightUsed - 1; // Skip the rows that were merged into the rectangle, fuuuuuuuu AI, I was right
+		} // <-- end of row loop
 
 		tileComp->m_processed = true;
 		tileComp->m_dirty = false;
 	}
 
 }
-
 /////////////////////////////////

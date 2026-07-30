@@ -14,6 +14,8 @@
 /////////////////////////////////
 // EntityType enum defines the various types of entities that can exist in the game. This includes different teams, explosions, tile maps, and 
 // a default type for generic entities. The enum values are explicitly assigned for clarity and potential use in serialization or debugging.
+//								|
+//								|_______________________________________________________________________
 enum class EntityType {
 	TeamEagle = 0,
 	TeamHawk = 1,

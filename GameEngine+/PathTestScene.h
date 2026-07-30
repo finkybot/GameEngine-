@@ -39,7 +39,8 @@ public:
 
 
 	/////////////////////////////////
-	// Overridden methods from the Scene base class for updating, rendering, handling events, entering/exiting the scene, and managing resources. These methods implement the specific behavior of the PathTestScene.
+	// Overridden methods from the Scene base class for updating, rendering, handling events, entering/exiting the scene, and managing resources. These methods 
+	// implement the specific behavior of the PathTestScene.
 	void Update(float deltaTime) override;
 	void Render() override;
 	void DoAction() override {}
@@ -50,6 +51,7 @@ public:
 	void UnloadResources() override;
 	void InitializeGame(sf::Vector2u windowSize) override;
 	/////////////////////////////////
+
 
 
 	/////////////////////////////////
@@ -136,7 +138,6 @@ private:
 	// Rendering
 	void RenderDebugOverlay();
 	/////////////////////////////////
-
 
 
 

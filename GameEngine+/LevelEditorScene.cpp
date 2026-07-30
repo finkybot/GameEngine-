@@ -169,19 +169,31 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	m_exportMessage = std::string("Loading level '") + name + "' - found " + std::to_string(fileCount) + " chunk files in " + chunkPath.string();
 	// Load level chunks
 	m_chunkManager.LoadAllSavedChunks();
-	m_chunkManager.UpdateMainThread();
-	m_chunkManager.RebuildAllChunksFromTileset();
-
+	
 	// Shift all chunks so they have positive coordinates (fixes pathfinding issues crossing boundaries)
 	m_chunkManager.ShiftChunksToPositiveCoords();
+	m_chunkManager.UpdateMainThread();
+	m_chunkManager.RebuildAllChunksFromTileset();
 
 	// After loading and shifting, refresh bounds and report
 	RefreshMapBounds();
 	float dMinX, dMinY, dMaxX, dMaxY;
 	if (m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
-		m_exportMessage += "; bounds set.";
-	} else {
-		m_exportMessage += "; no saved chunks (empty level).";
+		int tileSize = (int)m_chunkManager.GetTileSize();
+
+		int minTileX = (int)std::floor(dMinX / tileSize);
+		int minTileY = (int)std::floor(dMinY / tileSize);
+		int maxTileX = (int)std::ceil(dMaxX / tileSize);
+		int maxTileY = (int)std::ceil(dMaxY / tileSize);
+
+		std::cout << "LevelEditorScene::SwitchToLevel: bounds in tiles: minTileX=" << minTileX
+				  << " minTileY=" << minTileY << " maxTileX=" << maxTileX << " maxTileY=" << maxTileY << "\n";
+
+		int worldW = maxTileX - minTileX;
+		int worldH = maxTileY - minTileY;
+
+		m_chunkManager.SetWorldOffset(minTileX, minTileY); // <-- safe now
+		m_chunkManager.SetWorldSize(worldW, worldH); // <-- safe now
 	}
 }
 /////////////////////////////////
@@ -1584,5 +1596,4 @@ void LevelEditorScene::SaveLevelMetadata() {
 		std::cerr << "LevelEditorScene: Failed to save metadata\n";
 	}
 }
-/////////////////////////////////
 /////////////////////////////////

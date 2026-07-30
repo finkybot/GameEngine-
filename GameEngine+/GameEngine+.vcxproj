@@ -198,6 +198,7 @@
     <ClInclude Include="CCamera.h" />
     <ClInclude Include="CChunkComponent.h" />
     <ClInclude Include="CCircle.h" />
+    <ClInclude Include="CColliderRect.h" />
     <ClInclude Include="CExplosion.h" />
     <ClInclude Include="ChunkManager.h" />
     <ClInclude Include="ChunkManagerV2.h" />

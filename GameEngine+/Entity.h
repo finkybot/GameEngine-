@@ -20,6 +20,7 @@
 #include "CTileMap.h"
 #include "CSoundEffect.h"
 #include "CText.h"
+#include "CColliderRect.h"
 #include "Vec2.h"
 #include "EntityType.h"
 /////////////////////////////////

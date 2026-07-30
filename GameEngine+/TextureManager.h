@@ -19,6 +19,8 @@
 
 /////////////////////////////////
 // TextureManager class - manages loading, retrieval, and unloading of texture atlases used for rendering tiles and sprites in the game.
+//								|
+//								|_______________________________________________________________________
 class TextureManager {
 	/////////////////////////////////
 	// Public interface for managing texture atlases, including loading from file, retrieval by key, unloading, and listing loaded atlas keys.

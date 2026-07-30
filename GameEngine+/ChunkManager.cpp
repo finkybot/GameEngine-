@@ -95,6 +95,43 @@ void ChunkManager::ClearAllLoadedChunks() {
 
 
 /////////////////////////////////
+// BuildWorldMask - constructs a world mask for collision, pathfinding, and other gameplay mechanics. Each value corresponds to a 
+// specific tile's collision properties.
+void ChunkManager::BuildWorldMask() {
+	worldMask.assign(worldWidth * worldHeight, false); // Initialize world mask to false (no collision)
+	
+	int layer = 1; // For now, we only consider the main layer for collision
+
+	for (auto& [key, chunk] : m_chunks) {
+
+		for (int i = 0; i < chunk.width * chunk.height; ++i) {
+			int localX = i % chunk.width; // Calculate local tile coordinates within the chunk
+			int localY = i / chunk.width;
+
+			// absolute tile coords in world space
+			int absTx = chunk.chunkX * chunk.width + localX;
+			int absTy = chunk.chunkY * chunk.height + localY;
+
+            // convert to mask space using worldOffset
+			int relTx = absTx - m_worldOffsetX; // minTileX
+			int relTy = absTy - m_worldOffsetY; // minTileY
+
+			if (relTx < 0 || relTy < 0 || relTx >= worldWidth || relTy >= worldHeight) {
+				continue;
+			}
+
+			bool solid = (chunk.tilesPerLayer[layer][i] != 0);
+			if (solid) {
+				worldMask[relTy * worldWidth + relTx] = true;
+			}
+		}
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // LoadAllSavedChunks - Scans the base directory for saved chunk files and enqueues them for loading in the background thread. 
 // Each chunk file is expected to be named in the format "chunk_X_Y.dat" where X and Y are the chunk coordinates.
 void ChunkManager::LoadAllSavedChunks() {
@@ -138,7 +175,7 @@ void ChunkManager::LoadAllSavedChunks() {
 				if (m_chunks.find(key) == m_chunks.end()) {
 					// Create chunk with all layers
 					m_chunks[key] = Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers);
-					std::cout << "[ChunkManager] Created chunk (" << cx << "," << cy << ")\n";
+					//std::cout << "[ChunkManager] Created chunk (" << cx << "," << cy << ")\n";
 				}
 			}
 		}
@@ -157,7 +194,7 @@ void ChunkManager::LoadAllSavedChunks() {
 			int layer = std::stoi(body.substr(0, us1));
 			int cx = std::stoi(body.substr(us1+1, us2 - (us1+1)));
 			int cy = std::stoi(body.substr(us2+1, dot - (us2+1)));
-			std::cout << "  Enqueuing: " << fname << " (layer=" << layer << " cx=" << cx << " cy=" << cy << ")\n";
+			//std::cout << "  Enqueuing: " << fname << " (layer=" << layer << " cx=" << cx << " cy=" << cy << ")\n";
 			EnqueueLoadChunk(cx, cy, layer);
 		}
 		std::cout << "[ChunkManager] Total chunk files found: " << fileCount << "\n";
@@ -228,6 +265,7 @@ void ChunkManager::DebugPrintLayer1() {
 
 			const auto& layer1 = chunk.tilesPerLayer[1];
 
+			// ====== DEBUG ========
 			// Print as grid
 			for (int y = 0; y < chunk.height; ++y) {
 				std::cout << "  ";
@@ -385,6 +423,22 @@ void ChunkManager::SetBasePath(const std::string& basePath) {
 		}
 	}
 	// When base path changes, ensure per-level meta file exists (created by LevelEditorScene). We'll not create it here, but callers should write it.
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// SetWorldSize - Sets the world size in tiles, which is used to create a world mask for collision and pathfinding
+void ChunkManager::SetWorldSize(int width, int height) {
+	std::cout << "[ChunkManager] SetWorldSize called with width=" << width << " height=" << height << "\n";
+	worldWidth = width;
+	worldHeight = height;
+
+	if (width > 0 && height > 0)
+		worldMask.assign(width * height, false);
+	else
+		worldMask.clear();
 }
 /////////////////////////////////
 
@@ -809,8 +863,8 @@ void ChunkManager::EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int
 		int cy = chunk.chunkY;
 
 		bool outside = cx < minCx || cx > maxCx || cy < minCy || cy > maxCy;
-		if (outside)	std::cout << "[ChunkManager] Checking chunk (" << cx << "," << cy << ") against bounds (" << minCx << ","
-													<< maxCx << "," << minCy << "," << maxCy << ") - outside=" << outside << "\n";
+		//if (outside)	std::cout << "[ChunkManager] Checking chunk (" << cx << "," << cy << ") against bounds (" << minCx << ","
+		//											<< maxCx << "," << minCy << "," << maxCy << ") - outside=" << outside << "\n";
 		if (outside)
 		{
 			toRemove.push_back(key);
@@ -1347,6 +1401,9 @@ void ChunkManager::ScheduleChunkForRebuild(Chunk& c) {
 
 /////////////////////////////////
 // FinalizeLoadedChunk
+// This method is called on the main thread after a chunk has been loaded in the background. It finalizes the loaded chunk by updating its tile data, 
+// marking it as ready for rendering, and scheduling it for GPU/collider rebuild. If the chunk was evicted before finalization or if the editVersion 
+// has changed since the load was enqueued, the loaded data is discarded to avoid overwriting newer changes.
 void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue) {
 	long long key = GetChunkKey(chunkX, chunkY);
 	std::lock_guard<std::mutex> lock(m_mutex);
@@ -1371,6 +1428,54 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::v
 		chunk.dirty[layer] = 0;
 		chunk.readyForRendering[layer] = 1;
 	}
+
+	
+
+	//if (worldWidth > 0 && worldHeight > 0 && !worldMask.empty()) {
+	//	int baseX = chunk.chunkX * chunk.width;
+	//	int baseY = chunk.chunkY * chunk.height;
+
+	//	//std::cout << "FinalizeLoadedChunk: chunk (" << chunk.chunkX << "," << chunk.chunkY << ") base (" << baseX << "," << baseY << ") size (" << chunk.width << "," << chunk.height << ")\n";
+
+	//	for (int y = 0; y < chunk.height; ++y) {
+	//		for (int x = 0; x < chunk.width; ++x) {
+	//			int idx = y * chunk.width + x;
+
+	//			int worldX = baseX + x;
+	//			int worldY = baseY + y;
+
+	//			int maskX = worldX - m_worldOffsetX;
+	//			int maskY = worldY - m_worldOffsetY;
+
+
+	//			if (maskX < 0 || maskX >= worldWidth || maskY < 0 || maskY >= worldHeight)
+	//				continue;
+
+	//			int v0 = (chunk.tilesPerLayer.size() > 0) ? chunk.tilesPerLayer[0][idx] : 0;
+	//			int v1 = (chunk.tilesPerLayer.size() > 1) ? chunk.tilesPerLayer[1][idx] : 0;
+
+	//			bool walkable = (v0 != 0) && (v1 == 0);
+	//			
+
+	//			worldMask[maskY * worldWidth + maskX] = !walkable; // true = blocked
+	//			std::cout << "FinalizeLoadedChunk: worldMask[" << maskX << "," << maskY
+	//				 << "] = " << worldMask[maskY * worldWidth + maskX] << "\n";
+
+	//		}
+	//	}
+	//}
+
+	//for (int i = 0; i < (int)worldMask.size(); ++i) {
+	//	if (worldMask[i]) {
+	//		int mx = i % worldWidth;
+	//		int my = i / worldWidth;
+	//		std::cout << "Blocked at mask (" << mx << "," << my << ")\n";
+	//	} else {
+	//	
+	//		std::cout << "Walkable at mask (" << (i % worldWidth) << "," << (i / worldWidth) << ")\n";
+	//	}
+	//}
+
 	// Defer GPU / SFML dependent work: schedule a rebuild on the main thread instead of building vertex arrays here.
 	// This avoids touching SFML/OpenGL from background loader threads.
 	// Note: FinalizeLoadedChunk runs on the main thread via UpdateMainThread normally; we still schedule to be safe.
@@ -1439,122 +1544,146 @@ void ChunkManager::EvictIfNeeded() {
 /////////////////////////////////
 // LoadLevelFromFile - Load a TileMap JSON file into memory and replace active chunks.
 bool ChunkManager::LoadLevelFromFile(const std::string& path, std::string* outErr) {
-	// Load the TileMap from JSON file.
-	auto loaded = TileMap::LoadFromJSON(path, outErr);
+	//// Load the TileMap from JSON file.
+	//auto loaded = TileMap::LoadFromJSON(path, outErr);
 
-	// Guard: if loading failed, return false and append error message to outErr.
-	if (!loaded.has_value()) {
-		outErr->append("\nFailed to load TileMap from file: " + path + "\n");
-		return false;
-	}
+	//// Guard: if loading failed, return false and append error message to outErr.
+	//if (!loaded.has_value()) {
+	//	outErr->append("\nFailed to load TileMap from file: " + path + "\n");
+	//	return false;
+	//}
 
-	// No issues, then move the loaded TileMap into a local variable for processing.
-	TileMap map = std::move(*loaded);
+	//// No issues, then move the loaded TileMap into a local variable for processing.
+	//TileMap map = std::move(*loaded);
 
-	// Determine the number of layers to load. If the TileMap has no layers, we will still create a single default layer.
-	const int newLayerCount = std::max(1, (int)map.layers.size());
+	//// Determine the number of layers to load. If the TileMap has no layers, we will still create a single default layer.
+	//const int newLayerCount = std::max(1, (int)map.layers.size());
 
-	// Prepare a new chunk map to hold the loaded chunks. This will replace the current m_chunks after loading.
-	std::unordered_map<long long, Chunk> newChunks;
+	//// Prepare a new chunk map to hold the loaded chunks. This will replace the current m_chunks after loading.
+	//std::unordered_map<long long, Chunk> newChunks;
 
-	const int W = map.width;
-	const int H = map.height;
-
-	// OPTIMIZATION: Instead of triple-nested loop (ly, y, x) with hash lookups,
-	// we now pre-create all chunks, then fill them by chunk with better cache locality.
-
-	// FIRST PASS: Determine all chunks that need to exist
-	std::set<long long> chunkKeys; // create a set to hold unique (64-bit) chunk keys
-	for (int y = 0; y < H; ++y) {
-		for (int x = 0; x < W; ++x) {
-			int chunkX = FloorDiv(x, m_chunkWidth);
-			int chunkY = FloorDiv(y, m_chunkHeight);
-			long long key = GetChunkKey(chunkX, chunkY);
-			chunkKeys.insert(key);
-		}
-	}
-
-	// SECOND PASS: Create all chunks upfront (batch operation, no scatter)
-	for (long long key : chunkKeys) {
-		int chunkX = (int)(key >> 32);
-		int chunkY = (int)(key & 0xFFFFFFFF);
-		newChunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize, newLayerCount));
-	}
-
-	// THIRD PASS: Fill chunks by layer, then by chunk, for better cache locality
-	for (int LayerIndex = 0; LayerIndex < newLayerCount; ++LayerIndex) {
-		const auto& layerTiles = (LayerIndex < (int)map.layers.size()) ? map.layers[LayerIndex].tiles : std::vector<int>();
-
-		// Iterate by chunks first... so get their coordinates and base world positions...
-		for (auto& [key, chunk] : newChunks) {
-			int chunkX = chunk.chunkX;
-			int chunkY = chunk.chunkY;
-			int baseX = chunkX * m_chunkWidth;
-			int baseY = chunkY * m_chunkHeight;
-
-			// ...then iterate by local tile coordinates within the selected chunk, and compute the corresponding world coordinates 
-			// to fetch the tile value from the layer data.
+	//// Get the width and height of the TileMap in tiles.
+	//worldWidth = map.width;
+	//worldHeight = map.height;
+	//// Initialize world-scale walkability mask
+	//worldMask.resize(worldWidth * worldHeight, false);
 
 
-			for (int localY = 0; localY < chunk.height; ++localY) { // move across y axis 
-				for (int localX = 0; localX < chunk.width; ++localX) { // then move across x axis
-				
-					// **** Small Note of on how we cacluate world coordinates from chunk and local tile coordinates ****
-					// World coordinates = are calculated by getting a base position which is chunkX * chunkWidth and chunkY * chunkHeight,
-					// then adding the local tile coordinates (localX, localY) to get the absolute world position.
+	//// Update world dimensions and resize the world-scale walkability mask to match the new map size.
 
-					int worldX = baseX + localX;
-					int worldY = baseY + localY;
 
-					int val = 0;
-					if (!layerTiles.empty()) {
-						size_t idx = (size_t)worldY * (size_t)W + (size_t)worldX;
-						if (idx < layerTiles.size())
-							val = layerTiles[idx];
-					} else if (LayerIndex == 0 && worldX < W && worldY < H) {
-						val = map.GetTile(worldX, worldY);
-					}
 
-					chunk.tilesPerLayer[LayerIndex][localY * chunk.width + localX] = val;
-				}
-			}
-			chunk.dirty[LayerIndex] = 0;
-		}
 
-		{
-			std::lock_guard<std::mutex> lock(m_mutex);
-			try {
-				EntityManager& entityMan = GameEngine::GetInstance().GetEntityManager();
-				for (auto& chunkPair : m_chunks) {
-					Chunk& chunk = chunkPair.second;
-					for (Entity* genEnity : chunk.generatedEntities)
-						if (genEnity)
-							entityMan.SafeKillEntity(genEnity);
-					chunk.generatedEntities.clear();
-				}
-			} catch (...) {}
+	//// OPTIMIZATION: Instead of triple-nested loop (ly, y, x) with hash lookups,
+	//// we now pre-create all chunks, then fill them by chunk with better cache locality.
 
-			m_numLayers = newLayerCount;
-			m_chunks.swap(newChunks);
-			m_lruList.clear();
-			m_lruIndex.clear();
-			m_rebuildQueue.clear();
-			m_rebuildSet.clear();
+	//// FIRST PASS: Determine all chunks that need to exist
+	//std::set<long long> chunkKeys; // create a set to hold unique (64-bit) chunk keys
+	//for (int y = 0; y < worldHeight; ++y) {
+	//	for (int x = 0; x < worldWidth; ++x) {
+	//		int chunkX = FloorDiv(x, m_chunkWidth);
+	//		int chunkY = FloorDiv(y, m_chunkHeight);
+	//		long long key = GetChunkKey(chunkX, chunkY);
+	//		chunkKeys.insert(key);
+	//	}
+	//}
 
-			for (auto& chunkPair : m_chunks) {
-				const long long key = chunkPair.first;
-				m_lruList.push_front(key);
-				m_lruIndex[key] = m_lruList.begin();
-				m_rebuildQueue.push_back(key);
-				m_rebuildSet.insert(key);
-			}
+	//// SECOND PASS: Create all chunks upfront (batch operation, no scatter)
+	//for (long long key : chunkKeys) {
+	//	int chunkX = (int)(key >> 32);
+	//	int chunkY = (int)(key & 0xFFFFFFFF);
+	//	newChunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize, newLayerCount));
+	//}
 
-			if (!map.tilesetKey.empty())
-				m_tilesetKey = map.tilesetKey;
-		}
+	//// THIRD PASS: Fill chunks by layer, then by chunk, for better cache locality
+	//for (int LayerIndex = 0; LayerIndex < newLayerCount; ++LayerIndex) {
+	//	const auto& layerTiles = (LayerIndex < (int)map.layers.size()) ? map.layers[LayerIndex].tiles : std::vector<int>();
+
+	//	// Iterate by chunks first... so get their coordinates and base world positions...
+	//	for (auto& [key, chunk] : newChunks) {
+	//		int chunkX = chunk.chunkX;
+	//		int chunkY = chunk.chunkY;
+	//		int baseX = chunkX * m_chunkWidth;
+	//		int baseY = chunkY * m_chunkHeight;
+
+	//		// ...then iterate by local tile coordinates within the selected chunk, and compute the corresponding world coordinates 
+	//		// to fetch the tile value from the layer data.
+
+
+	//		for (int localY = 0; localY < chunk.height; ++localY) { // move across y axis 
+
+	//			std::cout << "/n";
+
+	//			for (int localX = 0; localX < chunk.width; ++localX) { // then move across x axis
+	//			
+	//				// **** Small Note of on how we cacluate world coordinates from chunk and local tile coordinates ****
+	//				// World coordinates = are calculated by getting a base position which is chunkX * chunkWidth and chunkY * chunkHeight,
+	//				// then adding the local tile coordinates (localX, localY) to get the absolute world position.
+
+	//				int worldX = baseX + localX;
+	//				int worldY = baseY + localY;
+
+	//				int val = 0;
+	//				if (!layerTiles.empty()) {
+	//					size_t idx = (size_t)worldY * (size_t)worldWidth + (size_t)worldX;
+	//					if (idx < layerTiles.size())
+	//						val = layerTiles[idx];
+	//				} else if (LayerIndex == 0 && worldX < worldWidth && worldY < worldHeight) {
+	//					val = map.GetTile(worldX, worldY);
+	//				}
+
+	//				chunk.tilesPerLayer[LayerIndex][localY * chunk.width + localX] = val;
+	//				
+	//				// Build world-scale walkability mask from obstacle layer (e.g. LayerIndex == 1)
+	//				if (LayerIndex == 1) // or whatever layer is your obstacle/collision layer
+	//				{
+	//					int wx = baseX + localX; // world tile X
+	//					int wy = baseY + localY; // world tile Y
+
+	//					// Ensure worldMask is sized: worldWidth = W, worldHeight = H
+	//					worldMask[wy * worldWidth + wx] = (val != 0); // 0 = walkable, non-zero = blocked
+
+	//					std::cout << val;
+	//				}
+	//			}
+	//		}
+	//		chunk.dirty[LayerIndex] = 0;
+	//	}
+
+	//	{
+	//		std::lock_guard<std::mutex> lock(m_mutex);
+	//		try {
+	//			EntityManager& entityMan = GameEngine::GetInstance().GetEntityManager();
+	//			for (auto& chunkPair : m_chunks) {
+	//				Chunk& chunk = chunkPair.second;
+	//				for (Entity* genEnity : chunk.generatedEntities)
+	//					if (genEnity)
+	//						entityMan.SafeKillEntity(genEnity);
+	//				chunk.generatedEntities.clear();
+	//			}
+	//		} catch (...) {}
+
+	//		m_numLayers = newLayerCount;
+	//		m_chunks.swap(newChunks);
+	//		m_lruList.clear();
+	//		m_lruIndex.clear();
+	//		m_rebuildQueue.clear();
+	//		m_rebuildSet.clear();
+
+	//		for (auto& chunkPair : m_chunks) {
+	//			const long long key = chunkPair.first;
+	//			m_lruList.push_front(key);
+	//			m_lruIndex[key] = m_lruList.begin();
+	//			m_rebuildQueue.push_back(key);
+	//			m_rebuildSet.insert(key);
+	//		}
+
+	//		if (!map.tilesetKey.empty())
+	//			m_tilesetKey = map.tilesetKey;
+	//	}
 
 		return true;
-	}
+	//}
 }
 /////////////////////////////////
 
@@ -1575,6 +1704,7 @@ void ChunkManager::UnregisterChunkColliders(EntityManager& em) {
 	std::lock_guard<std::mutex> lock(m_mutex); // lock the mutex to ensure thread safety
 	
 	// Iterate through all chunks and safely kill any generated collider entities to remove them from the game world; i'll loop through the tuple
+	// of generated entities for each chunk and call KillEntity on each one, then clear the generatedEntities vector; this should avoid dangling pointers.
 	// of generated entities for each chunk and call KillEntity on each one, then clear the generatedEntities vector; this should avoid dangling pointers.
 	for (auto &chunkPair : m_chunks) {
 		Chunk &chunk = chunkPair.second;

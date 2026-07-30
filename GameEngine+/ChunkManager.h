@@ -152,7 +152,8 @@ public:
 	// Public member variables for the ChunkManager class for world mask for collision, pathfinding, and other gameplay mechanics. 
 	// Each value corresponds to a specific tile's collision properties.
 	std::vector<uint8_t> worldMask;
-	int worldMaskWidth = 0, worldMaskHeight = 0;
+	int m_worldOffsetX = 0, m_worldOffsetY = 0; // world offset in pixels for coordinate system alignment
+	int worldWidth = 0, worldHeight = 0;
 
 
 
@@ -162,6 +163,14 @@ public:
 	// layerIndex defaults to 0 (main layer) for backward compatibility
 	int GetTileAt(int tileX, int tileY, int layerIndex = 0);
 	int SetTileAt(int tileX, int tileY, int tileValue, int layerIndex = 0);
+
+
+	int GetWorldWidth() const { return worldWidth; }
+	int GetWorldHeight() const { return worldHeight; }
+	std::vector<uint8_t> GetWorldMask() const { return worldMask; }
+
+	int GetWorldOffsetX() const { return m_worldOffsetX; }
+	int GetWorldOffsetY() const { return m_worldOffsetY; }
 	/////////////////////////////////
 	
 	
@@ -206,8 +215,28 @@ public:
 
 
 	/////////////////////////////////
+	void SetWorldOffset(int offsetX, int offsetY) {
+		m_worldOffsetX = offsetX;
+		m_worldOffsetY = offsetY;
+	}
+	/////////////////////////////////
+
+	/////////////////////////////////
+	// SetWorldSize - Set the size of the world in pixels. This is used to
+	void SetWorldSize(int width, int height); 
+	/////////////////////////////////
+	 
+	
+
+	/////////////////////////////////
 	// GetBasePath - Get the current base directory path for chunk files.
 	std::string GetBasePath() const { return m_basePath; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	void BuildWorldMask(); // Build the world mask for collision/pathfinding
 	/////////////////////////////////
 
 
@@ -334,6 +363,8 @@ public:
 	int GetChunkWidth() const { return m_chunkWidth; }
 	int GetChunkHeight() const { return m_chunkHeight; }
 	float GetTileSize() const { return m_tileSize; }
+
+
 	/////////////////////////////////
 
 

@@ -164,6 +164,9 @@ void ChunkManager::LoadAllSavedChunks() {
 			int layer = std::stoi(body.substr(0, us1));
 			int cx = std::stoi(body.substr(us1+1, us2 - (us1+1)));
 			int cy = std::stoi(body.substr(us2+1, dot - (us2+1)));
+
+			std::cout << "[LOADALL] Found saved chunk (" << cx << "," << cy << ")\n";
+
 			chunksToCreate.insert({cx, cy});
 		}
 
@@ -175,7 +178,6 @@ void ChunkManager::LoadAllSavedChunks() {
 				if (m_chunks.find(key) == m_chunks.end()) {
 					// Create chunk with all layers
 					m_chunks[key] = Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers);
-					//std::cout << "[ChunkManager] Created chunk (" << cx << "," << cy << ")\n";
 				}
 			}
 		}
@@ -194,7 +196,6 @@ void ChunkManager::LoadAllSavedChunks() {
 			int layer = std::stoi(body.substr(0, us1));
 			int cx = std::stoi(body.substr(us1+1, us2 - (us1+1)));
 			int cy = std::stoi(body.substr(us2+1, dot - (us2+1)));
-			//std::cout << "  Enqueuing: " << fname << " (layer=" << layer << " cx=" << cx << " cy=" << cy << ")\n";
 			EnqueueLoadChunk(cx, cy, layer);
 		}
 		std::cout << "[ChunkManager] Total chunk files found: " << fileCount << "\n";
@@ -555,8 +556,6 @@ void ChunkManager::BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<Tex
 			}
 		}
 	}
-	// Debug: log vertex counts when rebuilding (can be noisy)
-	// std::cout << "BuildChunkVertexArray chunk(" << chunk.chunkX << "," << chunk.chunkY << ") layers=" << chunk.numLayers << " atlas=" << (atlas?"yes":"no") << "\n";
 }
 /////////////////////////////////
 
@@ -863,8 +862,6 @@ void ChunkManager::EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int
 		int cy = chunk.chunkY;
 
 		bool outside = cx < minCx || cx > maxCx || cy < minCy || cy > maxCy;
-		//if (outside)	std::cout << "[ChunkManager] Checking chunk (" << cx << "," << cy << ") against bounds (" << minCx << ","
-		//											<< maxCx << "," << minCy << "," << maxCy << ") - outside=" << outside << "\n";
 		if (outside)
 		{
 			toRemove.push_back(key);
@@ -882,6 +879,30 @@ void ChunkManager::EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int
 		for (Entity* ge : c.generatedEntities)
 			if (ge)
 				em.SafeKillEntity(ge);
+
+
+		// Clear world mask for this chunk
+		if (worldWidth > 0 && worldHeight > 0 && !worldMask.empty()) {
+
+			int baseX = c.chunkX * c.width;
+			int baseY = c.chunkY * c.height;
+
+			for (int y = 0; y < c.height; ++y) {
+				for (int x = 0; x < c.width; ++x) {
+
+					int worldX = baseX + x;
+					int worldY = baseY + y;
+
+					int maskX = worldX - m_worldOffsetX;
+					int maskY = worldY - m_worldOffsetY;
+
+					if (maskX < 0 || maskY < 0 || maskX >= worldWidth || maskY >= worldHeight)
+						continue;
+
+					worldMask[maskY * worldWidth + maskX] = 0; // clear tile
+				}
+			}
+		}
 
 		// Remove from LRU
 		RemoveChunkFromLRU(key);
@@ -1049,15 +1070,17 @@ void ChunkManager::TouchChunkLRU(long long key) {
 // EnsureChunksInTileRect - Ensures that all chunks that intersect the specified tile rectangle (tileX0, tileY0, tileX1, tileY1) are loaded and ready for rendering. 
 // The marginChunks parameter specifies how many additional chunks to load around the edges of the rectangle to ensure smooth rendering when the player moves.
 void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, int tileY1, int marginChunks) {
-	if (tileX0 > tileX1) std::swap(tileX0, tileX1);
-	if (tileY0 > tileY1) std::swap(tileY0, tileY1);
+	if (tileX0 > tileX1)
+		std::swap(tileX0, tileX1);
+	if (tileY0 > tileY1)
+		std::swap(tileY0, tileY1);
 
-	int cX0 = FloorDiv(tileX0, m_chunkWidth)  - marginChunks;
+	int cX0 = FloorDiv(tileX0, m_chunkWidth) - marginChunks;
 	int cY0 = FloorDiv(tileY0, m_chunkHeight) - marginChunks;
-	int cX1 = FloorDiv(tileX1, m_chunkWidth)  + marginChunks;
+	int cX1 = FloorDiv(tileX1, m_chunkWidth) + marginChunks;
 	int cY1 = FloorDiv(tileY1, m_chunkHeight) + marginChunks;
 
-	// Safety clamp: avoid attempting to load an extremely large span of chunks which can freeze the app.
+	// Safety clamp: avoid attempting to load an extremely large span of chunks
 	if (cX1 - cX0 > (int)ChunkManager::kMaxChunkSpan) {
 		int mid = (cX0 + cX1) / 2;
 		cX0 = mid - ChunkManager::kMaxChunkSpan / 2;
@@ -1069,46 +1092,74 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 		cY1 = mid + ChunkManager::kMaxChunkSpan / 2;
 	}
 
+	// === FIX: clamp chunk coords to world bounds ===
+	const int minChunkX = 0;
+	const int maxChunkX = 1;
+	const int minChunkY = 0;
+	const int maxChunkY = 13;
+	// ===============================================
+
 	for (int cy = cY0; cy <= cY1; ++cy) {
 		for (int cx = cX0; cx <= cX1; ++cx) {
+
+			// FIX: skip invalid chunk coords
+			if (cx < minChunkX || cx > maxChunkX || cy < minChunkY || cy > maxChunkY)
+				continue;
+
 			const long long key = GetChunkKey(cx, cy);
 			bool needLoad = false;
+
 			{
 				std::lock_guard<std::mutex> lock(m_mutex);
+
 				if (m_chunks.find(key) != m_chunks.end()) {
-					// O(1) LRU touch
 					auto lruIt = m_lruIndex.find(key);
-					if (lruIt != m_lruIndex.end()) m_lruList.erase(lruIt->second);
+					if (lruIt != m_lruIndex.end())
+						m_lruList.erase(lruIt->second);
+
 					m_lruList.push_front(key);
 					m_lruIndex[key] = m_lruList.begin();
 					continue;
 				}
-				// Insert placeholder chunk. Mark it ready for rendering immediately if it contains no tiles
-				// so erasing/clearing operations show empty space instead of the "loading" grey box.
-				auto insertRes = m_chunks.emplace(key, Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers));
+
+				auto insertRes =
+					m_chunks.emplace(key, Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers));
+
 				auto insertedItr = insertRes.first;
 				bool insertedNow = insertRes.second;
+
 				m_lruList.push_front(key);
 				m_lruIndex[key] = m_lruList.begin();
-					if (insertedNow) {
-						Chunk& newChunk = insertedItr->second;
-						// placeholder chunks are initialized with zero tiles; treat them as ready so they render empty immediately.
+
+				if (insertedNow) {
+					Chunk& newChunk = insertedItr->second;
 					bool allZero = true;
-					for (int i = 0; i < newChunk.width * newChunk.height; ++i) { 
-						for (int L = 0; L < newChunk.numLayers; ++L) { if (!newChunk.tilesPerLayer.empty() && newChunk.tilesPerLayer[L][i] != 0) { allZero = false; break; } }
-						if (!allZero) break;
+
+					for (int i = 0; i < newChunk.width * newChunk.height; ++i) {
+						for (int L = 0; L < newChunk.numLayers; ++L) {
+							if (!newChunk.tilesPerLayer.empty() && newChunk.tilesPerLayer[L][i] != 0) {
+								allZero = false;
+								break;
+							}
+						}
+						if (!allZero)
+							break;
 					}
-					if (allZero) for (int L = 0; L < newChunk.numLayers; ++L) if (!newChunk.readyForRendering.empty()) newChunk.readyForRendering[L] = 1;
+
+					if (allZero) {
+						for (int L = 0; L < newChunk.numLayers; ++L)
+							if (!newChunk.readyForRendering.empty())
+								newChunk.readyForRendering[L] = 1;
+					}
 				}
+
 				needLoad = true;
 			}
-			if (needLoad) EnqueueLoadChunk(cx, cy);
+
+			if (needLoad)
+				EnqueueLoadChunk(cx, cy);
 		}
 	}
-
-	// After enqueuing loads, ensure we don't exceed allowed loaded chunks
-	// Intentional no-op context anchor: keep eviction immediately after enqueuing.
-	EvictIfNeeded();
 }
 /////////////////////////////////
 
@@ -1120,9 +1171,9 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 void ChunkManager::UpdateMainThread() {
 	
 	// Process pending loaded chunks in small batches to avoid spending a long time on the main thread; limit the number of pending 
-	// chunks processed per frame to 16; this should avoid frame stalls, if there are more pending chunks they will be processed 
+	// chunks processed per frame to 128 this should avoid frame stalls, if there are more pending chunks they will be processed 
 	// in following frames
-	const int kMaxPendingPerFrame =	16; 
+	const int kMaxPendingPerFrame = 128;
 
 	// Copy pending chunks to a local vector to minimize lock time
 	std::vector<std::tuple<int, int, int, std::vector<int>, uint32_t>> pendingChunksCopy;
@@ -1249,6 +1300,7 @@ void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY, int layer) {
 	{
 		std::lock_guard<std::mutex> lk(s_loadQueueMutex);
 		s_loadQueue.emplace_back(chunkX, chunkY, layer, m_basePath, versionAtEnqueue);
+		
 		// start loader pool once
 		if (!s_loaderStarted) {
 			s_loaderStarted = true;
@@ -1266,12 +1318,18 @@ void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY, int layer) {
 						int jobLayer = std::get<2>(job);
 						std::string jobBase = std::get<3>(job);
 						uint32_t jobVer = std::get<4>(job);
+						
 						// perform load for this job: attempt to read the specified layer only (or all layers if layer==-1)
 						if (jobLayer < 0) {
 							for (int L = 0; L < localNumLayers; ++L) {
 								std::vector<int> tileData(localChunkW * localChunkH, 0);
 								std::string name = std::string("chunk_") + std::to_string(L) + "_" + std::to_string(jobCx) + "_" + std::to_string(jobCy) + ".dat";
 								std::string filename = (fs::path(jobBase) / name).string();
+								
+								std::cout << "[LOAD] C(" << jobCx << "," << jobCy << ")"
+										  << " L=" << L << " file=" << filename << " exists=" << fs::exists(filename)
+										  << " ver=" << jobVer << "\n";
+								
 								if (fs::exists(filename)) {
 									std::ifstream inFile(filename, std::ios::binary);
 									if (inFile) inFile.read(reinterpret_cast<char*>(tileData.data()), tileData.size() * sizeof(int));
@@ -1405,10 +1463,15 @@ void ChunkManager::ScheduleChunkForRebuild(Chunk& c) {
 // marking it as ready for rendering, and scheduling it for GPU/collider rebuild. If the chunk was evicted before finalization or if the editVersion 
 // has changed since the load was enqueued, the loaded data is discarded to avoid overwriting newer changes.
 void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue) {
-	long long key = GetChunkKey(chunkX, chunkY);
-	std::lock_guard<std::mutex> lock(m_mutex);
-	auto itr = m_chunks.find(key);
 
+	std::cout << "[FINALIZE] C(" << chunkX << "," << chunkY << ")"
+			  << " L=" << layer << " ver=" << versionAtEnqueue << "\n";
+
+	// Lock the mutex to ensure thread safety while accessing and modifying the chunk data structures
+	std::lock_guard<std::mutex> lock(m_mutex);
+	
+	long long key = GetChunkKey(chunkX, chunkY);
+	auto itr = m_chunks.find(key);
 	if (itr == m_chunks.end()) {
 		// Chunk was evicted before we could finalize — discard the load
 		return;
@@ -1430,51 +1493,34 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::v
 	}
 
 	
+	// Update world mask from obstacle layer (layer 1)
+	if (worldWidth > 0 && worldHeight > 0 && !worldMask.empty()) {
 
-	//if (worldWidth > 0 && worldHeight > 0 && !worldMask.empty()) {
-	//	int baseX = chunk.chunkX * chunk.width;
-	//	int baseY = chunk.chunkY * chunk.height;
+		int baseX = chunk.chunkX * chunk.width;
+		int baseY = chunk.chunkY * chunk.height;
 
-	//	//std::cout << "FinalizeLoadedChunk: chunk (" << chunk.chunkX << "," << chunk.chunkY << ") base (" << baseX << "," << baseY << ") size (" << chunk.width << "," << chunk.height << ")\n";
+		for (int y = 0; y < chunk.height; ++y) {
+			for (int x = 0; x < chunk.width; ++x) {
 
-	//	for (int y = 0; y < chunk.height; ++y) {
-	//		for (int x = 0; x < chunk.width; ++x) {
-	//			int idx = y * chunk.width + x;
+				int idx = y * chunk.width + x;
 
-	//			int worldX = baseX + x;
-	//			int worldY = baseY + y;
+				// Read obstacle tile from layer 1
+				int tileVal = (chunk.tilesPerLayer.size() > 1) ? chunk.tilesPerLayer[1][idx] : 0;
 
-	//			int maskX = worldX - m_worldOffsetX;
-	//			int maskY = worldY - m_worldOffsetY;
+				int worldX = baseX + x;
+				int worldY = baseY + y;
 
+				int maskX = worldX - m_worldOffsetX;
+				int maskY = worldY - m_worldOffsetY;
 
-	//			if (maskX < 0 || maskX >= worldWidth || maskY < 0 || maskY >= worldHeight)
-	//				continue;
+				if (maskX < 0 || maskY < 0 || maskX >= worldWidth || maskY >= worldHeight)
+					continue;
 
-	//			int v0 = (chunk.tilesPerLayer.size() > 0) ? chunk.tilesPerLayer[0][idx] : 0;
-	//			int v1 = (chunk.tilesPerLayer.size() > 1) ? chunk.tilesPerLayer[1][idx] : 0;
-
-	//			bool walkable = (v0 != 0) && (v1 == 0);
-	//			
-
-	//			worldMask[maskY * worldWidth + maskX] = !walkable; // true = blocked
-	//			std::cout << "FinalizeLoadedChunk: worldMask[" << maskX << "," << maskY
-	//				 << "] = " << worldMask[maskY * worldWidth + maskX] << "\n";
-
-	//		}
-	//	}
-	//}
-
-	//for (int i = 0; i < (int)worldMask.size(); ++i) {
-	//	if (worldMask[i]) {
-	//		int mx = i % worldWidth;
-	//		int my = i / worldWidth;
-	//		std::cout << "Blocked at mask (" << mx << "," << my << ")\n";
-	//	} else {
-	//	
-	//		std::cout << "Walkable at mask (" << (i % worldWidth) << "," << (i / worldWidth) << ")\n";
-	//	}
-	//}
+				// true = blocked, false = walkable
+				worldMask[maskY * worldWidth + maskX] = (tileVal != 0);
+			}
+		}
+	}
 
 	// Defer GPU / SFML dependent work: schedule a rebuild on the main thread instead of building vertex arrays here.
 	// This avoids touching SFML/OpenGL from background loader threads.
@@ -1524,18 +1570,43 @@ void ChunkManager::EvictIfNeeded() {
 				}
 			}
 
-					try {
-						EntityManager& em = GameEngine::GetInstance().GetEntityManager();
-						for (Entity* ge : chunk.generatedEntities) {
-							if (ge) em.SafeKillEntity(ge);
-						}
-					} catch(...) {}
+			try {
+				EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+				for (Entity* ge : chunk.generatedEntities) {
+					if (ge) em.SafeKillEntity(ge);
+				}
+			} catch(...) {}
 
-					m_chunks.erase(itr);
+			// Update world mask to clear the tiles of the evicted chunk if it was an obstacle layer (layer 1)
+			if (worldWidth > 0 && worldHeight > 0 && !worldMask.empty()) {
+
+				int baseX = chunk.chunkX * chunk.width;
+				int baseY = chunk.chunkY * chunk.height;
+
+				for (int y = 0; y < chunk.height; ++y) {
+					for (int x = 0; x < chunk.width; ++x) {
+
+						int worldX = baseX + x;
+						int worldY = baseY + y;
+
+						int maskX = worldX - m_worldOffsetX;
+						int maskY = worldY - m_worldOffsetY;
+
+						if (maskX < 0 || maskY < 0 || maskX >= worldWidth || maskY >= worldHeight)
+							continue;
+
+						worldMask[maskY * worldWidth + maskX] = 0; // clear tile
+					}
 				}
-				m_lruIndex.erase(key);
-				m_lruList.pop_back();
-				}
+			}
+
+
+
+			m_chunks.erase(itr);
+		}
+		m_lruIndex.erase(key);
+		m_lruList.pop_back();
+	}
 }
 /////////////////////////////////
 

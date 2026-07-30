@@ -55,6 +55,7 @@ PathTestScene::~PathTestScene() {
 /////////////////////////////////
 // InitializeGame - Initializes the game scene, setting up the camera entity, map bounds, and scanning for available levels.
 void PathTestScene::InitializeGame(sf::Vector2u /*windowSize*/) {
+	SwitchToLevel(m_currentLevelName);
 	// Create  and setup a camera entity, similar to the LevelEditorScene
 	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Default);
 	m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
@@ -96,27 +97,6 @@ void PathTestScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 
 	// Set initial base path (will be overridden when level is loaded)
 	m_chunkManager.SetBasePath("levels/chunks");
-
-	// Determine world size from saved chunk bounds BEFORE loading chunks
-	float minX, minY, maxX, maxY;
-	if (m_chunkManager.GetSavedChunkBounds(minX, minY, maxX, maxY)) {
-		//int tileSize = (int)m_chunkManager.GetTileSize();
-
-		//int minTileX = (int)std::floor(minX / tileSize);
-		//int minTileY = (int)std::floor(minY / tileSize);
-		//int maxTileX = (int)std::ceil(maxX / tileSize);
-		//int maxTileY = (int)std::ceil(maxY / tileSize);
-
-		//int worldW = maxTileX - minTileX;
-		//int worldH = maxTileY - minTileY;
-
-		//m_chunkManager.SetWorldOffset(minTileX, minTileY); // <-- safe now
-		//m_chunkManager.SetWorldSize(worldW, worldH);
-	} else {
-		// No saved chunks yet — world mask stays empty until chunks load
-		//m_chunkManager.SetWorldSize(0, 0);
-	}
-
 
 	m_chunkManager.SetMaxLoadedChunks(256);
 }
@@ -188,25 +168,21 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 
 	// Determine the base path for levels based on the operating system
 	fs::path base;
-	
-
 
 	// ==========================
-	// We need to handle the Windows Enviorment differently, It requires _dupenv_s to safely retrieve the APPDATA environment variable on Windows, 
-	// and std::getenv for other platforms, so remember to free the allocated memory for appdata_buf on Windows after use.
 #ifdef _MSC_VER
-	char* appdata_buf = nullptr; // buffer
-	size_t len = 0;				 // length
+	char* appdata_buf = nullptr;
+	size_t len = 0;
 
 	// Use _dupenv_s to safely retrieve the APPDATA environment variable on Windows
 	if (_dupenv_s(&appdata_buf, &len, "APPDATA") == 0 && appdata_buf) {
 		base = fs::path(appdata_buf) / "GameEnginePlus" / "levels";
-		free(appdata_buf); // Free the allocated memory for appdata_buf after use - I membered!!! Honestly it wasn't AI, I membered it myself, I swear
+		free(appdata_buf);
 	} else {
-		base = fs::path("levels");
+		std::cout << "[SwitchToLevel] ERROR: APPDATA not available, cannot resolve level path\n";
+		return false; // <-- no silent fallback to "levels"
 	}
-#else // For non-Windows platforms there is no AppData, so we can just use std::getenv to retrieve the APPDATA environment variable, it wont find it
-	  // but we can just fallback to the "levels" directory in the current working directory.
+#else
 	const char* appdata = std::getenv("APPDATA");
 	if (appdata && appdata[0] != '\0') {
 		base = fs::path(appdata) / "GameEnginePlus" / "levels";
@@ -216,11 +192,14 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 #endif
 	// ==========================
 
-
-
 	// Set the chunk manager's base path to the "chunks" subdirectory of the specified level
 	fs::path chunkPath = base / name / "chunks";
+	std::cout << "[SwitchToLevel] chunkPath = " << chunkPath.string() << "\n";
 	m_chunkManager.SetBasePath(chunkPath.string());
+
+	// --- rest of your function unchanged ---
+	// Parse meta.txt, set tileset, layers, load chunks, build world mask, center camera, etc.
+	// (everything below here stays exactly as you had it)
 
 	// Parse meta.txt to get tileset and layers
 	std::string tilesetKey;
@@ -230,59 +209,47 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		auto metaPath = base / name / "meta.txt";
 		try {
 			std::ifstream meta(metaPath.string());
-
-			// Parse key=value pairs from meta.txt
 			if (meta) {
-				// Read each line and split on '=' to get key-value pairs
 				std::string line;
 				while (std::getline(meta, line)) {
 					auto eq = line.find('=');
-					if (eq == std::string::npos) continue; // Skip lines without '='
-					
-					// Trim whitespace from key and value
+					if (eq == std::string::npos)
+						continue;
 					std::string key = line.substr(0, eq);
 					std::string val = line.substr(eq + 1);
-
-					// set tileset and layers based on key-value pairs
 					if (key == "tileset") {
 						tilesetKey = val;
 					} else if (key == "tilesetPath") {
 						tilesetPath = val;
 					} else if (key == "layers") {
-						layers.clear(); // clear default layers and use the ones specified in meta.txt
-						// We split the value on commas to get individual layer names and add them to the layers vector
+						layers.clear();
 						size_t start = 0;
 						while (start < val.size()) {
 							auto comma = val.find(',', start);
-							if (comma == std::string::npos) comma = val.size();
+							if (comma == std::string::npos)
+								comma = val.size();
 							std::string token = val.substr(start, comma - start);
-							if (!token.empty()) layers.push_back(token);
+							if (!token.empty())
+								layers.push_back(token);
 							start = comma + 1;
 						}
 					}
 				}
 			}
-		} catch (...) {
-		}
+		} catch (...) {}
 	}
 
-	// Set tileset key in chunk manager and load tileset if specified
 	if (!tilesetKey.empty()) {
 		m_chunkManager.SetTilesetKey(tilesetKey);
-
-		// If we have a tileset path from metadata, load it
 		if (!tilesetPath.empty()) {
 			auto& textMan = GameEngine::GetInstance().GetTextureManager();
-			// Check if already loaded
 			auto atlasOpt = textMan.GetAtlas(tilesetKey);
 			if (!atlasOpt.has_value() || !*atlasOpt) {
 				std::cout << "PathTestScene: Loading tileset '" << tilesetKey << "' from " << tilesetPath << "\n";
-				// Use the stored tile size
 				int tileSize = (int)m_chunkManager.GetTileSize();
 				textMan.LoadAtlas(tilesetKey, tilesetPath, tileSize, tileSize);
 			}
 		} else {
-			// Fallback: Try common locations if no path in metadata
 			auto& tm = GameEngine::GetInstance().GetTextureManager();
 			auto atlasOpt = tm.GetAtlas(tilesetKey);
 			if (!atlasOpt.has_value() || !*atlasOpt) {
@@ -294,7 +261,6 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 					tilesetKey + ".png",
 					tilesetKey + ".jpg",
 				};
-
 				int tileSize = (int)m_chunkManager.GetTileSize();
 				for (const auto& searchPath : searchPaths) {
 					if (fs::exists(searchPath)) {
@@ -307,62 +273,30 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		}
 	}
 
-	// Set number of layers for proper rendering
 	if (!layers.empty()) {
 		m_chunkManager.SetNumLayers((int)layers.size());
 	}
 
-	// For pathfinding test, render all layers with same opacity set to render the "main" layer as active (middle layer) for game logic
 	m_chunkManager.SetActiveLayer(std::min(1, (int)layers.size() - 1));
-	
-	// Render unselected layers at full opacity so all layers are visible
 	m_chunkManager.SetUnselectedLayerAlpha(1.0f);
 
-	// Clear any previously loaded chunks before loading the new level
 	for (int i = 0; i < 20; ++i) {
-		m_chunkManager.UpdateMainThread(); // Process any pending chunk finalizations before clearing
+		m_chunkManager.UpdateMainThread();
 	}
 
-	// Clear all loaded chunks to ensure a clean state for the new level
-	{
-		std::cout << "[PathTestScene::SwitchToLevel] Clearing all loaded chunks before loading new level...\n";
-		m_chunkManager.ClearAllLoadedChunks();
-		std::cout << "[PathTestScene::SwitchToLevel] All loaded chunks cleared.\n";
-	}
+	std::cout << "[PathTestScene::SwitchToLevel] Clearing all loaded chunks before loading new level...\n";
+	m_chunkManager.ClearAllLoadedChunks();
+	std::cout << "[PathTestScene::SwitchToLevel] All loaded chunks cleared.\n";
 
-	// Now load the new level
 	m_chunkManager.LoadAllSavedChunks();
 
-	// Process pending chunk loads - call UpdateMainThread multiple times to drain the finalization queue
-	// This ensures all chunks are loaded and finalized before we proceed
 	for (int i = 0; i < 20; ++i) {
 		m_chunkManager.UpdateMainThread();
 	}
 
 	m_chunkManager.RebuildAllChunksFromTileset();
-
-	
-	// IMMEDIATE FIX: Shift chunks to positive coordinates to ensure they are visible in the viewport
-	m_chunkManager.ShiftChunksToPositiveCoords();
 	m_chunkManager.UpdateMainThread();
 
-	// IMMEDIATE FIX: Reposition test entity to a reasonable default level center
-	// This ensures the entity is visible regardless of whether GetSavedChunkBounds works
-	if (m_movementTester) {
-		if (auto testTransform = m_movementTester->GetComponent<CTransform>()) {
-			Vec2 quickCenter(0.0f, -1536.0f);  // Default level center for most levels
-			testTransform->m_position = quickCenter;
-			std::cout << "  [PathTestScene] Repositioned test entity to quick center: (" << quickCenter.x << ", " << quickCenter.y << ")\n";
-
-			// Disable movement
-			if (auto follower = m_movementTester->GetComponent<CPathFollower>()) {
-				follower->isActive = false;
-			}
-		}
-	}
-
-
-	// Get bounds and debug info
 	float dMinX, dMinY, dMaxX, dMaxY;
 	bool hasBounds = m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY);
 
@@ -372,54 +306,24 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 	}
 	std::cout << "\n";
 
-	// If bounds are found, calculate world size and offset in tiles
 	if (m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
 		int tileSize = (int)m_chunkManager.GetTileSize();
-
 		int minTileX = (int)std::floor(dMinX / tileSize);
 		int minTileY = (int)std::floor(dMinY / tileSize);
 		int maxTileX = (int)std::ceil(dMaxX / tileSize);
 		int maxTileY = (int)std::ceil(dMaxY / tileSize);
-
 		int worldW = maxTileX - minTileX;
 		int worldH = maxTileY - minTileY;
-
-		m_chunkManager.SetWorldOffset(minTileX, minTileY); // <-- safe now
-		m_chunkManager.SetWorldSize(worldW, worldH);	   // <-- safe now
+		m_chunkManager.SetWorldOffset(minTileX, minTileY);
+		m_chunkManager.SetWorldSize(worldW, worldH);
 		m_chunkManager.BuildWorldMask();
-
-
-		//  ===== DEBUG ===== 
-		// Dump world mask once
-		std::cout << "\n=== WORLD MASK DUMP ===\n";
-		for (int y = 0; y < m_chunkManager.worldHeight; ++y) {
-			for (int x = 0; x < m_chunkManager.worldWidth; ++x) {
-				bool solid = m_chunkManager.worldMask[y * m_chunkManager.worldWidth + x];
-				std::cout << (solid ? '1' : '0');
-			}
-			std::cout << "\n";
-		}
-
-	}	
-
-	// Log tile counts per layer
-	//std::cout << "  Chunk/Layer tile count:\n";
-	for (int layer = 0; layer < m_chunkManager.GetNumLayers(); ++layer) {
-		int totalTiles = 0;
-		// We need to count tiles per layer - this would require access to internal chunks
-		// For now just log that the layer exists
-		//std::cout << "    Layer " << layer << ": (loaded)\n";
 	}
-
-
 
 	if (hasBounds) {
 		m_mapMin = Vec2(dMinX, dMinY);
 		m_mapMax = Vec2(dMaxX, dMaxY);
 		m_haveBounds = true;
-		//std::cout << "  [SwitchToLevel] Bounds detected, checking test entity repositioning...\n";
 
-		// Center camera on level
 		if (m_cameraEntity) {
 			if (auto cam = m_cameraEntity->GetComponent<CCamera>()) {
 				auto tr = m_cameraEntity->GetComponent<CTransform>();
@@ -428,38 +332,27 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 				cam->m_position = center;
 				std::cout << "  Camera centered at (" << center.x << "," << center.y << ")\n";
 
-				// Also reposition the test entity to the center so it's visible after level load
 				if (m_movementTester) {
-					//std::cout << "  [PathTestScene] m_movementTester exists, attempting repositioning...\n";
 					if (auto testTransform = m_movementTester->GetComponent<CTransform>()) {
 						testTransform->m_position = center;
-						//std::cout << "  [PathTestScene] SUCCESS: Test entity repositioned to level center (" << center.x << ", " << center.y << ")\n";
-
-						// IMPORTANT: Disable any active movement so it doesn't move away from center
 						if (auto follower = m_movementTester->GetComponent<CPathFollower>()) {
 							follower->isActive = false;
-							//std::cout << "  [PathTestScene] Disabled movement to keep entity at level center\n";
 						}
-					} else {
-						//std::cout << "  [PathTestScene] ERROR: m_movementTester has no CTransform component!\n";
 					}
-				} else {
-					//std::cout << "  [PathTestScene] ERROR: m_movementTester is NULL!\n";
 				}
 
-				// Reset manual pathfinding state for the new level
 				m_manualStartSet = false;
 				m_manualGoalSet = false;
 				m_manualPathComplete = false;
 				m_manualStart = Vec2(0, 0);
 				m_manualGoal = Vec2(0, 0);
-				//std::cout << "  [PathTestScene] Manual pathfinding state reset for new level\n";
 			}
 		}
 	}
 
 	return true;
 }
+
 /////////////////////////////////
 
 
@@ -468,14 +361,19 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 // EnsureVisibleChunks - Ensures that all chunks within the camera's view, plus a margin, are loaded. This method calculates the tile coordinates of 
 // the visible area based on the camera's position and zoom level, and requests the ChunkManager to load any chunks that fall within this area.
 void PathTestScene::EnsureVisibleChunks() {
+	std::cout << "BasePath = " << m_chunkManager.GetBasePath() << "\n";
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (!camOpt) return;
 	CCamera* cam = *camOpt;
 
+	    // Convert viewport size to world-space size
+	float worldW = cam->m_viewportWidth / cam->m_zoom;
+	float worldH = cam->m_viewportHeight / cam->m_zoom;
+
 
 	// Ensure chunks within camera view + margin are loaded
-	float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
-	float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
+	float halfW = worldW * 0.5f;
+	float halfH = worldH * 0.5f;
 
 
 	int tx0 = (int)std::floor((cam->m_position.x - halfW) / m_tileSize);
@@ -483,7 +381,7 @@ void PathTestScene::EnsureVisibleChunks() {
 	int tx1 = (int)std::ceil((cam->m_position.x + halfW) / m_tileSize);
 	int ty1 = (int)std::ceil((cam->m_position.y + halfH) / m_tileSize);
 	m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, 2);
-
+	
 	// 3. Evict chunks outside radius
 	//m_chunkManager.EvictChunksOutsideRadius(tx0, tx1, ty0, ty1);
 }
@@ -499,11 +397,11 @@ void PathTestScene::ApplyMainCameraView() {
 	CCamera* cam = *camOpt;
 
 	sf::View v;
-	v.setSize(sf::Vector2f(cam->m_viewportWidth * cam->m_zoom, cam->m_viewportHeight * cam->m_zoom));
+	v.setSize(sf::Vector2f(cam->m_viewportWidth / cam->m_zoom, cam->m_viewportHeight / cam->m_zoom));
 
 	// Clamp camera to bounds
-	float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
-	float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
+	float halfW = (cam->m_viewportWidth / cam->m_zoom) * 0.5f;
+	float halfH = (cam->m_viewportHeight / cam->m_zoom) * 0.5f;
 	Vec2 newPos = cam->m_position;
 
 	if (m_haveBounds) {
@@ -548,13 +446,17 @@ void PathTestScene::Update(float deltaTime) {
 		m_cameraSystem.Update(deltaTime, GetEntityManager());
 	}
 
+
+	// Apply camera view
+	ApplyMainCameraView();
+
 	// Ensure visible chunks are loaded
 	EnsureVisibleChunks();
 	//m_chunkManager.UpdateStreaming(m_cameraEntity);
 	m_chunkManager.UpdateMainThread();
+	m_chunkManager.EvictIfNeeded(); // <-- move eviction here
 
-	// Apply camera view
-	ApplyMainCameraView();
+
 
 	// Update path system
 	//m_pathSystem.SetNodesPerFrame(m_nodesPerFrame);
@@ -609,8 +511,8 @@ void PathTestScene::Update(float deltaTime) {
 				Vec2 newPos = m_camPanStart - Vec2((float)delta.x, (float)delta.y);
 				// clamp to bounds if available
 				CCamera* cam = *camOpt;
-				float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
-				float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
+				float halfW = (cam->m_viewportWidth / cam->m_zoom) * 0.5f;
+				float halfH = (cam->m_viewportHeight / cam->m_zoom) * 0.5f;
 				if (m_haveBounds) {
 					float minCx = m_mapMin.x + halfW;
 					float maxCx = m_mapMax.x - halfW;

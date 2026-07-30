@@ -193,6 +193,12 @@ public:
 
 
 	/////////////////////////////////
+	void EvictIfNeeded();
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// UpdateMainThread - Called from the main thread to process any chunks that have finished loading in the background.
 	void UpdateMainThread(); 
 	/////////////////////////////////
@@ -387,7 +393,6 @@ private:
 	void FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue);
 	void RebuildChunkEntities(Chunk& chunk); // Rebuilds merged collider entities for a chunk; call after tile edits.
 	void ScheduleChunkForRebuild(Chunk& chunk); // Schedule chunk for main-thread-only GPU/collider rebuild
-	void EvictIfNeeded();
 	/////////////////////////////////
 	 
 	

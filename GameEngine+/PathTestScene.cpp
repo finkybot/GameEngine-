@@ -154,6 +154,7 @@ void PathTestScene::ScanLevelFiles() {
 	// Sort the available levels alphabetically for easier selection in the UI
 	std::sort(m_availableLevels.begin(), m_availableLevels.end());
 }
+/////////////////////////////////
 
 
 
@@ -281,21 +282,20 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 	m_chunkManager.SetUnselectedLayerAlpha(1.0f);
 
 	for (int i = 0; i < 20; ++i) {
-		m_chunkManager.UpdateMainThread();
+		m_chunkManager.UpdateMainThread_NoLock();
 	}
 
 	std::cout << "[PathTestScene::SwitchToLevel] Clearing all loaded chunks before loading new level...\n";
 	m_chunkManager.ClearAllLoadedChunks();
 	std::cout << "[PathTestScene::SwitchToLevel] All loaded chunks cleared.\n";
-
 	m_chunkManager.LoadAllSavedChunks();
 
 	for (int i = 0; i < 20; ++i) {
-		m_chunkManager.UpdateMainThread();
+		m_chunkManager.UpdateMainThread_NoLock();
 	}
 
 	m_chunkManager.RebuildAllChunksFromTileset();
-	m_chunkManager.UpdateMainThread();
+	m_chunkManager.UpdateMainThread_NoLock();
 
 	float dMinX, dMinY, dMaxX, dMaxY;
 	bool hasBounds = m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY);
@@ -453,7 +453,7 @@ void PathTestScene::Update(float deltaTime) {
 	// Ensure visible chunks are loaded
 	EnsureVisibleChunks();
 	//m_chunkManager.UpdateStreaming(m_cameraEntity);
-	m_chunkManager.UpdateMainThread();
+	m_chunkManager.UpdateMainThread_NoLock();
 	m_chunkManager.EvictIfNeeded(); // <-- move eviction here
 
 	float fps = m_gameEngine.GetFPSCounter().GetFPS();

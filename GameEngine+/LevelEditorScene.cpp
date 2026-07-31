@@ -79,6 +79,7 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	m_chunkManager.ClearAllLoadedChunks();
 	m_currentLevelName = name;
 	m_levelSelected = !m_currentLevelName.empty();
+	
 	// Update chunk manager path
 	// Use same APPDATA-based path as RefreshAvailableLevels
 	// Use secure getenv alternative on MSVC
@@ -173,7 +174,7 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	// Shift all chunks so they have positive coordinates (fixes pathfinding issues crossing boundaries)
 	// FIRST: flush background loads
 	for (int i = 0; i < 20; ++i) {
-		m_chunkManager.UpdateMainThread();
+		m_chunkManager.UpdateMainThread_NoLock();
 	}
 
 	// THEN: rebuild chunks
@@ -183,7 +184,7 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	m_chunkManager.ShiftChunksToPositiveCoords();
 
 	// flush again
-	m_chunkManager.UpdateMainThread();
+	m_chunkManager.UpdateMainThread_NoLock();
 
 	// After loading and shifting, refresh bounds and report
 	RefreshMapBounds();
@@ -267,7 +268,7 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 		m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, m_marginChunks);
 		
 		// finalize any background loads immediately so chunks are ready
-		m_chunkManager.UpdateMainThread();
+		m_chunkManager.UpdateMainThread_NoLock();
 		m_chunkManager.RebuildAllChunksFromTileset();
 	}
 
@@ -285,7 +286,7 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	// Load any previously-saved chunk files so saved maps appear on startup
 	m_chunkManager.LoadAllSavedChunks();
 	// finalize any loads immediately
-	m_chunkManager.UpdateMainThread();
+	m_chunkManager.UpdateMainThread_NoLock();
 	m_chunkManager.RebuildAllChunksFromTileset();
 
 	// Compute fixed map bounds from saved chunk files on disk.
@@ -429,7 +430,7 @@ void LevelEditorScene::Update(float deltaTime) {
 	EnsureVisibleChunks();
 
 	// finalize any background-loaded chunks
-	m_chunkManager.UpdateMainThread();
+	m_chunkManager.UpdateMainThread_NoLock();
 
 	// determine which tile the mouse is over in world coordinates.
 	sf::Vector2i mousePos = sf::Mouse::getPosition(m_window);
@@ -785,7 +786,7 @@ void LevelEditorScene::Render() {
 			ImStrncpy(m_tilesetKeyBuf, atlasKey.c_str(), sizeof(m_tilesetKeyBuf));
 			m_chunkManager.SetTilesetKey(atlasKey);
 			m_chunkManager.RebuildAllChunksFromTileset();
-			m_chunkManager.UpdateMainThread();
+			m_chunkManager.UpdateMainThread_NoLock();
 			m_chunkManager.RebuildAllChunksFromTileset();
 			SaveLevelMetadata();  // Save tileset to meta.txt
 			m_selectedTileIndex = 0;

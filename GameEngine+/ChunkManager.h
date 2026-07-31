@@ -202,6 +202,7 @@ public:
 	/////////////////////////////////
 	// UpdateMainThread - Called from the main thread to process any chunks that have finished loading in the background.
 	void UpdateMainThread(); 
+	void UpdateMainThread_NoLock(); // version that assumes caller holds m_mutex
 	/////////////////////////////////
 
 

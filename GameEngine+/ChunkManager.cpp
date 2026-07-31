@@ -947,62 +947,68 @@ int ChunkManager::GetTileAt(int tileX, int tileY, int layerIndex) {
 // SetTileAt - Sets the tile value at the specified tile coordinates (tileX, tileY) to the given tileValue. If the corresponding chunk is not loaded, it will be enqueued 
 // for loading in the background thread.
 int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex) {
+	
+	// Determine which chunk the tile belongs to and calculate local coordinates within that chunk
 	const int chunkX = FloorDiv(tileX, m_chunkWidth);
 	const int chunkY = FloorDiv(tileY, m_chunkHeight);
 	const int localX = tileX - chunkX * m_chunkWidth;
 	const int localY = tileY - chunkY * m_chunkHeight;
 	const long long key = GetChunkKey(chunkX, chunkY);
 
+	// Track whether we inserted a new chunk placeholder during this call
 	bool insertedNow = false;
 
 	// PUBLIC LOCK — only once
 	std::lock_guard<std::mutex> lock(m_mutex);
 
 	// Create placeholder chunk if needed
-	auto [itr, inserted] =
-		m_chunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers));
+	auto [itr, inserted] =	m_chunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers));
 
+	// Track if we inserted a new chunk placeholder during this call
 	insertedNow = inserted;
 
+	// If we inserted a new chunk, we need to add it to the LRU list and enqueue it for loading
 	if (insertedNow) {
 		// LRU insert
 		m_lruList.push_front(key);
 		m_lruIndex[key] = m_lruList.begin();
 	}
 
+	// Get a reference to the chunk (either existing or newly created)
 	Chunk& chunk = itr->second;
 
-	// Bounds check
+	// Bounds check: If the local coordinates are out of bounds or the layer index is invalid, return 0 without making any changes
 	if (localX < 0 || localX >= chunk.width || localY < 0 || localY >= chunk.height || layerIndex < 0 ||
 		layerIndex >= chunk.numLayers) {
 		return 0;
 	}
 
+	// Calculate the index in the tilesPerLayer vector for the specified layer and local coordinates
 	const int index = localY * chunk.width + localX;
 	const int prevValue = chunk.tilesPerLayer[layerIndex][index];
 
-	// Placeholder chunks must always accept edits
+	// Placeholder chunks must always accept edits, that is we allow setting a tile even if the chunk is not yet loaded to ensure user edits are not lost.
 	if (prevValue == tileValue && !insertedNow && tileValue != 0)
 		return prevValue;
 
-	// Apply tile
+	// Set the new tile value, mark the chunk as dirty, and increment the edit version for the specified layer
 	chunk.tilesPerLayer[layerIndex][index] = tileValue;
 	chunk.dirty[layerIndex] = 1;
 	chunk.editVersion[layerIndex]++;
 
 	// LRU touch
 	auto lruIt = m_lruIndex.find(key);
-	if (lruIt != m_lruIndex.end())
+	if (lruIt != m_lruIndex.end())	
 		m_lruList.erase(lruIt->second);
 
 	m_lruList.push_front(key);
 	m_lruIndex[key] = m_lruList.begin();
 
-	// Schedule rebuild
+	// Schedule the chunk for rebuild and mark it as ready for rendering for the specified layer
 	ScheduleChunkForRebuild(chunk);
 	chunk.readyForRendering[layerIndex] = 1;
 
-	// Save immediately (same as your original code)
+	// Save immediately (same as the orginal code)
 	if (!m_basePath.empty()) {
 		try {
 			bool anyNonZero = false;
@@ -1047,7 +1053,6 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 
 	return prevValue;
 }
-
 /////////////////////////////////
 
 
@@ -1190,19 +1195,23 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 
 
 /////////////////////////////////
-// EnsureChunksInTileRect_NoLock - Similar to EnsureChunksInTileRect, but does not acquire the mutex lock. This is intended for use in contexts where the caller already holds the lock,
+// EnsureChunksInTileRect_NoLock - Similar to EnsureChunksInTileRect, but does not acquire the mutex lock. This is intended for use in 
+// contexts where the caller already holds the lock,
 void ChunkManager::EnsureChunksInTileRect_NoLock(int tileX0, int tileY0, int tileX1, int tileY1, int marginChunks) {
+	
+	// Safety check: ensure tileX0 <= tileX1 and tileY0 <= tileY1
 	if (tileX0 > tileX1)
 		std::swap(tileX0, tileX1);
 	if (tileY0 > tileY1)
 		std::swap(tileY0, tileY1);
 
+	// Compute the chunk coordinates that cover the specified tile rectangle, including the margin
 	int cX0 = FloorDiv(tileX0, m_chunkWidth) - marginChunks;
 	int cY0 = FloorDiv(tileY0, m_chunkHeight) - marginChunks;
 	int cX1 = FloorDiv(tileX1, m_chunkWidth) + marginChunks;
 	int cY1 = FloorDiv(tileY1, m_chunkHeight) + marginChunks;
 
-	// Safety clamp
+	// Safety clamp to avoid attempting to load an extremely large span of chunks
 	if (cX1 - cX0 > (int)ChunkManager::kMaxChunkSpan) {
 		int mid = (cX0 + cX1) / 2;
 		cX0 = mid - ChunkManager::kMaxChunkSpan / 2;
@@ -1214,6 +1223,7 @@ void ChunkManager::EnsureChunksInTileRect_NoLock(int tileX0, int tileY0, int til
 		cY1 = mid + ChunkManager::kMaxChunkSpan / 2;
 	}
 
+	// Iterate over the computed chunk coordinates and ensure each chunk is loaded or enqueued for loading
 	for (int cy = cY0; cy <= cY1; ++cy) {
 		for (int cx = cX0; cx <= cX1; ++cx) {
 
@@ -1222,7 +1232,7 @@ void ChunkManager::EnsureChunksInTileRect_NoLock(int tileX0, int tileY0, int til
 			// Check existence WITHOUT locking
 			auto it = m_chunks.find(key);
 			if (it != m_chunks.end()) {
-				// LRU touch (no lock)
+				// LRU touch (no lock) LRU = least recently used, we move this chunk to the front of the list to mark it as recently used
 				auto lruIt = m_lruIndex.find(key);
 				if (lruIt != m_lruIndex.end())
 					m_lruList.erase(lruIt->second);
@@ -1236,24 +1246,29 @@ void ChunkManager::EnsureChunksInTileRect_NoLock(int tileX0, int tileY0, int til
 			auto [itr2, insertedNow] =
 				m_chunks.emplace(key, Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers));
 
+			// LRU touch (no lock)
 			m_lruList.push_front(key);
 			m_lruIndex[key] = m_lruList.begin();
 
+			// If we just inserted a new chunk, check if all layers are empty (all tiles are zero). If so, mark the chunk as ready for rendering.
 			if (insertedNow) {
 				Chunk& newChunk = itr2->second;
 
+				// Check if all layers are empty (all tiles are zero)
 				bool allZero = true;
 				for (int i = 0; i < newChunk.width * newChunk.height; ++i) {
 					for (int L = 0; L < newChunk.numLayers; ++L) {
 						if (!newChunk.tilesPerLayer.empty() && newChunk.tilesPerLayer[L][i] != 0) {
 							allZero = false;
-							break;
+							break; // break out of the inner loop if we find a non-zero tile
 						}
 					}
+					// break out of the outer loop if we found a non-zero tile in any layer
 					if (!allZero)
 						break;
 				}
 
+				// If all layers are empty, mark the chunk as ready for rendering for all layers
 				if (allZero) {
 					for (int L = 0; L < newChunk.numLayers; ++L)
 						if (!newChunk.readyForRendering.empty())
@@ -1266,77 +1281,85 @@ void ChunkManager::EnsureChunksInTileRect_NoLock(int tileX0, int tileY0, int til
 		}
 	}
 }
+/////////////////////////////////
 
 
 
 /////////////////////////////////
-// UpdateMainThread - This method should be called from the main thread to perform any necessary updates, such as processing dirty 
-// chunks or preparing vertex buffers for rendering.
+// UpdateMainThread - Locks the mutex and calls UpdateMainThread_NoLock to process pending loaded chunks and scheduled rebuilds. This method is intended to be 
+// called from the main thread.
 void ChunkManager::UpdateMainThread() {
-	
-	// Process pending loaded chunks in small batches to avoid spending a long time on the main thread; limit the number of pending 
-	// chunks processed per frame to 128 this should avoid frame stalls, if there are more pending chunks they will be processed 
-	// in following frames
-	const int kMaxPendingPerFrame = 128;
+	std::lock_guard<std::mutex> lock(m_mutex);
+	UpdateMainThread_NoLock();
+}
+/////////////////////////////////
 
-	// Copy pending chunks to a local vector to minimize lock time
+
+
+/////////////////////////////////
+// UpdateMainThread_NoLock - This method performs the main thread update logic without acquiring the mutex lock. It processes pending loaded chunks 
+// from the background loader and handles scheduled rebuilds for GPU/SFML dependent work. It is intended to be called when the caller already holds the mutex lock.
+void ChunkManager::UpdateMainThread_NoLock() {
+// === 1. Process pending loaded chunks (from background loader) ===
+	const int kMaxPendingPerFrame = 16;
+
 	std::vector<std::tuple<int, int, int, std::vector<int>, uint32_t>> pendingChunksCopy;
 
-
-	// Lock the pending chunks mutex and copy up to kMaxPendingPerFrame chunks to the local vector, 
-	// then erase them from the global queue
-	{ 
+	// Copy pending chunks WITHOUT locking m_mutex (only s_pendingMutex)
+	{
 		std::lock_guard<std::mutex> lock(s_pendingMutex);
+
 		int take = (int)std::min<size_t>(s_pendingChunks.size(), (size_t)kMaxPendingPerFrame);
+
 		pendingChunksCopy.reserve(take);
-		for (int i = 0; i < take; ++i) pendingChunksCopy.emplace_back(std::move(s_pendingChunks[i]));
-		if (take > 0) s_pendingChunks.erase(s_pendingChunks.begin(), s_pendingChunks.begin() + take);
+
+		for (int i = 0; i < take; ++i)
+			pendingChunksCopy.emplace_back(std::move(s_pendingChunks[i]));
+
+		if (take > 0)
+			s_pendingChunks.erase(s_pendingChunks.begin(), s_pendingChunks.begin() + take);
 	}
 
-	// Finalize each loaded chunk that we copied (bounded count)
+	// Finalize each loaded chunk
 	for (const auto& pending : pendingChunksCopy) {
 		const auto& [chunkX, chunkY, layer, tileData, version] = pending;
 		FinalizeLoadedChunk(chunkX, chunkY, layer, tileData, version);
 	}
 
-	// Process scheduled rebuilds (GPU / SFML dependent work) on the main thread.
+	// === 2. Process scheduled rebuilds (GPU / SFML dependent work) ===
 	std::vector<long long> rebuilds;
 
-	// Lock the mutex and swap the rebuild queue into a local vector to minimize lock time
-	{ 
-		std::lock_guard<std::mutex> lock(m_mutex);
-		if (!m_rebuildQueue.empty()) {
-			rebuilds.swap(m_rebuildQueue);
-			
-			// Remove these keys from the rebuild, avoids duplicate rebuilds if chunk has be re-scheduled 
-			// while we are processing the current rebuilds
-			for (auto key : rebuilds) m_rebuildSet.erase(key);
-		}
+	// Swap rebuild queue WITHOUT locking m_mutex (caller already holds it)
+	if (!m_rebuildQueue.empty()) {
+		rebuilds.swap(m_rebuildQueue);
+
+		for (auto key : rebuilds)
+			m_rebuildSet.erase(key);
 	}
 
-	// Rebuild vertex arrays and colliders for all scheduled chunks on the main thread
+	// Rebuild vertex arrays + colliders
 	for (long long key : rebuilds) {
-		std::lock_guard<std::mutex> lock(m_mutex);
+
 		auto it = m_chunks.find(key);
-		if (it == m_chunks.end()) continue;
+		if (it == m_chunks.end())
+			continue;
 
 		Chunk& chunk = it->second;
-		// Rebuild vertex arrays and colliders for all layers of this chunk using the main-thread-only API
+
 		std::shared_ptr<TextureAtlas> atlasPtr;
-		
-		// Fetch the current tileset atlas for this chunk. If no tileset is set, atlasPtr will remain nullptr 
-		// and BuildChunkVertexArray will use the fallback color.
+
 		if (!m_tilesetKey.empty()) {
 			auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
-			if (atlasOpt.has_value() && *atlasOpt) atlasPtr = *atlasOpt;
+
+			if (atlasOpt.has_value() && *atlasOpt)
+				atlasPtr = *atlasOpt;
 		}
 
-		// Rebuild the vertex array and entity colliders for this chunk
 		BuildChunkVertexArray(chunk, atlasPtr);
 		RebuildChunkEntities(chunk);
-		
-		// mark ready
-		for (int L = 0; L < chunk.numLayers; ++L) chunk.readyForRendering[L] = 1;
+
+		for (int L = 0; L < chunk.numLayers; ++L)
+			chunk.readyForRendering[L] = 1;
 	}
 }
 /////////////////////////////////

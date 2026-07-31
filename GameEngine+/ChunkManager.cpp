@@ -953,76 +953,101 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 	const int localY = tileY - chunkY * m_chunkHeight;
 	const long long key = GetChunkKey(chunkX, chunkY);
 
+	bool insertedNow = false;
+
+	// PUBLIC LOCK — only once
 	std::lock_guard<std::mutex> lock(m_mutex);
 
-	// Create placeholder chunk on first paint
-	auto [itr, inserted] = m_chunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers));
-	if (inserted) {
+	// Create placeholder chunk if needed
+	auto [itr, inserted] =
+		m_chunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers));
+
+	insertedNow = inserted;
+
+	if (insertedNow) {
+		// LRU insert
 		m_lruList.push_front(key);
 		m_lruIndex[key] = m_lruList.begin();
-		EnqueueLoadChunk(chunkX, chunkY);
 	}
 
 	Chunk& chunk = itr->second;
-	if (localX < 0 || localX >= chunk.width || localY < 0 || localY >= chunk.height) return 0;
-	if (layerIndex < 0 || layerIndex >= chunk.numLayers) return 0;
 
-	const int index     = localY * chunk.width + localX;
+	// Bounds check
+	if (localX < 0 || localX >= chunk.width || localY < 0 || localY >= chunk.height || layerIndex < 0 ||
+		layerIndex >= chunk.numLayers) {
+		return 0;
+	}
+
+	const int index = localY * chunk.width + localX;
 	const int prevValue = chunk.tilesPerLayer[layerIndex][index];
 
-	// If this chunk was just inserted as a placeholder (we created it because it wasn't loaded) then still apply the requested change even if the placeholder value matches 
-	// the requested value. This handles erasing areas of maps saved on disk: the placeholder starts as zeros and an erase should overwrite the on-disk non-zero tiles once 
-	// the background load finalizes. Always process clears (tileValue == 0) even if prevValue is already 0 — the chunk may be an unfinalized placeholder whose real on-disk 
-	// tiles are non-zero. Bumping editVersion here ensures FinalizeLoadedChunk rejects the stale background load and keeps the cleared in-memory state.
-	if (prevValue == tileValue && !inserted && tileValue != 0) return prevValue;
+	// Placeholder chunks must always accept edits
+	if (prevValue == tileValue && !insertedNow && tileValue != 0)
+		return prevValue;
 
+	// Apply tile
 	chunk.tilesPerLayer[layerIndex][index] = tileValue;
-	chunk.dirty[layerIndex]        = 1;
+	chunk.dirty[layerIndex] = 1;
 	chunk.editVersion[layerIndex]++;
 
-	// Debug log for paints (disabled by default - uncomment to enable)
-	// std::cout << "ChunkManager::SetTileAt chunk=(" << chunk.chunkX << "," << chunk.chunkY << ") local=(" << localX << "," << localY << ") layer=" << layerIndex << " val=" << tileValue << " prev=" << prevValue << "\n";
-
-	// O(1) LRU touch via iterator index
-	// Move the chunk to the front of the LRU list to mark it as recently used. If the chunk is already in the LRU list, we remove it from its current position and reinsert it at the front.
+	// LRU touch
 	auto lruIt = m_lruIndex.find(key);
-	if (lruIt != m_lruIndex.end()) m_lruList.erase(lruIt->second);
+	if (lruIt != m_lruIndex.end())
+		m_lruList.erase(lruIt->second);
+
 	m_lruList.push_front(key);
 	m_lruIndex[key] = m_lruList.begin();
 
-	// Defer expensive GPU/SFML dependent work: schedule this chunk for rebuild on the main thread.
+	// Schedule rebuild
 	ScheduleChunkForRebuild(chunk);
-	// Mark layer ready for rendering logically (actual vertex arrays will be prepared on main thread)
 	chunk.readyForRendering[layerIndex] = 1;
 
-	// Immediately persist to disk — delete the file if the chunk is entirely empty so
-	// GetSavedChunkBounds only counts chunks that actually contain tiles.
+	// Save immediately (same as your original code)
 	if (!m_basePath.empty()) {
 		try {
-			// Save per-layer chunk files named: chunk_<layer>_<cx>_<cy>.dat
 			bool anyNonZero = false;
+
 			for (int layer = 0; layer < chunk.numLayers; ++layer) {
-				std::string filename = (fs::path(m_basePath) / ("chunk_" + std::to_string(layer) + "_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
+				std::string filename =
+					(fs::path(m_basePath) / ("chunk_" + std::to_string(layer) + "_" + std::to_string(chunk.chunkX) +
+											 "_" + std::to_string(chunk.chunkY) + ".dat"))
+						.string();
+
 				bool allZero = true;
-				for (int t : chunk.tilesPerLayer[layer]) { if (t != 0) { allZero = false; break; } }
+				for (int t : chunk.tilesPerLayer[layer]) {
+					if (t != 0) {
+						allZero = false;
+						break;
+					}
+				}
+
 				if (allZero) {
-					try { fs::remove(filename); } catch(...) {}
+					try {
+						fs::remove(filename);
+					} catch (...) {}
 					chunk.dirty[layer] = false;
 				} else {
 					anyNonZero = true;
 					std::ofstream outFile(filename, std::ios::binary);
 					if (outFile) {
-						outFile.write(reinterpret_cast<const char*>(chunk.tilesPerLayer[layer].data()), chunk.tilesPerLayer[layer].size() * sizeof(int));
+						outFile.write(reinterpret_cast<const char*>(chunk.tilesPerLayer[layer].data()),
+									  chunk.tilesPerLayer[layer].size() * sizeof(int));
 						chunk.dirty[layer] = false;
-					} else {
-						std::cerr << "ChunkManager: failed to save chunk " << filename << "\n";
 					}
 				}
 			}
 		} catch (...) {}
 	}
+
+	// IMPORTANT:
+	// Call NO-LOCK version so we do NOT lock m_mutex again.
+	if (insertedNow) {
+		EnqueueLoadChunk_NoLock(chunkX, chunkY);
+	}
+
 	return prevValue;
 }
+
 /////////////////////////////////
 
 
@@ -1162,6 +1187,85 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 	}
 }
 /////////////////////////////////
+
+
+/////////////////////////////////
+// EnsureChunksInTileRect_NoLock - Similar to EnsureChunksInTileRect, but does not acquire the mutex lock. This is intended for use in contexts where the caller already holds the lock,
+void ChunkManager::EnsureChunksInTileRect_NoLock(int tileX0, int tileY0, int tileX1, int tileY1, int marginChunks) {
+	if (tileX0 > tileX1)
+		std::swap(tileX0, tileX1);
+	if (tileY0 > tileY1)
+		std::swap(tileY0, tileY1);
+
+	int cX0 = FloorDiv(tileX0, m_chunkWidth) - marginChunks;
+	int cY0 = FloorDiv(tileY0, m_chunkHeight) - marginChunks;
+	int cX1 = FloorDiv(tileX1, m_chunkWidth) + marginChunks;
+	int cY1 = FloorDiv(tileY1, m_chunkHeight) + marginChunks;
+
+	// Safety clamp
+	if (cX1 - cX0 > (int)ChunkManager::kMaxChunkSpan) {
+		int mid = (cX0 + cX1) / 2;
+		cX0 = mid - ChunkManager::kMaxChunkSpan / 2;
+		cX1 = mid + ChunkManager::kMaxChunkSpan / 2;
+	}
+	if (cY1 - cY0 > (int)ChunkManager::kMaxChunkSpan) {
+		int mid = (cY0 + cY1) / 2;
+		cY0 = mid - ChunkManager::kMaxChunkSpan / 2;
+		cY1 = mid + ChunkManager::kMaxChunkSpan / 2;
+	}
+
+	for (int cy = cY0; cy <= cY1; ++cy) {
+		for (int cx = cX0; cx <= cX1; ++cx) {
+
+			const long long key = GetChunkKey(cx, cy);
+
+			// Check existence WITHOUT locking
+			auto it = m_chunks.find(key);
+			if (it != m_chunks.end()) {
+				// LRU touch (no lock)
+				auto lruIt = m_lruIndex.find(key);
+				if (lruIt != m_lruIndex.end())
+					m_lruList.erase(lruIt->second);
+
+				m_lruList.push_front(key);
+				m_lruIndex[key] = m_lruList.begin();
+				continue;
+			}
+
+			// Insert placeholder chunk (no lock)
+			auto [itr2, insertedNow] =
+				m_chunks.emplace(key, Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers));
+
+			m_lruList.push_front(key);
+			m_lruIndex[key] = m_lruList.begin();
+
+			if (insertedNow) {
+				Chunk& newChunk = itr2->second;
+
+				bool allZero = true;
+				for (int i = 0; i < newChunk.width * newChunk.height; ++i) {
+					for (int L = 0; L < newChunk.numLayers; ++L) {
+						if (!newChunk.tilesPerLayer.empty() && newChunk.tilesPerLayer[L][i] != 0) {
+							allZero = false;
+							break;
+						}
+					}
+					if (!allZero)
+						break;
+				}
+
+				if (allZero) {
+					for (int L = 0; L < newChunk.numLayers; ++L)
+						if (!newChunk.readyForRendering.empty())
+							newChunk.readyForRendering[L] = 1;
+				}
+			}
+
+			// Queue background load (no lock)
+			EnqueueLoadChunk_NoLock(cx, cy);
+		}
+	}
+}
 
 
 
@@ -1360,6 +1464,92 @@ void ChunkManager::EnqueueLoadChunk(int chunkX, int chunkY, int layer) {
 	s_loadCv.notify_one();
 }
 /////////////////////////////////
+
+
+
+/////////////////////////////////
+// EnqueueLoadChunk_NoLock - version safe to call when m_mutex is already held.
+// This MUST NOT lock m_mutex. It only touches the global load queue mutex.
+void ChunkManager::EnqueueLoadChunk_NoLock(int chunkX, int chunkY) {
+	// Capture editVersion WITHOUT locking m_mutex
+	uint32_t versionAtEnqueue = 0;
+
+	auto it = m_chunks.find(GetChunkKey(chunkX, chunkY));
+	if (it != m_chunks.end()) {
+		// Use layer 0's version (your original two‑argument version implicitly loads all layers)
+		if (!it->second.editVersion.empty()) {
+			versionAtEnqueue = it->second.editVersion[0];
+		}
+	}
+
+	// Local copies (no locking)
+	int localChunkW = m_chunkWidth;
+	int localChunkH = m_chunkHeight;
+	int localNumLayers = m_numLayers;
+	std::string base = m_basePath;
+
+	// Push job into global load queue (this uses its own mutex)
+	{
+		std::lock_guard<std::mutex> lk(s_loadQueueMutex);
+
+		// Two‑argument version: load ALL layers
+		s_loadQueue.emplace_back(chunkX, chunkY, -1, base, versionAtEnqueue);
+
+		if (!s_loaderStarted) {
+			s_loaderStarted = true;
+
+			for (int i = 0; i < s_maxLoaderThreads; ++i) {
+				std::thread([localChunkW, localChunkH, localNumLayers]() {
+					while (true) {
+						std::tuple<int, int, int, std::string, uint32_t> job;
+
+						{
+							std::unique_lock<std::mutex> ql(s_loadQueueMutex);
+							s_loadCv.wait(ql, [] { return !s_loadQueue.empty(); });
+							job = s_loadQueue.back();
+							s_loadQueue.pop_back();
+						}
+
+						int jobCx = std::get<0>(job);
+						int jobCy = std::get<1>(job);
+						int jobLayer = std::get<2>(job); // -1 = load all layers
+						std::string jobBase = std::get<3>(job);
+						uint32_t jobVer = std::get<4>(job);
+
+						if (jobLayer < 0) {
+							// Load ALL layers
+							for (int L = 0; L < localNumLayers; ++L) {
+								std::vector<int> tileData(localChunkW * localChunkH, 0);
+
+								std::string filename =
+									(fs::path(jobBase) / ("chunk_" + std::to_string(L) + "_" + std::to_string(jobCx) +
+														  "_" + std::to_string(jobCy) + ".dat"))
+										.string();
+
+								if (fs::exists(filename)) {
+									std::ifstream inFile(filename, std::ios::binary);
+									if (inFile)
+										inFile.read(reinterpret_cast<char*>(tileData.data()),
+													tileData.size() * sizeof(int));
+								}
+
+								{
+									std::lock_guard<std::mutex> lock(s_pendingMutex);
+									s_pendingChunks.emplace_back(jobCx, jobCy, L, std::move(tileData), jobVer);
+								}
+							}
+						} else {
+							// (Not used in your two‑argument version)
+						}
+					}
+				}).detach();
+			}
+		}
+	}
+
+	s_loadCv.notify_one();
+}
+	/////////////////////////////////
 
 
 

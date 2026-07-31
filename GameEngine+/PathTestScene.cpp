@@ -456,7 +456,7 @@ void PathTestScene::Update(float deltaTime) {
 	m_chunkManager.UpdateMainThread();
 	m_chunkManager.EvictIfNeeded(); // <-- move eviction here
 
-
+	float fps = m_gameEngine.GetFPSCounter().GetFPS();
 
 	// Update path system
 	//m_pathSystem.SetNodesPerFrame(m_nodesPerFrame);
@@ -475,6 +475,7 @@ void PathTestScene::Update(float deltaTime) {
 	}
 
 	ImGui::Separator();
+	ImGui::Text("FPS: %.2f", fps);
 	ImGui::SliderInt("Nodes/Frame", &m_nodesPerFrame, 10, 2000);
 
 	if (m_manualStartSet && m_manualGoalSet) {

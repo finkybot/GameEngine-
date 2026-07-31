@@ -171,9 +171,19 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	m_chunkManager.LoadAllSavedChunks();
 	
 	// Shift all chunks so they have positive coordinates (fixes pathfinding issues crossing boundaries)
-	m_chunkManager.ShiftChunksToPositiveCoords();
-	m_chunkManager.UpdateMainThread();
+	// FIRST: flush background loads
+	for (int i = 0; i < 20; ++i) {
+		m_chunkManager.UpdateMainThread();
+	}
+
+	// THEN: rebuild chunks
 	m_chunkManager.RebuildAllChunksFromTileset();
+
+	// THEN: shift
+	m_chunkManager.ShiftChunksToPositiveCoords();
+
+	// flush again
+	m_chunkManager.UpdateMainThread();
 
 	// After loading and shifting, refresh bounds and report
 	RefreshMapBounds();

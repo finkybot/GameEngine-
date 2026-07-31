@@ -188,6 +188,7 @@ public:
 	// loaded and ready for rendering. The marginChunks parameter allows for loading additional chunks around the specified rectangle 
 	// to prevent visual gaps during rendering.
 	void EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, int tileY1, int marginChunks);
+	void EnsureChunksInTileRect_NoLock(int tileX0, int tileY0, int tileX1, int tileY1, int marginChunks);
 	/////////////////////////////////
 
 
@@ -390,6 +391,7 @@ private:
 	// Internal helper methods for loading, saving, and managing chunks
 	void EnqueueLoadChunk(int chunkX, int chunkY);
 	void EnqueueLoadChunk(int chunkX, int chunkY, int layer);
+	void EnqueueLoadChunk_NoLock(int chunkX, int chunkY);
 	void FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue);
 	void RebuildChunkEntities(Chunk& chunk); // Rebuilds merged collider entities for a chunk; call after tile edits.
 	void ScheduleChunkForRebuild(Chunk& chunk); // Schedule chunk for main-thread-only GPU/collider rebuild

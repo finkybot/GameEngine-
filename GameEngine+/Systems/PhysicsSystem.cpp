@@ -53,8 +53,8 @@ void PhysicsSystem::SlowEntity(Entity* entity, float slowFactor) const {
 	auto transform = entity->GetComponent<CTransform>();
 	auto shape = entity->GetComponent<CShape>();
 	if (transform) {
-		transform->m_velocity.x *= slowFactor;
-		transform->m_velocity.y *= slowFactor;
+		transform->velocity.x *= slowFactor;
+		transform->velocity.y *= slowFactor;
 	}
 }
 /////////////////////////////////
@@ -75,8 +75,8 @@ void PhysicsSystem::MoveEntity(Entity* entity, float deltaTime, float windowWidt
 
 	if (transform) {
 		// Update transform position
-		transform->m_position.x += transform->m_velocity.x * deltaTime;
-		transform->m_position.y += transform->m_velocity.y * deltaTime;
+		transform->position.x += transform->velocity.x * deltaTime;
+		transform->position.y += transform->velocity.y * deltaTime;
 	}
 
 	// Handle boundary collisions
@@ -97,7 +97,7 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 	if (!transform)
 		return;
 
-	Vec2 position = transform->m_position;
+	Vec2 position = transform->position;
 	float radius = entity->GetRadius();
 
 	// Despawn entities that go off the of the screen, allowing a 100-unit buffer for them to fully exit before despawning. This prevents entities from bouncing back and forth at the edges and allows for a more natural flow of entities across the screen.

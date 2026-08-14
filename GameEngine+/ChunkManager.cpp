@@ -113,8 +113,8 @@ void ChunkManager::BuildWorldMask() {
 			int absTy = chunk.chunkY * chunk.height + localY;
 
             // convert to mask space using worldOffset
-			int relTx = absTx - m_worldOffsetX; // minTileX
-			int relTy = absTy - m_worldOffsetY; // minTileY
+			int relTx = absTx - worldOffsetX; // minTileX
+			int relTy = absTy - worldOffsetY; // minTileY
 
 			if (relTx < 0 || relTy < 0 || relTx >= worldWidth || relTy >= worldHeight) {
 				continue;
@@ -893,8 +893,8 @@ void ChunkManager::EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int
 					int worldX = baseX + x;
 					int worldY = baseY + y;
 
-					int maskX = worldX - m_worldOffsetX;
-					int maskY = worldY - m_worldOffsetY;
+					int maskX = worldX - worldOffsetX;
+					int maskY = worldY - worldOffsetY;
 
 					if (maskX < 0 || maskY < 0 || maskX >= worldWidth || maskY >= worldHeight)
 						continue;
@@ -1723,8 +1723,8 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::v
 				int worldX = baseX + x;
 				int worldY = baseY + y;
 
-				int maskX = worldX - m_worldOffsetX;
-				int maskY = worldY - m_worldOffsetY;
+				int maskX = worldX - worldOffsetX;
+				int maskY = worldY - worldOffsetY;
 
 				if (maskX < 0 || maskY < 0 || maskX >= worldWidth || maskY >= worldHeight)
 					continue;
@@ -1802,8 +1802,8 @@ void ChunkManager::EvictIfNeeded() {
 						int worldX = baseX + x;
 						int worldY = baseY + y;
 
-						int maskX = worldX - m_worldOffsetX;
-						int maskY = worldY - m_worldOffsetY;
+						int maskX = worldX - worldOffsetX;
+						int maskY = worldY - worldOffsetY;
 
 						if (maskX < 0 || maskY < 0 || maskX >= worldWidth || maskY >= worldHeight)
 							continue;

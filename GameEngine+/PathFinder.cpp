@@ -41,7 +41,7 @@ Pathfinder::Pathfinder(ChunkManager& cm) : m_chunkManager(cm) {}
 
 /////////////////////////////////
 bool Pathfinder::InBounds(int tx, int ty) const {
-	return tx >= 0 && ty >= 0 && tx < m_chunkManager.GetWorldWidth() && ty < m_chunkManager.GetWorldHeight();
+	return tx >= 0 && ty >= 0 && tx < m_chunkManager.worldWidth && ty < m_chunkManager.worldHeight;
 }
 /////////////////////////////////
 
@@ -50,7 +50,7 @@ bool Pathfinder::InBounds(int tx, int ty) const {
 /////////////////////////////////
 bool Pathfinder::IsBlocked(int tx, int ty) const {
 	const auto& mask = m_chunkManager.GetWorldMask();
-	int w = m_chunkManager.GetWorldWidth();
+	int w = m_chunkManager.worldWidth;
 	return mask[ty * w + tx];
 }
 /////////////////////////////////
@@ -150,11 +150,11 @@ std::vector<Vec2> Pathfinder::SmoothLineOfSight(const std::vector<Vec2>& path) {
 	int last = 0;
 
 	for (int i = 1; i < path.size(); ++i) {
-		int lx = (int)((out.back().x / m_chunkManager.GetTileSize()) - m_chunkManager.GetWorldOffsetX());
-		int ly = (int)((out.back().y / m_chunkManager.GetTileSize()) - m_chunkManager.GetWorldOffsetY());
+		int lx = (int)((out.back().x / m_chunkManager.GetTileSize()) - m_chunkManager.worldOffsetX);
+		int ly = (int)((out.back().y / m_chunkManager.GetTileSize()) - m_chunkManager.worldOffsetY);
 
-		int nx = (int)((path[i].x / m_chunkManager.GetTileSize()) - m_chunkManager.GetWorldOffsetX());
-		int ny = (int)((path[i].y / m_chunkManager.GetTileSize()) - m_chunkManager.GetWorldOffsetY());
+		int nx = (int)((path[i].x / m_chunkManager.GetTileSize()) - m_chunkManager.worldOffsetX);
+		int ny = (int)((path[i].y / m_chunkManager.GetTileSize()) - m_chunkManager.worldOffsetY);
 
 		if (!LineOfSight(lx, ly, nx, ny)) {
 			out.push_back(path[i - 1]);
@@ -287,8 +287,8 @@ std::vector<Vec2> Pathfinder::Funnel(const std::vector<Vec2>& path) {
 // found, it returns std::nullopt.
 std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goalTileX, int goalTileY) {
 	// Convert world tile coords → mask coords
-	int offX = m_chunkManager.GetWorldOffsetX();
-	int offY = m_chunkManager.GetWorldOffsetY();
+	int offX = m_chunkManager.worldOffsetX;
+	int offY = m_chunkManager.worldOffsetY;
 
 	int sx = startTileX - offX;
 	int sy = startTileY - offY;

@@ -50,8 +50,8 @@ std::optional<std::vector<Vec2>> PathFindingSystem::FindPathSync(int startTx, in
 // start and goal tile coordinates from the entity's transform and the request target,
 void PathFindingSystem::ProcessRequests() {
 	float ts = m_chunks.GetTileSize();
-	int offX = m_chunks.GetWorldOffsetX();
-	int offY = m_chunks.GetWorldOffsetY();
+	int offX = m_chunks.worldOffsetX;
+	int offY = m_chunks.worldOffsetY;
 
 	for (auto& u : m_entities.GetEntities()) {
 		Entity* e = u.get();
@@ -67,8 +67,8 @@ void PathFindingSystem::ProcessRequests() {
 		// world → tile → mask coords
 		int startTx = 0, startTy = 0;
 		if (auto t = e->GetComponent<CTransform>()) {
-			startTx = static_cast<int>(std::floor(t->m_position.x / ts)) - offX;
-			startTy = static_cast<int>(std::floor(t->m_position.y / ts)) - offY;
+			startTx = static_cast<int>(std::floor(t->position.x / ts)) - offX;
+			startTy = static_cast<int>(std::floor(t->position.y / ts)) - offY;
 		}
 
 		int goalTx = static_cast<int>(std::floor(req->targetWorld.x / ts)) - offX;

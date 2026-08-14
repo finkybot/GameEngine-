@@ -286,8 +286,8 @@ void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 colo
 
 	auto* tform = en->GetComponent<CTransform>();
 	// Use CTransform's public members (position / velocity)
-	tform->m_position = Vec2(position.x + 0.4f, position.y - 0.5f);
-	tform->m_velocity = Vec2(velocity.x, velocity.y);
+	tform->position = Vec2(position.x + 0.4f, position.y - 0.5f);
+	tform->velocity = Vec2(velocity.x, velocity.y);
 
 	if (EntityType::Explosion == type) {
 		auto explosion = std::make_unique<CExplosion>();

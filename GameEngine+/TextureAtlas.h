@@ -12,9 +12,17 @@
 #include <optional>
 #include <string>
 #include <SFML/Graphics/Texture.hpp>
-#include <SFML/Graphics/Rect.hpp>
+#include <SFML/Graphics.hpp>
 /////////////////////////////////
 
+
+/////////////////////////////////
+// QuadTemplate struct - Represents a quad made of 6 vertices (2 triangles) for rendering a tile from the texture atlas. Each vertex contains position and texture coordinates.
+//			|
+//			|___________________________________________________________________________________
+struct QuadTemplate {
+	sf::Vertex v[6];
+};
 
 
 /////////////////////////////////
@@ -34,7 +42,20 @@ public:
 	/////////////////////////////////
 	// LoadFromFile - Load texture and slice into tiles of size tileW x tileH. Returns false on error.
 	bool LoadFromFile(const std::string& filePath, int tileW, int tileH);
+	/////////////////////////////////
 
+
+	/////////////////////////////////
+	// BuildQuadTemplates - Precomputes quad templates for each tile in the atlas, allowing
+	void BuildQuadTemplates();
+	////////////////////////////////
+
+
+	
+	/////////////////////////////////
+	// GetQuadTemplate - Retrieves the precomputed quad template for the specified tile index.
+	const QuadTemplate& GetQuadTemplate(size_t tileIndex) const;
+	/////////////////////////////////
 
 
 	/////////////////////////////////
@@ -103,6 +124,13 @@ private:
 	/////////////////////////////////
 	// Vector of TileRect structs representing the coordinates and dimensions of each tile in the atlas. This allows for easy retrieval of tile regions for rendering and other operations based on tile indices.
 	std::vector<TileRect> m_rects;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Vector of QuadTemplate structs representing the precomputed quad templates for each tile in the atlas. This allows for efficient rendering of tiles by reusing the precomputed vertex data.
+	std::vector<QuadTemplate> quadTemplates;
 	/////////////////////////////////
 
 

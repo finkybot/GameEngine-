@@ -387,7 +387,7 @@ void GameEngine::Update(float deltaTime) {
 
 					// Get the current waypoint target
 					const Vec2& currentWaypoint = path->points[follower->currentWaypointIndex];
-					Vec2 direction = (currentWaypoint - transform->m_position);
+					Vec2 direction = (currentWaypoint - transform->position);
 					float distanceToWaypoint = direction.Mag();
 
 					// Check if we've arrived at the current waypoint
@@ -408,7 +408,7 @@ void GameEngine::Update(float deltaTime) {
 						// Normalize direction and apply speed
 						direction.Normalize();
 						float moveDistance = follower->speed * deltaTime;
-						transform->m_position = transform->m_position + (direction * moveDistance);
+						transform->position = transform->position + (direction * moveDistance);
 					}
 				}
 			}

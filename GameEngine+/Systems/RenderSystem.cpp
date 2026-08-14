@@ -88,7 +88,7 @@ void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const 
 							sf::FloatRect fr = *rectOpt;
 							sprite->setTextureRect(sf::IntRect(sf::Vector2i((int)fr.position.x, (int)fr.position.y),
 															   sf::Vector2i((int)fr.size.x, (int)fr.size.y)));
-							sprite->setPosition(sf::Vector2f(transform->m_position.x, transform->m_position.y));
+							sprite->setPosition(sf::Vector2f(transform->position.x, transform->position.y));
 
 							// Tiled area: draw repeated sprites using the reused sprite
 							if (tex->areaW > 0.0f && tex->areaH > 0.0f) {
@@ -99,8 +99,8 @@ void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const 
 									int tilesY = static_cast<int>(std::round(tex->areaH / static_cast<float>(atlasH)));
 									for (int ty = 0; ty < tilesY; ++ty) {
 										for (int tx = 0; tx < tilesX; ++tx) {
-											sprite->setPosition(sf::Vector2f(transform->m_position.x + tx * atlasW,
-																			  transform->m_position.y + ty * atlasH));
+											sprite->setPosition(sf::Vector2f(transform->position.x + tx * atlasW,
+																			  transform->position.y + ty * atlasH));
 											window.draw(*sprite);
 										}
 									}
@@ -121,7 +121,7 @@ void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const 
 	if (auto shape = entity->GetComponent<CShape>()) {
 		auto transform = entity->GetComponent<CTransform>();
 		if (transform) {
-			shape->GetShape().setPosition(sf::Vector2f(transform->m_position.x, transform->m_position.y));
+			shape->GetShape().setPosition(sf::Vector2f(transform->position.x, transform->position.y));
 		}
 		window.draw(shape->GetShape());
 	}
@@ -228,7 +228,10 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 			sf::VertexArray va(sf::PrimitiveType::Triangles);
 			va.clear();
 
-			// Build vertex array for all entities in this batch
+			// Build vertex array for all entities in this batch...future me : consider using a pool of vertex arrays to avoid reallocating each frame also 
+			// I'm using the shorthand va.append() to add vertices to the vertex array (va), which is more efficient than using push_back() for each vertex.
+			// I know I'm going to look at this code in the future and wonder why I didn't use push_back(), so I'm leaving this comment to explain my reasoning.
+			// I'm also going to wonder what the hell I was thinking when I wrote this code, but that's a different story. (Fix this comment later, future me.)
 			for (Entity* e : entitiesForAtlas) {
 				auto tex = e->GetComponent<CTexture>();
 				auto transform = e->GetComponent<CTransform>();
@@ -243,8 +246,8 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 					int atlasH = atlasPtr->TileHeight();
 					if (atlasW <= 0 || atlasH <= 0) {
 						// fallback to single quad
-						float x = transform->m_position.x;
-						float y = transform->m_position.y;
+						float x = transform->position.x;
+						float y = transform->position.y;
                         // add quad as two triangles
 						va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
 						va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y)));
@@ -260,8 +263,8 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 					int tilesY = static_cast<int>(std::round(tex->areaH / static_cast<float>(atlasH)));
 					for (int ty = 0; ty < tilesY; ++ty) {
 						for (int tx = 0; tx < tilesX; ++tx) {
-							float x = transform->m_position.x + tx * atlasW;
-							float y = transform->m_position.y + ty * atlasH;
+							float x = transform->position.x + tx * atlasW;
+							float y = transform->position.y + ty * atlasH;
 							// two triangles (v0,v1,v2) and (v0,v2,v3)
 							va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
 							va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y)));
@@ -272,8 +275,8 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 						}
 					}
 				} else {
-					float x = transform->m_position.x;
-					float y = transform->m_position.y;
+					float x = transform->position.x;
+					float y = transform->position.y;
 					va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
 					va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y)));
 					va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
@@ -345,7 +348,7 @@ void RenderSystem::RenderTextEntity(Entity* entity, sf::RenderWindow& window) co
 	// Determine world position: prefer transform position, fall back to entity centre
 	Vec2 worldPos = entity->GetCentrePoint();
 	if (auto transform = entity->GetComponent<CTransform>(); transform) {
-		worldPos = transform->m_position;
+		worldPos = transform->position;
 	}
 	// Apply offset from CText
 	sf::Vector2f pos(worldPos.x + txt->offset.x, worldPos.y + txt->offset.y);

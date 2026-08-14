@@ -23,8 +23,8 @@ class CTransform : public Component {
 public:
 	/////////////////////////////////
 	// Member variables for position and velocity.
-	Vec2 m_position = {0, 0}; // World position of the entity (units in pixels, with (0, 0) at the top-left corner of the window)
-	Vec2 m_velocity = {0, 0}; // Velocity of the entity (units in pixels per second, used by PhysicsSystem for movement)
+	Vec2 position = {0, 0}; // World position of the entity (units in pixels, with (0, 0) at the top-left corner of the window)
+	Vec2 velocity = {0, 0}; // Velocity of the entity (units in pixels per second, used by PhysicsSystem for movement)
 	/////////////////////////////////
 
 
@@ -32,7 +32,7 @@ public:
 	/////////////////////////////////
 	// Constructors for the CTransform component. The default constructor initializes position and velocity to zero vectors, while the constructor with parameters allows for initializing the transform with specific position and velocity values.
 	CTransform() {}
-	CTransform(const Vec2& pos, const Vec2& vel): m_position(pos), m_velocity(vel) {};
+	CTransform(const Vec2& pos, const Vec2& vel): position(pos), velocity(vel) {};
 	/////////////////////////////////
 };
 /////////////////////////////////

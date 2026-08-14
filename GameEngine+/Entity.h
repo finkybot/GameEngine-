@@ -253,7 +253,7 @@ public:
 	inline const Vec2& GetPosition() const noexcept {
 		auto transform = GetComponent<CTransform>();
 		if (transform)
-			return transform->m_position;
+			return transform->position;
 	}
 	/////////////////////////////////
 

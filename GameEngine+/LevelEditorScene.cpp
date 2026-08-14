@@ -246,25 +246,25 @@ void LevelEditorScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Default);
 	m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
 	auto cam = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
-	cam->m_isMainCamera = true;
-	cam->m_isActive = true;
-	cam->m_viewportWidth = (float)m_window.getSize().x;
-	cam->m_viewportHeight = (float)m_window.getSize().y;
-	cam->m_smoothness = 0.0f; // Disable smoothing - editor controls camera directly via panning and clamping
+	cam->isMainCamera = true;
+	cam->isActive = true;
+	cam->viewportWidth = (float)m_window.getSize().x;
+	cam->viewportHeight = (float)m_window.getSize().y;
+	cam->smoothness = 0.0f; // Disable smoothing - editor controls camera directly via panning and clamping
 
 	// Ensure initial world area is larger than the screen so the user can pan around.
 	// Make the logical map area 3x the screen size centered on the camera.
 	{
-		float mapPxW = cam->m_viewportWidth * 3.0f;
-		float mapPxH = cam->m_viewportHeight * 3.0f;
+		float mapPxW = cam->viewportWidth * 3.0f;
+		float mapPxH = cam->viewportHeight * 3.0f;
 		
 		// store world bounds so camera panning can be clamped
-		m_mapMin = Vec2(cam->m_position.x - mapPxW * 0.5f, cam->m_position.y - mapPxH * 0.5f);
-		m_mapMax = Vec2(cam->m_position.x + mapPxW * 0.5f, cam->m_position.y + mapPxH * 0.5f);
-		int tx0 = (int)std::floor((cam->m_position.x - mapPxW * 0.5f) / m_tileSize);
-		int ty0 = (int)std::floor((cam->m_position.y - mapPxH * 0.5f) / m_tileSize);
-		int tx1 = (int)std::floor((cam->m_position.x + mapPxW * 0.5f) / m_tileSize);
-		int ty1 = (int)std::floor((cam->m_position.y + mapPxH * 0.5f) / m_tileSize);
+		m_mapMin = Vec2(cam->position.x - mapPxW * 0.5f, cam->position.y - mapPxH * 0.5f);
+		m_mapMax = Vec2(cam->position.x + mapPxW * 0.5f, cam->position.y + mapPxH * 0.5f);
+		int tx0 = (int)std::floor((cam->position.x - mapPxW * 0.5f) / m_tileSize);
+		int ty0 = (int)std::floor((cam->position.y - mapPxH * 0.5f) / m_tileSize);
+		int tx1 = (int)std::floor((cam->position.x + mapPxW * 0.5f) / m_tileSize);
+		int ty1 = (int)std::floor((cam->position.y + mapPxH * 0.5f) / m_tileSize);
 		m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, m_marginChunks);
 		
 		// finalize any background loads immediately so chunks are ready
@@ -409,7 +409,7 @@ void LevelEditorScene::HandleEvent(const std::optional<sf::Event>& event) {
 			// scroll down = zoom out (larger index = more zoomed out)
 			m_zoomIndex = std::min(kMaxIndex, m_zoomIndex + 1);
 		}
-		cam->m_zoom = k_zoomSteps[m_zoomIndex];
+		cam->zoom = k_zoomSteps[m_zoomIndex];
 	}
 }
 /////////////////////////////////
@@ -486,7 +486,7 @@ void LevelEditorScene::Update(float deltaTime) {
 			// record current camera position
 			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 			if (camOpt) {
-				m_camPanStart = (*camOpt)->m_position;
+				m_camPanStart = (*camOpt)->position;
 			} else {
 				// no main camera found
 			}
@@ -496,7 +496,7 @@ void LevelEditorScene::Update(float deltaTime) {
 			// panning ended
 			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 			if (camOpt) {
-				Vec2 endPos = (*camOpt)->m_position;
+				Vec2 endPos = (*camOpt)->position;
 				(void)endPos; // suppressed debug log
 			} else {
 				// no main camera found
@@ -516,8 +516,8 @@ void LevelEditorScene::Update(float deltaTime) {
 			Vec2 newPos = m_camPanStart - Vec2((float)delta.x, (float)delta.y);
 			// Compute current map bounds from loaded chunks so clamping is accurate at panning time
 			CCamera* cam = *camOpt;
-			float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
-			float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
+			float halfW = cam->viewportWidth * 0.5f * cam->zoom;
+			float halfH = cam->viewportHeight * 0.5f * cam->zoom;
 			if (m_haveBounds) {
 				float minCx = m_mapMin.x + halfW;
 				float maxCx = m_mapMax.x - halfW;
@@ -528,11 +528,11 @@ void LevelEditorScene::Update(float deltaTime) {
 				if (minCy <= maxCy) newPos.y = std::clamp(newPos.y, minCy, maxCy);
 				else newPos.y = (m_mapMin.y + m_mapMax.y) * 0.5f;
 			}
-			(*camOpt)->m_position = newPos;
+			(*camOpt)->position = newPos;
 			// Also update the camera entity's transform so CameraSystem smoothing doesn't pull it back
 			if (m_cameraEntity) {
 				if (auto t = m_cameraEntity->GetComponent<CTransform>()) {
-					t->m_position = newPos;
+					t->position = newPos;
 				}
 			}
 		}
@@ -734,8 +734,8 @@ void LevelEditorScene::Render() {
 		if (camOpt) {
 			CCamera* cam = *camOpt;
 			ImGui::SeparatorText("Camera");
-			ImGui::Text("Position: (%.1f, %.1f)", cam->m_position.x, cam->m_position.y);
-			ImGui::Text("Zoom:     %.2fx", cam->m_zoom);
+			ImGui::Text("Position: (%.1f, %.1f)", cam->position.x, cam->position.y);
+			ImGui::Text("Zoom:     %.2fx", cam->zoom);
 		}
 	}
 
@@ -1058,22 +1058,22 @@ void LevelEditorScene::CameraZoomWindow() {
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (camOpt) {
 		CCamera* cam = *camOpt;
-		ImGui::Text("FPS: %.1f  Camera: (%.1f, %.1f)  Zoom: %.2fx", fps, cam->m_position.x, cam->m_position.y,
-					cam->m_zoom);
+		ImGui::Text("FPS: %.1f  Camera: (%.1f, %.1f)  Zoom: %.2fx", fps, cam->position.x, cam->position.y,
+					cam->zoom);
 		constexpr int kMaxIndex = static_cast<int>(std::size(k_zoomSteps)) - 1;
 		if (ImGui::Button("Zoom In") && m_zoomIndex > 0) {
 			m_zoomIndex--;
-			cam->m_zoom = k_zoomSteps[m_zoomIndex];
+			cam->zoom = k_zoomSteps[m_zoomIndex];
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Reset Zoom")) {
 			m_zoomIndex = 1;
-			cam->m_zoom = k_zoomSteps[m_zoomIndex];
+			cam->zoom = k_zoomSteps[m_zoomIndex];
 		}
 		ImGui::SameLine();
 		if (ImGui::Button("Zoom Out") && m_zoomIndex < kMaxIndex) {
 			m_zoomIndex++;
-			cam->m_zoom = k_zoomSteps[m_zoomIndex];
+			cam->zoom = k_zoomSteps[m_zoomIndex];
 		}
 	} else {
 		ImGui::Text("FPS: %.1f  Camera: (no main camera)", fps);
@@ -1161,9 +1161,9 @@ void LevelEditorScene::BoundsInfoWindow(float x, float y, float alpha) {
 	ImGui::Checkbox("Show Chunk Diagnostics", &m_showChunkDiagnostics);
 	if (camOpt) {
 		CCamera* cam = *camOpt;
-		float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
-		float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
-		ImGui::Text("Camera pos=(%.1f, %.1f) zoom=%.2f", cam->m_position.x, cam->m_position.y, cam->m_zoom);
+		float halfW = cam->viewportWidth * 0.5f * cam->zoom;
+		float halfH = cam->viewportHeight * 0.5f * cam->zoom;
+		ImGui::Text("Camera pos=(%.1f, %.1f) zoom=%.2f", cam->position.x, cam->position.y, cam->zoom);
 		ImGui::Text("Half view=(%.1f, %.1f)", halfW, halfH);
 		if (m_haveBounds) {
 			ImGui::Text("minCx=%.1f maxCx=%.1f", m_mapMin.x + halfW, m_mapMax.x - halfW);
@@ -1263,7 +1263,7 @@ void LevelEditorScene::EnqueueMapBounds() {
 	// If we have a main camera, adjust the outline thickness based on the zoom level to keep it 
 	// visually consistent regardless of zoom.
 	if (camOpt) {
-		float zoom = (*camOpt)->m_zoom;
+		float zoom = (*camOpt)->zoom;
 		outlineThickness = 2.0f / zoom;
 	}
 
@@ -1477,12 +1477,12 @@ void LevelEditorScene::EnsureVisibleChunks() {
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (!camOpt) return;
 	CCamera* cam = *camOpt;
-	float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
-	float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
-	int tx0 = (int)std::floor((cam->m_position.x - halfW) / m_tileSize);
-	int ty0 = (int)std::floor((cam->m_position.y - halfH) / m_tileSize);
-	int tx1 = (int)std::floor((cam->m_position.x + halfW) / m_tileSize);
-	int ty1 = (int)std::floor((cam->m_position.y + halfH) / m_tileSize);
+	float halfW = cam->viewportWidth * 0.5f * cam->zoom;
+	float halfH = cam->viewportHeight * 0.5f * cam->zoom;
+	int tx0 = (int)std::floor((cam->position.x - halfW) / m_tileSize);
+	int ty0 = (int)std::floor((cam->position.y - halfH) / m_tileSize);
+	int tx1 = (int)std::floor((cam->position.x + halfW) / m_tileSize);
+	int ty1 = (int)std::floor((cam->position.y + halfH) / m_tileSize);
 	m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, m_marginChunks);
 }
 /////////////////////////////////
@@ -1523,12 +1523,12 @@ void LevelEditorScene::ApplyMainCameraView() {
 	if (!camOpt) return;
 	CCamera* cam = *camOpt;
 	sf::View v;
-	v.setSize(sf::Vector2f(cam->m_viewportWidth * cam->m_zoom, cam->m_viewportHeight * cam->m_zoom));
+	v.setSize(sf::Vector2f(cam->viewportWidth * cam->zoom, cam->viewportHeight * cam->zoom));
 
 	// Clamp camera using the fixed disk-derived bounds (set once in InitializeGame, updated when tiles are painted).
-	float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
-	float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
-	Vec2 newPos = cam->m_position;
+	float halfW = cam->viewportWidth * 0.5f * cam->zoom;
+	float halfH = cam->viewportHeight * 0.5f * cam->zoom;
+	Vec2 newPos = cam->position;
 	if (m_haveBounds) {
 		float minCx = m_mapMin.x + halfW;
 		float maxCx = m_mapMax.x - halfW;
@@ -1539,12 +1539,12 @@ void LevelEditorScene::ApplyMainCameraView() {
 		if (minCy <= maxCy) newPos.y = std::clamp(newPos.y, minCy, maxCy);
 		else newPos.y = (m_mapMin.y + m_mapMax.y) * 0.5f;
 	}
-	cam->m_position = newPos;
+	cam->position = newPos;
 
 	// Snap camera to sub-pixel grid based on zoom level to reduce shimmer/jitter when rendering
 	// At zoom levels 2.0x or higher, snap to tile alignment (32 pixels). Otherwise snap to half-pixel.
 	// This ensures that the view center aligns with rasterization boundaries and remains stable during camera movement.
-	float snapGrid = (cam->m_zoom >= 2.0f) ? 32.0f : 0.5f;  // Snap to tile grid at 2x+ zoom, else half-pixel
+	float snapGrid = (cam->zoom >= 2.0f) ? 32.0f : 0.5f;  // Snap to tile grid at 2x+ zoom, else half-pixel
 	float snapX = std::round(newPos.x / snapGrid) * snapGrid;
 	float snapY = std::round(newPos.y / snapGrid) * snapGrid;
 

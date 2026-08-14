@@ -229,7 +229,7 @@ void MusicVisualizerScene::UpdateEqualizerBars(const std::vector<float>& bands) 
 			if (alpha < 40) alpha = 40; // ensure minimum visibility
 			rectShape->SetColor(128.0f + 127.0f * (i / static_cast<float>(m)), 128.0f + 127.0f * level, 200.0f, alpha);
 		}
-		xf->m_position = Vec2(bx, by);
+		xf->position = Vec2(bx, by);
 	}
     (void)0; // diagnostics removed
 }
@@ -740,13 +740,13 @@ void MusicVisualizerScene::DrawPlaybackControls() {
 
 			if (ImGui::SliderFloat("Music X Position", &m_musicX, 0.0f, static_cast<float>(m_window.getSize().x), "%.0f")) {
 				if (auto transform = m_musicEntity->GetComponent<CTransform>()) {
-					transform->m_position.x = m_musicX;
+					transform->position.x = m_musicX;
 				}
 			}
 
 			if (ImGui::SliderFloat("Music Y Position", &m_musicY, 0.0f, static_cast<float>(m_window.getSize().y), "%.0f")) {
 				if (auto transform = m_musicEntity->GetComponent<CTransform>()) {
-					transform->m_position.y = m_musicY;
+					transform->position.y = m_musicY;
 				}
 			}
 

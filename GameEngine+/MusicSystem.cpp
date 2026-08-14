@@ -485,7 +485,7 @@ void MusicSystem::Process() {
 
 		// Apply spatial audio if the entity has a transform component
 		if (auto* transform = entity->GetComponent<CTransform>()) {
-			ApplySpatialAudioToMusic(*music, *musicComp, transform->m_position);
+			ApplySpatialAudioToMusic(*music, *musicComp, transform->position);
 		}
 
 		//std::cout << "Time left to play for music " << music->getDuration().asSeconds() - music->getPlayingOffset().asSeconds() << ": " << std::endl;

@@ -221,7 +221,7 @@ void SoundSystem::Process(EntityManager& em, float deltaTime) {
 		if (sound->m_is3D) {
 			if (auto* transform = entity->GetComponent<CTransform>()) {
 				if (sound->m_sound) {
-					ApplySpatialAudio(*sound->m_sound, *sound, transform->m_position);
+					ApplySpatialAudio(*sound->m_sound, *sound, transform->position);
 				}
 			}
 		}
@@ -277,7 +277,7 @@ void SoundSystem::Update(float deltaTime) {
 
 		// Update spatial audio distance
 		if (auto* transform = entity->GetComponent<CTransform>()) {
-			Vec2 delta = transform->m_position - m_listenerPosition;
+			Vec2 delta = transform->position - m_listenerPosition;
 			sound->m_currentDistance = delta.Mag();
 		}
 	}

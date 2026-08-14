@@ -50,7 +50,7 @@ void CameraSystem::Update(float deltaTime, EntityManager& entityManager) {
 		
 		// Check if the entity has a CCamera component and if it's active (We only want to apply shake to active cameras)
 		if (auto camera = entity->GetComponent<CCamera>()) {
-			if (camera->m_isActive) {
+			if (camera->isActive) {
 				auto it = s_shakeDataMap.find(camera); // Look up shake data for this camera	
 				if (it != s_shakeDataMap.end()) {	   // If shake data exists for this camera, update the shake effect
 					ShakeData& shakeData = it->second; // Reference to the shake data for easier access
@@ -60,9 +60,9 @@ void CameraSystem::Update(float deltaTime, EntityManager& entityManager) {
 						shakeData.duration -= deltaTime;
 						float currentMagnitude = shakeData.magnitude * (shakeData.duration / shakeData.magnitude); // Linear falloff
 						std::uniform_real_distribution<float> dist(-currentMagnitude, currentMagnitude);
-						camera->m_position = shakeData.basePosition + Vec2(dist(s_rng), dist(s_rng));
+						camera->position = shakeData.basePosition + Vec2(dist(s_rng), dist(s_rng));
 					} else {
-						camera->m_position = shakeData.basePosition; // Reset to original position after shake ends
+						camera->position = shakeData.basePosition; // Reset to original position after shake ends
 						s_shakeDataMap.erase(it);
 					}
 				}
@@ -72,25 +72,25 @@ void CameraSystem::Update(float deltaTime, EntityManager& entityManager) {
 		// If the camera is following an entity, update its position based on the target's position and the camera's smoothness factor
 		if (auto tform = entity->GetComponent<CTransform>()) {
 			if (auto camera = entity->GetComponent<CCamera>()) {
-				if (camera->m_isActive) {
-					Vec2 targetPosition = tform->m_position; // Get the target position from the transform component
-					camera->m_position += (targetPosition - camera->m_position) * camera->m_smoothness; // Smoothly move towards the target position
+				if (camera->isActive) {
+					Vec2 targetPosition = tform->position; // Get the target position from the transform component
+					camera->position += (targetPosition - camera->position) * camera->smoothness; // Smoothly move towards the target position
 				}
 			}
 		}
 
 		// Ensure camera position is clamped within positive bounds it shouldn't go negative, or below half the viewport size (to avoid showing empty space)
 		if (auto camera = entity->GetComponent<CCamera>()) {
-			if (camera->m_isActive) {
-				float halfW = camera->m_viewportWidth * 0.5f * camera->m_zoom; // Calculate half the viewport width in world units
-				float halfH = camera->m_viewportHeight * 0.5f * camera->m_zoom; // Calculate half the viewport height in world units
+			if (camera->isActive) {
+				float halfW = camera->viewportWidth * 0.5f * camera->zoom; // Calculate half the viewport width in world units
+				float halfH = camera->viewportHeight * 0.5f * camera->zoom; // Calculate half the viewport height in world units
 
 				// now ensure the camera's position is not less than half the viewport size, effectively clamping it to positive coordinates
 				// Why? Because at the momement i can create map chunks in negative coordinates, and the camera can pan into them,
 				// and its causing issues with path finding and other systems that assume the camera is always in positive coordinates. 
 				// This is a temporary fix until I implement proper world bounds.
-				camera->m_position.x = std::max(camera->m_position.x, halfW);
-				camera->m_position.y = std::max(camera->m_position.y, halfH);
+				camera->position.x = std::max(camera->position.x, halfW);
+				camera->position.y = std::max(camera->position.y, halfH);
 			}
 		}
 	}
@@ -106,7 +106,7 @@ std::optional<CCamera*> CameraSystem::GetMainCamera(EntityManager& entityManager
 	for (auto& uniquePtr : entityManager.GetEntities()) {
 		Entity* entity = uniquePtr.get(); // Get raw pointer from unique_ptr for easier access
 		if (auto camera = entity->GetComponent<CCamera>()) {
-			if (camera->m_isMainCamera) {
+			if (camera->isMainCamera) {
 				return camera; // Return the main camera if found
 			}
 		}
@@ -122,7 +122,7 @@ std::optional<CCamera*> CameraSystem::GetMainCamera(EntityManager& entityManager
 // the specified magnitude and duration, and stores it in the s_shakeDataMap for processing in the Update method.
 void CameraSystem::ApplyCameraShake(CCamera& camera, float magnitude, float duration) {
 	ShakeData shakeData;
-	shakeData.basePosition = camera.m_position;
+	shakeData.basePosition = camera.position;
 	shakeData.magnitude = magnitude;
 	shakeData.duration = duration;
 	s_shakeDataMap[&camera] = shakeData;
@@ -139,7 +139,7 @@ void CameraSystem::SetMainCamera(EntityManager& entityManager, Entity* cameraEnt
 	for (auto& uniquePtr : entityManager.GetEntities()) {
 		Entity* entity = uniquePtr.get(); // Get raw pointer from unique_ptr for easier access
 		if (auto camera = entity->GetComponent<CCamera>()) {
-			camera->m_isMainCamera = (entity == cameraEntity); // Set m_isMainCamera to true for the specified camera entity, false for all others
+			camera->isMainCamera = (entity == cameraEntity); // Set isMainCamera to true for the specified camera entity, false for all others
 		}
 	}
 }
@@ -148,12 +148,12 @@ void CameraSystem::SetMainCamera(EntityManager& entityManager, Entity* cameraEnt
  
 
 /////////////////////////////////
-// ClearMainCamera - Clears the main camera designation from all cameras. This iterates through all entities and sets the m_isMainCamera flag to false on any entity with a CCamera component.
+// ClearMainCamera - Clears the main camera designation from all cameras. This iterates through all entities and sets the isMainCamera flag to false on any entity with a CCamera component.
 void CameraSystem::ClearMainCamera(EntityManager& entityManager) {
 	for (auto& uniquePtr : entityManager.GetEntities()) {
 		Entity* entity = uniquePtr.get(); // Get raw pointer from unique_ptr for easier access
 		if (auto camera = entity->GetComponent<CCamera>()) {
-			camera->m_isMainCamera = false; // Clear the main camera designation
+			camera->isMainCamera = false; // Clear the main camera designation
 		}
 	}
 }
@@ -168,7 +168,7 @@ void CameraSystem::SetCameraSmoothness(EntityManager& entityManager, float smoot
 	for (auto& uniquePtr : entityManager.GetEntities()) {
 		Entity* entity = uniquePtr.get(); // Get raw pointer from unique_ptr for easier access
 		if (auto camera = entity->GetComponent<CCamera>()) {
-			camera->m_smoothness = smoothness; // Set the smoothness factor for the camera
+			camera->smoothness = smoothness; // Set the smoothness factor for the camera
 		}
 	}
 }
@@ -182,8 +182,8 @@ void CameraSystem::SetCameraViewportSize(EntityManager& entityManager, float wid
 	for (auto& uniquePtr : entityManager.GetEntities()) {
 		Entity* entity = uniquePtr.get(); // Get raw pointer from unique_ptr for easier access
 		if (auto camera = entity->GetComponent<CCamera>()) {
-			camera->m_viewportWidth = width; // Set the viewport width for the camera
-			camera->m_viewportHeight = height; // Set the viewport height for the camera
+			camera->viewportWidth = width; // Set the viewport width for the camera
+			camera->viewportHeight = height; // Set the viewport height for the camera
 		}
 	}
 }
@@ -196,9 +196,9 @@ void CameraSystem::SetCameraViewportSize(EntityManager& entityManager, float wid
 void CameraSystem::SetCameraOnEntity(EntityManager& entityManager, Entity* cameraEntity, const Vec2& position, float zoom, float rotation) {
 	if (!cameraEntity)	return; // Guard: If the provided camera entity is null, do nothing
 	if (auto camera = cameraEntity->GetComponent<CCamera>()) {
-		camera->m_position = position; // Set the camera's position to the specified position
-		camera->m_zoom = zoom;		   // Set the camera's zoom level to the specified zoom
-		camera->m_rotation = rotation; // Set the camera's rotation angle to the specified rotation
+		camera->position = position; // Set the camera's position to the specified position
+		camera->zoom = zoom;		   // Set the camera's zoom level to the specified zoom
+		camera->rotation = rotation; // Set the camera's rotation angle to the specified rotation
 	}
 }
 /////////////////////////////////
@@ -212,7 +212,7 @@ void CameraSystem::UpdateCameraPosition(EntityManager& entityManager, Entity* ca
 	if (!cameraEntity) return; // Guard: If the provided camera entity is null, do nothing
 	if (auto camera = cameraEntity->GetComponent<CCamera>()) {
 		// Smoothly interpolate the camera's position towards the target position using the smoothness factor
-		camera->m_position = camera->m_position + (targetPosition - camera->m_position) * camera->m_smoothness * deltaTime;
+		camera->position = camera->position + (targetPosition - camera->position) * camera->smoothness * deltaTime;
 	}
 }
 /////////////////////////////////
@@ -225,7 +225,7 @@ void CameraSystem::UpdateCameraRotation(EntityManager& entityManager, Entity* ca
 	if (!cameraEntity)	return; // Guard: If the provided camera entity is null, do nothing
 	if (auto camera = cameraEntity->GetComponent<CCamera>()) {
 		// Smoothly interpolate the camera's rotation towards the target rotation using the smoothness factor
-		camera->m_rotation = camera->m_rotation + (targetRotation - camera->m_rotation) * camera->m_smoothness * deltaTime;
+		camera->rotation = camera->rotation + (targetRotation - camera->rotation) * camera->smoothness * deltaTime;
 	}
 }
 /////////////////////////////////
@@ -239,7 +239,7 @@ void CameraSystem::UpdateCameraZoom(EntityManager& entityManager, Entity* camera
 	if (!cameraEntity)	return; // Guard: If the provided camera entity is null, do nothing
 	if (auto camera = cameraEntity->GetComponent<CCamera>()) {
 		// Smoothly interpolate the camera's zoom towards the target zoom using the smoothness factor
-		camera->m_zoom = camera->m_zoom + (targetZoom - camera->m_zoom) * camera->m_smoothness * deltaTime;
+		camera->zoom = camera->zoom + (targetZoom - camera->zoom) * camera->smoothness * deltaTime;
 	}
 }
 /////////////////////////////////
@@ -252,7 +252,7 @@ void CameraSystem::DeactivateCamera(EntityManager& entityManager, Entity* camera
 	if (!cameraEntity)	return; // Guard: If the provided camera entity is null, do nothing
 	auto camera = cameraEntity->GetComponent<CCamera>();
 	if (camera) {
-		camera->m_isActive = false; // Set the camera's active flag to false to deactivate it
+		camera->isActive = false; // Set the camera's active flag to false to deactivate it
 	}
 }
 /////////////////////////////////
@@ -265,7 +265,7 @@ void CameraSystem::ActivateCamera(EntityManager& entityManager, Entity* cameraEn
 	if (!cameraEntity)	return; // Guard: If the provided camera entity is null, do nothing
 	auto camera = cameraEntity->GetComponent<CCamera>();
 	if (camera) {
-		camera->m_isActive = true; // Set the camera's active flag to true to activate it
+		camera->isActive = true; // Set the camera's active flag to true to activate it
 	}
 }
 /////////////////////////////////

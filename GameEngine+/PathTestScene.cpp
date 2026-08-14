@@ -61,11 +61,11 @@ void PathTestScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
 	
 	auto camera = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
-	camera->m_isMainCamera = true;
-	camera->m_isActive = true;
-	camera->m_viewportWidth = (float)m_window.getSize().x;
-	camera->m_viewportHeight = (float)m_window.getSize().y;
-	camera->m_smoothness = 0.0f; // Disable smoothing - camera is controlled directly via panning and bounds clamping
+	camera->isMainCamera = true;
+	camera->isActive = true;
+	camera->viewportWidth = (float)m_window.getSize().x;
+	camera->viewportHeight = (float)m_window.getSize().y;
+	camera->smoothness = 0.0f; // Disable smoothing - camera is controlled directly via panning and bounds clamping
 
 	// Initialize map bounds
 	m_mapMin = Vec2(-512, -512);
@@ -328,13 +328,13 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 			if (auto cam = m_cameraEntity->GetComponent<CCamera>()) {
 				auto tr = m_cameraEntity->GetComponent<CTransform>();
 				Vec2 center = (m_mapMin + m_mapMax) * 0.5f;
-				tr->m_position = center;
-				cam->m_position = center;
+				tr->position = center;
+				cam->position = center;
 				std::cout << "  Camera centered at (" << center.x << "," << center.y << ")\n";
 
 				if (m_movementTester) {
 					if (auto testTransform = m_movementTester->GetComponent<CTransform>()) {
-						testTransform->m_position = center;
+						testTransform->position = center;
 						if (auto follower = m_movementTester->GetComponent<CPathFollower>()) {
 							follower->isActive = false;
 						}
@@ -367,8 +367,8 @@ void PathTestScene::EnsureVisibleChunks() {
 	CCamera* cam = *camOpt;
 
 	    // Convert viewport size to world-space size
-	float worldW = cam->m_viewportWidth / cam->m_zoom;
-	float worldH = cam->m_viewportHeight / cam->m_zoom;
+	float worldW = cam->viewportWidth / cam->zoom;
+	float worldH = cam->viewportHeight / cam->zoom;
 
 
 	// Ensure chunks within camera view + margin are loaded
@@ -376,10 +376,10 @@ void PathTestScene::EnsureVisibleChunks() {
 	float halfH = worldH * 0.5f;
 
 
-	int tx0 = (int)std::floor((cam->m_position.x - halfW) / m_tileSize);
-	int ty0 = (int)std::floor((cam->m_position.y - halfH) / m_tileSize);
-	int tx1 = (int)std::ceil((cam->m_position.x + halfW) / m_tileSize);
-	int ty1 = (int)std::ceil((cam->m_position.y + halfH) / m_tileSize);
+	int tx0 = (int)std::floor((cam->position.x - halfW) / m_tileSize);
+	int ty0 = (int)std::floor((cam->position.y - halfH) / m_tileSize);
+	int tx1 = (int)std::ceil((cam->position.x + halfW) / m_tileSize);
+	int ty1 = (int)std::ceil((cam->position.y + halfH) / m_tileSize);
 	m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, 2);
 	
 	// 3. Evict chunks outside radius
@@ -397,12 +397,12 @@ void PathTestScene::ApplyMainCameraView() {
 	CCamera* cam = *camOpt;
 
 	sf::View v;
-	v.setSize(sf::Vector2f(cam->m_viewportWidth / cam->m_zoom, cam->m_viewportHeight / cam->m_zoom));
+	v.setSize(sf::Vector2f(cam->viewportWidth / cam->zoom, cam->viewportHeight / cam->zoom));
 
 	// Clamp camera to bounds
-	float halfW = (cam->m_viewportWidth / cam->m_zoom) * 0.5f;
-	float halfH = (cam->m_viewportHeight / cam->m_zoom) * 0.5f;
-	Vec2 newPos = cam->m_position;
+	float halfW = (cam->viewportWidth / cam->zoom) * 0.5f;
+	float halfH = (cam->viewportHeight / cam->zoom) * 0.5f;
+	Vec2 newPos = cam->position;
 
 	if (m_haveBounds) {
 		float minCx = m_mapMin.x + halfW;
@@ -423,11 +423,11 @@ void PathTestScene::ApplyMainCameraView() {
 		}
 	}
 
-	cam->m_position = newPos;
+	cam->position = newPos;
 
 	// Snap camera to sub-pixel grid based on zoom level to reduce shimmer/jitter when rendering
 	// At zoom levels 2.0x or higher, snap to tile alignment (32 pixels). Otherwise snap to half-pixel.
-	float snapGrid = (cam->m_zoom >= 2.0f) ? 32.0f : 0.5f;  // Snap to tile grid at 2x+ zoom, else half-pixel
+	float snapGrid = (cam->zoom >= 2.0f) ? 32.0f : 0.5f;  // Snap to tile grid at 2x+ zoom, else half-pixel
 	float snapX = std::round(newPos.x / snapGrid) * snapGrid;
 	float snapY = std::round(newPos.y / snapGrid) * snapGrid;
 
@@ -499,7 +499,7 @@ void PathTestScene::Update(float deltaTime) {
 			// record current camera position
 			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 			if (camOpt) {
-				m_camPanStart = (*camOpt)->m_position;
+				m_camPanStart = (*camOpt)->position;
 			}
 		}
 		if (!isMiddleDown && m_panning) {
@@ -512,8 +512,8 @@ void PathTestScene::Update(float deltaTime) {
 				Vec2 newPos = m_camPanStart - Vec2((float)delta.x, (float)delta.y);
 				// clamp to bounds if available
 				CCamera* cam = *camOpt;
-				float halfW = (cam->m_viewportWidth / cam->m_zoom) * 0.5f;
-				float halfH = (cam->m_viewportHeight / cam->m_zoom) * 0.5f;
+				float halfW = (cam->viewportWidth / cam->zoom) * 0.5f;
+				float halfH = (cam->viewportHeight / cam->zoom) * 0.5f;
 				if (m_haveBounds) {
 					float minCx = m_mapMin.x + halfW;
 					float maxCx = m_mapMax.x - halfW;
@@ -524,11 +524,11 @@ void PathTestScene::Update(float deltaTime) {
 					if (minCy <= maxCy) newPos.y = std::clamp(newPos.y, minCy, maxCy);
 					else newPos.y = (m_mapMin.y + m_mapMax.y) * 0.5f;
 				}
-				(*camOpt)->m_position = newPos;
+				(*camOpt)->position = newPos;
 				// Update camera entity transform too
 				if (m_cameraEntity) {
 					if (auto t = m_cameraEntity->GetComponent<CTransform>()) {
-						t->m_position = newPos;
+						t->position = newPos;
 					}
 				}
 			}
@@ -657,16 +657,16 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 
 	// Manually convert screen pixel to world coordinates using camera
 	// screen coords are relative to viewport, need to transform through camera view
-	float halfW = cam->m_viewportWidth * 0.5f * cam->m_zoom;
-	float halfH = cam->m_viewportHeight * 0.5f * cam->m_zoom;
+	float halfW = cam->viewportWidth * 0.5f * cam->zoom;
+	float halfH = cam->viewportHeight * 0.5f * cam->zoom;
 
 	// Normalize screen coordinates to [-1, 1] range relative to viewport center
-	float normX = (2.0f * mousePixelPos.x / cam->m_viewportWidth) - 1.0f;
-	float normY = (2.0f * mousePixelPos.y / cam->m_viewportHeight) - 1.0f;
+	float normX = (2.0f * mousePixelPos.x / cam->viewportWidth) - 1.0f;
+	float normY = (2.0f * mousePixelPos.y / cam->viewportHeight) - 1.0f;
 
 	// Map to world space using camera position and zoom
-	float worldX = cam->m_position.x + normX * halfW;
-	float worldY = cam->m_position.y + normY * halfH;
+	float worldX = cam->position.x + normX * halfW;
+	float worldY = cam->position.y + normY * halfH;
 	Vec2 mouseWorld(worldX, worldY);
 
 	bool leftMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
@@ -706,8 +706,8 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 		//int goalY = static_cast<int>(std::floor(m_manualGoal.y / tileSize));
 
 
-		int offX = m_chunkManager.GetWorldOffsetX();
-		int offY = m_chunkManager.GetWorldOffsetY();
+		int offX = m_chunkManager.worldOffsetX;
+		int offY = m_chunkManager.worldOffsetY;
 
 		int startX = static_cast<int>(std::floor(m_manualStart.x / tileSize)) - offX;
 		int startY = static_cast<int>(std::floor(m_manualStart.y / tileSize)) - offY;
@@ -752,7 +752,7 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 			// The pathfinder returns waypoints at tile centers, so start from there for alignment
 			if (worldPath.size() > 0) {
 				if (auto* transform = m_movementTester->GetComponent<CTransform>()) {
-					transform->m_position = worldPath[0];
+					transform->position = worldPath[0];
 					//std::cout << "[PathTestScene] Moving test entity to first waypoint: (" << worldPath[0].x << ", " << worldPath[0].y << ")" << std::endl;
 				}
 			}
@@ -789,7 +789,7 @@ void PathTestScene::OnExit() {
 	// Unload resources when exiting the scene
 	UnloadResources();
 	std::cout << "[PathTestScene] OnExit called, resources unloaded." << std::endl;
-	m_cameraEntity->GetComponent<CTransform>()->m_position = Vec2::Zero;
+	m_cameraEntity->GetComponent<CTransform>()->position = Vec2::Zero;
 }
 /////////////////////////////////
  

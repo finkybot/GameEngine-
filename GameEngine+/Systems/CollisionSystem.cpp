@@ -115,10 +115,10 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 		Vec2 currentVel = Vec2::Zero;
 		Vec2 otherVel = Vec2::Zero;
 		if (auto t1 = entity1->GetComponent<CTransform>())
-			currentVel = t1->m_velocity;
+			currentVel = t1->velocity;
 		//else currentVel = shape1->m_velocity;
 		if (auto t2 = entity2->GetComponent<CTransform>())
-			otherVel = t2->m_velocity;
+			otherVel = t2->velocity;
 		//else otherVel = shape2->m_velocity;
 
 		float currentSpeed = std::sqrt(currentVel.x * currentVel.x + currentVel.y * currentVel.y);
@@ -237,7 +237,7 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const {
 	Vec2 unitNorm = distanceVec / scalerDist;
 
 	// Relative velocity
-	Vec2 relVel = entity1->GetComponent<CTransform>()->m_velocity - entity2->GetComponent<CTransform>()->m_velocity;
+	Vec2 relVel = entity1->GetComponent<CTransform>()->velocity - entity2->GetComponent<CTransform>()->velocity;
 
 	// Velocity along the normal
 	float velAlongNormal = relVel.x * unitNorm.x + relVel.y * unitNorm.y;
@@ -254,13 +254,13 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const {
 	impulse /= 2; // Assuming equal mass for both circles
 
 	// Apply impulse to the circles' velocities
-	Vec2 vel1 = entity1->GetComponent<CTransform>()->m_velocity;
-	Vec2 vel2 = entity2->GetComponent<CTransform>()->m_velocity;
+	Vec2 vel1 = entity1->GetComponent<CTransform>()->velocity;
+	Vec2 vel2 = entity2->GetComponent<CTransform>()->velocity;
 
 	// Update velocities based on impulse and collision normal
-	entity1->GetComponent<CTransform>()->m_velocity =
+	entity1->GetComponent<CTransform>()->velocity =
 		Vec2(vel1.x - impulse * unitNorm.x, vel1.y - impulse * unitNorm.y);
-	entity2->GetComponent<CTransform>()->m_velocity =
+	entity2->GetComponent<CTransform>()->velocity =
 		Vec2(vel2.x + impulse * unitNorm.x, vel2.y + impulse * unitNorm.y);
 
 	// Positional correction to avoid sinking
@@ -270,12 +270,12 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const {
 		const float slop = 0.01f;	// usually 0.01 to 0.1
 		float correction = std::max(overlap - slop, 0.0f) / 2 * percent;
 
-		Vec2 pos1 = entity1->GetComponent<CTransform>()->m_position;
-		Vec2 pos2 = entity2->GetComponent<CTransform>()->m_position;
+		Vec2 pos1 = entity1->GetComponent<CTransform>()->position;
+		Vec2 pos2 = entity2->GetComponent<CTransform>()->position;
 
-		entity1->GetComponent<CTransform>()->m_position =
+		entity1->GetComponent<CTransform>()->position =
 			Vec2(pos1.x - correction * unitNorm.x, pos1.y - correction * unitNorm.y);
-		entity2->GetComponent<CTransform>()->m_position =
+		entity2->GetComponent<CTransform>()->position =
 			Vec2(pos2.x + correction * unitNorm.x, pos2.y + correction * unitNorm.y);
 	}
 }

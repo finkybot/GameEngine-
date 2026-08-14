@@ -152,7 +152,7 @@ public:
 	// Public member variables for the ChunkManager class for world mask for collision, pathfinding, and other gameplay mechanics. 
 	// Each value corresponds to a specific tile's collision properties.
 	std::vector<uint8_t> worldMask;
-	int m_worldOffsetX = 0, m_worldOffsetY = 0; // world offset in pixels for coordinate system alignment
+	int worldOffsetX = 0, worldOffsetY = 0; // world offset in pixels for coordinate system alignment
 	int worldWidth = 0, worldHeight = 0;
 
 
@@ -165,12 +165,12 @@ public:
 	int SetTileAt(int tileX, int tileY, int tileValue, int layerIndex = 0);
 
 
-	int GetWorldWidth() const { return worldWidth; }
-	int GetWorldHeight() const { return worldHeight; }
+	//int GetWorldWidth() const { return worldWidth; }
+	//int GetWorldHeight() const { return worldHeight; }
 	std::vector<uint8_t> GetWorldMask() const { return worldMask; }
 
-	int GetWorldOffsetX() const { return m_worldOffsetX; }
-	int GetWorldOffsetY() const { return m_worldOffsetY; }
+	//int GetWorldOffsetX() const { return worldOffsetX; }
+	//int GetWorldOffsetY() const { return worldOffsetY; }
 	/////////////////////////////////
 	
 	
@@ -224,8 +224,8 @@ public:
 
 	/////////////////////////////////
 	void SetWorldOffset(int offsetX, int offsetY) {
-		m_worldOffsetX = offsetX;
-		m_worldOffsetY = offsetY;
+		worldOffsetX = offsetX;
+		worldOffsetY = offsetY;
 	}
 	/////////////////////////////////
 

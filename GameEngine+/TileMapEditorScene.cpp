@@ -916,8 +916,8 @@ void TileMapEditorScene::UpdateExplosions() {
 						float radiusDifference = explosion->GetRadius();
 						explosion->SetRadius(explosion->GetRadius() * 1.004f);
 						radiusDifference = explosion->GetRadius() - radiusDifference;
-						Vec2 explosionPosition = entity->GetComponent<CTransform>()->m_position;
-						entity->GetComponent<CTransform>()->m_position = Vec2(explosionPosition.x, explosionPosition.y);
+						Vec2 explosionPosition = entity->GetComponent<CTransform>()->position;
+						entity->GetComponent<CTransform>()->position = Vec2(explosionPosition.x, explosionPosition.y);
 						sf::Color currentColor = explosion->GetColor();
 						explosion->SetColor(static_cast<float>(currentColor.r), static_cast<float>(currentColor.g),
 											static_cast<float>(currentColor.b), newAlpha);

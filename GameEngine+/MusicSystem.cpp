@@ -530,8 +530,7 @@ void MusicSystem::Process() {
 
 
 /////////////////////////////////
-// AnalysisThreadFunc - runs on a dedicated thread at ~30 Hz. Reads playhead snapshots written by Process(), seeks/reads from InputSoundFile, 
-// performs FFT or Goertzel analysis, and stores results in m_levels / m_spectra.
+// AnalysisThreadFunc - This method runs in a separate thread and performs audio analysis on the currently playing music tracks. It wakes up at ~60 Hz,
 void MusicSystem::AnalysisThreadFunc() {
 	using namespace std::chrono_literals;
 	std::unordered_map<size_t, float> lastAnalyzedSeconds;
@@ -563,28 +562,26 @@ void MusicSystem::AnalysisThreadFunc() {
 		bool useFFT;
 		int fftSize;
 		
-		// Make a local copy of the EQ center frequencies for use in this analysis iteration. This allows the main thread to modify the center 
-		// frequencies without affecting the analysis thread until the next iteration, and avoids holding the levels mutex while performing analysis.
+		// Copy the center frequencies for the EQ bands
 		std::vector<float> eqCenterFreqs;
 		
+		// Lock the levels mutex to safely read the configuration values for the analysis
 		std::lock_guard<std::recursive_mutex> lk(m_levelsMutex);
 		eqBandCount = m_eqBandCount;
 		spectrumSmoothing = m_spectrumSmoothing;
-		useFFT = m_useFFT;
-		fftSize = m_fftSize;
+		useFFT = m_useFFT; // Whether to use FFT analysis or not
+		fftSize = m_fftSize; // The size of the FFT to use for analysis
 		eqCenterFreqs = m_eqCenterFreqs;
 		
-		// For each active music track, read a window of audio samples around the playhead position, compute the RMS level and spectrum, and store the results. 
-		// I use the playhead snapshot to know where to read from each track's sound file, while the buffer snapshot is used to access the sound files without 
-		// holding locks during analysis.
+		// Iterate over the snapshot of buffers and playhead positions to perform analysis
 		for (auto& [id, soundFile] : bufSnap) {
 			if (!soundFile) continue;
 			auto pit = playheadSnap.find(id);
 			if (pit == playheadSnap.end()) continue;
 			float seconds = pit->second;
 
-			// If playhead hasn't moved meaningfully since last analysis, skip this pass.
-			// This avoids repeated seek/read/decode work (especially noticeable on very large files or paused playback).
+			// Avoid analyzing the same playhead position repeatedly (e.g., when paused or not moving); this should reduce CPU usage 
+			// when the playhead is not moving.
 			auto lastIt = lastAnalyzedSeconds.find(id);
 			if (lastIt != lastAnalyzedSeconds.end()) {
 				if (std::fabs(seconds - lastIt->second) < 0.002f) {
@@ -593,9 +590,10 @@ void MusicSystem::AnalysisThreadFunc() {
 			}
 			lastAnalyzedSeconds[id] = seconds;
 
+			// Get the sample rate, channel count, and total sample count from the sound file
 			unsigned int sampleRate = soundFile->getSampleRate();
 			unsigned int channels = soundFile->getChannelCount();
-			size_t totalSamples = static_cast<size_t>(soundFile->getSampleCount());
+			size_t totalSamples = static_cast<size_t>(soundFile->getSampleCount()); // Get the total number of samples in the sound file
 
 			if (sampleRate == 0 || channels == 0) continue;
 
@@ -614,7 +612,7 @@ void MusicSystem::AnalysisThreadFunc() {
 			if (start < 0) start = 0;
 
 			// Avoid expensive deep seeks every analysis tick: read sequentially when playhead movement is continuous,
-			// and only seek on startup / large jumps (e.g., user scrub).
+			// and only seek on startup / large jumps (e.g. when the user scrubs the playhead).
 			bool needSeek = true;
 			auto cursorIt = lastReadCursorSamples.find(id);
 			if (cursorIt != lastReadCursorSamples.end()) {
@@ -625,6 +623,7 @@ void MusicSystem::AnalysisThreadFunc() {
 				}
 			}
 
+			// Seek or read to the analysis window start position
 			if (needSeek) {
 				soundFile->seek(static_cast<size_t>(start));
 				lastReadCursorSamples[id] = start;
@@ -642,6 +641,7 @@ void MusicSystem::AnalysisThreadFunc() {
 				}
 			}
 
+			// Read the analysis window samples into a buffer
 			std::vector<short> sampleBuf(windowSamples, 0);
 			size_t readCount = soundFile->read(sampleBuf.data(), windowSamples);
 			const short* samples = sampleBuf.data();
@@ -677,7 +677,7 @@ void MusicSystem::AnalysisThreadFunc() {
 					mono[i] = acc / static_cast<float>(channels);
 				}
 
-				// Apply Hanning window
+				// Apply Hanning window, to reduce spectral leakage and improve frequency resolution in the FFT output. "I don't know what that means, but it sounds impressive." - SpongeBob Squarepants
 				for (int i = 0; i < N; ++i) {
 					float w = 0.5f * (1.0f - cosf(2.0f * 3.14159265358979323846f * static_cast<float>(i) / static_cast<float>(N)));
 					mono[i] *= w;

@@ -39,7 +39,7 @@
 TestScene::TestScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
 	: m_window(win), Scene(engine, entityManager) {
 	// Initialize ImGui with SFML backend
-	if (!ImGui::SFML::Init(engine.m_window)) {
+	if (!ImGui::SFML::Init(engine.window)) {
 		std::cerr << "Failed to initialize ImGui::SFML." << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
@@ -68,11 +68,11 @@ void TestScene::Update(float deltaTime) {
 	ReportFPS(fpsFrames, fpsLast, fpsSmooth, alpha);
 
 	// Handle events (SFML 3.0: pollEvent returns std::optional<sf::Event>)
-	while (auto eventOpt = m_gameEngine.m_window.pollEvent()) {
-		ImGui::SFML::ProcessEvent(m_gameEngine.m_window, *eventOpt);
+	while (auto eventOpt = m_gameEngine.window.pollEvent()) {
+		ImGui::SFML::ProcessEvent(m_gameEngine.window, *eventOpt);
 
 		if (eventOpt->is<sf::Event::Closed>()) {
-			m_gameEngine.m_window.close(); // window X button - always close
+			m_gameEngine.window.close(); // window X button - always close
 		}
 		// Escape is handled globally by GameEngine before scenes run, so do NOT forward it here
 		if (!eventOpt->is<sf::Event::KeyPressed>() || [&]{
@@ -111,13 +111,13 @@ void TestScene::Update(float deltaTime) {
 			if (direction == 1) {	// Move rightward
 				velocityX = velocityX * -1.0f; // Reverse velocity for rightward movement
 				spawnX = std::uniform_real_distribution<float>(-100.0f, 0.0f)(m_generator); // Just off left edge
-				spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.m_windowSize.y))(
+				spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.windowSize.y))(
 					m_generator);
 			} else {
 				// Spawn off the right edge of screen, move left across screen with randomized leftward velocity
-				spawnX = static_cast<float>(m_gameEngine.m_windowSize.x) +
+				spawnX = static_cast<float>(m_gameEngine.windowSize.x) +
 						 std::uniform_real_distribution<float>(0.0f, 100.0f)(m_generator); // Just off right edge
-				spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.m_windowSize.y))(
+				spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.windowSize.y))(
 					m_generator);
 			}
 
@@ -219,8 +219,8 @@ void TestScene::InitializeGame(sf::Vector2u windowSize) {
 	m_xVelocity		=		std::uniform_int_distribution<int>(-80, -40);	// Slow movement speed
 	m_yVelocity		=		std::uniform_int_distribution<int>(-20, 20);	// Slow vertical speed
 
-	m_xDistro		=		std::uniform_int_distribution<int>(	20,	m_gameEngine.m_windowSize.x - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the left and a 5-pixel margin on the right to prevent immediate off-screen spawning
-	m_yDistro		=		std::uniform_int_distribution<int>(	20,	m_gameEngine.m_windowSize.y - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the top and a 5-pixel margin on the bottom to prevent immediate off-screen spawning
+	m_xDistro		=		std::uniform_int_distribution<int>(	20,	m_gameEngine.windowSize.x - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the left and a 5-pixel margin on the right to prevent immediate off-screen spawning
+	m_yDistro		=		std::uniform_int_distribution<int>(	20,	m_gameEngine.windowSize.y - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the top and a 5-pixel margin on the bottom to prevent immediate off-screen spawning
 
 	m_redVal		=		std::uniform_int_distribution<int>(100, 255);			// Brighter reds
 	m_greenVal		=		std::uniform_int_distribution<int>(100, 255);			// Brighter greens
@@ -253,13 +253,13 @@ void TestScene::InitializeGame(sf::Vector2u windowSize) {
 		if (direction == 1) {			   // Move rightward
 			velocityX = velocityX * -1.0f; // Reverse velocity for rightward movement
 			spawnX = std::uniform_real_distribution<float>(-100.0f, 0.0f)(m_generator); // Just off left edge
-			spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.m_windowSize.y))(
+			spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.windowSize.y))(
 				m_generator);
 		} else {
 			// Spawn off the right edge of screen, move left across screen with randomized leftward velocity
-			spawnX = static_cast<float>(m_gameEngine.m_windowSize.x) +
+			spawnX = static_cast<float>(m_gameEngine.windowSize.x) +
 					 std::uniform_real_distribution<float>(0.0f, 100.0f)(m_generator); // Just off right edge
-			spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.m_windowSize.y))(
+			spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.windowSize.y))(
 				m_generator);
 		}
 

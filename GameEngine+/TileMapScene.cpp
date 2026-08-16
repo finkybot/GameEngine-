@@ -278,11 +278,11 @@ void TileMapScene::ProcessSaveKey(bool keyDown) const {
 // Update - handles events, updates the entity manager, and prepares debug visualization data for rendering
 void TileMapScene::Update(float /*deltaTime*/) {
 	// Handle events (SFML 3.0: pollEvent returns std::optional<sf::Event>)
-	while (auto eventOpt = m_gameEngine.m_window.pollEvent()) {
+	while (auto eventOpt = m_gameEngine.window.pollEvent()) {
 		// ImGui::SFML::ProcessEvent(m_gameEngine.m_window, *eventOpt);
 
 		if (eventOpt->is<sf::Event::Closed>()) {
-			m_gameEngine.m_window.close(); // window X button - always close
+			m_gameEngine.window.close(); // window X button - always close
 		}
 		// Escape is handled globally by GameEngine before scenes run, so do NOT forward it here
 		if (!eventOpt->is<sf::Event::KeyPressed>() || [&]{

@@ -44,53 +44,55 @@ static std::mt19937 s_rng(std::random_device{}());
 /////////////////////////////////
 // Update - Called every frame and is responsible for updating the position of active cameras based on their shake effects and smooth following behavior.
 void CameraSystem::Update(float deltaTime, EntityManager& entityManager) {
-	// Update camera shake timers and smoothing for active cameras
 	for (auto& uniquePtr : entityManager.GetEntities()) {
-		Entity* entity = uniquePtr.get(); // Get raw pointer from unique_ptr for easier access
-		
-		// Check if the entity has a CCamera component and if it's active (We only want to apply shake to active cameras)
-		if (auto camera = entity->GetComponent<CCamera>()) {
-			if (camera->isActive) {
-				auto it = s_shakeDataMap.find(camera); // Look up shake data for this camera	
-				if (it != s_shakeDataMap.end()) {	   // If shake data exists for this camera, update the shake effect
-					ShakeData& shakeData = it->second; // Reference to the shake data for easier access
-					
-					// Update shake timer and calculate new camera position with shake offset
-					if (shakeData.duration > 0.0f) { 
-						shakeData.duration -= deltaTime;
-						float currentMagnitude = shakeData.magnitude * (shakeData.duration / shakeData.magnitude); // Linear falloff
-						std::uniform_real_distribution<float> dist(-currentMagnitude, currentMagnitude);
-						camera->position = shakeData.basePosition + Vec2(dist(s_rng), dist(s_rng));
-					} else {
-						camera->position = shakeData.basePosition; // Reset to original position after shake ends
-						s_shakeDataMap.erase(it);
-					}
-				}
-			}
-		}
+		Entity* entity = uniquePtr.get();
+		if (!entity)
+			continue;
 
-		// If the camera is following an entity, update its position based on the target's position and the camera's smoothness factor
+		auto camera = entity->GetComponent<CCamera>();
+		if (!camera || !camera->isActive)
+			continue;
+
+		// ---------------------------------------------------------
+		// 1. FOLLOW TARGET (smooth)
+		// ---------------------------------------------------------
 		if (auto tform = entity->GetComponent<CTransform>()) {
-			if (auto camera = entity->GetComponent<CCamera>()) {
-				if (camera->isActive) {
-					Vec2 targetPosition = tform->position; // Get the target position from the transform component
-					camera->position += (targetPosition - camera->position) * camera->smoothness; // Smoothly move towards the target position
-				}
-			}
+			Vec2 target = tform->position;
+
+			float t = 1.0f - std::exp(-camera->smoothness * deltaTime);
+			camera->position += (target - camera->position) * t;
 		}
 
-		// Ensure camera position is clamped within positive bounds it shouldn't go negative, or below half the viewport size (to avoid showing empty space)
-		if (auto camera = entity->GetComponent<CCamera>()) {
-			if (camera->isActive) {
-				float halfW = camera->viewportWidth * 0.5f * camera->zoom; // Calculate half the viewport width in world units
-				float halfH = camera->viewportHeight * 0.5f * camera->zoom; // Calculate half the viewport height in world units
+		// ---------------------------------------------------------
+		// 2. CLAMP (world bounds, zoom‑correct)
+		// ---------------------------------------------------------
+		float halfW_screen = camera->viewportWidth * 0.5f;
+		float halfH_screen = camera->viewportHeight * 0.5f;
 
-				// now ensure the camera's position is not less than half the viewport size, effectively clamping it to positive coordinates
-				// Why? Because at the momement i can create map chunks in negative coordinates, and the camera can pan into them,
-				// and its causing issues with path finding and other systems that assume the camera is always in positive coordinates. 
-				// This is a temporary fix until I implement proper world bounds.
-				camera->position.x = std::max(camera->position.x, halfW);
-				camera->position.y = std::max(camera->position.y, halfH);
+		float minX = halfW_screen / camera->zoom;
+		float minY = halfH_screen / camera->zoom;
+
+		camera->position.x = std::max(camera->position.x, minX);
+		camera->position.y = std::max(camera->position.y, minY);
+
+		// ---------------------------------------------------------
+		// 3. SHAKE (apply AFTER clamping)
+		// ---------------------------------------------------------
+		auto it = s_shakeDataMap.find(camera);
+		if (it != s_shakeDataMap.end()) {
+			ShakeData& shakeData = it->second;
+
+			if (shakeData.duration > 0.0f) {
+				shakeData.duration -= deltaTime;
+
+				float currentMagnitude = shakeData.magnitude * (shakeData.duration / shakeData.magnitude);
+
+				std::uniform_real_distribution<float> dist(-currentMagnitude, currentMagnitude);
+
+				// Apply shake as an offset AFTER clamping
+				camera->position += Vec2(dist(s_rng), dist(s_rng));
+			} else {
+				s_shakeDataMap.erase(it);
 			}
 		}
 	}

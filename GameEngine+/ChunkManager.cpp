@@ -510,8 +510,11 @@ void ChunkManager::BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<Tex
 				if (value == 0) continue;
 
 				// Snap tile positions to whole pixels to prevent sub-pixel jitter and seam artifacts
-				const float px = std::round((baseX + x) * tileSize);
-				const float py = std::round((baseY + y) * tileSize);
+				//const float px = std::round((baseX + x) * tileSize);
+				//const float py = std::round((baseY + y) * tileSize);
+
+				const float px = (baseX + x) * tileSize;
+				const float py = (baseY + y) * tileSize;
 
 				// Determine the texture coordinates (UVs) for the tile based on the atlas. If the atlas 
 				// is not provided or the tile index is invalid, fallback to a solid color.
@@ -525,34 +528,61 @@ void ChunkManager::BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<Tex
 					// If the atlas provides valid texture coordinates, set the UVs and mark that we are using a texture
 					if (rectOpt.has_value()) {
 						const sf::FloatRect& fr = *rectOpt;
-						uv00 = { fr.position.x, fr.position.y };
-						uv11 = { fr.position.x + fr.size.x, fr.position.y + fr.size.y };
+						const float inset = 0.5f;
+						uv00 = {fr.position.x + inset, fr.position.y + inset};
+						uv11 = {fr.position.x + fr.size.x - inset, fr.position.y + fr.size.y - inset};
 						usedTexture = true;
 					}
 				}
 
-				// Append vertices for the tile quad to the vertex array. If a texture is used, include UVs; otherwise, use a fallback color.
+// Append vertices for the tile quad to the vertex array.
+				// If a texture is used, include UVs; otherwise, use a fallback color.
 				if (usedTexture && chunk.vertexTexture) {
-					const float snapTs = std::round(tileSize);  // Round tile size to whole pixels for consistent rendering
-					vertArray.append({ {px,				py				}, sf::Color::White, uv00 });
-					vertArray.append({ {px + snapTs,	py				}, sf::Color::White, {uv11.x, uv00.y} });
-					vertArray.append({ {px + snapTs,	py +	snapTs	}, sf::Color::White, uv11 });
-					vertArray.append({ {px,				py				}, sf::Color::White, uv00 });
-					vertArray.append({ {px + snapTs,	py +	snapTs	}, sf::Color::White, uv11 });
-					vertArray.append({ {px,				py +	snapTs	}, sf::Color::White, {uv00.x, uv11.y} });
+					const float ts = tileSize;
+
+					// v0 = top-left
+					// v1 = top-right
+					// v2 = bottom-right
+					// v3 = bottom-left
+					sf::Vector2f v0(px, py);
+					sf::Vector2f v1(px + ts, py);
+					sf::Vector2f v2(px + ts, py + ts);
+					sf::Vector2f v3(px, py + ts);
+
+					// Triangle 1: v0, v1, v3
+					vertArray.append({v0, sf::Color::White, uv00});
+					vertArray.append({v1, sf::Color::White, {uv11.x, uv00.y}});
+					vertArray.append({v3, sf::Color::White, {uv00.x, uv11.y}});
+
+					// Triangle 2: v1, v2, v3
+					vertArray.append({v1, sf::Color::White, {uv11.x, uv00.y}});
+					vertArray.append({v2, sf::Color::White, uv11});
+					vertArray.append({v3, sf::Color::White, {uv00.x, uv11.y}});
 				} else {
-					// Fallback color for tiles without texture. In-editor, show an opaque placeholder so painted tiles are visible even
-					// when a tileset isn't loaded. If a tileset key is configured we keep transparent fallback so cleared tiles show through.
-					const float snapTs = std::round(tileSize);  // Round tile size to whole pixels for consistent rendering
+					const float ts = tileSize;
 					uint8_t alpha = atlas ? 0u : 255u;
 					sf::Color fallback(120, 120, 120, alpha);
-					vertArray.append({ {px,				py				}, fallback });
-					vertArray.append({ {px + snapTs,	py				}, fallback });
-					vertArray.append({ {px + snapTs,	py +	snapTs	}, fallback });
-					vertArray.append({ {px,				py				}, fallback });
-					vertArray.append({ {px + snapTs,	py +	snapTs	}, fallback });
-					vertArray.append({ {px,				py +	snapTs	}, fallback });
+
+					// v0 = top-left
+					// v1 = top-right
+					// v2 = bottom-right
+					// v3 = bottom-left
+					sf::Vector2f v0(px, py);
+					sf::Vector2f v1(px + ts, py);
+					sf::Vector2f v2(px + ts, py + ts);
+					sf::Vector2f v3(px, py + ts);
+
+					// Triangle 1: v0, v1, v3
+					vertArray.append({v0, fallback});
+					vertArray.append({v1, fallback});
+					vertArray.append({v3, fallback});
+
+					// Triangle 2: v1, v2, v3
+					vertArray.append({v1, fallback});
+					vertArray.append({v2, fallback});
+					vertArray.append({v3, fallback});
 				}
+
 			}
 		}
 	}
@@ -673,7 +703,7 @@ void ChunkManager::DrawChunks(sf::RenderWindow& window, const sf::View& view) {
 			
 			// If the engine has an active layer set, we need to draw other layers dimmed. We rendered merged vertexArray in order so
 			// we cannot distinguish layers at draw time. Simpler approach: draw per-layer instead of merged when alpha-dimming is active.
-			if (true) {
+			if (false) {
 				// per-layer draw to allow dimming, stub
 				for (const auto& pair : m_chunks) { /* No-op to keep symbol referenced */ }
 				
@@ -690,7 +720,6 @@ void ChunkManager::DrawChunks(sf::RenderWindow& window, const sf::View& view) {
 
 					// Draw each layer of the chunk separately, applying alpha modulation for unselected layers
 					for (int layer = 0; layer < chunk.numLayers; ++layer) {
-						
 						// Skip layers that are not ready for rendering or have no vertex arrays
 						if (chunk.vertexArrays.size() <= (size_t)layer) continue;
 						auto &vertArray = chunk.vertexArrays[layer];

@@ -44,5 +44,8 @@ public:
 	float shakeDuration = 0.0f;		// Duration of camera shake effect in seconds
 
 	float smoothness = 0.1f;			// Smoothness factor for camera movement (0.0 = instant, higher values = smoother)
+
+	Vec2 smoothedTarget;
+	bool hasSmoothedTarget = false;
 };
 /////////////////////////////////

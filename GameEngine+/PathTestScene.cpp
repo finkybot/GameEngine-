@@ -306,6 +306,7 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 	}
 	std::cout << "\n";
 
+	// If bounds are found, calculate the world size and offset based on the tile size and set them in the ChunkManager to ensure proper rendering and chunk management.
 	if (m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
 		int tileSize = (int)m_chunkManager.GetTileSize();
 		int minTileX = (int)std::floor(dMinX / tileSize);
@@ -319,11 +320,13 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		m_chunkManager.BuildWorldMask();
 	}
 
+	// Center the camera on the map bounds if they exist, and reset the movement tester's position to the center as well.
 	if (hasBounds) {
 		m_mapMin = Vec2(dMinX, dMinY);
 		m_mapMax = Vec2(dMaxX, dMaxY);
 		m_haveBounds = true;
 
+		// Center the camera on the map bounds
 		if (m_cameraEntity) {
 			if (auto cam = m_cameraEntity->GetComponent<CCamera>()) {
 				auto tr = m_cameraEntity->GetComponent<CTransform>();
@@ -366,7 +369,7 @@ void PathTestScene::EnsureVisibleChunks() {
 	if (!camOpt) return;
 	CCamera* cam = *camOpt;
 
-	    // Convert viewport size to world-space size
+	// Convert viewport size to world-space size
 	float worldW = cam->viewportWidth / cam->zoom;
 	float worldH = cam->viewportHeight / cam->zoom;
 
@@ -468,6 +471,13 @@ void PathTestScene::Update(float deltaTime) {
 	ImGui::Begin("PathTest Level Selector");
 
 	ImGui::Text("Available Levels:");
+	if (m_availableLevels.empty()) {
+		ImGui::Text("No levels found in APPDATA/GameEnginePlus/levels");
+		ImGui::NewLine();
+		ImGui::Text("Please create a level with the Level Editor.");
+	} else {
+		ImGui::Text("Click a button to switch levels:");
+	}
 	for (const auto& level : m_availableLevels) {
 		if (ImGui::Button(level.c_str(), ImVec2(-1, 0))) {
 			SwitchToLevel(level);
@@ -606,7 +616,9 @@ void PathTestScene::RenderDebugOverlay() {
 		}
 	}
 
-	// Draw start/goal markers with outlines
+	// Draw start/goal markers with outlines // Marked for deprecation: This rendering logic is duplicated in LevelEditorScene. 
+	// Consider refactoring into a shared utility function or class for rendering markers to avoid code duplication and improve maintainability.
+	// Also we are goig to move to a sprite based rendering for start/goal markers in the future, so this will be replaced with sprite rendering logic.
 	if (m_manualStartSet) {
 		sf::CircleShape startOutline(outerRadius);
 		startOutline.setFillColor(sf::Color::Black);

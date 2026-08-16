@@ -441,5 +441,6 @@
     <None Include="assets\spawners\default.json" />
     <None Include="RENDER_QUEUE_PHASE1.md" />
     <None Include="DIALOGUE_SYSTEM_SCHEMA.md" />
+    <None Include="README.md" />
   </ItemGroup>
 </Project>

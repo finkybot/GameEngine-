@@ -1323,6 +1323,12 @@ void LevelEditorScene::LevelManagerWindow(float x, float y, float alpha) {
 		return;
 	} // Begin by creating a new ImGui window; if it fails to initialize, we end and return early
 	
+	ImGui::Text("Create a 3 layered level (background, main, upper) with a tileset key and tile dimensions.");
+	ImGui::Text("Main layer, acts as colision layer for pathfinding");
+	ImGui::Text("Left click to paint, left click and drag to paint area at release, right click to erase");
+	ImGui::Text("right click and drag to erase area on release,	middle click to pick tile from level");
+	ImGui::Text("Use mouse wheel to zoom in / out");
+
 	if (ImGui::Button("Refresh Levels"))
 		RefreshAvailableLevels(); // Create a button to refesh level directory when clicked
 
@@ -1523,7 +1529,11 @@ void LevelEditorScene::ApplyMainCameraView() {
 	if (!camOpt) return;
 	CCamera* cam = *camOpt;
 	sf::View v;
-	v.setSize(sf::Vector2f(cam->viewportWidth * cam->zoom, cam->viewportHeight * cam->zoom));
+	//v.setSize(sf::Vector2f(cam->viewportWidth * cam->zoom, cam->viewportHeight * cam->zoom));
+	float viewW = std::round(cam->viewportWidth * cam->zoom);
+	float viewH = std::round(cam->viewportHeight * cam->zoom);
+	v.setSize(sf::Vector2f(viewW, viewH));
+
 
 	// Clamp camera using the fixed disk-derived bounds (set once in InitializeGame, updated when tiles are painted).
 	float halfW = cam->viewportWidth * 0.5f * cam->zoom;
@@ -1544,11 +1554,15 @@ void LevelEditorScene::ApplyMainCameraView() {
 	// Snap camera to sub-pixel grid based on zoom level to reduce shimmer/jitter when rendering
 	// At zoom levels 2.0x or higher, snap to tile alignment (32 pixels). Otherwise snap to half-pixel.
 	// This ensures that the view center aligns with rasterization boundaries and remains stable during camera movement.
-	float snapGrid = (cam->zoom >= 2.0f) ? 32.0f : 0.5f;  // Snap to tile grid at 2x+ zoom, else half-pixel
-	float snapX = std::round(newPos.x / snapGrid) * snapGrid;
-	float snapY = std::round(newPos.y / snapGrid) * snapGrid;
-
-	v.setCenter(sf::Vector2f(snapX, snapY));
+	//float snapGrid = (cam->zoom >= 2.0f) ? 32.0f : 0.5f;  // Snap to tile grid at 2x+ zoom, else half-pixel
+	//float snapX = std::round(newPos.x / snapGrid) * snapGrid;
+	//float snapY = std::round(newPos.y / snapGrid) * snapGrid;
+	//v.setCenter(sf::Vector2f(snapX, snapY));
+	
+	// Instead of snapping to a grid, we can apply a small offset to the camera center to reduce shimmer/jitter when rendering. 
+	// This offset is based on the zoom level and ensures that the view center aligns with rasterization boundaries and remains stable during camera movement.
+	v.setCenter(sf::Vector2f(newPos.x + 0.001f, newPos.y + 0.001f));
+	
 	m_window.setView(v);
 }
 /////////////////////////////////

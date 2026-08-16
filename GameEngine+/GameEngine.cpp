@@ -39,18 +39,18 @@
 /////////////////////////////////
 GameEngine::GameEngine() {
 	// Setup the SFML window as borderless (fullscreen-windowed) to avoid exclusive fullscreen quirks
-	m_windowSize = sf::VideoMode::getDesktopMode().size;
-	m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::Style::None);
-	//m_window.setPosition(sf::Vector2i(0, 0));
-	//m_window.create(sf::VideoMode(m_windowSize), "SFML Game Engine", sf::State::Fullscreen);
+	windowSize = sf::VideoMode::getDesktopMode().size;
+	window.create(sf::VideoMode(windowSize), "SFML Game Engine", sf::Style::None);
+	//window.setPosition(sf::Vector2i(0, 0));
+	//window.create(sf::VideoMode(windowSize), "SFML Game Engine", sf::Style::Fullscreen);
 
-	m_window.setFramerateLimit(120);
-	//m_window.setVerticalSyncEnabled(true);
-	m_isRunning = true;
+	window.setFramerateLimit(120);
+	//window.setVerticalSyncEnabled(true);
+	isRunning = true;
 
 	// Create a single engine-wide EntityManager and bind shared resources
-	m_entityManager = std::make_unique<EntityManager>(m_window);
-	m_entityManager->GetRenderSystem().SetFontManager(&m_fontManager);
+	entityManager = std::make_unique<EntityManager>(window);
+	entityManager->GetRenderSystem().SetFontManager(&fontManager);
 
 	// Debug: Print current working directory
 	char cwd[260];
@@ -59,13 +59,13 @@ GameEngine::GameEngine() {
 	}
 
 	// Create and initialize the SoundSystem
-	m_soundSystem = std::make_unique<SoundSystem>();
-	m_soundSystem->Initialize();  // Check audio device and log diagnostics
-	m_soundSystem->InitializePool(*m_entityManager, 64);  // Initialize sound pool with 64 entities
-	m_soundSystem->SetMasterVolume(70.0f);  // Set master volume to 70% (0-100 scale)
+	soundSystem = std::make_unique<SoundSystem>();
+	soundSystem->Initialize();  // Check audio device and log diagnostics
+	soundSystem->InitializePool(*entityManager, 64);  // Initialize sound pool with 64 entities
+	soundSystem->SetMasterVolume(70.0f);  // Set master volume to 70% (0-100 scale)
 
 	// Connect SoundSystem to CollisionSystem for sound limit checking
-	m_entityManager->GetCollisionSystem().SetSoundSystem(m_soundSystem.get());
+	entityManager->GetCollisionSystem().SetSoundSystem(soundSystem.get());
 
 	// Audio listener setup completely disabled - causes music volume issues in SFML 3.x
 	// Spatial audio will use SFML defaults without explicit configuration
@@ -73,15 +73,15 @@ GameEngine::GameEngine() {
 	std::cout << "[GameEngine] Audio system initialized (using SFML defaults)" << std::endl;
 
 	// Try to load a default font for in-engine text (used by MainMenu and CText). Expect file at assets/fonts/tech.ttf
-	if (!m_fontManager.LoadFont("default", "assets/fonts/tech.ttf")) {
+	if (!fontManager.LoadFont("default", "assets/fonts/tech.ttf")) {
 		std::cerr << "Warning: failed to load default font at assets/fonts/tech.ttf" << std::endl;
 	}
 
 	m_cursorSystem = std::make_unique<CursorSystem>(); // Initialize the cursor system with the game window
-	m_cursorSystem->Initialize(&m_window);
+	m_cursorSystem->Initialize(&window);
 
 	// Initialize MovementSystem for path following
-	m_movementSystem = std::make_unique<MovementSystem>();
+	movementSystem = std::make_unique<MovementSystem>();
 
 	// Initialize FileManager with current working directory for asset loading
 	m_fileManager.SetBasePath(".");
@@ -90,7 +90,7 @@ GameEngine::GameEngine() {
 	// can choose which atlas to use at runtime.
 
 	// Initialize ImGui-SFML early so scenes can safely call ImGui during Update
-	if (!ImGui::SFML::Init(m_window)) {
+	if (!ImGui::SFML::Init(window)) {
 		std::cerr << "Warning: Failed to initialize ImGui::SFML in GameEngine" << std::endl;
 		// continue without ImGui but scenes must tolerate absence
 	}
@@ -110,7 +110,7 @@ GameEngine::~GameEngine() {}
 // AddScene - Adds a new scene to the game engine with the given name and scene instance, allowing for dynamic scene management. The scene is stored in a map of 
 // scene names to scene instances, enabling easy retrieval and switching between scenes during the game loop.
 void GameEngine::AddScene(const std::string& sceneName, std::shared_ptr<Scene> scene) {
-	m_scenes[sceneName] = scene;
+	scenes[sceneName] = scene;
 }
 /////////////////////////////////
 
@@ -120,7 +120,7 @@ void GameEngine::AddScene(const std::string& sceneName, std::shared_ptr<Scene> s
 // GetSceneNames - Return a list of registered scene names (useful for UI like a main menu)
 std::vector<std::string> GameEngine::GetSceneNames() const {
 	std::vector<std::string> names;
-	for (auto const& p : m_scenes) names.push_back(p.first);
+	for (auto const& p : scenes) names.push_back(p.first);
 	return names;
 }
 /////////////////////////////////
@@ -131,32 +131,32 @@ std::vector<std::string> GameEngine::GetSceneNames() const {
 // ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions. The method checks if the specified scene exists 
 // in the scenes map and sets it as the current active scene, enabling the game loop to update and render the new scene. If the scene name is not found, a warning is logged.
 void GameEngine::ChangeScene(const std::string& sceneName) {
-	auto it = m_scenes.find(sceneName);
-	if (it != m_scenes.end()) {
+	auto it = scenes.find(sceneName);
+	if (it != scenes.end()) {
 		// notify previous scene it's exiting
-		if (m_currentScene) {
-			try { m_currentScene->OnExit(); } catch (...) {}
+		if (currentScene) {
+			try { currentScene->OnExit(); } catch (...) {}
 			// Allow the scene to release any loaded resources (textures, atlases, large buffers)
-			try { m_currentScene->UnloadResources(); } catch (...) {}
+			try { currentScene->UnloadResources(); } catch (...) {}
 		}
 
 		// Clear all entities from the previous scene before activating the new one
-		if (m_entityManager) m_entityManager->ClearAll();
+		if (entityManager) entityManager->ClearAll();
 
 		// Reset the view to default before switching scenes to avoid any leftover zoom or pan from the previous scene
-		m_window.setView(m_window.getDefaultView());
+		window.setView(window.getDefaultView());
 
 		// Set the new scene as the current active scene
-		m_currentScene = it->second;
+		currentScene = it->second;
 
 		// initialize the new scene so it has window size, input controller, and resources set up
-		if (m_currentScene) {
+		if (currentScene) {
 			try {
-				m_currentScene->InitializeGame(m_windowSize);
+				currentScene->InitializeGame(windowSize);
 			} catch (...) {}
 			// update input controller to use the new scene's game controller
-			try { m_InputController.SetGameController(m_currentScene->GetGameController()); } catch (...) {}
-			try { m_currentScene->OnEnter(); } catch (...) {}
+			try { m_InputController.SetGameController(currentScene->GetGameController()); } catch (...) {}
+			try { currentScene->OnEnter(); } catch (...) {}
 		}
 	} else {
 		std::cerr << "Scene '" << sceneName << "' not found!" << std::endl;
@@ -170,9 +170,9 @@ void GameEngine::ChangeScene(const std::string& sceneName) {
 // RemoveScene - Removes a scene from the game engine by its name, allowing for cleanup and resource management of scenes that are no longer needed. The method checks if the 
 // specified scene exists in the scenes map and removes it, freeing up resources associated with that scene and ensuring it is no longer updated or rendered in the game loop.
 void GameEngine::RemoveScene(const std::string& sceneName) {
-	auto it = m_scenes.find(sceneName);
-	if (it != m_scenes.end()) {
-		m_scenes.erase(it);
+	auto it = scenes.find(sceneName);
+	if (it != scenes.end()) {
+		scenes.erase(it);
 	}
 }
 /////////////////////////////////
@@ -187,30 +187,30 @@ void GameEngine::Run() {
 	bool running = true; // Create a Boolean variable to manage the engine running state
 
 	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
-	AddScene("MainMenu", std::make_shared<MainMenuScene>(*this, m_window, *m_entityManager));					// Adding MainMenuScene
-	AddScene("TestScene", std::make_shared<TestScene>(*this, m_window, *m_entityManager));						// Adding TestScene
-	AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, m_window, *m_entityManager));				// Adding TileMapScene
-	AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, m_window, *m_entityManager));			// Adding TileMapEditor
-	AddScene("MusicVisualizer", std::make_shared<MusicVisualizerScene>(*this, m_window, *m_entityManager));		// Adding MusicVisualizer	
-	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, m_window, *m_entityManager));				// Adding LevelEditor
-	AddScene("PathTestScene", std::make_shared<PathTestScene>(*this, m_window, *m_entityManager));				// Adding PathTestScene
+	AddScene("MainMenu", std::make_shared<MainMenuScene>(*this, window, *entityManager));					// Adding MainMenuScene
+	AddScene("TestScene", std::make_shared<TestScene>(*this, window, *entityManager));						// Adding TestScene
+	// AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, window, *entityManager));				// Adding TileMapScene, old tilemap scene, not used anymore (deprecated)
+	AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, window, *entityManager));			// Adding TileMapEditor
+	AddScene("MusicVisualizer", std::make_shared<MusicVisualizerScene>(*this, window, *entityManager));		// Adding MusicVisualizer	
+	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, window, *entityManager));				// Adding LevelEditor
+	AddScene("PathTestScene", std::make_shared<PathTestScene>(*this, window, *entityManager));				// Adding PathTestScene
 
 	ChangeScene("MainMenu");
 
 	// Initialize the chosen scene if it was found. ChangeScene() logs a warning when the scene
 	// name is not found; guard against a null current scene to avoid dereferencing a nullptr.
-	if (m_currentScene) {
-		m_currentScene->InitializeGame(m_windowSize);
+	if (currentScene) {
+		currentScene->InitializeGame(windowSize);
 
 		// FontManager already bound to engine-owned EntityManager in constructor
-		m_InputController.SetGameController(m_currentScene->GetGameController());
+		m_InputController.SetGameController(currentScene->GetGameController());
 
 		m_InputController.Init(
 			[&running](uint32_t deltaT, InputState state) {
 				running = false;
 				std::cout << "Quitting" << std::endl;
 			},
-			&m_window); // The defined function will be called when we quit the game..
+			&window); // The defined function will be called when we quit the game..
 	} else {
 		std::cerr << "No current scene selected; skipping scene initialization." << std::endl;
 	}
@@ -219,12 +219,12 @@ void GameEngine::Run() {
 
 
 	/* Main Loop, game logic is handled in here once per frame */
-	while (m_window.isOpen()) {
+	while (window.isOpen()) {
 		Update(0.016f); // Update the scene with a fixed delta time (16ms for ~60 FPS), I can calculate actual delta time using the deltaClock for variable time steps
 	}
 
 	// Ensure window closes cleanly when Run exits
-	if (m_window.isOpen()) m_window.close();
+	if (window.isOpen()) window.close();
 }
 /////////////////////////////////
 
@@ -236,35 +236,35 @@ void GameEngine::Run() {
 // regardless of frame rate variations. It also handles event polling and forwarding to ImGui and the current scene, as well as rendering the scene and ImGui.
 void GameEngine::Update(float deltaTime) {
 	// Handle events and input before updating the scene.
-	while (m_window.isOpen()) {
+	while (window.isOpen()) {
 		// Clear the window at the start of each frame. Use an explicit clear color so fully transparent tiles in the editor reveal the intended background instead
 		// of an unintended grey fallback.
-		m_window.clear(sf::Color::Transparent);
+		window.clear(sf::Color::Transparent);
 
 		// Clear the engine-wide render queue from the previous frame
 		m_renderQueue.Clear();
 
 		// Restart delta clock and update ImGui once per frame
-		sf::Time frameTime = m_deltaClock.restart();
+		sf::Time frameTime = deltaClock.restart();
 		if (ImGui::GetCurrentContext())
-			ImGui::SFML::Update(m_window, frameTime);
+			ImGui::SFML::Update(window, frameTime);
 
 		// Update shared FPS counter with the real frame time
 		m_fpsCounter.Update(frameTime.asSeconds());
 
 		// Poll events (SFML 3: pollEvent returns std::optional<sf::Event>) and forward to current scene
-		while (auto eventOpt = m_window.pollEvent()) {
+		while (auto eventOpt = window.pollEvent()) {
 			// Forward events to ImGui-SFML so UI widgets receive input
 			if (ImGui::GetCurrentContext())
-				ImGui::SFML::ProcessEvent(m_window, *eventOpt);
+				ImGui::SFML::ProcessEvent(window, *eventOpt);
 
 			// Global Escape handling: intercept Escape before forwarding to the scene so scene-level handlers that close the window won't run. If Escape is 
 			// pressed and we're not already on MainMenu, switch to it
 			if (eventOpt->is<sf::Event::KeyPressed>()) {
 				if (auto kp = eventOpt->getIf<sf::Event::KeyPressed>()) {
 					if (static_cast<sf::Keyboard::Key>(kp->code) == sf::Keyboard::Key::Escape) {
-						auto it = m_scenes.find("MainMenu");
-						if (it != m_scenes.end() && m_currentScene && m_currentScene != it->second) {
+						auto it = scenes.find("MainMenu");
+						if (it != scenes.end() && currentScene && currentScene != it->second) {
 							ChangeScene("MainMenu");
 							// consume the event (do not forward to the current scene)
 							continue;
@@ -273,10 +273,10 @@ void GameEngine::Update(float deltaTime) {
 				}
 			}
 
-			if (m_currentScene)
-				m_currentScene->HandleEvent(eventOpt);
+			if (currentScene)
+				currentScene->HandleEvent(eventOpt);
 			if (eventOpt->is<sf::Event::Closed>())
-				m_window.close();
+				window.close();
 		}
 
 		// Update method will run  (carry out) these actions.
@@ -285,29 +285,29 @@ void GameEngine::Update(float deltaTime) {
 		// Global keyboard poll: if Escape is held, switch back to MainMenu before any scene Update runs... This prevents scenes that poll sf::Keyboard::isKeyPressed(Escape) 
 		// from closing the window directly.
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
-			auto it = m_scenes.find("MainMenu");
-			if (it != m_scenes.end() && m_currentScene && m_currentScene != it->second) {
+			auto it = scenes.find("MainMenu");
+			if (it != scenes.end() && currentScene && currentScene != it->second) {
 				ChangeScene("MainMenu");
 				// Reset input controller to new scene controller
-				m_InputController.SetGameController(m_currentScene->GetGameController());
+				m_InputController.SetGameController(currentScene->GetGameController());
 				// Skip running the previous scene's Update this frame
 				continue;
 			}
 		}
-		if (m_currentScene) {
+		if (currentScene) {
 			// Let the scene update (handles ImGui update and input)... Use the actual frame time measured above so scenes get accurate timing for FPS and logic.
-			m_currentScene->Update(frameTime.asSeconds());
+			currentScene->Update(frameTime.asSeconds());
 
 			// Update movement BEFORE entity manager so new paths can be used immediately
-			m_movementSystem->Update(m_currentScene->GetEntityManager().GetEntities(), deltaTime);
+			movementSystem->Update(currentScene->GetEntityManager().GetEntities(), deltaTime);
 
 			// Ensure the scene's EntityManager processes game logic (tile system, pending entities)
-			m_currentScene->GetEntityManager().Update(deltaTime);
+			currentScene->GetEntityManager().Update(deltaTime);
 
 			// Process sound effects using the SCENE's EntityManager (not global)
 			// This ensures we process sounds for entities in the current active scene
-			m_soundSystem->Process(m_currentScene->GetEntityManager(), deltaTime);
-			m_soundSystem->Update(deltaTime);
+			soundSystem->Process(currentScene->GetEntityManager(), deltaTime);
+			soundSystem->Update(deltaTime);
 
 			// Update the global cursor system
 			m_cursorSystem->Update(deltaTime);
@@ -322,13 +322,13 @@ void GameEngine::Update(float deltaTime) {
 
 			// Engine render pass ordering:
 			// 1) Scene overlays (render chunks and world elements first)
-			m_currentScene->Render();
+			currentScene->Render();
 			// 2) Entity shapes (on top of scene overlays)
-			m_currentScene->GetEntityManager().RenderShapes();
+			currentScene->GetEntityManager().RenderShapes();
 			// 3) Flush queued overlays and shapes
-			m_renderQueue.Flush(m_window);
+			m_renderQueue.Flush(window);
 			// 4) Entity text (direct render after queue flush so text appears on top)
-			m_currentScene->GetEntityManager().RenderText();
+			currentScene->GetEntityManager().RenderText();
 			// 5) Custom cursor (on top of scene, below ImGui)
 			m_cursorSystem->Render();
 		}
@@ -338,14 +338,14 @@ void GameEngine::Update(float deltaTime) {
 
 		// Flush the engine-wide render queue to the window before ImGui rendering
 		// This ensures all scene and entity draws appear behind the UI
-		m_renderQueue.Flush(m_window);
+		m_renderQueue.Flush(window);
 
 		// Render ImGui on top of everything (ImGui::SFML::Render without args uses current target)
-		if (ImGui::GetCurrentContext() && (m_currentScene == nullptr || m_currentScene->IsImGuiEnabled())) {
-					ImGui::SFML::Render(m_window);
+		if (ImGui::GetCurrentContext() && (currentScene == nullptr || currentScene->IsImGuiEnabled())) {
+					ImGui::SFML::Render(window);
 					}
 
-					m_window.display();
+					window.display();
 				}
 			}
 			/////////////////////////////////

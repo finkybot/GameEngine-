@@ -22,9 +22,7 @@
 
 #include <map>
 #include <string>
-#include <iostream>
 #include <vector>
-#include <memory>
 
 // MovementSystem class definition (inline to avoid include path issues)
 class Entity;
@@ -163,21 +161,21 @@ public:
 
 
 	/////////////////////////////////
-	// Private member variables for managing scenes, the game window, the current active scene, the game loop state, and various managers for fonts, textures, 
+	// Member variables for managing scenes, the game window, the current active scene, the game loop state, and various managers for fonts, textures, 
 	// entities, and input. These variables are used throughout the game engine to manage the game state, handle rendering, and provide access to resources 
 	// and systems needed for game development.
-	std::map<std::string, std::shared_ptr<Scene>> m_scenes;				// Map of scene names to scene instances, allowing for easy scene management and switching
-	sf::RenderWindow m_window;											// SFML RenderWindow for rendering the game, handling events, and managing the main game window
-	std::shared_ptr<Scene>	m_currentScene;								// Pointer to the current active scene, used to determine which scene to update and render during the game loop
-	bool m_isRunning =	false;											// Flag to indicate whether the game loop is currently running, used to control the main game loop execution
+	std::map<std::string, std::shared_ptr<Scene>> scenes;				// Map of scene names to scene instances, allowing for easy scene management and switching
+	sf::RenderWindow window;											// SFML RenderWindow for rendering the game, handling events, and managing the main game window
+	std::shared_ptr<Scene>	currentScene;								// Pointer to the current active scene, used to determine which scene to update and render during the game loop
+	bool isRunning =	false;											// Flag to indicate whether the game loop is currently running, used to control the main game loop execution
 
-	sf::Clock m_deltaClock;												// SFML Clock to measure the time elapsed between frames, used for calculating delta time for updates and game logic processing
-	sf::Vector2u m_windowSize = {0, 0};									// Size of the game window, initialized to zero and set in the constructor based on the desktop mode
+	sf::Clock deltaClock;												// SFML Clock to measure the time elapsed between frames, used for calculating delta time for updates and game logic processing
+	sf::Vector2u windowSize = {0, 0};									// Size of the game window, initialized to zero and set in the constructor based on the desktop mode
 
-	FontManager	m_fontManager;											// Font manager instance for managing fonts across the game, allowing for loading, retrieving, and unloading fonts in a centralized manner
-	std::unique_ptr<EntityManager>	m_entityManager;					// Unique pointer to the central EntityManager owned by the engine, responsible for managing game entities and providing access to the entity system throughout the game
-	std::unique_ptr<SoundSystem> m_soundSystem;							// Unique pointer to the SoundSystem owned by the engine, responsible for managing sound effects and audio playback
-	std::unique_ptr<MovementSystem> m_movementSystem;					// Unique pointer to the MovementSystem owned by the engine, responsible for moving entities along computed paths
+	FontManager	fontManager;											// Font manager instance for managing fonts across the game, allowing for loading, retrieving, and unloading fonts in a centralized manner
+	std::unique_ptr<EntityManager> entityManager;						// Unique pointer to the central EntityManager owned by the engine, responsible for managing game entities and providing access to the entity system throughout the game
+	std::unique_ptr<SoundSystem> soundSystem;							// Unique pointer to the SoundSystem owned by the engine, responsible for managing sound effects and audio playback
+	std::unique_ptr<MovementSystem> movementSystem;						// Unique pointer to the MovementSystem owned by the engine, responsible for moving entities along computed paths
 	/////////////////////////////////
 
 
@@ -185,7 +183,7 @@ public:
 	/////////////////////////////////
 	// Accessor methods for the various managers and systems. These methods provide access to the font manager, texture manager, entity manager, and FPS counter, 
 	// allowing scenes and other game components to interact with these systems through the game engine's centralized management.
-	FontManager& GetFontManager() { return m_fontManager; } // Accessor for shared font manager
+	FontManager& GetFontManager() { return fontManager; } // Accessor for shared font manager
 	/////////////////////////////////
 
 
@@ -203,14 +201,14 @@ public:
 	/////////////////////////////////
 	// Accessor for central entity manager, returns a reference to the EntityManager instance owned by the engine, allowing scenes and 
 	// other game components to access and manage entities through the engine's central entity management system
-	EntityManager& GetEntityManager() const { return *m_entityManager; } 
+	EntityManager& GetEntityManager() const { return *entityManager; } 
 	/////////////////////////////////
 
 
 
 	/////////////////////////////////
 	// Accessor for the SoundSystem, allowing scenes to control audio playback
-	SoundSystem& GetSoundSystem() const { return *m_soundSystem; }
+	SoundSystem& GetSoundSystem() const { return *soundSystem; }
 	/////////////////////////////////
 
 
@@ -218,7 +216,7 @@ public:
 
 	/////////////////////////////////
 	// Accessor for the MovementSystem, allowing scenes and systems to move entities along paths
-	MovementSystem& GetMovementSystem() { return *m_movementSystem; }
+	MovementSystem& GetMovementSystem() { return *movementSystem; }
 	/////////////////////////////////
 
 

@@ -5,29 +5,10 @@
 
 
 /////////////////////////////////
-// Includes and forward declarations for the main function. This includes necessary headers for the game engine, entity management, scene management, and ImGui integration, as well as standard library headers for memory management, random number generation, and threading.
-#include <imgui/imgui.h>
+// Includes and forward declarations for the main function.
 #include <imgui/backends/imgui-SFML.h>
-
-#include <SFML/Graphics.hpp>
-
-#include <SFML/Window/Event.hpp>
-#include <SFML/Window/Keyboard.hpp>
-#include <SFML/Window/VideoMode.hpp>
-
-#include <memory>
-#include <optional>
-#include <random>
-#include <thread>
-
-#include "Entity.h"
-#include "EntityManager.h"
-#include "EntityType.h"
 #include "GameEngine.h"
-#include "ImageManagementSystem.h"
-#include "SpatialHashGrid.h"
-#include "TestScene.h"
-#include "Vec2.h"
+
 /////////////////////////////////
 
 

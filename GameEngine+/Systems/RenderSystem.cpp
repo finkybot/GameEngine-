@@ -228,61 +228,90 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 			sf::VertexArray va(sf::PrimitiveType::Triangles);
 			va.clear();
 
-			// Build vertex array for all entities in this batch...future me : consider using a pool of vertex arrays to avoid reallocating each frame also 
-			// I'm using the shorthand va.append() to add vertices to the vertex array (va), which is more efficient than using push_back() for each vertex.
-			// I know I'm going to look at this code in the future and wonder why I didn't use push_back(), so I'm leaving this comment to explain my reasoning.
-			// I'm also going to wonder what the hell I was thinking when I wrote this code, but that's a different story. (Fix this comment later, future me.)
+
+			// Code re-write completely to use a single vertex array for all entities using the same atlas, instead of creating a new vertex array for each entity. This reduces draw calls and improves performance.
+			// Pre-cache atlas UVs once
+			std::vector<sf::FloatRect> uvCache;
+			uvCache.resize(atlasPtr->TileCount()); // resize to number of tiles in atlas
+
+			// Precompute UVs for all tiles in the atlas
+			for (size_t i = 0; i < uvCache.size(); ++i) {
+				auto rectOpt = atlasPtr->GetSfFloatRectForTile(i);
+				uvCache[i] = rectOpt.value_or(sf::FloatRect());
+			}
+
+			// Helper to append a single quad (two triangles)
+			auto appendQuad = [&](float x, float y, const sf::FloatRect& fr) {
+				// UV shorthand (correct for SFML 3.1.0)
+				const float u0 = fr.position.x;
+				const float v0 = fr.position.y;
+				const float u1 = u0 + fr.size.x;
+				const float v1 = v0 + fr.size.y;
+
+				// World-space quad size = atlas tile size
+				const float w = fr.size.x;
+				const float h = fr.size.y;
+
+				// Snap world-space to pixel boundaries
+				const float sx = std::round(x);
+				const float sy = std::round(y);
+
+				const float x0 = sx;
+				const float y0 = sy;
+				const float x1 = sx + w;
+				const float y1 = sy + h;
+
+				// Emit quad (two triangles)
+				va.append(sf::Vertex({x0, y0}, sf::Color::White, {u0, v0}));
+				va.append(sf::Vertex({x1, y0}, sf::Color::White, {u1, v0}));
+				va.append(sf::Vertex({x1, y1}, sf::Color::White, {u1, v1}));
+
+				va.append(sf::Vertex({x0, y0}, sf::Color::White, {u0, v0}));
+				va.append(sf::Vertex({x1, y1}, sf::Color::White, {u1, v1}));
+				va.append(sf::Vertex({x0, y1}, sf::Color::White, {u0, v1}));
+			};
+
+			// Main loop
 			for (Entity* e : entitiesForAtlas) {
 				auto tex = e->GetComponent<CTexture>();
-				auto transform = e->GetComponent<CTransform>();
-				if (!tex || !transform) continue;
-				auto rectOpt = atlasPtr->GetSfFloatRectForTile((size_t)tex->tileIndex);
-				if (!rectOpt.has_value()) continue;
-				sf::FloatRect fr = *rectOpt;
-				
-				// Determine tile area
-				if (tex->areaW > 0.0f && tex->areaH > 0.0f) {
-					int atlasW = atlasPtr->TileWidth();
-					int atlasH = atlasPtr->TileHeight();
+				auto xf = e->GetComponent<CTransform>();
+				if (!tex || !xf)
+					continue;
+
+				const size_t tileIndex = (size_t)tex->tileIndex;
+
+				if (tileIndex >= uvCache.size()) {
+					// This entity is using a tile index that does not exist in this atlas.
+					// Skip it to avoid corrupting the vertex array.
+					continue;
+				}
+
+				const sf::FloatRect& fr = uvCache[tileIndex];
+
+				const float baseX = xf->position.x;
+				const float baseY = xf->position.y;
+
+				// Multi‑tile area
+				if (tex->areaW > 0.f && tex->areaH > 0.f) {
+					const int atlasW = atlasPtr->TileWidth();
+					const int atlasH = atlasPtr->TileHeight();
+
 					if (atlasW <= 0 || atlasH <= 0) {
-						// fallback to single quad
-						float x = transform->position.x;
-						float y = transform->position.y;
-                        // add quad as two triangles
-						va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
-						va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y)));
-						va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
-						va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
-						va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
-						va.append(sf::Vertex(sf::Vector2f(x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y + fr.size.y)));
+						appendQuad(baseX, baseY, fr);
 						continue;
 					}
 
-					// Calculate how many tiles fit in the specified area and create quads for each tile
-                    int tilesX = static_cast<int>(std::round(tex->areaW / static_cast<float>(atlasW)));
-					int tilesY = static_cast<int>(std::round(tex->areaH / static_cast<float>(atlasH)));
+					const int tilesX = (int)std::round(tex->areaW / (float)atlasW);
+					const int tilesY = (int)std::round(tex->areaH / (float)atlasH);
+
 					for (int ty = 0; ty < tilesY; ++ty) {
 						for (int tx = 0; tx < tilesX; ++tx) {
-							float x = transform->position.x + tx * atlasW;
-							float y = transform->position.y + ty * atlasH;
-							// two triangles (v0,v1,v2) and (v0,v2,v3)
-							va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
-							va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y)));
-							va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
-							va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
-							va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
-							va.append(sf::Vertex(sf::Vector2f(x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y + fr.size.y)));
+							appendQuad(baseX + tx * atlasW, baseY + ty * atlasH, fr);
 						}
 					}
 				} else {
-					float x = transform->position.x;
-					float y = transform->position.y;
-					va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
-					va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y)));
-					va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
-					va.append(sf::Vertex(sf::Vector2f(x, y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y)));
-					va.append(sf::Vertex(sf::Vector2f(x + fr.size.x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x + fr.size.x, fr.position.y + fr.size.y)));
-					va.append(sf::Vertex(sf::Vector2f(x, y + fr.size.y), sf::Color::White, sf::Vector2f(fr.position.x, fr.position.y + fr.size.y)));
+					// Single tile
+					appendQuad(baseX, baseY, fr);
 				}
 			}
 

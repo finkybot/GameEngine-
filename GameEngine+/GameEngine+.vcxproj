@@ -280,6 +280,7 @@
     <None Include="DIALOGUE_SYSTEM_SCHEMA.md" />
     <None Include="GameEngine+.vcxproj.filters" />
     <None Include="imgui.ini" />
+    <None Include="README.md" />
     <None Include="RENDER_QUEUE_PHASE1.md" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

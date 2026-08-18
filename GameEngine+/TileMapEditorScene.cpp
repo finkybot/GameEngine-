@@ -684,6 +684,22 @@ void TileMapEditorScene::HandleEvent(const std::optional<sf::Event>& event) {
 // OnEnter, OnExit, LoadResources, UnloadResources - lifecycle methods for the tile map editor scene.
 void TileMapEditorScene::OnEnter() {}
 void TileMapEditorScene::OnExit() {}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void TileMapEditorScene::OnWindowResized(sf::Vector2u newSize) {
+	sf::View view;
+	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
+	view.setSize(sf::Vector2f(newSize.x, newSize.y));
+	m_window.setView(view);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 void TileMapEditorScene::LoadResources() {	m_isLoaded = true; }
 void TileMapEditorScene::UnloadResources() {}
 /////////////////////////////////

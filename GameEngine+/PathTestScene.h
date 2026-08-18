@@ -25,7 +25,6 @@
 // PathTestScene class - A scene for testing pathfinding in a tile-based game engine.
 //								|
 //								|_______________________________________________________________________
-// ///////////////////////////////
 class PathTestScene : public Scene {
 	/////////////////////////////////
 	// Public interface
@@ -47,6 +46,7 @@ public:
 	void HandleEvent(const std::optional<sf::Event>& event) override;
 	void OnEnter() override;
 	void OnExit() override;
+	void OnWindowResized(sf::Vector2u newSize) override;
 	void LoadResources() override {}
 	void UnloadResources() override;
 	void InitializeGame(sf::Vector2u windowSize) override;
@@ -147,4 +147,3 @@ private:
 	bool m_movementTestActive = false;				// Whether movement testing is currently active
 	/////////////////////////////////
 };
-

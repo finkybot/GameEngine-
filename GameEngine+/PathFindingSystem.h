@@ -23,6 +23,8 @@
 
 /////////////////////////////////
 // PathJobResult - Represents the result of a pathfinding job, including the entity ID, request ID, and the resulting path points.
+//								|
+//								|_______________________________________________________________________
 struct PathJobResult {
 	size_t entityId;
 	std::optional<std::vector<Vec2>> path;

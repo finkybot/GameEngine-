@@ -21,6 +21,8 @@
 
 /////////////////////////////////
 // FontManager class declaration. This class manages the loading, storage, and retrieval of fonts in the game engine, providing an interface for efficient font resource management.
+//								|
+//								|_______________________________________________________________________
 class FontManager {
 	/////////////////////////////////
 	// Public interface for the FontManager class.

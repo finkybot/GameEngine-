@@ -10,6 +10,8 @@
 #include "Scene.h"
 #include <SFML/Window/Event.hpp>
 #include <random>
+#include <SFML/Graphics.hpp>
+
 #include "Systems/PhysicsSystem.h"
 /////////////////////////////////
 
@@ -18,6 +20,8 @@
 /////////////////////////////////
 // TestScene class - implements a test scene for the game engine, responsible for managing the game logic, entity updates, and rendering for a simple test scenario. 
 // The scene includes functionality for spawning entities with random properties, updating active explosions, and rendering game information using ImGui.
+//								|
+//								|_______________________________________________________________________
 class TestScene : public Scene {
 	/////////////////////////////////
 	// Public interface for the TestScene class
@@ -45,6 +49,7 @@ public:
 	void HandleEvent(const std::optional<sf::Event>& event) override;
 	void OnEnter() override;
 	void OnExit() override;
+	void OnWindowResized(sf::Vector2u newSize) override;
 	void LoadResources() override;
 	void UnloadResources() override;
 	/////////////////////////////////
@@ -106,7 +111,7 @@ private:
 	/////////////////////////////////
 	// Private member variables for the TestScene class. These include references to the GameEngine, EntityManager, and SFML window, as well as random distributions for entity properties and tracking variables for explosions and FPS.
 	const int m_targetEntityCount = 500;
-	sf::Window& m_window; // Reference to the SFML window for rendering and event handling
+	sf::RenderWindow& m_window; // Reference to the SFML render window for rendering the scene
 	int m_explosionCount = 0; // Number of active explosions currently playing, used for tracking and displaying explosion count in the game info window.
 	float m_fps = 0.0f; // Current frames per second (FPS).
 	/////////////////////////////////

@@ -17,6 +17,8 @@
 /////////////////////////////////
 // MainMenuScene class definition, derived from the base Scene class. This class represents the main menu scene of the game, allowing players to select different scenes to play. It includes methods for updating, rendering, handling events, and managing the scene lifecycle, 
 // as well as a reference to the SFML RenderWindow for drawing the menu and a list of available scene names for selection.
+//								|
+//								|_______________________________________________________________________
 class MainMenuScene : public Scene {
 	/////////////////////////////////
 	// Public interface
@@ -43,6 +45,7 @@ public:
 	void HandleEvent(const std::optional<sf::Event>& event) override;
 	void OnEnter() override;
 	void OnExit() override;
+	void OnWindowResized(sf::Vector2u newSize) override;
 	void LoadResources() override;
 	void UnloadResources() override;
 	void InitializeGame(sf::Vector2u windowSize) override;

@@ -14,6 +14,8 @@
 /////////////////////////////////
 // FPSCounter class - utility for tracking and smoothing frames per second (FPS) in the game engine. It calculates the instantaneous FPS based on the time elapsed between 
 // frames and applies an exponential moving average to smooth out fluctuations in FPS for a more stable display. The smoothing factor can be adjusted to control how quickly the smoothed FPS responds to changes in the instantaneous FPS.
+//								|
+//								|_______________________________________________________________________
 class FPSCounter {
 	/////////////////////////////////
 	// Public interface for the FPSCounter class

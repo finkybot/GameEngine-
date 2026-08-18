@@ -364,6 +364,19 @@ void LevelEditorScene::OnExit() {
 
 
 /////////////////////////////////
+// OnWindowResized - Adjust the main camera's viewport size when the window is resized. This ensures that the camera view remains consistent with the 
+// new window dimensions, allowing for proper rendering of the level editor scene.
+void LevelEditorScene::OnWindowResized(sf::Vector2u newSize) {
+	sf::View view;
+	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
+	view.setSize(sf::Vector2f(newSize.x, newSize.y));
+	m_window.setView(view);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // UnloadResources - free large resources held by the editor when it is no longer active.
 // 
 void LevelEditorScene::UnloadResources() {
@@ -670,51 +683,77 @@ void LevelEditorScene::Render() {
 	m_tempRenderVertexArrays.clear();
 	m_nextTempId = 0;
 
-	// Enqueue checkerboard background at depth 0 (background layer)
+	// ---------------------------------------------------------
+	// 0. APPLY CAMERA → SFML VIEW (zoom‑safe pixel snapping)
+	// ---------------------------------------------------------
+	if (auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager())) {
+		CCamera* cam = *camOpt;
+
+		sf::View view = m_window.getDefaultView();
+		view.setSize({cam->viewportWidth, cam->viewportHeight});
+		view.setCenter({cam->position.x, cam->position.y});
+
+		// Apply zoom FIRST
+		view.zoom(cam->zoom);
+
+		// Pixel-snap AFTER zoom is applied using world-units-per-screen-pixel.
+		const sf::Vector2u windowSize = m_window.getSize();
+		const sf::Vector2f viewSize = view.getSize();
+		const float snapX = viewSize.x / static_cast<float>(std::max(1u, windowSize.x));
+		const float snapY = viewSize.y / static_cast<float>(std::max(1u, windowSize.y));
+		sf::Vector2f c = view.getCenter();
+		c.x = std::round(c.x / snapX) * snapX;
+		c.y = std::round(c.y / snapY) * snapY;
+		view.setCenter(c);
+
+		m_window.setView(view);
+	}
+
+	// ---------------------------------------------------------
+	// 1. BACKGROUND
+	// ---------------------------------------------------------
 	EnqueueCheckerboardBackground();
 
-	// Enqueue chunks through the render queue with proper per-layer temp storage
+	// ---------------------------------------------------------
+	// 2. CHUNKS (rendered using the snapped camera view)
+	// ---------------------------------------------------------
 	m_chunkManager.EnqueueChunks(m_renderQueue, m_window.getView());
 
-	// Enqueue optional debug visualization at depth 100 (on top of chunks, below UI)
+	// ---------------------------------------------------------
+	// 3. DEBUG VISUALIZATION
+	// ---------------------------------------------------------
 	EnqueueChunkDiag();
 	EnqueueDragRect();
 	EnqueueMapBounds();
 
-	// Flush the render queue to the window (this renders all enqueued drawables in depth order)
+	// ---------------------------------------------------------
+	// 4. FLUSH WORLD RENDER QUEUE
+	// ---------------------------------------------------------
 	m_renderQueue.Flush(m_window);
 
-	// reset view to default for UI rendering
+	// ---------------------------------------------------------
+	// 5. RESET VIEW FOR UI
+	// ---------------------------------------------------------
 	m_window.setView(m_window.getDefaultView());
 
-	
-	// Show bounds info in a separate ImGui window
+	// ---------------------------------------------------------
+	// 6. UI WINDOWS
+	// ---------------------------------------------------------
 	BoundsInfoWindow(m_window.getSize().x, m_window.getSize().y, 0.35f);
-
-	// Render the separate Level Manager window
 	LevelManagerWindow(m_window.getSize().x - 550.0f, 10, 0.35f);
 
-	// ████
-	// ████
-	// ████
-	
-	// ImGui Browser Parent window for tileset management and brush preview. This is where we will add the UI for loading a tileset atlas, inputting the tileset key, 
-	// and showing a preview of the currently selected tile/brush. We will also include some diagnostics here like FPS and camera info for convenience while editing.
 	{
 		ImGuiIO& io = ImGui::GetIO();
 		float margin = 10.0f;
 		float winH = 10.0f;
-		// approximate window height for the tileset panel, position so bottom aligns with margin
 		float approxHeight = 420.0f;
 		ImGui::SetNextWindowPos(ImVec2(10, std::max(margin, winH - approxHeight - margin)), ImGuiCond_Once);
 	}
+
 	ImGui::SetNextWindowBgAlpha(0.35f);
-	// Allow the tileset window to be movable by giving it a title bar; keep auto-resize
 	ImGui::Begin("Tileset Browser", nullptr, ImGuiWindowFlags_AlwaysAutoResize);
 
-	// Level management moved to dedicated window
-
-	// Display current mouse world coordinates and tile coordinates
+	// Mouse world/tile position
 	{
 		sf::Vector2i mousePixelPos = sf::Mouse::getPosition(m_window);
 		sf::Vector2f mouseWorldPos = m_window.mapPixelToCoords(mousePixelPos, m_window.getView());
@@ -728,7 +767,7 @@ void LevelEditorScene::Render() {
 
 	ImGui::Separator();
 
-	// Display camera position and zoom level
+	// Camera info
 	{
 		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 		if (camOpt) {
@@ -741,46 +780,30 @@ void LevelEditorScene::Render() {
 
 	ImGui::Separator();
 
-	// Fetch atlas once for UI usage (preview + brush). Declared here so later preview code can use it.
 	auto atlasOpt = m_gameEngine.GetTextureManager().GetAtlas(std::string(m_tilesetKeyBuf));
-
 	SelectedBrushWindow(atlasOpt);
 
-	// ████
-
 	CameraZoomWindow();
-	
-	// ████
-		
 	AtlasBrowserWindow();
+	TilesetKeyWindow();
 
-	// ████
-	
-	TilesetKeyWindow(); // UI for inputting the tileset key and dimensions
-
-	// ████
-
-	// Snapshot shared async-load state under lock, then release before any ImGui/chunk work
 	std::string atlasMessage;
 	bool atlasFinished = false, atlasSuccess = false;
 	std::string atlasKey;
 	{
 		std::lock_guard<std::mutex> lg(m_atlasLoadMutex);
-		atlasMessage  = m_atlasLoadMessage;
+		atlasMessage = m_atlasLoadMessage;
 		if (m_atlasLoadFinished) {
 			atlasFinished = true;
-			atlasSuccess  = m_atlasLoadSuccess;
-			atlasKey      = m_atlasLoadKey;
-			m_atlasLoadFinished = false; // clear flag while we still hold the lock
+			atlasSuccess = m_atlasLoadSuccess;
+			atlasKey = m_atlasLoadKey;
+			m_atlasLoadFinished = false;
 		}
 	}
 
-	// ████
+	if (!atlasMessage.empty())
+		ImGui::TextUnformatted(atlasMessage.c_str());
 
-	// Display message outside the lock
-	if (!atlasMessage.empty()) ImGui::TextUnformatted(atlasMessage.c_str());
-
-	// Apply finished load result outside the lock
 	if (atlasFinished) {
 		if (atlasSuccess) {
 			ImStrncpy(m_tilesetKeyBuf, atlasKey.c_str(), sizeof(m_tilesetKeyBuf));
@@ -788,63 +811,65 @@ void LevelEditorScene::Render() {
 			m_chunkManager.RebuildAllChunksFromTileset();
 			m_chunkManager.UpdateMainThread_NoLock();
 			m_chunkManager.RebuildAllChunksFromTileset();
-			SaveLevelMetadata();  // Save tileset to meta.txt
+			SaveLevelMetadata();
 			m_selectedTileIndex = 0;
 		}
 	}
 
-	// ████
-
-	TilePreviewWindow(atlasOpt); // Window for previewing the currently loaded tileset atlas and selecting the active brush tile
+	TilePreviewWindow(atlasOpt);
 	ImGui::End();
-
-	// ████
-	// ████
-	// ████
-
 }
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// SeclectedTileWindow - Renders a small floating preview of the currently-selected tile/atlas used for painting. This provides visual feedback to the user about which 
-// tile is currently active as the brush for painting in the level editor. It checks if an atlas is loaded and if a brush tile is selected, then extracts the 
-// corresponding tile from the atlas texture and displays it using ImGui::ImageButton. If no brush is selected, it shows a "(no brush)" message.
+// SelectedBrushWindow - Renders a small floating preview of the currently-selected tile/atlas used for painting. This window shows whether the atlas image contains any transparent pixels,
 void LevelEditorScene::SelectedBrushWindow(std::optional<std::shared_ptr<TextureAtlas>>& atlasOpt) {
-	// Small floating preview of the currently-selected tile/atlas used for painting
 	ImGui::Separator();
 	ImGui::Text("Current Brush");
-	if (atlasOpt.has_value() && atlasOpt.value() && m_brushValue > 0) {
-		auto atlas = atlasOpt.value();
-		// Show whether the atlas image contains any transparent pixels
-		ImGui::Text("Atlas has alpha: %s", atlas->HasAlpha() ? "yes" : "no");
-		auto tex = atlas->GetTexture();
-		if (tex) {
-			int tw = atlas->TileWidth();
-			int th = atlas->TileHeight();
-			int idx = std::max(0, m_brushValue - 1);
-			int cols = (int)(tex->getSize().x / tw);
-			int r = idx / cols;
-			int c = idx % cols;
-			// draw a small image using SFML sprite helper via ImGui::Image (imgui-SFML provides overload)
-			sf::Sprite spr(*tex);
-			sf::IntRect rect(sf::Vector2i(c * tw, r * th), sf::Vector2i(tw, th));
-			spr.setTextureRect(rect);
-			ImGui::ImageButton("CurrentBrush", spr, sf::Vector2f((float)tw * 2.0f, (float)th * 2.0f));
-		}
-	} else {
+
+	if (!atlasOpt.has_value() || !atlasOpt.value() || m_brushValue <= 0) {
 		ImGui::Text("(no brush)");
+		return;
 	}
+
+	auto atlas = atlasOpt.value();
+	ImGui::Text("Atlas has alpha: %s", atlas->HasAlpha() ? "yes" : "no");
+
+	auto tex = atlas->GetTexture();
+	if (!tex)
+		return;
+
+	int tw = atlas->TileWidth();
+	int th = atlas->TileHeight();
+	int idx = std::max(0, m_brushValue - 1);
+
+	// Get padded/inset atlas rect
+	auto rectOpt = atlas->GetSfFloatRectForTile(idx);
+	if (!rectOpt.has_value())
+		return;
+
+	const sf::FloatRect& fr = *rectOpt;
+
+	const float inset = 0.5f; // match renderer
+
+	// Convert FloatRect → IntRect (SFML 3.1.0 uses vectors)
+	sf::IntRect irect(sf::Vector2i((int)(fr.position.x + inset), (int)(fr.position.y + inset)),
+					  sf::Vector2i((int)(fr.size.x - inset * 2), (int)(fr.size.y - inset * 2)));
+
+	sf::Sprite spr(*tex);
+	spr.setTextureRect(irect);
+
+	// Draw selected tile (scaled up)
+	ImGui::ImageButton("CurrentBrush", spr, sf::Vector2f((float)tw * 2.0f, (float)th * 2.0f));
 }
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// AtlasBrowserWindow - Renders ImGui controls for browsing the filesystem to load a tileset atlas, inputting the tileset key and tile dimensions, 
-// and triggering the loading of the atlas. When an atlas is loaded, we also trigger a rebuild of all chunks to update their vertex textures 
-// based on the new atlas.
+// AtlasBrowserWindow - Renders a file browser for selecting and loading texture atlases. It allows navigation through directories, refreshing the file list, and selecting files.
 void LevelEditorScene::AtlasBrowserWindow() {
 	// File browser: input for load filename, buttons to navigate up and refresh, and list of files in the current directory. Clicking a directory navigates 
 	// into it, while clicking a file selects it for loading.
@@ -853,7 +878,9 @@ void LevelEditorScene::AtlasBrowserWindow() {
 
 	// Cache directory entries in a static vector to avoid re-reading the filesystem on every frame. We will refresh this cache when navigating or when the 
 	// user clicks the Refresh button.
-	static std::vector<std::filesystem::directory_entry> s_entries;
+	static std::vector<std::filesystem::directory_entry>s_entries; // static cache
+	
+	// Lambda to refresh the cached directory entries. This function clears the current cache and repopulates it by iterating over the current directory.
 	auto refresh_entries = [&]() {
 		s_entries.clear();
 		try {
@@ -880,10 +907,12 @@ void LevelEditorScene::AtlasBrowserWindow() {
 		}
 	};
 
+	// Input for load filename, plus buttons to navigate up and refresh the file list. The current folder path is displayed for context.
 	if (ImGui::Button("Up") && m_currentDir.has_parent_path()) {
 		m_currentDir = m_currentDir.parent_path();
 		refresh_entries();
 	}
+	// Refresh button to re-read the current directory and update the file list. This is useful if files have been added or removed externally.
 	ImGui::SameLine();
 	if (ImGui::Button("Refresh")) {
 		refresh_entries();
@@ -894,23 +923,28 @@ void LevelEditorScene::AtlasBrowserWindow() {
 	if (s_entries.empty())
 		refresh_entries();
 
-	// File browser: list files and directories in the current folder. Directories are shown with a trailing slash and sorted before files. Clicking a 
-	// directory navigates into it, while clicking a file selects it for loading. Double-clicking a file triggers loading the atlas immediately. 
-	// The selected file is also copied into the load filename buffer for convenience if the user wants to edit it before loading.
+	// Child window to display the list of files and directories in the current folder. This allows for scrolling if there are many entries.
 	ImGui::BeginChild("files_list", ImVec2(0, 200), true);
-	static std::string s_selected_file;
+	static std::string s_selected_file; // static to persist selection across frames
+	
+	// Iterate over the cached directory entries and display them in the ImGui window. Directories are shown with a trailing slash, and files can be selected for loading.
 	for (size_t i = 0; i < s_entries.size(); ++i) {
 		auto& entry = s_entries[i];
 		std::string name = entry.path().filename().string();
 		bool is_dir = false;
+		// Use try-catch to safely check if the entry is a directory, as some filesystem operations may throw exceptions (e.g., due to permissions).
 		try {
 			is_dir = entry.is_directory();
 		} catch (...) {
 			is_dir = false;
 		}
+		
+		// Display directories with a trailing slash for clarity. This helps users distinguish between files and folders in the list.
 		std::string label = is_dir ? (name + "/") : name;
 		std::string fullpath = (m_currentDir / entry.path().filename()).string();
 		bool selected = (!s_selected_file.empty() && s_selected_file == fullpath);
+		
+		// Use ImGui::Selectable to allow the user to select files and directories. If a directory is selected, we navigate into it. If a file is selected, we update the load filename buffer.
 		if (ImGui::Selectable(label.c_str(), selected)) {
 			if (is_dir) {
 				m_currentDir = entry.path();
@@ -929,6 +963,8 @@ void LevelEditorScene::AtlasBrowserWindow() {
 							key = "";
 						}
 					}
+					
+					// Load atlas asynchronously to avoid blocking UI
 					if (m_gameEngine.GetTextureManager().LoadAtlas(key, s_selected_file, m_tilesetTileW,
 																	   m_tilesetTileH)) {
 						m_chunkManager.SetTilesetKey(key);
@@ -965,6 +1001,7 @@ void LevelEditorScene::TilesetKeyWindow() {
 		std::cout << "LevelEditorScene: Set tileset to '" << m_tilesetKeyBuf << "' and saved metadata\n";
 	}
 
+	// Input for tile width and height, allowing the user to specify the dimensions of individual tiles in the atlas. This is important for correctly slicing the atlas texture.
 	ImGui::Separator();
 	if (ImGui::Button("Load Selected")) {
 		std::string key = std::string(m_tilesetKeyBuf);
@@ -1000,84 +1037,129 @@ void LevelEditorScene::TilesetKeyWindow() {
 
 
 /////////////////////////////////
-// TilePreviewWindow - Renders a preview of the currently loaded tileset atlas, showing all the individual tiles in a grid. The user can click 
-// on any tile in the preview to select it as the active brush tile for painting. The selected tile is highlighted with a background color. 
-// This provides a convenient visual reference for the user to see all available tiles in the atlas and quickly select one for editing the level.
+// TilePreviewWindow - Renders a preview of the loaded atlas tiles if available. It displays the number of tiles in the atlas and allows the user to select a tile by clicking on it,
+// adjusted for tile padding we added to avoid bleeding. The selected tile is highlighted, and clicking on a tile updates the selected tile index and brush value for painting.
 void LevelEditorScene::TilePreviewWindow(std::optional<std::shared_ptr<TextureAtlas>>& atlasOpt) {
-	// Preview loaded atlas tiles if available
 	ImGui::Separator();
-	// atlasOpt was fetched above once for UI usage
-	if (atlasOpt.has_value() && atlasOpt.value()) {
-		auto atlas = atlasOpt.value();
-		std::shared_ptr<sf::Texture> tex = atlas->GetTexture();
-		if (tex) {
-			int tw = atlas->TileWidth();
-			int th = atlas->TileHeight();
-			int cols = (int)(tex->getSize().x / tw);
-			int rows = (int)(tex->getSize().y / th);
-			ImGui::Text("Preview: %d x %d tiles", cols, rows);
-			ImGui::BeginChild("atlas_preview", ImVec2(0, 200), true);
-			for (int r = 0; r < rows; ++r) {
-				ImGui::BeginGroup();
-				for (int c = 0; c < cols; ++c) {
-					int idx = r * cols + c;
-					// build sprite for the tile region
-					sf::Sprite spr(*tex);
-					sf::IntRect rect(sf::Vector2i(c * tw, r * th), sf::Vector2i(tw, th));
-					spr.setTextureRect(rect);
-					std::string id = std::string("tile_") + std::to_string(idx);
-					// highlight selected tile
-					sf::Color bg = (idx == m_selectedTileIndex) ? sf::Color(100, 150, 255) : sf::Color::Transparent;
-					if (ImGui::ImageButton(id.c_str(), spr, sf::Vector2f((float)tw, (float)th), bg, sf::Color::White)) {
-						m_selectedTileIndex = idx;
-						m_brushValue = idx + 1; // Tile values are 1-based
-					}
-					ImGui::SameLine();
-				}
-				ImGui::EndGroup();
-				ImGui::NewLine();
+
+	if (!atlasOpt.has_value() || !atlasOpt.value())
+		return;
+
+	auto atlas = atlasOpt.value();
+	std::shared_ptr<sf::Texture> tex = atlas->GetTexture();
+	if (!tex)
+		return;
+
+	int tw = atlas->TileWidth();
+	int th = atlas->TileHeight();
+	int tileCount = atlas->TileCount();
+
+	int cols = tex->getSize().x / tw;
+	int rows = (tileCount + cols - 1) / cols;
+
+	ImGui::Text("Preview: %d x %d tiles", cols, rows);
+	ImGui::BeginChild("atlas_preview", ImVec2(0, 200), true);
+
+	const float inset = 0.5f; // match renderer
+
+	for (int r = 0; r < rows; ++r) {
+		ImGui::BeginGroup();
+
+		for (int c = 0; c < cols; ++c) {
+			int idx = r * cols + c;
+			if (idx >= tileCount)
+				break;
+
+			auto rectOpt = atlas->GetSfFloatRectForTile(idx);
+			if (!rectOpt.has_value())
+				continue;
+
+			const sf::FloatRect& fr = *rectOpt;
+
+			// Convert padded float rect → IntRect for Sprite
+			sf::IntRect irect(sf::Vector2i((int)(fr.position.x + inset), (int)(fr.position.y + inset)),
+							  sf::Vector2i((int)(fr.size.x - inset * 2), (int)(fr.size.y - inset * 2)));
+
+			sf::Sprite spr(*tex);
+			spr.setTextureRect(irect);
+
+			std::string id = "tile_" + std::to_string(idx);
+
+			sf::Color bg = (idx == m_selectedTileIndex) ? sf::Color(100, 150, 255) : sf::Color::Transparent;
+
+			if (ImGui::ImageButton(id.c_str(), spr, sf::Vector2f((float)tw, (float)th), bg, sf::Color::White)) {
+				m_selectedTileIndex = idx;
+				m_brushValue = idx + 1; // 1-based tile values
 			}
-			ImGui::EndChild();
+
+			ImGui::SameLine();
 		}
+
+		ImGui::EndGroup();
+		ImGui::NewLine();
 	}
+
+	ImGui::EndChild();
 }
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// ShowCameraZoomWindow - Renders a small ImGui window with diagnostics about the camera and controls to adjust the zoom level. This allows the 
-// user to see the current FPS, camera position, and zoom level at a glance while editing the level, and provides convenient buttons to quickly 
-// adjust the zoom without needing to use the mouse wheel.
+// CameraZoomWindow - Renders ImGui controls for zooming the camera in and out, as well as resetting the zoom level. The zoom levels are defined in a fixed array of
 void LevelEditorScene::CameraZoomWindow() {
-	// Separator and diagnostics window to group related info and controls together. This includes FPS, camera position, zoom level, and buttons
-	// to control zoom. Small diagnostics: FPS + camera position and zoom, plus buttons to zoom in/out and reset zoom to default. This is useful 
-	// for testing and debugging the camera system while we are editing levels, and also serves as a reminder of the current zoom level which 
-	// affects how the level will look in-game.
 	float fps = m_gameEngine.GetFPSCounter().GetFPS();
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (camOpt) {
 		CCamera* cam = *camOpt;
-		ImGui::Text("FPS: %.1f  Camera: (%.1f, %.1f)  Zoom: %.2fx", fps, cam->position.x, cam->position.y,
-					cam->zoom);
+		ImGui::Text("FPS: %.1f  Camera: (%.1f, %.1f)  Zoom: %.2fx", fps, cam->position.x, cam->position.y, cam->zoom);
+
 		constexpr int kMaxIndex = static_cast<int>(std::size(k_zoomSteps)) - 1;
+
+		// --- ZOOM IN ---
 		if (ImGui::Button("Zoom In") && m_zoomIndex > 0) {
 			m_zoomIndex--;
 			cam->zoom = k_zoomSteps[m_zoomIndex];
+
+			// Pixel-perfect quantization
+			const float tileSize = m_chunkManager.GetTileSize();
+			float pixelsPerTile = tileSize / cam->zoom;
+			float snapped = std::max(1.0f, std::round(pixelsPerTile));
+			cam->zoom = tileSize / snapped;
 		}
+
 		ImGui::SameLine();
+
+		// --- RESET ZOOM ---
 		if (ImGui::Button("Reset Zoom")) {
 			m_zoomIndex = 1;
 			cam->zoom = k_zoomSteps[m_zoomIndex];
+
+			// Pixel-perfect quantization
+			const float tileSize = m_chunkManager.GetTileSize();
+			float pixelsPerTile = tileSize / cam->zoom;
+			float snapped = std::max(1.0f, std::round(pixelsPerTile));
+			cam->zoom = tileSize / snapped;
 		}
+
 		ImGui::SameLine();
+
+		// --- ZOOM OUT ---
 		if (ImGui::Button("Zoom Out") && m_zoomIndex < kMaxIndex) {
 			m_zoomIndex++;
 			cam->zoom = k_zoomSteps[m_zoomIndex];
+
+			// Pixel-perfect quantization
+			const float tileSize = m_chunkManager.GetTileSize();
+			float pixelsPerTile = tileSize / cam->zoom;
+			float snapped = std::max(1.0f, std::round(pixelsPerTile));
+			cam->zoom = tileSize / snapped;
 		}
+
 	} else {
 		ImGui::Text("FPS: %.1f  Camera: (no main camera)", fps);
 	}
+
 	ImGui::Separator();
 }
 /////////////////////////////////
@@ -1224,19 +1306,34 @@ void LevelEditorScene::EnqueueChunkDiag() {
 		bool any = false;
 		for (int L = 0; L < c.numLayers; ++L) { for (int t : c.tilesPerLayer[L]) { if (t != 0) { any = true; break; } } if (any) break; }
 
-		auto r = std::make_shared<sf::RectangleShape>(sf::Vector2f(w, h));
-		r->setPosition(sf::Vector2f(wx, wy));
-		r->setFillColor(sf::Color::Transparent);
+		sf::Color color;
 		if (!any) {
-			r->setOutlineColor(sf::Color(200, 0, 0, 180)); // red = empty
+			color = sf::Color(200, 0, 0, 180); // red = empty
 		} else if (c.vertexTexture) {
-			r->setOutlineColor(sf::Color(0, 200, 0, 180)); // green = has tiles + texture
+			color = sf::Color(0, 200, 0, 180); // green = has tiles + texture
 		} else {
-			r->setOutlineColor(sf::Color(200, 200, 0, 180)); // yellow = has tiles but no texture
+			color = sf::Color(200, 200, 0, 180); // yellow = has tiles but no texture
 		}
-		r->setOutlineThickness(2.0f);
-		m_tempRenderShapes[m_nextTempId] = r;
-		m_renderQueue.Enqueue(r.get(), 100); // depth 100: debug overlay
+
+		auto va = std::make_shared<sf::VertexArray>();
+		va->setPrimitiveType(sf::PrimitiveType::Lines);
+
+		const float x0 = wx;
+		const float y0 = wy;
+		const float x1 = wx + w;
+		const float y1 = wy + h;
+
+		va->append(sf::Vertex(sf::Vector2f(x0, y0), color));
+		va->append(sf::Vertex(sf::Vector2f(x1, y0), color));
+		va->append(sf::Vertex(sf::Vector2f(x0, y1), color));
+		va->append(sf::Vertex(sf::Vector2f(x1, y1), color));
+		va->append(sf::Vertex(sf::Vector2f(x0, y0), color));
+		va->append(sf::Vertex(sf::Vector2f(x0, y1), color));
+		va->append(sf::Vertex(sf::Vector2f(x1, y0), color));
+		va->append(sf::Vertex(sf::Vector2f(x1, y1), color));
+
+		m_tempRenderVertexArrays[m_nextTempId] = va;
+		m_renderQueue.Enqueue(va.get(), 100); // depth 100: debug overlay
 		m_nextTempId++;
 	}
 }
@@ -1322,13 +1419,39 @@ void LevelEditorScene::LevelManagerWindow(float x, float y, float alpha) {
 		ImGui::End();
 		return;
 	} // Begin by creating a new ImGui window; if it fails to initialize, we end and return early
-	
-	ImGui::Text("Create a 3 layered level (background, main, upper) with a tileset key and tile dimensions.");
-	ImGui::Text("Main layer, acts as colision layer for pathfinding");
-	ImGui::Text("Left click to paint, left click and drag to paint area at release, right click to erase");
-	ImGui::Text("right click and drag to erase area on release,	middle click to pick tile from level");
-	ImGui::Text("Use mouse wheel to zoom in / out");
 
+
+	// Show a help button that toggles a help window with instructions for using the level manager. This is useful for new users who may not be familiar with the editor's features.
+	static bool m_showLevelManagerHelp = false;
+	if (ImGui::Button("How too?")) {
+		m_showLevelManagerHelp = !m_showLevelManagerHelp;
+	}
+
+	if (m_showLevelManagerHelp) {
+		ImGui::Begin("Level Manager Help", &m_showLevelManagerHelp, ImGuiWindowFlags_AlwaysAutoResize);
+		ImGui::Separator();
+		ImGui::Text("Level Manager Help");
+		ImGui::Separator();
+		ImGui::Text("You can create new levels, switch between existing levels, export them, or delete them.");
+		ImGui::Text("Levels are stored in the 'levels' directory under your application data folder.");
+		ImGui::Text("Make sure to refresh the list after adding or removing levels from disk.");
+		ImGui::Separator();
+		ImGui::Text("Level Layout");
+		ImGui::Separator();
+		ImGui::Text("Each level is a layered level (background, main, upper) with a tileset key and tile dimensions.");
+		ImGui::Text("Any tiles added to the Main layer will act as collision layer for pathfinding");
+		ImGui::Separator();
+		ImGui::Text("Using the mouse to edit!");
+		ImGui::Separator();
+		ImGui::Text("Left click to paint a tile to paint a single tile area, left click and drag/release to paint area with the selected tile.");
+		ImGui::Text("Right click to delete a single tile area, right click and drag/release to erase an area.");	
+		ImGui::Text("Press and hold the d key to select a tile graphic from the tilemap");
+		ImGui::Text("Use mouse wheel to zoom in / out, press middle mouse button to pan");
+		ImGui::End();
+	}
+	
+
+	// Create a button to refresh the list of available levels. When clicked, it will call the RefreshAvailableLevels() function to re-scan the levels directory and update the list.
 	if (ImGui::Button("Refresh Levels"))
 		RefreshAvailableLevels(); // Create a button to refesh level directory when clicked
 
@@ -1475,9 +1598,7 @@ void LevelEditorScene::LevelManagerWindow(float x, float y, float alpha) {
 
 
 /////////////////////////////////
-// EnsureVisibleChunks - Ensure that the chunks covering the current camera view are loaded. This function calculates the bounds of the camera's viewport 
-// in world coordinates, converts those to tile coordinates, and then tells the chunk manager to ensure that all chunks intersecting that tile rectangle 
-// are loaded. The marginChunks parameter allows for loading additional chunks around the edges of the view to prevent pop-in when moving the camera.
+// EnsureVisibleChunks - Ensures that all chunks that intersect the current camera view are loaded and visible. This function calculates the tile coordinates of the camera's view bounds
 void LevelEditorScene::EnsureVisibleChunks() {
 	// compute view bounds in world coords from active camera
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
@@ -1496,9 +1617,8 @@ void LevelEditorScene::EnsureVisibleChunks() {
 
 
 /////////////////////////////////
-// AtlasLoadWorker - runs on a background thread. Performs atlas load and writes results into guarded members using m_atlasLoadMutex. Note: the code is thread safe 
-// so we can ignore the warnings about the caller failing to hold lock - the caller just needs to ensure it doesn't read the results until m_atlasLoadFinished is true, 
-// which is guaranteed by the logic in Update() that checks m_atlasLoadFinished before reading the results.
+// AtlasLoadWorker - Worker function to load a texture atlas in a separate thread. This function attempts to load the atlas using the provided key, path, width, and height.
+// We can ignore unlock warnings here because the mutex is only used to protect the shared state variables (m_atlasLoadSuccess, m_atlasLoadFinished, m_atlasLoadMessage) that are updated after the loading attempt.
 void LevelEditorScene::AtlasLoadWorker(std::string key, std::string path, int w, int h) {
 	bool ok = m_gameEngine.GetTextureManager().LoadAtlas(key, path, w, h);
 	{
@@ -1517,13 +1637,7 @@ void LevelEditorScene::AtlasLoadWorker(std::string key, std::string path, int w,
 
 
 /////////////////////////////////
-// ApplyMainCameraView - Apply the main camera's view to the render window. This function retrieves the main camera from the camera system, calculates the appropriate 
-// view based on the camera's position, zoom, and viewport size, and then sets that view on the SFML render window. It also includes logic to clamp the camera's position 
-// within the bounds of the map if those bounds are available, to prevent the user from panning the camera outside the edges of the level. The clamping is based on the 
-// fixed bounds derived from the disk data, which are updated when tiles are painted, ensuring that the camera always has valid bounds to work with. 
-// 
-// Note as above the code is thread safe. So we can ignore warnings about caller not holding locks - the caller just needs to ensure it doesn't read camera position until 
-// after m_haveBounds is set to true, which is guaranteed by the logic in Update() that checks m_haveBounds before calling this function.
+// ApplyMainCameraView - Applies the main camera's position and zoom to the SFML window's view. This function calculates the appropriate view size based on the camera's
 void LevelEditorScene::ApplyMainCameraView() {
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (!camOpt) return;
@@ -1551,18 +1665,15 @@ void LevelEditorScene::ApplyMainCameraView() {
 	}
 	cam->position = newPos;
 
-	// Snap camera to sub-pixel grid based on zoom level to reduce shimmer/jitter when rendering
-	// At zoom levels 2.0x or higher, snap to tile alignment (32 pixels). Otherwise snap to half-pixel.
-	// This ensures that the view center aligns with rasterization boundaries and remains stable during camera movement.
-	//float snapGrid = (cam->zoom >= 2.0f) ? 32.0f : 0.5f;  // Snap to tile grid at 2x+ zoom, else half-pixel
-	//float snapX = std::round(newPos.x / snapGrid) * snapGrid;
-	//float snapY = std::round(newPos.y / snapGrid) * snapGrid;
-	//v.setCenter(sf::Vector2f(snapX, snapY));
-	
-	// Instead of snapping to a grid, we can apply a small offset to the camera center to reduce shimmer/jitter when rendering. 
-	// This offset is based on the zoom level and ensures that the view center aligns with rasterization boundaries and remains stable during camera movement.
-	v.setCenter(sf::Vector2f(newPos.x + 0.001f, newPos.y + 0.001f));
-	
+	// Snap camera center using world-units-per-screen-pixel so Update() coordinate mapping
+	// and Render() draw calls use the same stable camera alignment.
+	const sf::Vector2u windowSize = m_window.getSize();
+	const float snapX = viewW / static_cast<float>(std::max(1u, windowSize.x));
+	const float snapY = viewH / static_cast<float>(std::max(1u, windowSize.y));
+	const float snappedX = std::round(newPos.x / snapX) * snapX;
+	const float snappedY = std::round(newPos.y / snapY) * snapY;
+	v.setCenter(sf::Vector2f(snappedX, snappedY));
+
 	m_window.setView(v);
 }
 /////////////////////////////////

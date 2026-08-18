@@ -17,6 +17,8 @@
 
 /////////////////////////////////
 // CursorSystem class - manages the cursor's appearance and behavior in the game engine.
+//								|
+//								|_______________________________________________________________________
 class CursorSystem {
 	/////////////////////////////////
 public:

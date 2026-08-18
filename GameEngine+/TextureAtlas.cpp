@@ -10,6 +10,9 @@
 #include <SFML/Graphics.hpp>
 
 #include <SFML/Graphics/Image.hpp>
+#include <SFML/Graphics/Texture.hpp>
+#include <SFML/System/Vector2.hpp>
+
 #include <iostream>
 /////////////////////////////////
 
@@ -27,8 +30,7 @@ const QuadTemplate& TextureAtlas::GetQuadTemplate(size_t tileIndex) const {
 
 
 /////////////////////////////////
-// LoadFromFile
-// Loads a texture from a file and slices it into tiles of specified width and height. Returns true if successful, false otherwise.
+// LoadFromFile - Loads a texture from a file and slices it into tiles of specified width and height. Returns true if successful, false otherwise.
 bool TextureAtlas::LoadFromFile(const std::string& filePath, int tileW, int tileH) {
 	if (tileW <= 0 || tileH <= 0)
 		return false;
@@ -38,16 +40,6 @@ bool TextureAtlas::LoadFromFile(const std::string& filePath, int tileW, int tile
 		std::cerr << "TextureAtlas: failed to load image '" << filePath << "'\n";
 		return false;
 	}
-
-	m_texture = std::make_shared<sf::Texture>();
-	if (!m_texture->loadFromImage(img)) {
-		std::cerr << "TextureAtlas: failed to create texture from image '" << filePath << "'\n";
-		m_texture.reset();
-		return false;
-	}
-
-	m_texture->setSmooth(false);
-	m_texture->setRepeated(false);
 
 	// Detect alpha
 	m_hasAlpha = false;
@@ -63,14 +55,96 @@ bool TextureAtlas::LoadFromFile(const std::string& filePath, int tileW, int tile
 		}
 	}
 
-	// Slice into tiles
+	// Store tile size
 	m_tileW = tileW;
 	m_tileH = tileH;
 	m_rects.clear();
 
-	unsigned int cols = img.getSize().x / static_cast<unsigned int>(tileW);
-	unsigned int rows = img.getSize().y / static_cast<unsigned int>(tileH);
+	// Decide whether padding should be applied
+	auto isPow2 = [](int x) { return (x & (x - 1)) == 0; };
 
+	applyPadding = (!conditionalPadding) ||		  // pad ALL tiles if conditionalPadding == false
+				   (isPow2(tileW) && isPow2(tileH)); // otherwise pad only power-of-two tiles
+
+	unsigned int cols = img.getSize().x / tileW;
+	unsigned int rows = img.getSize().y / tileH;
+
+	if (applyPadding) {
+		const int pad = 1; // 1px extruded padding
+
+		unsigned int newW = cols * (tileW + pad * 2);
+		unsigned int newH = rows * (tileH + pad * 2);
+
+		// SFML 3.1.0: must use constructor with Vector2u
+		sf::Image padded(sf::Vector2u(newW, newH), sf::Color::Transparent);
+
+		for (unsigned int r = 0; r < rows; ++r) {
+			for (unsigned int c = 0; c < cols; ++c) {
+
+				int srcX = c * tileW;
+				int srcY = r * tileH;
+
+				int dstX = c * (tileW + pad * 2) + pad;
+				int dstY = r * (tileH + pad * 2) + pad;
+
+				// Copy tile interior
+				for (int y = 0; y < tileH; ++y) {
+					for (int x = 0; x < tileW; ++x) {
+						padded.setPixel(sf::Vector2u(dstX + x, dstY + y),
+										img.getPixel(sf::Vector2u(srcX + x, srcY + y)));
+					}
+				}
+
+				// Extrude top/bottom edges
+				for (int x = 0; x < tileW; ++x) {
+					padded.setPixel(sf::Vector2u(dstX + x, dstY - pad), img.getPixel(sf::Vector2u(srcX + x, srcY)));
+					padded.setPixel(sf::Vector2u(dstX + x, dstY + tileH),
+									img.getPixel(sf::Vector2u(srcX + x, srcY + tileH - 1)));
+				}
+
+				// Extrude left/right edges
+				for (int y = 0; y < tileH; ++y) {
+					padded.setPixel(sf::Vector2u(dstX - pad, dstY + y), img.getPixel(sf::Vector2u(srcX, srcY + y)));
+					padded.setPixel(sf::Vector2u(dstX + tileW, dstY + y),
+									img.getPixel(sf::Vector2u(srcX + tileW - 1, srcY + y)));
+				}
+
+				// Extrude corners
+				padded.setPixel(sf::Vector2u(dstX - pad, dstY - pad), img.getPixel(sf::Vector2u(srcX, srcY)));
+
+				padded.setPixel(sf::Vector2u(dstX + tileW, dstY - pad),
+								img.getPixel(sf::Vector2u(srcX + tileW - 1, srcY)));
+
+				padded.setPixel(sf::Vector2u(dstX - pad, dstY + tileH),
+								img.getPixel(sf::Vector2u(srcX, srcY + tileH - 1)));
+
+				padded.setPixel(sf::Vector2u(dstX + tileW, dstY + tileH),
+								img.getPixel(sf::Vector2u(srcX + tileW - 1, srcY + tileH - 1)));
+
+				// Store padded rect
+				TileRect rect;
+				rect.x = dstX;
+				rect.y = dstY;
+				rect.w = tileW;
+				rect.h = tileH;
+				m_rects.push_back(rect);
+			}
+		}
+
+		// Replace texture with padded version
+		m_texture = std::make_shared<sf::Texture>();
+		if (!m_texture->loadFromImage(padded)) {
+			std::cerr << "TextureAtlas: failed to create padded texture\n";
+			return false;
+		}
+
+		m_texture->setSmooth(false);
+		m_texture->setRepeated(false);
+
+		return true;
+	}
+
+	// --- NO PADDING: original slicing ---
 	for (unsigned int r = 0; r < rows; ++r) {
 		for (unsigned int c = 0; c < cols; ++c) {
 			TileRect rect;
@@ -81,6 +155,16 @@ bool TextureAtlas::LoadFromFile(const std::string& filePath, int tileW, int tile
 			m_rects.push_back(rect);
 		}
 	}
+
+	// Use original texture
+	m_texture = std::make_shared<sf::Texture>();
+	if (!m_texture->loadFromImage(img)) {
+		std::cerr << "TextureAtlas: failed to create texture from image '" << filePath << "'\n";
+		return false;
+	}
+
+	m_texture->setSmooth(false);
+	m_texture->setRepeated(false);
 
 	return !m_rects.empty();
 }
@@ -99,6 +183,8 @@ void TextureAtlas::BuildQuadTemplates() {
 	float texW = static_cast<float>(m_texture->getSize().x);
 	float texH = static_cast<float>(m_texture->getSize().y);
 
+	const int pad = 1; // must match LoadFromFile()
+
 	for (size_t i = 0; i < TileCount(); ++i) {
 		auto frOpt = GetSfFloatRectForTile(i);
 		if (!frOpt)
@@ -108,17 +194,34 @@ void TextureAtlas::BuildQuadTemplates() {
 
 		QuadTemplate q;
 
-		float u0 = fr.position.x / texW;
-		float v0 = fr.position.y / texH;
-		float u1 = (fr.position.x + fr.size.x) / texW;
-		float v1 = (fr.position.y + fr.size.y) / texH;
+		// If padding was applied, skip padded border
+		float px = applyPadding ? pad : 0;
+		float py = applyPadding ? pad : 0;
 
+		// Compute interior tile bounds (correct!)
+		float interiorX0 = fr.position.x + px;
+		float interiorY0 = fr.position.y + py;
+
+		float interiorX1 = fr.position.x + px + m_tileW;
+		float interiorY1 = fr.position.y + py + m_tileH;
+
+		// Convert to UVs
+		float u0 = interiorX0 / texW;
+		float v0 = interiorY0 / texH;
+		float u1 = interiorX1 / texW;
+		float v1 = interiorY1 / texH;
+
+		// Quad size in world space
+		float w = static_cast<float>(m_tileW);
+		float h = static_cast<float>(m_tileH);
+
+		// Two triangles forming a quad
 		q.v[0] = {{0.f, 0.f}, sf::Color::White, {u0, v0}};
-		q.v[1] = {{fr.size.x, 0.f}, sf::Color::White, {u1, v0}};
-		q.v[2] = {{fr.size.x, fr.size.y}, sf::Color::White, {u1, v1}};
+		q.v[1] = {{w, 0.f}, sf::Color::White, {u1, v0}};
+		q.v[2] = {{w, h}, sf::Color::White, {u1, v1}};
 		q.v[3] = {{0.f, 0.f}, sf::Color::White, {u0, v0}};
-		q.v[4] = {{fr.size.x, fr.size.y}, sf::Color::White, {u1, v1}};
-		q.v[5] = {{0.f, fr.size.y}, sf::Color::White, {u0, v1}};
+		q.v[4] = {{w, h}, sf::Color::White, {u1, v1}};
+		q.v[5] = {{0.f, h}, sf::Color::White, {u0, v1}};
 
 		quadTemplates[i] = q;
 	}

@@ -34,6 +34,8 @@ class Entity;
 //   2. Add CPathFollower component with desired speed
 //   3. Set CPathFollower::isActive = true
 //   4. MovementSystem::Update() handles the rest each frame
+//								|
+//								|_______________________________________________________________________
 class MovementSystem {
 	/////////////////////////////////
 	// Public interface

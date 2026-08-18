@@ -28,6 +28,8 @@
 //   - Priority-based culling when max concurrent sounds exceeded
 //   - Fade-in/fade-out support
 //   - Data-driven (flag-based) design using m_shouldPlay
+//								|
+//								|_______________________________________________________________________
 class SoundSystem {
 	/////////////////////////////////
 	// Private member variables

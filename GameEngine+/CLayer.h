@@ -15,6 +15,8 @@
 /////////////////////////////////
 // CLayer component - represents the rendering layer of an entity, allowing for control over the rendering order of entities in the game. This component can be used by the RenderSystem to determine 
 // the order in which entities are drawn on the screen, with different layers representing different depths in the scene (e.g., background, midground, foreground, overlay).
+//								|
+//								|_______________________________________________________________________
 class CLayer : public Component {
 	/////////////////////////////////
 	// Public data members for CLayer.

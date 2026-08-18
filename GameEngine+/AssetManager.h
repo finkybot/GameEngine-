@@ -24,6 +24,8 @@ namespace fs = std::filesystem;
 
 /////////////////////////////////
 /// AssetManager class responsible for loading and managing game assets such as textures, sounds, etc.
+//								|
+//								|_______________________________________________________________________
 class AssetManager {
 	/////////////////////////////////
 	// Public interface for the AssetManager class

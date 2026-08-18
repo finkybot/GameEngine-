@@ -8,13 +8,9 @@
 /////////////////////////////////
 // Includes and forward declarations for the Scene class. We include necessary headers for SFML graphics and events, as well as the GameEngine and EntityManager classes that will be injected into scenes for managing game state and entities.
 #pragma once
-#include <SFML/Window/Event.hpp>
-
 #include <SFML/Graphics.hpp>
 
 #include <SFML/Window/Event.hpp>
-#include <SFML/Window/Keyboard.hpp>
-#include <SFML/Window/VideoMode.hpp>
 #include <SFML/System/Clock.hpp>
 #include "GameEngine.h"
 #include "RenderQueue.h"
@@ -27,6 +23,8 @@ class EntityManager;
 
 /////////////////////////////////
 // Base class for scenes. Scenes receive injected references to engine + entity manager.
+//								|
+//								|_______________________________________________________________________
 class Scene {
 	/////////////////////////////////
 	// Public interface for the Scene class, including virtual destructor and pure virtual methods for updating, rendering, handling events, and managing scene lifecycle. Derived scene classes must implement these methods to define their specific behavior and content.
@@ -45,6 +43,7 @@ public:
 	virtual void HandleEvent(const std::optional<sf::Event>& event) = 0;
 	virtual void OnEnter() = 0;
 	virtual void OnExit() = 0;
+	virtual void OnWindowResized(sf::Vector2u newSize) = 0;
 	virtual void LoadResources() = 0;
 	virtual void UnloadResources() = 0;
 	virtual void InitializeGame(sf::Vector2u windowSize) = 0;

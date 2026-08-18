@@ -17,6 +17,8 @@
 
 /////////////////////////////////
 // DrawRequest - A single drawable request with depth and rendering state info
+//								|
+//								|_______________________________________________________________________
 struct DrawRequest {
 	sf::Drawable* drawable = nullptr;
 	std::shared_ptr<sf::Texture> texture;
@@ -41,6 +43,8 @@ struct DrawRequest {
 
 /////////////////////////////////
 // RenderQueue - Collects drawable requests and renders them in sorted order
+//								|
+//								|_______________________________________________________________________
 class RenderQueue {
 public:
 	RenderQueue() = default;

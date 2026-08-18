@@ -85,7 +85,14 @@ void RenderSystem::RenderEntity(Entity* entity, sf::RenderWindow& window) const 
 								lastTex = texPtr.get();
 							}
 
-							sf::FloatRect fr = *rectOpt;
+							sf::FloatRect fr = rectOpt.value();
+
+							// inset
+							fr.position.x += 0.5f;
+							fr.position.y += 0.5f;
+							fr.size.x -= 1.0f;
+							fr.size.y -= 1.0f;
+
 							sprite->setTextureRect(sf::IntRect(sf::Vector2i((int)fr.position.x, (int)fr.position.y),
 															   sf::Vector2i((int)fr.size.x, (int)fr.size.y)));
 							sprite->setPosition(sf::Vector2f(transform->position.x, transform->position.y));
@@ -225,7 +232,7 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 			auto texPtr = atlasPtr->GetTexture();
 			if (!texPtr) continue;
 
-			sf::VertexArray va(sf::PrimitiveType::Triangles);
+			sf::VertexArray va(sf::PrimitiveType::TriangleStrip);
 			va.clear();
 
 
@@ -237,22 +244,33 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 			// Precompute UVs for all tiles in the atlas
 			for (size_t i = 0; i < uvCache.size(); ++i) {
 				auto rectOpt = atlasPtr->GetSfFloatRectForTile(i);
-				uvCache[i] = rectOpt.value_or(sf::FloatRect());
+				if (rectOpt.has_value()) {
+					sf::FloatRect fr = rectOpt.value();
+
+					// Pixel-perfect inset to prevent shimmering / bleeding
+					fr.position.x += 0.5f;
+					fr.position.y += 0.5f;
+					fr.size.x -= 1.0f;
+					fr.size.y -= 1.0f;
+
+					uvCache[i] = fr;
+				} else {
+					uvCache[i] = sf::FloatRect();
+				}
 			}
+
 
 			// Helper to append a single quad (two triangles)
 			auto appendQuad = [&](float x, float y, const sf::FloatRect& fr) {
-				// UV shorthand (correct for SFML 3.1.0)
+				// UVs are already inset in uvCache
 				const float u0 = fr.position.x;
 				const float v0 = fr.position.y;
-				const float u1 = u0 + fr.size.x;
-				const float v1 = v0 + fr.size.y;
+				const float u1 = fr.position.x + fr.size.x;
+				const float v1 = fr.position.y + fr.size.y;
 
-				// World-space quad size = atlas tile size
 				const float w = fr.size.x;
 				const float h = fr.size.y;
 
-				// Snap world-space to pixel boundaries
 				const float sx = std::round(x);
 				const float sy = std::round(y);
 
@@ -261,14 +279,10 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 				const float x1 = sx + w;
 				const float y1 = sy + h;
 
-				// Emit quad (two triangles)
 				va.append(sf::Vertex({x0, y0}, sf::Color::White, {u0, v0}));
 				va.append(sf::Vertex({x1, y0}, sf::Color::White, {u1, v0}));
-				va.append(sf::Vertex({x1, y1}, sf::Color::White, {u1, v1}));
-
-				va.append(sf::Vertex({x0, y0}, sf::Color::White, {u0, v0}));
-				va.append(sf::Vertex({x1, y1}, sf::Color::White, {u1, v1}));
 				va.append(sf::Vertex({x0, y1}, sf::Color::White, {u0, v1}));
+				va.append(sf::Vertex({x1, y1}, sf::Color::White, {u1, v1}));
 			};
 
 			// Main loop

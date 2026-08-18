@@ -63,6 +63,19 @@ void MainMenuScene::OnExit() {}
 
 
 /////////////////////////////////
+// OnWindowResized - Adjusts the view of the main menu scene when the window is resized, ensuring that the menu remains centered and properly scaled. 
+// This method creates a new view based on the new window size and sets it as the current view for rendering.
+void MainMenuScene::OnWindowResized(sf::Vector2u newSize) {
+	sf::View view;
+	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
+	view.setSize(sf::Vector2f(newSize.x, newSize.y));
+	m_window.setView(view);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // Update - Updates the main menu scene based on player input for navigating the menu and selecting scenes. This method checks for keyboard input to move the selection up and down the list of available scenes, and if the Enter key is pressed, 
 // it changes the current scene to the selected scene using the game engine's ChangeScene method.
 void MainMenuScene::Update(float deltaTime) {

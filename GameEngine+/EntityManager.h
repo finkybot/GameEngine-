@@ -64,6 +64,8 @@ using EntityMap = std::map<EntityType, std::vector<Entity*>>;
 // EntityManager class - responsible for managing all entities in the game, including creation, updating, rendering, and spatial organization. The EntityManager maintains a collection of active entities, 
 // a spatial hash grid for efficient spatial queries, and manages the main systems that operate on entities such as physics, collision detection, and rendering. It also provides an interface for adding 
 // and removing entities, as well as processing pending entities that have been added but not yet integrated into the main entity list.
+//								|
+//								|_______________________________________________________________________
 class EntityManager {
 	/////////////////////////////////
 	// Public interface for the EntityManager class

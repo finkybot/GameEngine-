@@ -484,6 +484,17 @@ void TileMapScene::OnExit() {}
 
 
 /////////////////////////////////
+void TileMapScene::OnWindowResized(sf::Vector2u newSize) {
+	sf::View view;
+	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
+	view.setSize(sf::Vector2f(newSize.x, newSize.y));
+	m_window.setView(view);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // LoadResources - currently empty, but could be used to load textures, sounds, or other resources needed by the scene. In this example, we load the tile map in 
 // InitializeGame instead, but we could also move it here if we wanted to separate resource loading from game initialization.
 void TileMapScene::LoadResources() {}

@@ -804,6 +804,18 @@ void PathTestScene::OnExit() {
 	m_cameraEntity->GetComponent<CTransform>()->position = Vec2::Zero;
 }
 /////////////////////////////////
+
+
+
+/////////////////////////////////
+// OnWindowResized - Adjusts the SFML view when the window is resized to maintain proper
+void PathTestScene::OnWindowResized(sf::Vector2u newSize) {
+	sf::View view;
+	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
+	view.setSize(sf::Vector2f(newSize.x, newSize.y));
+	m_window.setView(view);
+}
+/////////////////////////////////
  
  
 

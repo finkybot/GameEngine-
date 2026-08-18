@@ -21,6 +21,14 @@
 struct EntityManager;
 struct MusicSystem;
 class Entity;
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Namespace
+//								|
+//								|_______________________________________________________________________
 namespace sf { 
 	class RenderWindow; 
 }

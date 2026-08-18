@@ -1310,12 +1310,6 @@ MusicVisualizerScene::~MusicVisualizerScene() {
 // the state of the spawn system and equalizer bars based on user interactions and music analysis.
 void MusicVisualizerScene::Update(float deltaTime) {
 
-	// *** Deprecated: Listener position is now set in OnEnter and does not need to be updated every frame. Keeping this code commented out for reference.
-	//Vec2 listenerPos(m_window.getSize().x / 2.0f, m_window.getSize().y / 2.0f);
-	//if (m_entityManager.GetSoundSystem()) {
-	//	m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
-	//}
-
 	// Minimal update: process explosions and audio-reactive spawns similar to TileMapEditorScene
 	// Pause visual updates when music is paused so effects stop on pause
 	bool musicPaused = false;
@@ -1542,6 +1536,7 @@ void MusicVisualizerScene::OnEnter() {
 
 
 /////////////////////////////////
+// OnExit 
 void MusicVisualizerScene::OnExit() 
 {
 	if (m_musicEntity) {
@@ -1549,6 +1544,17 @@ void MusicVisualizerScene::OnExit()
 		m_entityManager.Update(0.0f);
 		m_musicEntity = nullptr;
 	}
+}
+
+
+
+/////////////////////////////////
+// OnWindowResized
+void MusicVisualizerScene::OnWindowResized(sf::Vector2u newSize) {
+	sf::View view;
+	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
+	view.setSize(sf::Vector2f(newSize.x, newSize.y));
+	m_window.setView(view);
 }
 /////////////////////////////////
 

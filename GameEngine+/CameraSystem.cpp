@@ -95,6 +95,13 @@ void CameraSystem::Update(float deltaTime, EntityManager& entityManager) {
 				s_shakeDataMap.erase(it);
 			}
 		}
+		// ---------------------------------------------------------
+		// 4. PIXEL SNAP (fix shimmering)
+		// ---------------------------------------------------------
+		float snap = 1.0f / camera->zoom;
+		camera->position.x = std::round(camera->position.x / snap) * snap;
+		camera->position.y = std::round(camera->position.y / snap) * snap;
+
 	}
 }
 /////////////////////////////////

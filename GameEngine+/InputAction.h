@@ -36,6 +36,8 @@ struct ButtonAction {
 
 /////////////////////////////////
 // Namespace InputHelper - Namespace to encapsulate helper functions for checking input states, providing a clear and organized way to determine whether an input is currently pressed or released based on its InputState value. These functions can be used throughout the game engine to simplify input state checks and improve code readability when handling user input events.
+//								|
+//								|_______________________________________________________________________
 namespace InputHelper 
 {
 	/////////////////////////////////

@@ -16,6 +16,8 @@
 /////////////////////////////////
 // Forward declarations to avoid header cycles. We forward declare the SFML RenderWindow class and the Entity class, as well as the FontManager class which is used for text rendering. This allows us to use pointers or references to these types without 
 // including their full definitions in this header, which can help reduce compilation dependencies and improve build times.
+//								|
+//								|_______________________________________________________________________
 namespace sf {
 	class RenderWindow;
 }
@@ -28,6 +30,8 @@ class FontManager;
 
 /////////////////////////////////
 // RenderSystem is responsible for rendering all alive entities to the SFML render window. It iterates through the list of entities, checks if they are alive, and draws their shapes and text components if present.
+//								|
+//								|_______________________________________________________________________
 class RenderSystem {
 	/////////////////////////////////
 	// Public interface

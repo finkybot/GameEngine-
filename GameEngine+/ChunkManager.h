@@ -38,8 +38,8 @@ class TextureAtlas;
 /////////////////////////////////
 // Chunk struct represents a section of the tile map, containing tile data and metadata for rendering and collision. 
 // Each chunk corresponds to a specific area of the game world and can be loaded/unloaded independently to optimize performance and memory usage.
-//						|
-//						|___________________________________________________________________________________
+//								|
+//								|_______________________________________________________________________
 struct Chunk {
 	/////////////////////////////////
 	// Public member variables for the Chunk struct, including chunk coordinates, size, tile data, rendering information, and generated entities for collision.

@@ -21,6 +21,8 @@
 // The grid is implemented using an unordered_map where the key is a hash representing the cell coordinates and the value is a vector of pointers to objects that occupy that cell.
 // The class provides methods for inserting objects into the grid, clearing the grid, and querying for nearby objects while optionally excluding a specific object from the results (e.g. to avoid self-collision checks).
 // It also includes instrumentation for tracking query performance metrics such as total queries and total objects queried.
+//								|
+//								|_______________________________________________________________________
 template <typename T>
 class SpatialHashGrid {
 	/////////////////////////////////

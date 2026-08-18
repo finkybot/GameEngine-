@@ -25,6 +25,8 @@ class Entity;
 /////////////////////////////////
 // PhysicsSystem class - Responsible for updating the positions of entities based on their velocities and handling boundary collisions. It provides methods for applying a slowing effect to entities and for moving entities according to their velocity and elapsed time. 
 // The PhysicsSystem interacts with the EntityManager to access entities and their components, allowing it to update their positions and handle collisions with the window boundaries.
+//								|
+//								|_______________________________________________________________________
 class PhysicsSystem {
 	/////////////////////////////////
 	// Public interface for the PhysicsSystem class

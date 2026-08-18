@@ -17,6 +17,8 @@
 /////////////////////////////////
 // TileMapScene class - A simple scene to test the tilemap component and TileSystem. This scene allows for interactive raycasting and tile editing, providing visual debug overlays to help visualize the raycasting process and tile states. 
 // It serves as a testing ground for the tilemap functionality and can be used to experiment with different tile configurations and raycasting scenarios. (Note: This scene is not intended to be a full level editor, but rather a simple testbed for tilemap features.)
+//								|
+//								|_______________________________________________________________________
 class TileMapScene : public Scene {
 	/////////////////////////////////
 	// Public interface for the TileMapScene class
@@ -47,6 +49,7 @@ public:
 	void HandleEvent(const std::optional<sf::Event>& event) override;
 	void OnEnter() override;
 	void OnExit() override;
+	void OnWindowResized(sf::Vector2u newSize) override;
 	void LoadResources() override;
 	void UnloadResources() override;
 	void InitializeGame(sf::Vector2u windowSize) override;

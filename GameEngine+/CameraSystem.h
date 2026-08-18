@@ -20,6 +20,8 @@
 /////////////////////////////////
 // CameraSystem - A system responsible for managing camera components in the game engine. This system handles updating camera positions, applying camera shake effects, and ensuring that the main camera is properly set up for rendering. 
 // It interacts with the EntityManager to access entities with CCamera components and updates their states based on game logic and player input.
+//								|
+//								|_______________________________________________________________________
 class CameraSystem {
 	/////////////////////////////////
 	// Public interface for the CameraSystem class, including methods for updating camera states, retrieving the main camera, applying camera shake effects, setting the main camera, clearing the main camera, and configuring camera properties such as smoothness, viewport size, and target following.

@@ -27,6 +27,8 @@ struct TileMap;
 // FileManager class - centralized file management system for loading all types of engine assets
 // (tilemaps, textures, images, configurations, etc.). Provides uniform interface across different
 // file types with built-in caching, error handling, and path resolution.
+//								|
+//								|_______________________________________________________________________
 class FileManager {
 	/////////////////////////////////
 	// Public interface

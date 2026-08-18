@@ -13,7 +13,6 @@
 #include <mutex>
 #include <SFML/Graphics.hpp>
 #include <atomic>
-#include <mutex>
 #include <string>
 #include <vector>
 /////////////////////////////////
@@ -23,6 +22,8 @@
 /////////////////////////////////
 // LevelEditorScene class - implements a chunked level editor scene with camera controls, tile editing, and asynchronous chunk loading. 
 // The scene manages a grid of chunks that can be edited in real-time, with support for panning the camera and loading/unloading chunks as needed to optimize performance.
+//								|
+//								|_______________________________________________________________________
 class LevelEditorScene : public Scene {
 	/////////////////////////////////
 	// Public interface for the LevelEditorScene class, including constructor, destructor, and overridden virtual methods from the Scene base class for updating, rendering, handling events, and managing scene lifecycle.
@@ -45,7 +46,8 @@ public:
 	void HandleEvent(const std::optional<sf::Event>& event) override;
 	void OnEnter() override;
 	void OnExit() override;
-	void LoadResources() override {}
+	void OnWindowResized(sf::Vector2u newSize) override;
+	void LoadResources() override {};
 	void UnloadResources() override;
 	void InitializeGame(sf::Vector2u windowSize) override;
 	/////////////////////////////////

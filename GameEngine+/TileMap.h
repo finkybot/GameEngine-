@@ -17,6 +17,8 @@
 
 /////////////////////////////////
 // TileMap - logical representation of a 2D tile map used for raycasting, collision and rendering metadata.
+//								|
+//								|_______________________________________________________________________
 struct TileMap {
 	/////////////////////////////////
 	// Public data members for TileMap
@@ -40,6 +42,8 @@ struct TileMap {
 
 	/////////////////////////////////
 	// Optional layers support. If empty, 'tiles' is the single layer saved/loaded for compatibility.
+	//								|
+	//								|_______________________________________________________________________
 	struct Layer {
 		std::string name;
 		std::vector<int> tiles;

@@ -17,10 +17,26 @@
 
 ## External dependency: SFML 3.1.0
 
+## Files not included in Git
+Following files need to be installed in `GameEngine+/x64/Release` These can be found with both the imgui and sfml downloads.
+
+imgui.ini
+sfml-audio-3.dll
+sfml-audio-d-3.dll
+sfml-graphics-3.dll
+sfml-graphics-d-3.dll
+sfml-network-3.dll
+sfml-network-d-3.dll
+sfml-system-3.dll
+sfml-system-d-3.dll
+sfml-window-3.dll
+sfml-window-d-3.dll
+
 The project is configured to use SFML at:
 
 - Include: `C:\Libraries\SFML-3.1.0\include`
 - Lib: `C:\Libraries\SFML-3.1.0\lib`
+
 
 If your SFML is installed elsewhere, update the project properties.
 

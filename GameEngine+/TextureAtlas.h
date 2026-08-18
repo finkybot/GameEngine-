@@ -18,8 +18,8 @@
 
 /////////////////////////////////
 // QuadTemplate struct - Represents a quad made of 6 vertices (2 triangles) for rendering a tile from the texture atlas. Each vertex contains position and texture coordinates.
-//			|
-//			|___________________________________________________________________________________
+//								|
+//								|_______________________________________________________________________
 struct QuadTemplate {
 	sf::Vertex v[6];
 };
@@ -27,6 +27,8 @@ struct QuadTemplate {
 
 /////////////////////////////////
 // TextureAtlas: simple atlas that slices a texture into fixed-size tiles and exposes their rects.
+//								|
+//								|_______________________________________________________________________
 class TextureAtlas {
 	/////////////////////////////////
 	// Public interface
@@ -80,6 +82,14 @@ public:
 		int w;
 		int h;
 	};
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// whether to apply conditional padding to the tile rects (for example, to avoid bleeding when rendering tiles with linear filtering)
+	bool conditionalPadding = false; 
+	bool applyPadding = false; // actual result
 	/////////////////////////////////
 
 

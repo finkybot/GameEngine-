@@ -29,6 +29,8 @@ namespace Spawn { class SpawnSystem; }
 /////////////////////////////////
 // CollisionSystem class - Responsible for detecting and resolving collisions between entities. It uses a SpatialHashGrid for efficient broad-phase collision detection, and then performs narrow-phase checks to determine if entities are colliding. 
 // When a collision is detected, it resolves the collision based on the entity types: enemies (different tags) create explosions and are destroyed, while allies (same tag) bounce off each other elastically.
+//								|
+//								|_______________________________________________________________________
 class CollisionSystem {
 	/////////////////////////////////
 	// Public member variables

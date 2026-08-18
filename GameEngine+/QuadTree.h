@@ -27,6 +27,8 @@ class Vec2;
 /////////////////////////////////
 // BoundingBox struct - Represents an axis-aligned bounding box defined by its top-left and bottom-right corners. It provides methods for calculating the center point, checking if a point is contained within the box, and checking for intersection with another bounding box. 
 // The class uses half-open intervals [topLeft, bottomRight) for containment and intersection checks to avoid ambiguity on boundaries.
+//								|
+//								|_______________________________________________________________________
 struct BoundingBox {
 	/////////////////////////////////
 	// Member variables for the top-left and bottom-right corners of the bounding box. These are initialized to zero vectors by default, representing a degenerate bounding box at the origin.
@@ -95,6 +97,8 @@ struct BoundingBox {
 // QuadTree class template - A spatial partitioning data structure that recursively subdivides a 2D space into four quadrants (child nodes) to efficiently manage and query objects based on their spatial location. 
 // The QuadTree is designed to hold pointers to objects of type T, which are expected to have a method GetCentrePoint() that returns their position in the 2D space. The QuadTree supports insertion of objects, querying for objects within a specified area, 
 // updating object positions, and removing objects from the tree. It also includes instrumentation for tracking query performance metrics such as the total number of queries, total objects queried, and total nodes visited during queries.
+//								|
+//								|_______________________________________________________________________
 template <typename T>
 class QuadTree {
 	/////////////////////////////////

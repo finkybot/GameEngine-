@@ -15,6 +15,8 @@
 /////////////////////////////////
 // Vec2 class - represents a 2D vector with x and y components, along with various operations for vector arithmetic, normalization, projection, and rotation. 
 // This class provides a convenient way to perform common vector operations needed for game development, such as calculating distances, angles, and reflections.
+//								|
+//								|_______________________________________________________________________
 class Vec2 {
 	/////////////////////////////////
 	// Public member variables for the Vec2 class
@@ -101,6 +103,8 @@ public:
 
 /////////////////////////////////
 // Vec3 struct - represents a 3D vector with x, y, and z components. This struct is used for representing 3D positions, colors, or any other data that requires three components. It provides a convenient way to store and manipulate 3D vector data in the game engine.
+//								|
+//								|_______________________________________________________________________
 struct Vec3 {
 	float x;
 	float y;

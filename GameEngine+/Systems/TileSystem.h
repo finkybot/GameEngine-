@@ -17,6 +17,8 @@
 
 /////////////////////////////////
 // TileSystem: processes entities with CTileMap and creates static collider entities
+//								|
+//								|_______________________________________________________________________
 class TileSystem {
 	/////////////////////////////////
 	// Public interface

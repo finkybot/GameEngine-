@@ -13,9 +13,8 @@
 #include "Vec2.h"
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
-#include <SFML/Graphics.hpp>
+#include <SFML/Window/Event.hpp>
 #include <SFML/Window/VideoMode.hpp>
-#include <SFML/Audio/Listener.hpp>
 #include <memory>
 #include <string>
 #include <direct.h>
@@ -30,7 +29,6 @@
 #include "PathTestScene.h"
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
-#include <cstdlib>
 #include "MainThreadTasks.h"
 /////////////////////////////////
 
@@ -254,9 +252,18 @@ void GameEngine::Update(float deltaTime) {
 
 		// Poll events (SFML 3: pollEvent returns std::optional<sf::Event>) and forward to current scene
 		while (auto eventOpt = window.pollEvent()) {
+			const auto& resizeEvent = eventOpt->getIf<sf::Event::Resized>();
 			// Forward events to ImGui-SFML so UI widgets receive input
 			if (ImGui::GetCurrentContext())
 				ImGui::SFML::ProcessEvent(window, *eventOpt);
+
+			// Detect if the window is resized and update the current scene's view accordingly
+			if (eventOpt->is<sf::Event::Resized>()) {
+				if (currentScene) {
+					currentScene->OnWindowResized({resizeEvent->size.x, resizeEvent->size.y});
+					windowSize = {resizeEvent->size.x, resizeEvent->size.y}; // set the new window size in GameEngine.
+				}
+			}
 
 			// Global Escape handling: intercept Escape before forwarding to the scene so scene-level handlers that close the window won't run. If Escape is 
 			// pressed and we're not already on MainMenu, switch to it
@@ -348,68 +355,62 @@ void GameEngine::Update(float deltaTime) {
 					window.display();
 				}
 			}
-			/////////////////////////////////
+	/////////////////////////////////
 
 
 
+	/////////////////////////////////
+	// MovementSystem implementation
+	void MovementSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime) {
+		// Iterate through all entities in the scene
+		for (const auto& ent : entities) {
+			if (!ent || !ent->IsAlive()) continue;
 
-			/////////////////////////////////
-			// MovementSystem implementation
-			#include "Entity.h"
-			#include "CPathRequest.h"
-			#include "CTransform.h"
-			#include <cmath>
+			// Skip if entity doesn't have a path follower or it's not active
+			auto* follower = ent->GetComponent<CPathFollower>();
+			if (!follower || !follower->isActive) continue;
 
-			void MovementSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime) {
-				// Iterate through all entities in the scene
-				for (const auto& ent : entities) {
-					if (!ent || !ent->IsAlive()) continue;
+			// Skip if entity doesn't have a path with waypoints
+			auto* path = ent->GetComponent<CPath>();
+			if (!path || path->points.empty()) {
+				follower->isActive = false;
+				continue;
+			}
 
-					// Skip if entity doesn't have a path follower or it's not active
-					auto* follower = ent->GetComponent<CPathFollower>();
-					if (!follower || !follower->isActive) continue;
+			// Skip if entity doesn't have a transform
+			auto* transform = ent->GetComponent<CTransform>();
+			if (!transform) continue;
 
-					// Skip if entity doesn't have a path with waypoints
-					auto* path = ent->GetComponent<CPath>();
-					if (!path || path->points.empty()) {
-						follower->isActive = false;
-						continue;
-					}
+			// Ensure waypoint index is valid
+			if (follower->currentWaypointIndex >= (int)path->points.size()) {
+				follower->currentWaypointIndex = (int)path->points.size() - 1;
+			}
 
-					// Skip if entity doesn't have a transform
-					auto* transform = ent->GetComponent<CTransform>();
-					if (!transform) continue;
+			// Get the current waypoint target
+			const Vec2& currentWaypoint = path->points[follower->currentWaypointIndex];
+			Vec2 direction = (currentWaypoint - transform->position);
+			float distanceToWaypoint = direction.Mag();
 
-					// Ensure waypoint index is valid
-					if (follower->currentWaypointIndex >= (int)path->points.size()) {
-						follower->currentWaypointIndex = (int)path->points.size() - 1;
-					}
+			// Check if we've arrived at the current waypoint
+			if (distanceToWaypoint < WAYPOINT_ARRIVAL_THRESHOLD) {
+				// Move to next waypoint
+				follower->currentWaypointIndex++;
 
-					// Get the current waypoint target
-					const Vec2& currentWaypoint = path->points[follower->currentWaypointIndex];
-					Vec2 direction = (currentWaypoint - transform->position);
-					float distanceToWaypoint = direction.Mag();
-
-					// Check if we've arrived at the current waypoint
-					if (distanceToWaypoint < WAYPOINT_ARRIVAL_THRESHOLD) {
-						// Move to next waypoint
-						follower->currentWaypointIndex++;
-
-						// Check if we've reached the end of the path
-						if (follower->currentWaypointIndex >= (int)path->points.size()) {
-							// Path complete: mark as inactive but keep components for reuse
-							follower->isActive = false;
-							continue;
-						}
-					}
-
-					// Move towards the current waypoint if there's distance to cover
-					if (distanceToWaypoint > 0.001f) {
-						// Normalize direction and apply speed
-						direction.Normalize();
-						float moveDistance = follower->speed * deltaTime;
-						transform->position = transform->position + (direction * moveDistance);
-					}
+				// Check if we've reached the end of the path
+				if (follower->currentWaypointIndex >= (int)path->points.size()) {
+					// Path complete: mark as inactive but keep components for reuse
+					follower->isActive = false;
+					continue;
 				}
 			}
-			/////////////////////////////////
+
+			// Move towards the current waypoint if there's distance to cover
+			if (distanceToWaypoint > 0.001f) {
+				// Normalize direction and apply speed
+				direction.Normalize();
+				float moveDistance = follower->speed * deltaTime;
+				transform->position = transform->position + (direction * moveDistance);
+			}
+		}
+	}
+	/////////////////////////////////

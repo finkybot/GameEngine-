@@ -21,6 +21,8 @@
 /////////////////////////////////
 // TileMapEditorScene class - implements a simple interactive tilemap editor scene with mouse input for toggling tiles, keyboard shortcuts for saving/loading, and an optional ImGui interface for 
 // additional controls. The scene manages a tile map data structure and allows the user to edit it in real-time, with support for saving and loading tile maps from files.
+//								|
+//								|_______________________________________________________________________
 class TileMapEditorScene : public Scene {
 	/////////////////////////////////
 	// Public Methods
@@ -50,6 +52,7 @@ public:
 	void HandleEvent(const std::optional<sf::Event>& event) override;
 	void OnEnter() override;
 	void OnExit() override;
+	void OnWindowResized(sf::Vector2u newSize) override;
 	/////////////////////////////////
 
 
@@ -78,7 +81,7 @@ private:
 
 	/////////////////////////////////
 	// private member variables
-	sf::RenderWindow& m_window;
+	sf::RenderWindow& m_window;				// Reference to the SFML render window for rendering the scene
 	TileMap m_tileMap;						// The tile map data structure
 	Vec2 m_mouseWorld;						// Current mouse position in world coordinates
 	bool m_previewActive = false;			// Preview state for drag-based raycsting or tile placement (not fully implemented in this snippet, but can be used for showing a preview of the tile being placed or the raycast path)

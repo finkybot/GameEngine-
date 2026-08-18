@@ -267,12 +267,6 @@
         }
         "Entry"
         {
-        "MsmKey" = "8:_D91B16BDEC7149A2B72B277BBD91F0BE"
-        "OwnerKey" = "8:_UNDEFINED"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
         "MsmKey" = "8:_DE7EB728CC464E059DF2D1ED50B5070D"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -1224,26 +1218,6 @@
             "TargetName" = "8:Roboto_Specimen_Book.pdf"
             "Tag" = "8:"
             "Folder" = "8:_137455C146F246B7955052D6C9536A94"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:1"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:FALSE"
-            "IsolateTo" = "8:"
-            }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_D91B16BDEC7149A2B72B277BBD91F0BE"
-            {
-            "SourcePath" = "8:..\\GameEngine+\\assets\\Ambition.mp3"
-            "TargetName" = "8:Ambition.mp3"
-            "Tag" = "8:"
-            "Folder" = "8:_ED523247CB2848A7BF524F9DBC901335"
             "Condition" = "8:"
             "Transitive" = "11:FALSE"
             "Vital" = "11:TRUE"

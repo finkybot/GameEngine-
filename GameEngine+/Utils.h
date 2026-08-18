@@ -25,6 +25,8 @@ const float TWO_PI = 2.0f * PI; // Precomputed value for 2 * PI, used for effici
 
 /////////////////////////////////
 // Size struct represents a simple width and height pair, commonly used for dimensions of objects, textures, or other 2D elements in the game engine.
+//								|
+//								|_______________________________________________________________________
 struct Size {
 	unsigned int width = 0, height = 0;
 };

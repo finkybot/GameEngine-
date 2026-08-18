@@ -20,6 +20,8 @@
 
 /////////////////////////////////
 // Forward declarations
+//								|
+//								|_______________________________________________________________________
 namespace Spawn {
 class SpawnSystem;
 }
@@ -30,6 +32,8 @@ class SpawnSystem;
 /////////////////////////////////
 // MusicVisualizerScene class definition. This class implements a music visualizer scene that inherits from the base Scene class. It manages a tile map for visual effects, handles user input for file browsing and playback controls, 
 // and implements audio-reactive visual effects such as explosions and equalizer bars based on the music being played.
+//								|
+//								|_______________________________________________________________________
 class MusicVisualizerScene : public Scene {
 	/////////////////////////////////
 	// Public methods
@@ -59,6 +63,7 @@ public:
 	void HandleEvent(const std::optional<sf::Event>& event) override;
 	void OnEnter() override;
 	void OnExit() override;
+	void OnWindowResized(sf::Vector2u newSize) override;
 	/////////////////////////////////
 
 

@@ -350,9 +350,6 @@
     <ClInclude Include="Includes.h">
       <Filter>Header Files\Misc</Filter>
     </ClInclude>
-    <ClInclude Include="MusicVisualizerScene.h">
-      <Filter>Header Files\Misc</Filter>
-    </ClInclude>
     <ClInclude Include="resource.h">
       <Filter>Header Files\Misc</Filter>
     </ClInclude>
@@ -410,9 +407,6 @@
     <ClInclude Include="PathTestScene.h">
       <Filter>Header Files\Scenes</Filter>
     </ClInclude>
-    <ClInclude Include="MainThreadTasks.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="GameEngine+\MovementSystem.h">
       <Filter>Header Files\Systems</Filter>
     </ClInclude>
@@ -427,6 +421,12 @@
     </ClInclude>
     <ClInclude Include="CColliderRect.h">
       <Filter>Header Files\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="MusicVisualizerScene.h">
+      <Filter>Header Files\Scenes</Filter>
+    </ClInclude>
+    <ClInclude Include="MainThreadTasks.h">
+      <Filter>Header Files\Misc</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -191,6 +191,19 @@ void TestScene::OnExit() { /* cleanup when scene exits */ }
 
 
 
+/////////////////////////////////
+// OnWindowResized - called when the window is resized, allowing for any necessary adjustments to the scene's view or layout based on the new window size. 
+// In this implementation, it updates the view to center on the new window size and adjusts the view's size accordingly.
+void TestScene::OnWindowResized(sf::Vector2u newSize) {
+	sf::View view;
+	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
+	view.setSize(sf::Vector2f(newSize.x, newSize.y));
+	m_window.setView(view);
+}
+/////////////////////////////////
+
+
+
 // LoadResources - responsible for loading any resources needed by the scene, such as textures, fonts, or sounds. In this implementation, it simply sets the m_isLoaded flag to true, but in a more complete implementation, it would include actual resource loading logic.
 void TestScene::LoadResources() {
 	m_isLoaded = true;

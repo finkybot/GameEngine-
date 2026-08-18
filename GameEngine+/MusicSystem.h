@@ -47,6 +47,8 @@ class EntityManager;
 /////////////////////////////////
 // MusicSystem class - manages the playback of music tracks in the game. It interacts with entities that have CMusic components, and uses the SFML Audio module to play music. The MusicSystem is responsible for starting, stopping, and updating music playback based on the state of 
 // CMusic components in the entities. It maintains a mapping of active music tracks to their corresponding sf::Music instances for efficient management and control of music playback.
+//								|
+//								|_______________________________________________________________________
 class MusicSystem {
 	/////////////////////////////////
 	// Public interface

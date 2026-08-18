@@ -132,6 +132,21 @@ Check:
 ### App fails on startup
 Make sure the required SFML DLLs are next to the executable or available via `PATH`.
 
+## Files not included in Git
+Following files need to be installed in `GameEngine+/x64/Release` These can be found with both the imgui and sfml downloads.
+
+imgui.ini
+sfml-audio-3.dll
+sfml-audio-d-3.dll
+sfml-graphics-3.dll
+sfml-graphics-d-3.dll
+sfml-network-3.dll
+sfml-network-d-3.dll
+sfml-system-3.dll
+sfml-system-d-3.dll
+sfml-window-3.dll
+sfml-window-d-3.dll
+
 ### Font warning on startup
 Make sure `assets/fonts/tech.ttf` exists.
 

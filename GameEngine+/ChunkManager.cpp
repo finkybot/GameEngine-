@@ -89,6 +89,47 @@ void ChunkManager::ClearAllLoadedChunks() {
 	m_chunks.clear();
 	m_lruIndex.clear();
 	m_lruList.clear();
+	m_worldRevision.fetch_add(1, std::memory_order_relaxed);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// RefreshWorldBoundsFromLoadedChunks - recompute world offset and dimensions from currently loaded chunks.
+void ChunkManager::RefreshWorldBoundsFromLoadedChunks() {
+	std::lock_guard<std::mutex> lock(m_mutex);
+	if (m_chunks.empty()) {
+		SetWorldOffset(0, 0);
+		SetWorldSize(0, 0);
+		return;
+	}
+
+	int minTx = std::numeric_limits<int>::max();
+	int minTy = std::numeric_limits<int>::max();
+	int maxTx = std::numeric_limits<int>::min();
+	int maxTy = std::numeric_limits<int>::min();
+
+	for (const auto& kv : m_chunks) {
+		const Chunk& c = kv.second;
+		const int x0 = c.chunkX * c.width;
+		const int y0 = c.chunkY * c.height;
+		const int x1 = x0 + c.width - 1;
+		const int y1 = y0 + c.height - 1;
+		minTx = std::min(minTx, x0);
+		minTy = std::min(minTy, y0);
+		maxTx = std::max(maxTx, x1);
+		maxTy = std::max(maxTy, y1);
+	}
+
+	if (minTx > maxTx || minTy > maxTy) {
+		SetWorldOffset(0, 0);
+		SetWorldSize(0, 0);
+		return;
+	}
+
+	SetWorldOffset(minTx, minTy);
+	SetWorldSize(maxTx - minTx + 1, maxTy - minTy + 1);
 }
 /////////////////////////////////
 
@@ -939,6 +980,8 @@ void ChunkManager::EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int
 		// Remove chunk
 		m_chunks.erase(key);
 	}
+	if (!toRemove.empty())
+		m_worldRevision.fetch_add(1, std::memory_order_relaxed);
 }
 /////////////////////////////////
 
@@ -1024,6 +1067,7 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 	chunk.tilesPerLayer[layerIndex][index] = tileValue;
 	chunk.dirty[layerIndex] = 1;
 	chunk.editVersion[layerIndex]++;
+	m_worldRevision.fetch_add(1, std::memory_order_relaxed);
 
 	// LRU touch
 	auto lruIt = m_lruIndex.find(key);
@@ -1732,6 +1776,7 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::v
 		}
 		chunk.dirty[layer] = 0;
 		chunk.readyForRendering[layer] = 1;
+		m_worldRevision.fetch_add(1, std::memory_order_relaxed);
 	}
 
 	

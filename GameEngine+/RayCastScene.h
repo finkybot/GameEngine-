@@ -10,6 +10,7 @@
 #include "Scene.h"
 #include "Raycast.h"
 #include "ChunkManager.h"
+#include "CameraSystem.h"
 #include <vector>
 #include <string>
 /////////////////////////////////
@@ -81,6 +82,8 @@ private:
 	void ProcessEscapeKey(bool keyDown) const;
 	void ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouseWorld);
 	void ProcessMiddleMousePan();
+	void ApplyMainCameraView();
+	void RefreshMapBounds();
 	void RefreshAvailableLevels();
 	bool SwitchToLevel(const std::string& name);
 	void LevelManagerWindow();
@@ -91,8 +94,8 @@ private:
 	/////////////////////////////////
 	// Raycasting helpers for performing DDA raycasts based on mouse interactions and synthesizing a start-cell hit when the ray begins inside a solid tile.
 	RaycastHit MakeStartCellHit(int tileX, int tileY, const Vec2& origin);
-	void RebuildRaycastSnapshotFromChunks();
-	bool RaycastDynamicEntities(const Vec2& origin, const Vec2& dir, float maxDistance, RaycastHit& outHit, Entity*& outEntity);
+	bool RaycastDynamicEntities(const Vec2& origin, const Vec2& dir, float maxDistance, RaycastHit& outHit,	Entity*& outEntity);
+	void UpdateHitInfo(float& nearest, float hitDist, Entity*& outEntity, Entity* e, RaycastHit& outHit, const Vec2& origin, Vec2& dirN);
 	/////////////////////////////////
 
 
@@ -134,15 +137,13 @@ private:
 
 
 	/////////////////////////////////
-	// Preview mode state for showing a preview line while dragging with the left mouse button. m_previewLine will store the start and end points of the preview line,
-	// while m_previewActive indicates whether the preview line should be drawn. Raycasts use m_raycastMap, a temporary snapshot built from chunk layer data.
+	// Preview mode state for showing a preview line while dragging with the left mouse button. m_previewLine stores start/end points for visual guidance.
 	bool m_previewActive = false;
 	std::pair<Vec2, Vec2> m_previewLine;
-	ChunkManager m_chunkManager;
-	TileMap m_raycastMap;
+	ChunkManager& m_chunkManager;
+	CameraSystem m_cameraSystem;
+	Entity* m_cameraEntity = nullptr;
 	int m_collisionLayer = 1;
-	int m_raycastOffsetX = 0;
-	int m_raycastOffsetY = 0;
 	/////////////////////////////////
 
 
@@ -150,9 +151,6 @@ private:
 	/////////////////////////////////
 	// Input state tracking for mouse buttons/keys used by the read-only raycast interactions.
 	bool m_prevLmbMouseDown = false;
-	bool m_panning = false;
-	sf::Vector2i m_panStart{0, 0};
-	Vec2 m_viewPanStart = Vec2(0.0f, 0.0f);
 	/////////////////////////////////
 
 
@@ -186,5 +184,17 @@ private:
 	std::vector<std::string> m_availableLevels;
 	int m_selectedLevelIndex = -1;
 	std::string m_currentLevelName;
+
+	// Persistent map bounds for camera/pan clamping (full saved level bounds, not only currently loaded chunks)
+	Vec2 m_mapMin = Vec2(-512.0f, -512.0f);
+	Vec2 m_mapMax = Vec2(512.0f, 512.0f);
+	bool m_haveBounds = true;
+	bool m_clampPanToBounds = true;
+	bool m_includeDefaultEntitiesInRaycast = true;
+
+	// Chunk/world refresh tracking for mask rebuilds (revision-based + teleport detection)
+	uint64_t m_lastSeenWorldRevision = 0;
+	Vec2 m_lastViewCenter = Vec2(0.0f, 0.0f);
+	bool m_hasLastViewCenter = false;
 	/////////////////////////////////
 };

@@ -55,8 +55,8 @@ namespace RaycastDebug {
 
 
 /////////////////////////////////
-// RaycastHit struct - Represents the result of a raycast against a tilemap, including whether a hit occurred, the tile coordinates of the hit, the world space position and normal of the hit, the distance along the ray to the hit, and the value of the tile that was hit. 
-// This struct provides a convenient way to encapsulate all relevant information about a raycast hit for use in game logic and rendering.
+// RaycastHit struct - Represents the result of a raycast against a tilemap, including whether a hit occurred, the tile coordinates of the hit, the world space position and normal of the hit, the distance 
+// along the ray to the hit, and the value of the tile that was hit. This struct provides a convenient way to encapsulate all relevant information about a raycast hit for use in game logic and rendering.
 //								|
 //								|_______________________________________________________________________
 struct RaycastHit {
@@ -73,32 +73,24 @@ struct RaycastHit {
 
 
 /////////////////////////////////
-// RayIntersectsAABB - A function to check for intersection between a ray and an axis-aligned bounding box (AABB) using the slab method. The function takes the origin and direction of the ray, the minimum and maximum corners of the AABB, and outputs the distance 
-// to the hit point if an intersection occurs. Ray vs Axis Aligned Bounding Box (AABB) using slab method. rectMin and rectMax are world coordinates of AABB. dir must be normalized. Returns true and fills out outT if hit at positive t <= maxDistance.
+// RayIntersectsAABB - A function to check for intersection between a ray and an axis-aligned bounding box (AABB) using the slab method. The function takes the origin and direction of the ray, the minimum 
+// and maximum corners of the AABB, and outputs the distance to the hit point if an intersection occurs. Ray vs Axis Aligned Bounding Box (AABB) using slab method. rectMin and rectMax are world coordinates 
+// of AABB. dir must be normalized. Returns true and fills out outT if hit at positive t <= maxDistance.
 inline bool RayIntersectsAABB(	const Vec2& origin, const Vec2& dir, const Vec2& rectMin, const Vec2& rectMax, float& outDistance, float maxDistance = FLT_MAX) {
-	// Set up a few things, first define a small epsilon for handling floating-point precision when checking for parallel rays.Next initialize tmin and tmax
-	// to manage intersection intervals along the ray. I'll set tmin to 0.0 as I only care about positive distances along the ray and tmax to the passed max
-	// distance, so we are measuring a line segment and not a infinite ray.
-	// We will update these values as we check against the slabs of the AABB, and if at any point tmin exceeds tmax, we can conclude there is no intersection.
+
+	// Epsilon value to handle floating-point precision issues when checking for parallel rays. This small threshold is used to determine if the ray direction is effectively zero in a given axis, which 
+	// would indicate that the ray is parallel to that axis.
 	const float epsilon = 1e-9f;
 	float tmin = 0.0f;
 	float tmax = maxDistance;
 
-	// Lets start with the x slab of the AABB. We check if the ray is parallel to the x axis by comparing the absolute value of dir.x to a small epsilon.
-	// If the ray is parallel to the X axis and the origin's X coordinate is outside the AABB's X bounds, there is no intersection. If the ray is not parallel
-	// to the X axis,then calculate the intersection t values for the two vertical slabs of the AABB, swap them if necessary to ensure t1 is the entry point and
-	// t2 is the exit point for the X slab, and then update tmin and tmax to account for the X slab intersection interval. If at any point tmin exceeds tmax,
-	// then there is no intersection...
-	// Are we parallel to the x axis?, that is, is dir.x smaller than our epsilon threshold?
+	// First, we check the x slab of the AABB. We determine if the ray is parallel to the x axis by comparing the absolute value of dir.x to a small epsilon. If the ray is parallel to the X axis and the origin's
 	if (std::fabs(dir.x) < epsilon) {
 		if (origin.x < rectMin.x || origin.x > rectMax.x)
 			return false;
 	}
-	// Not parallel to x axis? then calculate intersection t values for the two vertical slabs of AABB and swap if necessary
-	// Note we guard against division by zero (ood) to remove possible infinte t values when computing t1 and t2; next swap
-	// t1 and t2 to ensure the entry and exit points are correct for the x slab; Finally we update tmin and tmax to account
-	// for the intersection interval of the x slab, and if at any point tmin exceeds tmax, there is no intersection so return
-	// false...
+	// If the ray is not parallel to the X axis, we calculate the intersection t values for the two vertical slabs of the AABB. We guard against division by zero (ood) to avoid infinite t values when computing 
+	// t1 and t2.
 	else {
 		float ood = 1.0f / dir.x;
 		float t1 = (rectMin.x - origin.x) * ood;
@@ -111,21 +103,13 @@ inline bool RayIntersectsAABB(	const Vec2& origin, const Vec2& dir, const Vec2& 
 			return false;
 	}
 
-	// Next is the y slab of the AABB. We check if the ray is parallel to the y axis by comparing the absolute value of dir.y to a small epsilon.
-	// If the ray is parallel to the Y axis and the origin's Y coordinate is outside the AABB's Y bounds, there is no intersection. If the ray is not parallel
-	// to the Y axis,then calculate the intersection t values for the two horizontal slabs of the AABB, swap them if necessary to ensure t1 is the entry point and
-	// t2 is the exit point for the Y slab, and then update tmin and tmax to account for the Y slab intersection interval. If at any point tmin exceeds tmax,
-	// then there is no intersection...
-	// Are we parallel to the y axis?, that is, is dir.y smaller than our epsilon threshold?
+	// Next, we check the y slab of the AABB. Similar to the x slab, we determine if the ray is parallel to the y axis by comparing the absolute value of dir.y to a small epsilon. If the ray is parallel to the 
+	// Y axis and the origin's
 	if (std::fabs(dir.y) < epsilon) {
 		if (origin.y < rectMin.y || origin.y > rectMax.y)
 			return false;
 	}
-	// Not parallel to y axis? then calculate intersection t values for the two horizontal slabs of AABB and swap if necessary.
-	// Like above, we guard against division by zero (ood) to remove possible infinte t values when computing t1 and t2; next swap
-	// t1 and t2 to ensure the entry and exit points are correct for the y slab; Finally we update tmin and tmax to account
-	// for the intersection interval of the y slab, and if at any point tmin exceeds tmax, there is no intersection so return
-	// false...
+	// If the ray is not parallel to the Y axis, we calculate the intersection t values for the two horizontal slabs of the AABB. Again, we guard against division by zero (ood) to avoid infinite t values when
 	else {
 		float ood = 1.0f / dir.y;
 		float t1 = (rectMin.y - origin.y) * ood;
@@ -138,11 +122,7 @@ inline bool RayIntersectsAABB(	const Vec2& origin, const Vec2& dir, const Vec2& 
 			return false;
 	}
 
-	// At this point, we have the intersection interval [tmin, tmax] along the ray where it intersects the AABB. We want to report the first
-	// hit at positive t within maxDistance. If tmin is negative, it means the ray starts inside the AABB, so we check if tmax is positive to
-	// report the exit hit; if both tmin and tmax are negative, it means the AABB is behind the ray origin and there is no valid hit,
-	// so we return false...
-	//
+	// If tmin is negative, it means the ray origin is inside the AABB, and we report the exit hit at tmax. If tmax is also negative, it means the ray is pointing away from the AABB, and we return false for no hit.
 	if (tmin < 0.0f) {
 		if (tmax < 0.0f)
 			return false;
@@ -154,9 +134,7 @@ inline bool RayIntersectsAABB(	const Vec2& origin, const Vec2& dir, const Vec2& 
 		outDistance = tmin;
 	}
 
-	// Final check to ensure the reported outDistance hit is within the maxDistance limit. If it is not then return false for no valid hit.
-	// Note this manages the case where the ray starts inside the AABB and we report the exit hit at tmax,thus ensuring that we don't report
-	// hits beyond maxDistance in that case as well...
+	// If the calculated hit distance exceeds the maximum allowed distance, we return false for no hit. Otherwise, we return true to indicate a successful intersection.
 	if (outDistance > maxDistance)
 		return false;
 	return true;
@@ -219,10 +197,8 @@ static inline bool IntersectAABB_Ray(const Vec2& origin, double ndx, double ndy,
 
 
 /////////////////////////////////
-// RaycastTilemapDDA - Perform DDA raycasting against a tilemap. This function implements the Digital Differential Analyzer (DDA) algorithm to efficiently traverse the grid of tiles in the tilemap along 
-// the path of the ray defined by the origin and direction. The function returns RaycastHit with hit info if we hit a solid tile, or default RaycastHit with hit=false if no hit..... If we start in a solid 
-// tile and ignoreStartingCell is false, we will report an immediate hit at the origin. Otherwise, we will step through the grid using DDA and check for hits at each cell boundary crossing. I recommend 
-// the direction vector be normalized for consistent results but can handle non-normalized directions as well.
+// RaycastTilemapDDA - Perform a DDA raycast against a tilemap, returning a RaycastHit with the result. The function takes the ray origin, direction, tilemap reference, maximum distance, and optional 
+// parameters to ignore the starting cell and collect visited cells for debugging.
 inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const TileMap& map, float maxDistance,	bool ignoreStartingCell = false, std::vector<std::pair<int, int>>* outVisited = nullptr) {
 	// Use small helper functions declared above instead of local lambdas.
 	RaycastHit result;

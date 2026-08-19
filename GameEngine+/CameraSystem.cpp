@@ -22,6 +22,12 @@ struct ShakeData {
 	float magnitude = 0.0f;
 	float duration = 0.0f;
 };
+
+struct PanData {
+	bool active = false;
+	sf::Vector2i panStart = sf::Vector2i(0, 0);
+	Vec2 camStart = Vec2::Zero;
+};
 /////////////////////////////////
 
 
@@ -30,9 +36,10 @@ struct ShakeData {
 /////////////////////////////////
 // Static map to track shake data for each camera. This allows us to store the original position, magnitude, and duration of the shake effect for each camera that is currently shaking.
 static std::unordered_map<CCamera*, ShakeData> s_shakeDataMap;
+static std::unordered_map<CCamera*, PanData> s_panDataMap;
 /////////////////////////////////
- 
- 
+
+
 
 /////////////////////////////////
 // Random number generator for shake offsets, why mt19937? (I don't fucking know but AI recommended it, saying it's a good general-purpose RNG with better randomness quality than rand()).
@@ -43,6 +50,48 @@ static std::mt19937 s_rng(std::random_device{}());
 
 /////////////////////////////////
 // Update - Called every frame and is responsible for updating the position of active cameras based on their shake effects and smooth following behavior.
+Vec2 CameraSystem::ClampPositionToBounds(const Vec2& position, float viewportWidth, float viewportHeight, float zoom,
+										 const Vec2& mapMin, const Vec2& mapMax, bool hasBounds) {
+	if (!hasBounds)
+		return position;
+
+	Vec2 out = position;
+	const float safeZoom = (zoom > 0.0001f) ? zoom : 1.0f;
+	const float halfW = (viewportWidth / safeZoom) * 0.5f;
+	const float halfH = (viewportHeight / safeZoom) * 0.5f;
+	const float minCx = mapMin.x + halfW;
+	const float maxCx = mapMax.x - halfW;
+	const float minCy = mapMin.y + halfH;
+	const float maxCy = mapMax.y - halfH;
+
+	if (minCx <= maxCx)
+		out.x = std::clamp(out.x, minCx, maxCx);
+	if (minCy <= maxCy)
+		out.y = std::clamp(out.y, minCy, maxCy);
+	return out;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+sf::View CameraSystem::BuildViewFromCamera(const CCamera& camera, bool clampToBounds, const Vec2& mapMin, const Vec2& mapMax,
+										   bool hasBounds) {
+	const float safeZoom = (camera.zoom > 0.0001f) ? camera.zoom : 1.0f;
+	Vec2 center = camera.position;
+	if (clampToBounds)
+		center = ClampPositionToBounds(center, camera.viewportWidth, camera.viewportHeight, safeZoom, mapMin, mapMax, hasBounds);
+
+	sf::View view;
+	view.setSize(sf::Vector2f(camera.viewportWidth / safeZoom, camera.viewportHeight / safeZoom));
+	view.setCenter(sf::Vector2f(center.x, center.y));
+	return view;
+}
+/////////////////////////////////
+
+
+
+///////////////////////////////
 void CameraSystem::Update(float deltaTime, EntityManager& entityManager) {
 	for (auto& uniquePtr : entityManager.GetEntities()) {
 		Entity* entity = uniquePtr.get();
@@ -135,6 +184,50 @@ void CameraSystem::ApplyCameraShake(CCamera& camera, float magnitude, float dura
 	shakeData.magnitude = magnitude;
 	shakeData.duration = duration;
 	s_shakeDataMap[&camera] = shakeData;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void CameraSystem::BeginPan(CCamera& camera, const sf::Vector2i& mousePos) {
+	PanData& pan = s_panDataMap[&camera];
+	pan.active = true;
+	pan.panStart = mousePos;
+	pan.camStart = camera.position;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void CameraSystem::UpdatePan(CCamera& camera, const sf::Vector2i& mousePos) {
+	auto it = s_panDataMap.find(&camera);
+	if (it == s_panDataMap.end() || !it->second.active)
+		return;
+
+	const sf::Vector2i delta = mousePos - it->second.panStart;
+	camera.position = it->second.camStart - Vec2(static_cast<float>(delta.x), static_cast<float>(delta.y));
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void CameraSystem::EndPan(CCamera& camera) {
+	auto it = s_panDataMap.find(&camera);
+	if (it == s_panDataMap.end())
+		return;
+	it->second.active = false;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+bool CameraSystem::IsPanning(const CCamera& camera) const {
+	auto it = s_panDataMap.find(const_cast<CCamera*>(&camera));
+	return (it != s_panDataMap.end()) && it->second.active;
 }
 /////////////////////////////////
 

@@ -37,17 +37,15 @@ namespace fs = std::filesystem;
 /////////////////////////////////
 // PathTestScene implementation
 PathTestScene::PathTestScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
-	: Scene(engine, entityManager), m_window(win), m_chunkManager(32, 32, 32.0f), 
+	: Scene(engine, entityManager), m_window(win), m_chunkManager(engine.GetChunkManager()), 
 	  m_pathSystem(m_chunkManager, entityManager) {}
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// Destructor for the PathTestScene class. Ensures that all chunks are saved to disk when the scene is destroyed.
-PathTestScene::~PathTestScene() {
-	m_chunkManager.SaveAllChunks();
-}
+// Destructor for the PathTestScene class.
+PathTestScene::~PathTestScene() = default;
 /////////////////////////////////
 
 

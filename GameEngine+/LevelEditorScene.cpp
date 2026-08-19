@@ -29,7 +29,7 @@ namespace fs = std::filesystem;
 // Constructor - initializes the level editor scene with references to the game engine, render window, and entity manager, and sets up the 
 // chunk manager with specified chunk dimensions and tile size
 LevelEditorScene::LevelEditorScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em)
-	: Scene(engine, em), m_window(win), m_chunkManager(32, 32, 32.0f) {
+	: Scene(engine, em), m_window(win), m_chunkManager(engine.GetChunkManager()) {
 }
 /////////////////////////////////
 
@@ -208,14 +208,22 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	}
 }
 /////////////////////////////////
-
-
-/////////////////////////////////
 // Destructor - ensures that all chunks are saved to disk when the level editor scene is destroyed, preventing data loss and ensuring that any 
 // changes made to the level are preserved
 LevelEditorScene::~LevelEditorScene() {
-	m_chunkManager.SaveAllChunks();
+	// Skip saving chunks during process shutdown to avoid accessing already-destroyed objects
+	// during static destruction order issues (0xC0000005 access violation)
+	if (!ShutdownGuard::IsShuttingDown()) {
+		m_chunkManager.SaveAllChunks();
+	}
 }
+/////////////////////////////////
+
+
+/////////////////////////////////
+// OnPreUnload - Called before the scene is unloaded to allow cleanup
+// void LevelEditorScene::OnPreUnload() {
+// }
 /////////////////////////////////
 
 

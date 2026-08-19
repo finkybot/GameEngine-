@@ -177,6 +177,7 @@
     <ClCompile Include="PathFindingSystem.cpp" />
     <ClCompile Include="PathTestScene.cpp" />
     <ClCompile Include="Scene.cpp" />
+    <ClCompile Include="ShutdownGuard.cpp" />
     <ClCompile Include="SoundSystem.cpp" />
     <ClCompile Include="Systems\CollisionSystem.cpp" />
     <ClCompile Include="Systems\PhysicsSystem.cpp" />
@@ -255,6 +256,7 @@
     <ClInclude Include="RenderQueue.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Scene.h" />
+    <ClInclude Include="ShutdownGuard.h" />
     <ClInclude Include="SoundSystem.h" />
     <ClInclude Include="SpatialHashGrid.h" />
     <ClInclude Include="Systems\CollisionSystem.h" />

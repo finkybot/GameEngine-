@@ -7,7 +7,9 @@
 /////////////////////////////////
 // Includes and forward declarations for the LevelEditorScene class. We include
 #pragma once
+
 #include "Scene.h"
+#include "ShutdownGuard.h"
 #include "ChunkManager.h"
 #include "CameraSystem.h"
 #include <mutex>
@@ -91,7 +93,7 @@ private:
 	// Private member variables for the LevelEditorScene class, including references to the render window, chunk manager, camera system, and 
 	// state variables for input handling and camera control. These variables will be used to manage the scene's state and behavior during updates and rendering.
 	sf::RenderWindow& m_window;
-	ChunkManager m_chunkManager;
+	ChunkManager& m_chunkManager;
 	CameraSystem m_cameraSystem;
 	Entity* m_cameraEntity = nullptr;
 	float m_tileSize = 32.0f;

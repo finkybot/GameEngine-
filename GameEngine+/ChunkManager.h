@@ -14,6 +14,7 @@
 #include <optional>
 #include <unordered_set>
 #include <string>
+#include <atomic>
 
 #include "TileMap.h"
 #include "RenderQueue.h"
@@ -245,6 +246,7 @@ public:
 
 	/////////////////////////////////
 	void BuildWorldMask(); // Build the world mask for collision/pathfinding
+	void RefreshWorldBoundsFromLoadedChunks(); // Recompute world offset/size from currently loaded chunks
 	/////////////////////////////////
 
 
@@ -381,6 +383,7 @@ public:
 	// Accessors for read-only inspection by renderers / scenes. These return references guarded by the caller using the mutex returned by GetMutex().
 	std::unordered_map<long long, Chunk>& GetChunks() { return m_chunks; }
 	std::mutex& GetMutex() { return m_mutex; }
+	uint64_t GetWorldRevision() const noexcept { return m_worldRevision.load(std::memory_order_relaxed); }
 	/////////////////////////////////
 
 
@@ -460,6 +463,7 @@ private:
 	std::unordered_map<long long, Chunk> _GUARDED_BY(m_mutex) m_chunks; // Map of loaded chunks, keyed by a combined chunkX and chunkY value (e.g., (chunkX << 32) | chunkY)
 	std::list<long long> _GUARDED_BY(m_mutex) m_lruList;				// LRU (Least Recently Used) chunks for eviction (stores 64bit chunk keys)
 	std::unordered_map<long long, std::list<long long>::iterator> _GUARDED_BY(m_mutex) m_lruIndex; // O(1) iterator lookup into m_lruList
+	std::atomic<uint64_t> m_worldRevision{1}; // Monotonic change counter for loaded chunk/world mutation detection
 	/////////////////////////////////
 
 

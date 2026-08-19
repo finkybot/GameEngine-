@@ -60,7 +60,7 @@ private:
 	/////////////////////////////////
 	// Member variables for managing the render window, chunk manager, pathfinding system, camera system, render queue, tile size, and nodes processed per frame
 	sf::RenderWindow& m_window;
-	ChunkManager m_chunkManager;
+	ChunkManager& m_chunkManager;
 	PathFindingSystem m_pathSystem;
 	CameraSystem m_cameraSystem;
 	RenderQueue m_renderQueue;

@@ -39,6 +39,20 @@ public:
 	void UpdateCameraZoom(EntityManager& entityManager, Entity* cameraEntity, float targetZoom, float deltaTime);
 	void DeactivateCamera(EntityManager& entityManager, Entity* cameraEntity);
 	void ActivateCamera(EntityManager& entityManager, Entity* cameraEntity);
+
+	// Camera panning helpers (screen-space drag -> world-space camera movement)
+	void BeginPan(CCamera& camera, const sf::Vector2i& mousePos);
+	void UpdatePan(CCamera& camera, const sf::Vector2i& mousePos);
+	void EndPan(CCamera& camera);
+	bool IsPanning(const CCamera& camera) const;
+
+	// Utility clamp for scene-driven cameras/views: clamps camera center to map bounds using viewport and zoom.
+	static Vec2 ClampPositionToBounds(const Vec2& position, float viewportWidth, float viewportHeight, float zoom,
+									 const Vec2& mapMin, const Vec2& mapMax, bool hasBounds);
+
+	// Apply camera state to an SFML view and optional bounds clamp in one place.
+	static sf::View BuildViewFromCamera(const CCamera& camera, bool clampToBounds, const Vec2& mapMin, const Vec2& mapMax,
+									 bool hasBounds);
 	/////////////////////////////////
 };
 /////////////////////////////////

@@ -7,6 +7,8 @@
 /////////////////////////////////
 // Includes and forward declarations for the GameEngine class. We include necessary headers for SFML graphics, memory management, and various managers for fonts, textures, entities, and input. We also forward declare the Scene class to avoid circular dependencies with the GameEngine.
 #pragma once
+
+#include "ShutdownGuard.h"
 #include <SFML/Graphics.hpp>
 #include <memory>
 //#include "Scene.h"
@@ -19,6 +21,7 @@
 #include "CursorSystem.h"
 #include "RenderQueue.h"
 #include "SoundSystem.h"
+#include "ChunkManager.h"
 
 #include <map>
 #include <string>
@@ -252,6 +255,16 @@ public:
 	/////////////////////////////////
 	// Accessor for centralized file manager, allowing scenes and systems to load assets
 	FileManager& GetFileManager() { return m_fileManager; }
+	/////////////////////////////////
+
+	/////////////////////////////////
+	// Accessor for engine-owned shared ChunkManager
+	ChunkManager& GetChunkManager() { return m_chunkManager; }
+	/////////////////////////////////
+
+	/////////////////////////////////
+	// Engine-owned shared chunk manager for chunk streaming/path/raycast scenes
+	ChunkManager m_chunkManager;
 	/////////////////////////////////
 
 };

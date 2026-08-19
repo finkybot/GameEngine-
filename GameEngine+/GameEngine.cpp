@@ -95,7 +95,11 @@ GameEngine::GameEngine() {
 
 /////////////////////////////////
 // Destructor - cleans up resources and shuts down the game engine, including ImGui-SFML shutdown and clearing scenes
-GameEngine::~GameEngine() {}
+GameEngine::~GameEngine() {
+	// Mark that we're shutting down BEFORE member destruction begins
+	// This prevents destructors from attempting operations on already-destroyed objects
+	ShutdownGuard::MarkShuttingDown();
+}
 /////////////////////////////////
 
 

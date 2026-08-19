@@ -367,12 +367,8 @@ void EntityManager::Update(float deltaTime) {
 
 	m_deathCountThisFrame = 0;
 
-// ValidateIntegrity calls disabled by user request.
-
 	AddPendingEntities();
 	RemoveDeadEntities();
-
-// ValidateIntegrity calls disabled by user request.
 
 	// Let MusicSystem reconcile component data with runtime sf::Music instances.
 	if (m_musicSystem)

@@ -18,6 +18,8 @@
 /////////////////////////////////
 // GameController class - manages input action mappings for keyboard keys and mouse buttons, allowing for dynamic assignment of input actions and retrieval of actions based on user input events. 
 // It also provides static helper functions for checking input states and defining common input keys for game actions.
+//					|
+//					|___________________________________________________________________________________
 class GameController {
 	/////////////////////////////////
 	// Private member variables for storing input action mappings and mouse movement action.

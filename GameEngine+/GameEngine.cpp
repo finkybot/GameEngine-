@@ -21,7 +21,7 @@
 #include <iostream>
 #include "Scene.h"
 #include "TestScene.h"
-#include "TileMapScene.h"
+#include "RayCastScene.h"
 #include "TileMapEditorScene.h"
 #include "MusicVisualizerScene.h"
 #include "LevelEditorScene.h"
@@ -46,7 +46,7 @@ GameEngine::GameEngine() {
 	//window.setVerticalSyncEnabled(true);
 	isRunning = true;
 
-	// Create a single engine-wide EntityManager and bind shared resources
+	// *** ENTITY MANAGER *** Create a single engine-wide EntityManager and bind shared resources
 	entityManager = std::make_unique<EntityManager>(window);
 	entityManager->GetRenderSystem().SetFontManager(&fontManager);
 
@@ -56,41 +56,37 @@ GameEngine::GameEngine() {
 		std::cout << "[GameEngine] Current working directory: " << cwd << std::endl;
 	}
 
-	// Create and initialize the SoundSystem
+	// *** AUDIO *** Create and initialize the SoundSystem
 	soundSystem = std::make_unique<SoundSystem>();
 	soundSystem->Initialize();  // Check audio device and log diagnostics
 	soundSystem->InitializePool(*entityManager, 64);  // Initialize sound pool with 64 entities
 	soundSystem->SetMasterVolume(70.0f);  // Set master volume to 70% (0-100 scale)
 
-	// Connect SoundSystem to CollisionSystem for sound limit checking
+	// Bind the SoundSystem to the CollisionSystem so it can check for concurrent sound limits when playing collision sounds (bit of coupling here, but it's a simple solution for now)
 	entityManager->GetCollisionSystem().SetSoundSystem(soundSystem.get());
+	std::cout << "[GameEngine] Audio system initialized (using SFML defaults)"  << std::endl; // Log audio system initialization
 
-	// Audio listener setup completely disabled - causes music volume issues in SFML 3.x
-	// Spatial audio will use SFML defaults without explicit configuration
 
-	std::cout << "[GameEngine] Audio system initialized (using SFML defaults)" << std::endl;
-
-	// Try to load a default font for in-engine text (used by MainMenu and CText). Expect file at assets/fonts/tech.ttf
+	// *** FONTS *** Try to load a default font for in-engine text (used by MainMenu and CText). Expect file at assets/fonts/tech.ttf
 	if (!fontManager.LoadFont("default", "assets/fonts/tech.ttf")) {
 		std::cerr << "Warning: failed to load default font at assets/fonts/tech.ttf" << std::endl;
 	}
 
-	m_cursorSystem = std::make_unique<CursorSystem>(); // Initialize the cursor system with the game window
+	// *** CURSOR SYSTEM *** Initialize the cursor system with the game window
+	m_cursorSystem = std::make_unique<CursorSystem>();
 	m_cursorSystem->Initialize(&window);
 
-	// Initialize MovementSystem for path following
+	// *** MOVEMENT SYSTEM *** Initialize MovementSystem for path following
 	movementSystem = std::make_unique<MovementSystem>();
 
-	// Initialize FileManager with current working directory for asset loading
+	// *** FILE MANAGER *** Initialize FileManager with current working directory for asset loading
 	m_fileManager.SetBasePath(".");
 
-	// Do not preload atlases automatically. Atlases should be loaded explicitly via the editor UI so users
-	// can choose which atlas to use at runtime.
-
-	// Initialize ImGui-SFML early so scenes can safely call ImGui during Update
+	// Do not preload atlases automatically. Atlases should be loaded explicitly via the editor UI so users can choose which atlas to use at runtime.
+	// *** IMGUI *** Initialize ImGui-SFML early so scenes can safely call ImGui during Update
 	if (!ImGui::SFML::Init(window)) {
 		std::cerr << "Warning: Failed to initialize ImGui::SFML in GameEngine" << std::endl;
-		// continue without ImGui but scenes must tolerate absence
+		// continue without ImGui but scenes must tolerate absence, have no idea if they will atm.
 	}
 }
 /////////////////////////////////
@@ -105,8 +101,8 @@ GameEngine::~GameEngine() {}
 
 
 /////////////////////////////////
-// AddScene - Adds a new scene to the game engine with the given name and scene instance, allowing for dynamic scene management. The scene is stored in a map of 
-// scene names to scene instances, enabling easy retrieval and switching between scenes during the game loop.
+// AddScene - Adds a new scene to the game engine with the given name and scene instance, allowing for dynamic scene management. The scene is stored in a map of scene names to scene instances, enabling 
+// easy retrieval and switching between scenes during the game loop.
 void GameEngine::AddScene(const std::string& sceneName, std::shared_ptr<Scene> scene) {
 	scenes[sceneName] = scene;
 }
@@ -126,8 +122,8 @@ std::vector<std::string> GameEngine::GetSceneNames() const {
 
 
 /////////////////////////////////
-// ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions. The method checks if the specified scene exists 
-// in the scenes map and sets it as the current active scene, enabling the game loop to update and render the new scene. If the scene name is not found, a warning is logged.
+// ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions. The method checks if the specified scene exists // in the scenes map and sets it as 
+// the current active scene, enabling the game loop to update and render the new scene. If the scene name is not found, a warning is logged.
 void GameEngine::ChangeScene(const std::string& sceneName) {
 	auto it = scenes.find(sceneName);
 	if (it != scenes.end()) {
@@ -165,8 +161,8 @@ void GameEngine::ChangeScene(const std::string& sceneName) {
 
 
 /////////////////////////////////
-// RemoveScene - Removes a scene from the game engine by its name, allowing for cleanup and resource management of scenes that are no longer needed. The method checks if the 
-// specified scene exists in the scenes map and removes it, freeing up resources associated with that scene and ensuring it is no longer updated or rendered in the game loop.
+// RemoveScene - Removes a scene from the game engine by its name, allowing for dynamic scene management. The method checks if the specified scene exists in the scenes map and erases it, freeing up 
+// resources associated with that scene. If the scene name is not found, no action is taken.
 void GameEngine::RemoveScene(const std::string& sceneName) {
 	auto it = scenes.find(sceneName);
 	if (it != scenes.end()) {
@@ -178,8 +174,8 @@ void GameEngine::RemoveScene(const std::string& sceneName) {
 
 
 /////////////////////////////////
-// Run - Starts the main game loop, handling scene initialization, event processing, updating, and rendering. The method sets up the initial scene, initializes it, and enters a 
-// loop that continues until the window is closed... The loop processes events, updates the current scene with a fixed delta time, and renders the scene to the window.
+// Run - Main game loop that handles scene management, input processing, and rendering. The method initializes the chosen scene, sets up the input controller, and enters a loop that updates the current 
+// scene, processes events, and renders the scene to the window. The loop continues until the window is closed or the running state is set to false.
 void GameEngine::Run() {
 	// Setup Event Handler.
 	bool running = true; // Create a Boolean variable to manage the engine running state
@@ -187,16 +183,15 @@ void GameEngine::Run() {
 	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
 	AddScene("MainMenu", std::make_shared<MainMenuScene>(*this, window, *entityManager));					// Adding MainMenuScene
 	AddScene("TestScene", std::make_shared<TestScene>(*this, window, *entityManager));						// Adding TestScene
-	// AddScene("TileMapScene", std::make_shared<TileMapScene>(*this, window, *entityManager));				// Adding TileMapScene, old tilemap scene, not used anymore (deprecated)
-	AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, window, *entityManager));			// Adding TileMapEditor
+	AddScene("RayCastScene", std::make_shared<RayCastScene>(*this, window, *entityManager));				// Adding TileMapScene, old tilemap (deprecated)
+	//AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, window, *entityManager));		// Adding TileMapEditor, will need to revisit this later to implement new tilemap editor with new tilemap system
 	AddScene("MusicVisualizer", std::make_shared<MusicVisualizerScene>(*this, window, *entityManager));		// Adding MusicVisualizer	
 	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, window, *entityManager));				// Adding LevelEditor
 	AddScene("PathTestScene", std::make_shared<PathTestScene>(*this, window, *entityManager));				// Adding PathTestScene
 
 	ChangeScene("MainMenu");
 
-	// Initialize the chosen scene if it was found. ChangeScene() logs a warning when the scene
-	// name is not found; guard against a null current scene to avoid dereferencing a nullptr.
+	// Initialize the chosen scene if it was found. ChangeScene() logs a warning when the scene name is not found; guard against a null current scene to avoid dereferencing a nullptr.
 	if (currentScene) {
 		currentScene->InitializeGame(windowSize);
 
@@ -216,6 +211,7 @@ void GameEngine::Run() {
 
 
 
+	// *** MAIN LOOP ***
 	/* Main Loop, game logic is handled in here once per frame */
 	while (window.isOpen()) {
 		Update(0.016f); // Update the scene with a fixed delta time (16ms for ~60 FPS), I can calculate actual delta time using the deltaClock for variable time steps
@@ -229,28 +225,31 @@ void GameEngine::Run() {
 
 
 /////////////////////////////////
-// Update - Updates the current scene and game state based on the elapsed time since the last frame, allowing for time-based updates and game logic processing. 
-// The method calculates the delta time using the SFML clock and calls the update method of the current active scene, enabling smooth and consistent updates 
-// regardless of frame rate variations. It also handles event polling and forwarding to ImGui and the current scene, as well as rendering the scene and ImGui.
+// Update - Updates the current scene, processes input, and handles rendering. The method is called once per frame and performs the following actions:
+//			1) Clears the window and render queue, 
+//			2) Updates ImGui and FPS counter, 
+//			3) Polls events and forwards them to the current scene, 
+//			4) Updates the input controller, 
+//			5) Updates the current scene and its entity manager,
 void GameEngine::Update(float deltaTime) {
-	// Handle events and input before updating the scene.
+	// *** MAIN LOOP *** Main loop, game logic is handled in here once per frame, runs while the window is open and handles events, updates, and rendering for the current scene.
 	while (window.isOpen()) {
-		// Clear the window at the start of each frame. Use an explicit clear color so fully transparent tiles in the editor reveal the intended background instead
-		// of an unintended grey fallback.
+		// *** CLEAR WINDOW *** Clear the window at the start of each frame. Use an explicit clear color so fully transparent tiles in the editor reveal the intended background instead of an unintended 
+		// grey fallback.
 		window.clear(sf::Color::Transparent);
 
-		// Clear the engine-wide render queue from the previous frame
+		// *** RENDER QUEUE *** Clear the engine-wide render queue from the previous frame
 		m_renderQueue.Clear();
 
-		// Restart delta clock and update ImGui once per frame
+		// *** DELTA TIME CLOCK *** Restart delta clock and update ImGui once per frame
 		sf::Time frameTime = deltaClock.restart();
 		if (ImGui::GetCurrentContext())
 			ImGui::SFML::Update(window, frameTime);
 
-		// Update shared FPS counter with the real frame time
+		// *** FPS COUNTER *** Update shared FPS counter with the real frame time
 		m_fpsCounter.Update(frameTime.asSeconds());
-
-		// Poll events (SFML 3: pollEvent returns std::optional<sf::Event>) and forward to current scene
+	
+		// *** EVENT POLLING *** Poll events (SFML 3: pollEvent returns std::optional<sf::Event>) and forward to current scene
 		while (auto eventOpt = window.pollEvent()) {
 			const auto& resizeEvent = eventOpt->getIf<sf::Event::Resized>();
 			// Forward events to ImGui-SFML so UI widgets receive input
@@ -265,8 +264,8 @@ void GameEngine::Update(float deltaTime) {
 				}
 			}
 
-			// Global Escape handling: intercept Escape before forwarding to the scene so scene-level handlers that close the window won't run. If Escape is 
-			// pressed and we're not already on MainMenu, switch to it
+			// *** GLOBAL ESCAPE HANDLING *** Intercept Escape before forwarding to the scene so scene-level handlers that close the window won't run. If Escape is pressed and we're not already on 
+			// MainMenu, switch to it.
 			if (eventOpt->is<sf::Event::KeyPressed>()) {
 				if (auto kp = eventOpt->getIf<sf::Event::KeyPressed>()) {
 					if (static_cast<sf::Keyboard::Key>(kp->code) == sf::Keyboard::Key::Escape) {
@@ -280,16 +279,17 @@ void GameEngine::Update(float deltaTime) {
 				}
 			}
 
+			// Forward the event to the current scene for handling (if any)
 			if (currentScene)
 				currentScene->HandleEvent(eventOpt);
 			if (eventOpt->is<sf::Event::Closed>())
 				window.close();
 		}
 
-		// Update method will run  (carry out) these actions.
+		// *** INPUT CONTROLLER UPDATE *** Update method will run  (carry out) these actions.
 		m_InputController.Update(deltaTime);
 
-		// Global keyboard poll: if Escape is held, switch back to MainMenu before any scene Update runs... This prevents scenes that poll sf::Keyboard::isKeyPressed(Escape) 
+		// *** GLOBAL ESCAPE HANDLING *** Global keyboard poll: if Escape is held, switch back to MainMenu before any scene Update runs... This prevents scenes that poll sf::Keyboard::isKeyPressed(Escape) 
 		// from closing the window directly.
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
 			auto it = scenes.find("MainMenu");
@@ -301,6 +301,9 @@ void GameEngine::Update(float deltaTime) {
 				continue;
 			}
 		}
+
+		// *** SCENE UPDATE *** Update the current scene and its entity manager, movement system, and sound system. The scene's Update method handles ImGui updates and input, while the movement system 
+		// updates entity positions based on their paths. The entity manager processes game logic, and the sound system handles sound effects for entities in the current scene.
 		if (currentScene) {
 			// Let the scene update (handles ImGui update and input)... Use the actual frame time measured above so scenes get accurate timing for FPS and logic.
 			currentScene->Update(frameTime.asSeconds());
@@ -319,15 +322,17 @@ void GameEngine::Update(float deltaTime) {
 			// Update the global cursor system
 			m_cursorSystem->Update(deltaTime);
 
-			// Execute any main-thread GL/upload tasks queued by worker threads. These must run while the
-			// main thread's OpenGL context is current to avoid context activation errors.
+			// *** MAIN-THREAD GL/UPLOAD TASKS *** Execute any main-thread GL/upload tasks queued by worker threads. These must run while the main thread's OpenGL context is current to avoid context 
+			// activation errors.
 			std::vector<std::function<void()>> _mainThreadTasks;
-			MainThreadTaskQueue::Instance().Drain(_mainThreadTasks);
+			MainThreadTaskQueue::Instance().Drain(_mainThreadTasks); // Drain queued tasks into a local vector to avoid holding the mutex while executing tasks
+			
+			// Execute each task in the drained vector, catching any exceptions to prevent a single task failure from crashing the engine
 			for (auto &t : _mainThreadTasks) {
 				try { t(); } catch (...) {}
 			}
 
-			// Engine render pass ordering:
+			// *** ENGINE RENDER PASS ORDERING *** 
 			// 1) Scene overlays (render chunks and world elements first)
 			currentScene->Render();
 			// 2) Entity shapes (on top of scene overlays)
@@ -343,74 +348,73 @@ void GameEngine::Update(float deltaTime) {
 		// Draw any debug overlays from the current scene before ImGui so they are visible
 		//if (m_currentScene) m_currentScene->RenderDebugOverlay();
 
-		// Flush the engine-wide render queue to the window before ImGui rendering
+		// *** ENGINE RENDER QUEUE FLUSH *** Flush the engine-wide render queue to the window before ImGui rendering
 		// This ensures all scene and entity draws appear behind the UI
 		m_renderQueue.Flush(window);
 
-		// Render ImGui on top of everything (ImGui::SFML::Render without args uses current target)
-		if (ImGui::GetCurrentContext() && (currentScene == nullptr || currentScene->IsImGuiEnabled())) {
-					ImGui::SFML::Render(window);
-					}
+		// *** IMGUI RENDERING *** (Should be done last) Render ImGui on top of everything (ImGui::SFML::Render without args uses current target)
+		if (ImGui::GetCurrentContext() && (currentScene == nullptr || currentScene->IsImGuiEnabled())) ImGui::SFML::Render(window);
 
-					window.display();
-				}
-			}
-	/////////////////////////////////
-
+		// *** DISPLAY FRAME *** Display the rendered frame to the window
+		window.display();
+	}
+}
+/////////////////////////////////
 
 
-	/////////////////////////////////
-	// MovementSystem implementation
-	void MovementSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime) {
-		// Iterate through all entities in the scene
-		for (const auto& ent : entities) {
-			if (!ent || !ent->IsAlive()) continue;
 
-			// Skip if entity doesn't have a path follower or it's not active
-			auto* follower = ent->GetComponent<CPathFollower>();
-			if (!follower || !follower->isActive) continue;
+/////////////////////////////////
+// *** MOVEMENT SYSTEM UPDATE ***
+void MovementSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime) {
+	// Iterate through all entities in the scene
+	for (const auto& ent : entities) {
+		if (!ent || !ent->IsAlive()) continue;
 
-			// Skip if entity doesn't have a path with waypoints
-			auto* path = ent->GetComponent<CPath>();
-			if (!path || path->points.empty()) {
+		// Skip if entity doesn't have a path follower or it's not active
+		auto* follower = ent->GetComponent<CPathFollower>();
+		if (!follower || !follower->isActive) continue;
+
+		// Skip if entity doesn't have a path with waypoints
+		auto* path = ent->GetComponent<CPath>();
+		if (!path || path->points.empty()) {
+			follower->isActive = false;
+			continue;
+		}
+
+		// Skip if entity doesn't have a transform.
+		auto* transform = ent->GetComponent<CTransform>();
+		if (!transform) continue;
+
+		// Ensure the current waypoint index is within bounds.
+		if (follower->currentWaypointIndex >= (int)path->points.size()) {
+			follower->currentWaypointIndex = (int)path->points.size() - 1;
+		}
+
+		// Get the current waypoint target
+		const Vec2& currentWaypoint = path->points[follower->currentWaypointIndex];
+		Vec2 direction = (currentWaypoint - transform->position);
+		float distanceToWaypoint = direction.Mag();
+
+		// Check if we've arrived at the current waypoint
+		if (distanceToWaypoint < WAYPOINT_ARRIVAL_THRESHOLD) {
+			// Move to next waypoint
+			follower->currentWaypointIndex++;
+
+			// Check if we've reached the end of the path
+			if (follower->currentWaypointIndex >= (int)path->points.size()) {
+				// Path complete: mark as inactive but keep components for reuse
 				follower->isActive = false;
 				continue;
 			}
+		}
 
-			// Skip if entity doesn't have a transform
-			auto* transform = ent->GetComponent<CTransform>();
-			if (!transform) continue;
-
-			// Ensure waypoint index is valid
-			if (follower->currentWaypointIndex >= (int)path->points.size()) {
-				follower->currentWaypointIndex = (int)path->points.size() - 1;
-			}
-
-			// Get the current waypoint target
-			const Vec2& currentWaypoint = path->points[follower->currentWaypointIndex];
-			Vec2 direction = (currentWaypoint - transform->position);
-			float distanceToWaypoint = direction.Mag();
-
-			// Check if we've arrived at the current waypoint
-			if (distanceToWaypoint < WAYPOINT_ARRIVAL_THRESHOLD) {
-				// Move to next waypoint
-				follower->currentWaypointIndex++;
-
-				// Check if we've reached the end of the path
-				if (follower->currentWaypointIndex >= (int)path->points.size()) {
-					// Path complete: mark as inactive but keep components for reuse
-					follower->isActive = false;
-					continue;
-				}
-			}
-
-			// Move towards the current waypoint if there's distance to cover
-			if (distanceToWaypoint > 0.001f) {
-				// Normalize direction and apply speed
-				direction.Normalize();
-				float moveDistance = follower->speed * deltaTime;
-				transform->position = transform->position + (direction * moveDistance);
-			}
+		// Move towards the current waypoint if there's distance to cover
+		if (distanceToWaypoint > 0.001f) {
+			// Normalize direction and apply speed
+			direction.Normalize();
+			float moveDistance = follower->speed * deltaTime;
+			transform->position = transform->position + (direction * moveDistance);
 		}
 	}
-	/////////////////////////////////
+}
+/////////////////////////////////

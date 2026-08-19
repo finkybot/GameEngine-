@@ -188,6 +188,7 @@
     <ClCompile Include="TextureManager.cpp" />
     <ClCompile Include="TileMap.cpp" />
     <ClCompile Include="TileMapEditorScene.cpp" />
+    <ClCompile Include="RayCastScene.cpp" />
     <ClCompile Include="TileMapScene.cpp" />
     <ClCompile Include="Utils.cpp" />
     <ClCompile Include="Vec2.cpp" />
@@ -266,6 +267,7 @@
     <ClInclude Include="TextureManager.h" />
     <ClInclude Include="TileMap.h" />
     <ClInclude Include="TileMapEditorScene.h" />
+    <ClInclude Include="RayCastScene.h" />
     <ClInclude Include="TileMapScene.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="Utils\FPSCounter.h" />

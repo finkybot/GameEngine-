@@ -159,10 +159,8 @@ void PathTestScene::ScanLevelFiles() {
 
 
 /////////////////////////////////
-// SwitchToLevel - Switches the current level to the specified level name, loading the appropriate tileset and layers based on metadata in "meta.txt".
-// ***** WARNING ***** Ohh my god this is a fucking long function, Its a damn mess, but I guess it will be fine, right??? right??? Future me no 
-// fucking clue????? Spend sometime later to refactor this into smaller functions, maybe even a LevelLoader class or something, but for now, 
-// let's just get it working.
+// SwitchToLevel - Switches the current level to the specified name, updating the chunk manager's base path and loading the level's metadata (tileset, layers, etc.). Function size is large, but it is necessary 
+// to handle the complexity of level switching and resource management; I'll check it ata later date.
 bool PathTestScene::SwitchToLevel(const std::string& name) {
 	std::cout << "[PathTestScene::SwitchToLevel] CALLED with level: " << name << "\n";
 	m_currentLevelName = name;
@@ -198,11 +196,8 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 	std::cout << "[SwitchToLevel] chunkPath = " << chunkPath.string() << "\n";
 	m_chunkManager.SetBasePath(chunkPath.string());
 
-	// --- rest of your function unchanged ---
-	// Parse meta.txt, set tileset, layers, load chunks, build world mask, center camera, etc.
-	// (everything below here stays exactly as you had it)
-
-	// Parse meta.txt to get tileset and layers
+	// *** PARSING META.TXT ***
+	// Parse meta.txt, set tileset, layers, load chunks, build world mask
 	std::string tilesetKey;
 	std::string tilesetPath;
 	std::vector<std::string> layers = {"background", "main", "upper"};
@@ -240,6 +235,7 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		} catch (...) {}
 	}
 
+	// *** SETTING TILES AND LAYERS ***
 	if (!tilesetKey.empty()) {
 		m_chunkManager.SetTilesetKey(tilesetKey);
 		if (!tilesetPath.empty()) {
@@ -274,6 +270,7 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		}
 	}
 
+	// *** SETTING LAYERS ***
 	if (!layers.empty()) {
 		m_chunkManager.SetNumLayers((int)layers.size());
 	}
@@ -281,22 +278,25 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 	m_chunkManager.SetActiveLayer(std::min(1, (int)layers.size() - 1));
 	m_chunkManager.SetUnselectedLayerAlpha(1.0f);
 
+	// *** LOADING CHUNKS ***
 	for (int i = 0; i < 20; ++i) {
 		m_chunkManager.UpdateMainThread_NoLock();
 	}
 
+	// *** CLEARING AND RELOADING CHUNKS ***
 	std::cout << "[PathTestScene::SwitchToLevel] Clearing all loaded chunks before loading new level...\n";
 	m_chunkManager.ClearAllLoadedChunks();
 	std::cout << "[PathTestScene::SwitchToLevel] All loaded chunks cleared.\n";
 	m_chunkManager.LoadAllSavedChunks();
 
+	// *** REBUILDING CHUNKS FROM TILESET ***
 	for (int i = 0; i < 20; ++i) {
 		m_chunkManager.UpdateMainThread_NoLock();
 	}
-
 	m_chunkManager.RebuildAllChunksFromTileset();
 	m_chunkManager.UpdateMainThread_NoLock();
 
+	// *** RETRIEVING MAP BOUNDS ***
 	float dMinX, dMinY, dMaxX, dMaxY;
 	bool hasBounds = m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY);
 

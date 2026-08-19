@@ -96,7 +96,7 @@
     <ClCompile Include="TestScene.cpp">
       <Filter>Source Files\Scenes</Filter>
     </ClCompile>
-    <ClCompile Include="TileMapScene.cpp">
+    <ClCompile Include="RayCastScene.cpp">
       <Filter>Source Files\Scenes</Filter>
     </ClCompile>
     <ClCompile Include="Systems\PhysicsSystem.cpp">
@@ -195,6 +195,9 @@
     <ClCompile Include="ChunkManagerV2.cpp">
       <Filter>Source Files\Managers</Filter>
     </ClCompile>
+    <ClCompile Include="TileMapScene.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imgui\backends\imgui_impl_dx9.h">
@@ -227,7 +230,7 @@
     <ClInclude Include="imgui\imstb_truetype.h">
       <Filter>Header Files\imgui</Filter>
     </ClInclude>
-    <ClInclude Include="TileMapScene.h">
+    <ClInclude Include="RayCastScene.h">
       <Filter>Header Files\Scenes</Filter>
     </ClInclude>
     <ClInclude Include="TestScene.h">
@@ -427,6 +430,9 @@
     </ClInclude>
     <ClInclude Include="MainThreadTasks.h">
       <Filter>Header Files\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="TileMapScene.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

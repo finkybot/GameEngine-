@@ -75,8 +75,7 @@ struct RaycastHit {
 /////////////////////////////////
 // RayIntersectsAABB - A function to check for intersection between a ray and an axis-aligned bounding box (AABB) using the slab method. The function takes the origin and direction of the ray, the minimum and maximum corners of the AABB, and outputs the distance 
 // to the hit point if an intersection occurs. Ray vs Axis Aligned Bounding Box (AABB) using slab method. rectMin and rectMax are world coordinates of AABB. dir must be normalized. Returns true and fills out outT if hit at positive t <= maxDistance.
-inline bool RayIntersectsAABB(const Vec2& origin, const Vec2& dir, const Vec2& rectMin, const Vec2& rectMax,
-							  float& outDistance, float maxDistance = FLT_MAX) {
+inline bool RayIntersectsAABB(	const Vec2& origin, const Vec2& dir, const Vec2& rectMin, const Vec2& rectMax, float& outDistance, float maxDistance = FLT_MAX) {
 	// Set up a few things, first define a small epsilon for handling floating-point precision when checking for parallel rays.Next initialize tmin and tmax
 	// to manage intersection intervals along the ray. I'll set tmin to 0.0 as I only care about positive distances along the ray and tmax to the passed max
 	// distance, so we are measuring a line segment and not a infinite ray.
@@ -220,14 +219,11 @@ static inline bool IntersectAABB_Ray(const Vec2& origin, double ndx, double ndy,
 
 
 /////////////////////////////////
-// RaycastTilemapDDA - Perform DDA raycasting against a tilemap. This function implements the Digital Differential Analyzer (DDA) algorithm to efficiently 
-// traverse the grid of tiles in the tilemap along the path of the ray defined by the origin and direction. The function returns RaycastHit with hit info 
-// if we hit a solid tile, or default RaycastHit with hit=false if no hit..... If we start in a solid tile and ignoreStartingCell is false, we will report 
-// an immediate hit at the origin. Otherwise, we will step through the grid using DDA and check for hits at each cell boundary crossing.
-// I recommend the direction vector be normalized for consistent results but can handle non-normalized directions as well.
-inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const TileMap& map, float maxDistance,
-									bool ignoreStartingCell = false,
-									std::vector<std::pair<int, int>>* outVisited = nullptr) {
+// RaycastTilemapDDA - Perform DDA raycasting against a tilemap. This function implements the Digital Differential Analyzer (DDA) algorithm to efficiently traverse the grid of tiles in the tilemap along 
+// the path of the ray defined by the origin and direction. The function returns RaycastHit with hit info if we hit a solid tile, or default RaycastHit with hit=false if no hit..... If we start in a solid 
+// tile and ignoreStartingCell is false, we will report an immediate hit at the origin. Otherwise, we will step through the grid using DDA and check for hits at each cell boundary crossing. I recommend 
+// the direction vector be normalized for consistent results but can handle non-normalized directions as well.
+inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const TileMap& map, float maxDistance,	bool ignoreStartingCell = false, std::vector<std::pair<int, int>>* outVisited = nullptr) {
 	// Use small helper functions declared above instead of local lambdas.
 	RaycastHit result;
 	if (map.width <= 0 || map.height <= 0)
@@ -269,13 +265,13 @@ inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const T
 	double tDeltaY = CalcTDelta(dyN, map.tileSize);
 	double maxDistanceT = static_cast<double>(maxDistance);
 
-	// Main DDA loop: at each step, we compare tMaxX and tMaxY to determine whether we step to the next vertical or horizontal grid line. We also check for corner cases where tMaxX and tMaxY
-	// are very close, which can happen when the ray passes near a grid corner. In that case, we need to check all three potentially hit tiles (the one we step into and the two adjacent ones)
-	// to ensure we don't miss any hits due to floating-point precision issues.
+	// Main DDA loop: at each step, we compare tMaxX and tMaxY to determine whether we step to the next vertical or horizontal grid line. We also check for corner cases where tMaxX and tMaxY are very close, 
+	// which can happen when the ray passes near a grid corner. In that case, we need to check all three potentially hit tiles (the one we step into and the two adjacent ones) to ensure we don't miss any 
+	// hits due to floating-point precision issues.
 	const double CORNER_EPS = 1e-12;
 	while (true) {
-		// Handle corner case where tMaxX and tMaxY are very close, which can happen when the ray passes near a grid corner. In that case, we need to check all three potentially hit tiles
-		// (the one we step into and the two adjacent ones) to ensure we don't miss any hits due to floating-point precision issues.
+		// Handle corner case where tMaxX and tMaxY are very close, which can happen when the ray passes near a grid corner. In that case, we need to check all three potentially hit tiles (the one we step 
+		// into and the two adjacent ones) to ensure we don't miss any hits due to floating-point precision issues.
 		if (std::fabs(tMaxX - tMaxY) < CORNER_EPS) {
 			double cornerT = tMaxX;
 
@@ -288,16 +284,16 @@ inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const T
 			tMaxX += tDeltaX;
 			tMaxY += tDeltaY;
 
-			// For debugging, we can optionally collect the visited cells. In this corner case, we are effectively stepping into three cells at once (the new cell at (mapX, mapY)
-			// and the two adjacent cells at (prevX, mapY) and (mapX, prevY)), so we add all three to the visited list if it's enabled.
+			// For debugging, we can optionally collect the visited cells. In this corner case, we are effectively stepping into three cells at once (the new cell at (mapX, mapY) and the two adjacent cells 
+			// at (prevX, mapY) and (mapX, prevY)), so we add all three to the visited list if it's enabled.
 			if (outVisited) {
 				outVisited->push_back({mapX, prevY});
 				outVisited->push_back({prevX, mapY});
 				outVisited->push_back({mapX, mapY});
 			}
 
-			// Check the new cell at (mapX, mapY) for a hit. If it's solid, we perform a ray vs AABB intersection test to find the exact hit position and distance.
-			// If the intersection test fails due to precision issues,
+			// Check the new cell at (mapX, mapY) for a hit. If it's solid, we perform a ray vs AABB intersection test to find the exact hit position and distance. If the intersection test fails due to 
+			// precision issues,
 			if (!map.InBounds(mapX, mapY))
 				break;
 
@@ -328,8 +324,8 @@ inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const T
 				int hx = mapX, hy = prevY;
 				float outHitDistance = 0.0f;
 
-				// Perform a ray vs AABB intersection test for the adjacent cell at (mapX, prevY). If it hits, we report the hit information.
-				// Note that the normal will be different for this cell compared to the main cell at (mapX, mapY),
+				// Perform a ray vs AABB intersection test for the adjacent cell at (mapX, prevY). If it hits, we report the hit information. Note that the normal will be different for this 
+				// cell compared to the main cell at (mapX, mapY),
 				if (IntersectAABB_Ray(origin, dxN, dyN, map, hx, hy, maxDistance, outHitDistance)) {
 					result.hit = true;
 					result.tileX = hx;
@@ -362,8 +358,8 @@ inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const T
 			continue;
 		}
 
-		// Determine whether to step to the next vertical or horizontal grid line based on which tMax is smaller.
-		// This is the core of the DDA algorithm, where we are effectively "walking" along the ray through the grid.
+		// Determine whether to step to the next vertical or horizontal grid line based on which tMax is smaller. This is the core of the DDA algorithm, where we are effectively "walking" 
+		// along the ray through the grid.
 		bool stepXNext = (tMaxX < tMaxY);
 		double t = stepXNext ? tMaxX : tMaxY;
 
@@ -371,8 +367,8 @@ inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const T
 		if (t > maxDistanceT)
 			break;
 
-		// Step to the next cell in the grid based on the ray direction. If we are stepping to the next vertical grid line, we update mapX and tMaxX;
-		// if we are stepping to the next horizontal grid line, we update mapY and tMaxY.
+		// Step to the next cell in the grid based on the ray direction. If we are stepping to the next vertical grid line, we update mapX and tMaxX, if we are stepping to the next horizontal 
+		// grid line, we update mapY and tMaxY.
 		if (stepXNext) {
 			mapX += (dxN > 0.0) ? 1 : -1;
 			tMaxX += tDeltaX;
@@ -409,7 +405,8 @@ inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const T
 				result.tileY = mapY;
 				result.tileValue = map.GetTile(mapX, mapY);
 
-				// Determine the normal based on which face of the tile was hit. We check if the hit position is within a small epsilon distance from any of the tile's edges, and if so, we set the normal accordingly.
+				// Determine the normal based on which face of the tile was hit. We check if the hit position is within a small epsilon distance from any of the tile's edges, and if so, we set 
+				// the normal accordingly.
 				if (std::fabs(hitP.x - mapX * map.tileSize) < EPS_FACE)
 					result.normal = Vec2(-1.0f, 0.0f);
 				else if (std::fabs(hitP.x - (mapX + 1) * map.tileSize) < EPS_FACE)
@@ -440,15 +437,15 @@ inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const T
 		}
 	}
 
-	// If we exit the loop without finding a hit, we can optionally check the end point of the ray at maxDistance to see if it hits a solid tile. 
-	// This can help ensure we report hits at the max distance limit even if the ray passes very close to a tile boundary at that point.
+	// If we exit the loop without finding a hit, we can optionally check the end point of the ray at maxDistance to see if it hits a solid tile. This can help ensure we report hits at the 
+	// max distance limit even if the ray passes very close to a tile boundary at that point.
 	const double endWorldX = origin.x + dxN * maxDistance;
 	const double endWorldY = origin.y + dyN * maxDistance;
 	const int endMapX = static_cast<int>(std::floor(endWorldX / map.tileSize));
 	const int endMapY = static_cast<int>(std::floor(endWorldY / map.tileSize));
 
-	// After the DDA loop, we can optionally check the end cell at the maximum distance to see if it is solid and report a hit there if it is.
-	// This can help ensure we report hits at the max distance limit even if the ray passes very close to a tile boundary at that point.
+	// After the DDA loop, we can optionally check the end cell at the maximum distance to see if it is solid and report a hit there if it is. This can help ensure we report hits at the max 
+	// distance limit even if the ray passes very close to a tile boundary at that point.
 	if (map.InBounds(endMapX, endMapY) && map.IsSolid(endMapX, endMapY)) {
 		float outHitDistance = 0.0f;
 
@@ -470,6 +467,102 @@ inline RaycastHit RaycastTilemapDDA(const Vec2& origin, const Vec2& dir, const T
 		result.tileValue = map.GetTile(endMapX, endMapY);
 		result.distance = maxDistance;
 		result.position = Vec2(static_cast<float>(endWorldX), static_cast<float>(endWorldY));
+		return result;
+	}
+
+	return result;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// RaycastWorldMaskDDA - Perform DDA raycasting directly against a boolean world mask. WorldMask is indexed as [localY * worldWidth + localX] where local coords are world-tile coords offset by worldOffsetX/Y.
+inline RaycastHit RaycastWorldMaskDDA(const Vec2& origin, const Vec2& dir, const std::vector<uint8_t>& worldMask, int worldWidth, int worldHeight, int worldOffsetX, int worldOffsetY,
+									  float tileSize, float maxDistance, bool ignoreStartingCell = false, std::vector<std::pair<int, int>>* outVisited = nullptr) {	
+	// Initialize the result RaycastHit struct to default values. This will be returned if no hit is found during the raycasting process.
+	RaycastHit result;
+	if (worldWidth <= 0 || worldHeight <= 0 || worldMask.empty() || tileSize <= 0.0f)
+		return result;
+
+	// Normalize the direction vector and get its length. If the direction is too small to normalize, return no hit.
+	double dxN, dyN, len;
+	if (!NormalizeDir(dir, dxN, dyN, len))
+		return result;
+
+	// Lambda to check if a world tile at (worldTileX, worldTileY) is solid based on the world mask. This function converts world tile coordinates to local coordinates in the mask and checks if the 
+	// corresponding value is non-zero.
+	auto isSolidWorldTile = [&](int worldTileX, int worldTileY) -> bool {
+		const int localX = worldTileX - worldOffsetX;
+		const int localY = worldTileY - worldOffsetY;
+		if (localX < 0 || localY < 0 || localX >= worldWidth || localY >= worldHeight)
+			return false;
+		const size_t idx = static_cast<size_t>(localY) * static_cast<size_t>(worldWidth) + static_cast<size_t>(localX);
+		return idx < worldMask.size() && worldMask[idx] != 0;
+	};
+
+	// Calculate the starting cell coordinates in the world mask based on the ray origin. This is done by dividing the world coordinates of the origin by the tile size and flooring the result to get integer cell indices.
+	int mapX = static_cast<int>(std::floor(origin.x / tileSize));
+	int mapY = static_cast<int>(std::floor(origin.y / tileSize));
+
+	// If the caller provided an outVisited vector, use it to store visited cells. If not, but debug collection is enabled, use the debug vector to store visited cells.
+	std::vector<std::pair<int, int>>* usedVisited = outVisited;
+	if (!usedVisited && RaycastDebug::collectVisited) {
+		RaycastDebug::lastVisited.clear();
+		usedVisited = &RaycastDebug::lastVisited;
+	}
+
+	//	For debugging, we can optionally collect the visited cells. We add the starting cell at (mapX, mapY) to the visited list if it's enabled.
+	if (usedVisited)
+		usedVisited->push_back({mapX, mapY});
+
+	// Check the starting cell for a hit if we are not ignoring it. This allows for rays that start inside a solid tile to report an immediate hit.
+	if (isSolidWorldTile(mapX, mapY) && !ignoreStartingCell) {
+		result.hit = true;
+		result.tileX = mapX;
+		result.tileY = mapY;
+		result.tileValue = 1;
+		result.position = origin;
+		result.distance = 0.0f;
+		return result;
+	}
+
+	// Calculate the initial t values for the ray to reach the next vertical and horizontal grid lines, as well as the t deltas for stepping through the grid.
+	double tMaxX = CalcInitialT(dxN, mapX, origin.x, tileSize);
+	double tMaxY = CalcInitialT(dyN, mapY, origin.y, tileSize);
+	double tDeltaX = CalcTDelta(dxN, tileSize);
+	double tDeltaY = CalcTDelta(dyN, tileSize);
+	const double maxDistanceT = static_cast<double>(maxDistance);
+
+	// Main DDA loop: at each step, we compare tMaxX and tMaxY to determine whether we step to the next vertical or horizontal grid line. We also check for corner cases where tMaxX and tMaxY are very close,
+	while (true) {
+		const bool stepXNext = (tMaxX < tMaxY);
+		const double t = stepXNext ? tMaxX : tMaxY;
+		if (t > maxDistanceT)
+			break;
+
+		if (stepXNext) {
+			mapX += (dxN > 0.0) ? 1 : -1;
+			tMaxX += tDeltaX;
+		} else {
+			mapY += (dyN > 0.0) ? 1 : -1;
+			tMaxY += tDeltaY;
+		}
+
+		if (usedVisited)
+			usedVisited->push_back({mapX, mapY});
+
+		if (!isSolidWorldTile(mapX, mapY))
+			continue;
+
+		result.hit = true;
+		result.tileX = mapX;
+		result.tileY = mapY;
+		result.tileValue = 1;
+		result.distance = static_cast<float>(t);
+		result.position = Vec2(origin.x + static_cast<float>(dxN * t), origin.y + static_cast<float>(dyN * t));
+		result.normal = stepXNext ? Vec2((dxN > 0) ? -1.0f : 1.0f, 0.0f)
+							  : Vec2(0.0f, (dyN > 0) ? -1.0f : 1.0f);
 		return result;
 	}
 

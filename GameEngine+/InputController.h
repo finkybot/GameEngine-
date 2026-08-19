@@ -24,6 +24,8 @@ class GameController;
 
 /////////////////////////////////
 // InputController class declaration, responsible for handling user input events and managing the current GameController reference to trigger appropriate actions based on user input.
+//					|
+//					|___________________________________________________________________________________
 class InputController {
 	/////////////////////////////////
 	// Private member variables

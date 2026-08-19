@@ -25,9 +25,8 @@ class Entity;
 
 
 /////////////////////////////////
-// MovementSystem - Moves entities with CPathFollower + CPath components along waypoints each frame.
-// Entities with both components and isActive=true will move from waypoint to waypoint at their configured speed.
-// When the last waypoint is reached, isActive is set to false automatically (components remain for reuse).
+// MovementSystem - Moves entities with CPathFollower + CPath components along waypoints each frame. Entities with both components and isActive=true will move from waypoint to waypoint at their configured 
+// speed. When the last waypoint is reached, isActive is set to false automatically (components remain for reuse).
 //
 // Usage:
 //   1. Entity must have CPath component with waypoints
@@ -48,12 +47,10 @@ public:
 
 
 
-
 	/////////////////////////////////
 	// Update - Moves all entities with CPathFollower + CPath components along their paths based on deltaTime
 	void Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime);
 	/////////////////////////////////
-
 
 
 

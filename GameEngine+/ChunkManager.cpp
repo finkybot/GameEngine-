@@ -988,6 +988,27 @@ void ChunkManager::EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int
 
 
 /////////////////////////////////
+// GetChunkForPosition - Retrieves the chunk that contains the specified world position (pos). Returns nullptr if the chunk is not loaded.
+Chunk* ChunkManager::GetChunkForPosition(const Vec2& pos) const {
+	int tileX = static_cast<int>(pos.x / m_tileSize);
+	int tileY = static_cast<int>(pos.y / m_tileSize);
+
+	int cx = FloorDiv(tileX, m_chunkWidth);
+	int cy = FloorDiv(tileY, m_chunkHeight);
+
+	long long key = GetChunkKey(cx, cy);
+
+	auto it = m_chunks.find(key);
+	if (it == m_chunks.end())
+		return nullptr;
+
+	return const_cast<Chunk*>(&it->second);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // GetTileAt - Retrieves the tile value at the specified tile coordinates (tileX, tileY). If the corresponding chunk is not loaded, it will be enqueued for loading in the 
 // background thread. Returns 0 if the chunk is not loaded or if the tile coordinates are out of bounds within the chunk.
 int ChunkManager::GetTileAt(int tileX, int tileY, int layerIndex) {
@@ -1410,7 +1431,7 @@ void ChunkManager::UpdateMainThread_NoLock() {
 			m_rebuildSet.erase(key);
 	}
 
-	// Rebuild vertex arrays + colliders
+	// === 3. Rebuild vertex arrays + colliders ===
 	for (long long key : rebuilds) {
 
 		auto it = m_chunks.find(key);
@@ -1433,6 +1454,12 @@ void ChunkManager::UpdateMainThread_NoLock() {
 
 		for (int L = 0; L < chunk.numLayers; ++L)
 			chunk.readyForRendering[L] = 1;
+	}
+
+	// === 3. Rebuild per‑chunk BVH trees ===
+	// (Caller already holds m_mutex, so this is safe)
+	for (auto& [key, chunk] : m_chunks) {
+		chunk.dynamicBVH.Rebuild(chunk.dynamicEntities);
 	}
 }
 /////////////////////////////////

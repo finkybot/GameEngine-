@@ -29,8 +29,8 @@
 #include <limits>
 #include <imgui/imgui.h>
 #include "CRectangle.h"
+#include "ChunkManager.h"
 /////////////////////////////////
-
 
 
 /////////////////////////////////
@@ -250,68 +250,58 @@ void RayCastScene::ProcessDebugToggle(bool debugToggle) {
 
 /////////////////////////////////
 // RaycastDynamicEntities - Query nearby entities from spatial hash and run narrowphase ray-vs-AABB against candidates.
-bool RayCastScene::RaycastDynamicEntities(const Vec2& origin, const Vec2& dir, float maxDistance, RaycastHit& outHit, Entity*& outEntity) {
-	
-	// *** OUTPUT PARAMETER ***
-	// outEntity will be set to the nearest hit entity, or nullptr if no hit occurred
+bool RayCastScene::RaycastDynamicEntities(const Vec2& origin, const Vec2& dir, float maxDistance, RaycastHit& outHit,
+										  Entity*& outEntity) {
 	outEntity = nullptr;
-	outHit = RaycastHit{}; // Reset outHit to default values
+	outHit = RaycastHit{};
 	if (maxDistance <= 0.0f)
 		return false;
 
-	// *** DIRECTION NORMALIZATION ***
 	Vec2 dirN = dir.GetUnitVec();
-	if (dirN.Mag2() <= 1e-12f) return false;
+	if (dirN.Mag2() <= 1e-12f)
+		return false;
 
-	// *** SPATIAL HASH QUERY ***
-	std::vector<Entity*> candidates;
-	m_entityManager.GetSpatialHash().Query(candidates, origin, maxDistance + m_chunkManager.GetTileSize());
-	if (candidates.empty())	return false;
+	ChunkManager& cm = m_chunkManager;
+	std::lock_guard<std::mutex> lock(cm.GetMutex());
 
-	// *** NARROWPHASE RAYCAST ***
+	// === 1. Collect chunks along the ray ===
+	std::vector<std::pair<int, int>> rayChunks;
+	Raycast::CollectChunksAlongRay(origin, dirN, maxDistance, cm.GetTileSize(), cm.GetChunkWidth(), cm.GetChunkHeight(),
+								   rayChunks);
+
+	// === 2. Raycast each chunk's BVH ===
 	float nearest = maxDistance;
-	for (Entity* e : candidates) {
-		if (!e || !e->IsAlive()) continue;
+	Entity* bestEntity = nullptr;
+	RaycastHit bestHit;
 
-		const EntityType type = e->GetType();
-		if (type == EntityType::Tile || type == EntityType::TileMap || type == EntityType::Chunk) continue;
-		if (!m_includeDefaultEntitiesInRaycast && type == EntityType::Default) continue;
+	for (auto& [cx, cy] : rayChunks) {
+		long long key = ChunkManager::GetChunkKey(cx, cy);
+		auto it = cm.GetChunks().find(key);
+		if (it == cm.GetChunks().end())
+			continue;
 
-		// Check if the entity has a CShape component, which is required for raycasting against its bounding box
-		CShape* shape = e->GetShape();
-		if (!shape) continue;
+		Chunk& chunk = it->second;
 
-		sf::Shape& sfShape = shape->GetShape();
-		const sf::FloatRect b = sfShape.getGlobalBounds();
-		
-		// Skip entities with non-positive size, as they cannot be hit by a ray
-		if (b.size.x <= 0.0f || b.size.y <= 0.0f) continue;
+		RaycastHit hit;
+		Entity* hitEntity = nullptr;
 
-		// Perform ray-AABB intersection test. If the ray does not intersect the entity's bounding box, continue to the next candidate.
-		float hitDist = 0.0f;
-		if (!RayIntersectsAABB(origin, dirN, Vec2(b.position.x, b.position.y), Vec2(b.position.x + b.size.x, b.position.y + b.size.y), hitDist, nearest)) continue;
-
-		// If the hit distance is negative (behind the ray origin) or greater than the nearest hit found so far, skip this entity
-		if (hitDist < 0.0f || hitDist > nearest) continue;
-
-		// Update the nearest hit information with the current entity's hit data
-		UpdateHitInfo(nearest, hitDist, outEntity, e, outHit, origin, dirN);
-
-		// Calculate the normal of the hit surface based on the entity's bounding box and the hit position. This is done by finding the center of the bounding box and computing the delta from the 
-		// hit position to the center.
-		Vec2 center(b.position.x + b.size.x * 0.5f, b.position.y + b.size.y * 0.5f);
-		Vec2 delta = outHit.position - center;
-		float nx = (b.size.x > 0.0f) ? (delta.x / (b.size.x * 0.5f)) : 0.0f;
-		float ny = (b.size.y > 0.0f) ? (delta.y / (b.size.y * 0.5f)) : 0.0f;
-		
-		// Determine the normal direction based on which axis has the larger absolute value. This helps to identify which side of the bounding box was hit by the ray.
-		if (std::fabs(nx) > std::fabs(ny))
-			outHit.normal = Vec2((nx > 0.0f) ? 1.0f : -1.0f, 0.0f);
-		else
-			outHit.normal = Vec2(0.0f, (ny > 0.0f) ? 1.0f : -1.0f);
+		if (chunk.dynamicBVH.Raycast(origin, dirN, maxDistance, hit, hitEntity)) {
+			if (hit.distance < nearest) {
+				nearest = hit.distance;
+				bestHit = hit;
+				bestEntity = hitEntity;
+			}
+		}
 	}
 
-	return outEntity != nullptr;
+	// === 3. Return nearest hit ===
+	if (bestEntity) {
+		outHit = bestHit;
+		outEntity = bestEntity;
+		return true;
+	}
+
+	return false;
 }
 /////////////////////////////////
 

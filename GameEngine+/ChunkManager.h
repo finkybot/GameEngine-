@@ -15,6 +15,7 @@
 #include <unordered_set>
 #include <string>
 #include <atomic>
+#include "BVHSystem.h"
 
 #include "TileMap.h"
 #include "RenderQueue.h"
@@ -63,8 +64,16 @@ struct Chunk {
 
 
 	/////////////////////////////////
-	// Entities generated for this chunk's merged collision rectangles (Tile static entities)
+	// Entities generated for this chunk's merged collision rectangles (Tile static entities) & Dynamic entities (e.g., enemies, items) that are spawned in this chunk. 
+	// These entities are managed by the EntityManager and should be cleaned up when the chunk is unloaded.
 	std::vector<Entity*> generatedEntities;
+	std::vector<Entity*> dynamicEntities;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	BVHSystem dynamicBVH; // BVH for dynamic entities in this chunk, used for efficient collision detection and raycasting.
 	/////////////////////////////////
 
 
@@ -76,6 +85,7 @@ struct Chunk {
 
 	std::vector<sf::VertexArray> tempVertexArraysForRendering; // temporary storage per-layer for alpha-modulated vertex data during enqueue
 	/////////////////////////////////
+
 
 
 	/////////////////////////////////
@@ -149,12 +159,20 @@ public:
 	/////////////////////////////////
 
 	
+
 	/////////////////////////////////
 	// Public member variables for the ChunkManager class for world mask for collision, pathfinding, and other gameplay mechanics. 
 	// Each value corresponds to a specific tile's collision properties.
 	std::vector<uint8_t> worldMask;
 	int worldOffsetX = 0, worldOffsetY = 0; // world offset in pixels for coordinate system alignment
 	int worldWidth = 0, worldHeight = 0;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	Chunk* GetChunkForPosition(const Vec2& pos) const;
+	/////////////////////////////////
 
 
 
@@ -389,6 +407,27 @@ public:
 
 
 	/////////////////////////////////
+	// FloorDiv - Helper function for floor division of integers, ensuring that the result is rounded down to the nearest integer. This is useful for calculating chunk coordinates from tile coordinates.	
+	static inline int FloorDiv(int a, int b) {
+		assert(b > 0); // Ensure divisor is positive
+		if (a >= 0)
+			return a / b;
+		return -(((-a) + (b - 1)) / b);
+	}
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// GetChunkKey - Helper function to combine chunkX and chunkY into a single key for the chunks map
+	static long long GetChunkKey(int chunkX, int chunkY) {
+		return (static_cast<long long>(chunkX) << 32) | static_cast<unsigned int>(chunkY);
+	}
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Private helper methods for loading, saving, and managing chunks, as well as building vertex arrays for rendering.
 private:
 	/////////////////////////////////
@@ -407,28 +446,7 @@ private:
 	// BuildChunkVertexArray - Builds the vertex array for a chunk using the given atlas (may be nullptr for colour fallback)
 	static void BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<TextureAtlas>& atlas);
 	/////////////////////////////////
-	 
 
-	
-	/////////////////////////////////
-	// GetChunkKey - Helper function to combine chunkX and chunkY into a single key for the chunks map
-	static long long GetChunkKey(int chunkX, int chunkY) {
-		return (static_cast<long long>(chunkX) << 32) | static_cast<unsigned int>(chunkY);
-	}
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// FloorDiv - Helper function to perform floor division of two integers, ensuring that the result is rounded down to the nearest integer. 
-	// This is useful for calculating chunk coordinates from tile coordinates. Note :- For optimal performance, there is no actual floor 
-	// division operator in C++, so we implement it manually. The function asserts that the divisor is positive to avoid undefined behavior.
-	static inline int FloorDiv(int a, int b) { 
-		assert(b > 0); // Ensure divisor is positive
-		if (a >= 0) return a / b;
-		return -(((-a) + (b - 1)) / b);
-	}
-	/////////////////////////////////
 
 
 	/////////////////////////////////

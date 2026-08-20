@@ -9,7 +9,8 @@
 #pragma once
 #include <vector>
 #include "Entity.h"
-#include "Raycast.h"
+// Forward declaration to break circular include: BVHSystem.h -> Raycast.h -> ChunkManager.h -> BVHSystem.h
+struct RaycastHit;
 /////////////////////////////////
 
 

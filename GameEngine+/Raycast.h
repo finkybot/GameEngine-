@@ -10,19 +10,68 @@
 
 #include "Vec2.h"
 #include <vector>
+#include <utility>
 #include <cfloat>
 #include <cmath>
 #include <limits>
 #include <algorithm>
+#include <Vec2.h>
 #include <fstream>
 #include <sstream>
 #include <optional>
 #include <string>
 #include <iomanip>
 #include "Utils.h"
-// Note - TileMap is referenced here via TileMap.h included below by caller when needed
-/////////////////////////////////
 
+#include "ChunkManager.h"
+
+/////////////////////////////////
+// Namespace for raycast utilities and debug helpers. This namespace contains functions and data related to performing raycasts against tilemaps, as well as optional debug features for collecting visited cells during raycasting.
+//								|
+//								|_______________________________________________________________________
+namespace Raycast {
+
+	inline void CollectChunksAlongRay(const Vec2& origin, const Vec2& dir, float maxDistance, float tileSize,
+								  int chunkWidth, int chunkHeight, std::vector<std::pair<int, int>>& outChunks) {
+	
+		float originX = origin.x / tileSize;
+		float originY = origin.y / tileSize;
+
+		float dirX = dir.x;
+		float dirY = dir.y;
+
+		int tileX = static_cast<int>(std::floor(originX));
+		int tileY = static_cast<int>(std::floor(originY));
+
+		float stepX = (dirX > 0) ? 1 : -1;
+		float stepY = (dirY > 0) ? 1 : -1;
+
+		float tMaxX = ((stepX > 0 ? (tileX + 1) : tileX) - originX) / dirX;
+		float tMaxY = ((stepY > 0 ? (tileY + 1) : tileY) - originY) / dirY;
+
+		float tDeltaX = stepX / dirX;
+		float tDeltaY = stepY / dirY;
+
+		float t = 0.0f;
+
+		while (t <= maxDistance) {
+			int chunkX = ChunkManager::FloorDiv(tileX, chunkWidth);
+			int chunkY = ChunkManager::FloorDiv(tileY, chunkHeight);
+
+			outChunks.emplace_back(chunkX, chunkY);
+
+			if (tMaxX < tMaxY) {
+				tileX += (int)stepX;
+				t = tMaxX;
+				tMaxX += tDeltaX;
+			} else {
+				tileY += (int)stepY;
+				t = tMaxY;
+				tMaxY += tDeltaY;
+			}
+		}
+	}
+} // namespace Raycast
 
 
 /////////////////////////////////

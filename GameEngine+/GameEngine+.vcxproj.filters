@@ -195,11 +195,11 @@
     <ClCompile Include="ChunkManagerV2.cpp">
       <Filter>Source Files\Managers</Filter>
     </ClCompile>
-    <ClCompile Include="TileMapScene.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="ShutdownGuard.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Misc</Filter>
+    </ClCompile>
+    <ClCompile Include="BVHSystem.cpp">
+      <Filter>Source Files\Systems</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -434,11 +434,11 @@
     <ClInclude Include="MainThreadTasks.h">
       <Filter>Header Files\Misc</Filter>
     </ClInclude>
-    <ClInclude Include="TileMapScene.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="ShutdownGuard.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="BVHSystem.h">
+      <Filter>Header Files\Systems</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

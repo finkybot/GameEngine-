@@ -146,6 +146,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="BVHSystem.cpp" />
     <ClCompile Include="CameraSystem.cpp" />
     <ClCompile Include="ChunkManager.cpp" />
     <ClCompile Include="ChunkManagerV2.cpp" />
@@ -190,12 +191,12 @@
     <ClCompile Include="TileMap.cpp" />
     <ClCompile Include="TileMapEditorScene.cpp" />
     <ClCompile Include="RayCastScene.cpp" />
-    <ClCompile Include="TileMapScene.cpp" />
     <ClCompile Include="Utils.cpp" />
     <ClCompile Include="Vec2.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AssetManager.h" />
+    <ClInclude Include="BVHSystem.h" />
     <ClInclude Include="CameraSystem.h" />
     <ClInclude Include="CCamera.h" />
     <ClInclude Include="CChunkComponent.h" />
@@ -270,7 +271,6 @@
     <ClInclude Include="TileMap.h" />
     <ClInclude Include="TileMapEditorScene.h" />
     <ClInclude Include="RayCastScene.h" />
-    <ClInclude Include="TileMapScene.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="Utils\FPSCounter.h" />
     <ClInclude Include="Vec2.h" />

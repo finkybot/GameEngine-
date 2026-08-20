@@ -28,7 +28,11 @@ enum class EntityType {
 	Chunk = 8,
 
 	Default = 9,
-	Equalizer = 10
+	
+	Equalizer = 10,
+	DynamicBox1 = 11,
+	DynamicBox2 = 12,
+	DynamicBox3 = 13
 };
 /////////////////////////////////
 
@@ -52,8 +56,14 @@ inline const char* EntityTypeToString(EntityType type) {
 		return "Explosion";
 	case EntityType::Tile:
 		return "Tile";
-   case EntityType::Equalizer:
+	case EntityType::Equalizer:
 		return "Equalizer";
+	case EntityType::DynamicBox1:
+	   return "DynamicBox1";
+	case EntityType::DynamicBox2:
+	   return "DynamicBox2";
+	case EntityType::DynamicBox3:
+	   return "DynamicBox3";
 	case EntityType::Default:
 		return "Default";
 	default:

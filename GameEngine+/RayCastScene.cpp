@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <limits>
 #include <imgui/imgui.h>
+#include "CRectangle.h"
 /////////////////////////////////
 
 
@@ -49,6 +50,57 @@ RayCastScene::RayCastScene(GameEngine& engine, sf::RenderWindow& win, EntityMana
 /////////////////////////////////
 // Destructor - defaulted since we don't have any special cleanup logic, but we could add it if needed in the future
 RayCastScene::~RayCastScene() = default;
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// DrawBVHNode - recursively draws the bounding volume hierarchy (BVH) nodes for visualizing the spatial partitioning of the tile map. Each node is drawn as a rectangle, with leaf nodes in green and internal nodes in blue.
+void RayCastScene::DrawBVHNode(sf::RenderWindow& window, BVHNode* node) {
+	if (!node)
+		return;
+
+	sf::RectangleShape rect;
+	rect.setPosition(node->bounds.position);
+	rect.setSize(node->bounds.size);
+	rect.setFillColor(sf::Color::Transparent);
+
+	if (node->IsLeaf())
+		rect.setOutlineColor(sf::Color(0, 255, 0, 120)); // green
+	else
+		rect.setOutlineColor(sf::Color(0, 100, 255, 120)); // blue
+
+	rect.setOutlineThickness(1.f);
+	window.draw(rect);
+
+	DrawBVHNode(window, node->left);
+	DrawBVHNode(window, node->right);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// DrawHighlightedEntity - draws a yellow outline around the currently highlighted entity for visual debugging.
+void RayCastScene::DrawHighlightedEntity(sf::RenderWindow& window) {
+	if (!m_highlightedEntity)
+		return;
+
+	CShape* shape = m_highlightedEntity->GetShape();
+	if (!shape)
+		return;
+
+	sf::FloatRect bounds = shape->GetShape().getGlobalBounds();
+
+	sf::RectangleShape outline;
+	outline.setPosition(bounds.position);
+	outline.setSize(bounds.size);
+	outline.setFillColor(sf::Color::Transparent);
+	outline.setOutlineColor(sf::Color::Yellow);
+	outline.setOutlineThickness(2.f);
+
+	window.draw(outline);
+}
 /////////////////////////////////
 
 
@@ -290,33 +342,30 @@ void RayCastScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 		m_lmbDragStart = mouseWorld;
 		m_previewActive = true;
 	}
+
 	// If mouse is up and was down in previous frame, end dragging and perform raycast
 	else if (!leftMouseDown && m_prevLmbMouseDown) {
-		// To prevent unnecessary raycasts, only perform raycast if we were dragging, otherwise it was just a click without movement, and we will handle that case separately to toggle tile state. We get 
-		// the magnitude of the drag and if it's very small, we treat it as a click rather than a drag.
 		if (m_lmbdragging) {
 			m_lmbdragging = false;
 			m_lmbDragEnd = mouseWorld;
 			Vec2 dir = m_lmbDragEnd - m_lmbDragStart;
 			float dragLen = dir.Mag();
 
-			// If the drag length is very small, we can treat it as a click to toggle a tile solid/not solid state.
-			// I'm using a small threshold of 0.001 units.
+			// If the drag length is too small, cancel the preview and return early
 			if (dragLen <= 0.001f) {
 				m_previewActive = false;
 				m_prevLmbMouseDown = leftMouseDown;
 				return;
 			}
 
-			// Normalize the direction vector for raycasting. Use the original drag length to clamp the raycast distance, but the direction needs to be a unit vector for the DDA algorithm.
-			dir = dir.GetUnitVec();
+			dir = dir.GetUnitVec(); // Normalize direction for raycast
 
-			// Clear previous debug lines and points to ensure that our debug visualization is accurate and up-to-date with the latest raycast.
+			// Clear previous debug lines, colors, and points for the new raycast
 			m_debugLines.clear();
 			m_debugLineColors.clear();
 			m_debugPoints.clear();
 
-			// Ensure chunks along the full drag segment are loaded before raycasting (not just current camera bounds).
+			// Clear previous raw hit points and visited cells for the new raycast
 			const float tileSize = m_chunkManager.GetTileSize();
 			const float rayMinX = std::min(m_lmbDragStart.x, m_lmbDragEnd.x);
 			const float rayMinY = std::min(m_lmbDragStart.y, m_lmbDragEnd.y);
@@ -330,6 +379,8 @@ void RayCastScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 			(void)rayMinTy;
 			(void)rayMaxTx;
 			(void)rayMaxTy;
+
+			// Refresh world bounds and world mask if the world revision has changed since the last raycast
 			const uint64_t beforeRayRevision = m_chunkManager.GetWorldRevision();
 			if (beforeRayRevision != m_lastSeenWorldRevision) {
 				m_chunkManager.RefreshWorldBoundsFromLoadedChunks();
@@ -337,43 +388,55 @@ void RayCastScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 				m_lastSeenWorldRevision = m_chunkManager.GetWorldRevision();
 			}
 
-			// Raycast directly against chunk world mask (static geometry) and then test dynamic entities; keep nearest hit.
+			// Determine the starting tile coordinates for the raycast based on the drag start position and tile size
 			const int startTileX = static_cast<int>(std::floor(m_lmbDragStart.x / tileSize));
 			const int startTileY = static_cast<int>(std::floor(m_lmbDragStart.y / tileSize));
 
+			// Perform a raycast to check if the starting cell is solid. This is necessary because the DDA algorithm will not return a hit if the ray starts inside a solid tile.
 			RaycastHit rayHitStartCell = MakeStartCellHit(startTileX, startTileY, m_lmbDragStart);
-
 			const bool startSolid = rayHitStartCell.hit;
 
+			// Clear visited cells and prepare for visual debug output if enabled
 			m_visitedCells.clear();
 			std::vector<std::pair<int, int>> visitedCellsTemp;
 			std::vector<std::pair<int, int>>* visitedOut = nullptr;
+			
+			// If visual debug is enabled, reserve space for visited cells and set the output pointer to the temporary vector
 			if (m_visualDebug) {
 				visitedCellsTemp.reserve(1024);
 				visitedOut = &visitedCellsTemp;
 			}
-			RaycastHit rayHitIgnore;
+
+			RaycastHit rayHitIgnore; // This will hold the result of the DDA raycast, ignoring the starting cell if it's solid
 			{
 				std::lock_guard<std::mutex> lock(m_chunkManager.GetMutex());
-				rayHitIgnore = RaycastWorldMaskDDA(
-					m_lmbDragStart, dir, m_chunkManager.worldMask, m_chunkManager.worldWidth, m_chunkManager.worldHeight,
-					m_chunkManager.worldOffsetX, m_chunkManager.worldOffsetY, tileSize, dragLen, startSolid, visitedOut);
+				rayHitIgnore =
+					RaycastWorldMaskDDA(m_lmbDragStart, dir, m_chunkManager.worldMask, m_chunkManager.worldWidth,
+										m_chunkManager.worldHeight, m_chunkManager.worldOffsetX,
+										m_chunkManager.worldOffsetY, tileSize, dragLen, startSolid, visitedOut);
 			}
+
+			// If visual debug is enabled, store the visited cells in the member variable for rendering
 			if (m_visualDebug) {
 				if (visitedCellsTemp.size() > 1024)
 					visitedCellsTemp.resize(1024);
 				m_visitedCells = std::move(visitedCellsTemp);
 			}
 
+			// BVH DYNAMIC ENTITY RAYCAST (drop‑in replacement)
 			RaycastHit entityHit;
 			Entity* hitEntity = nullptr;
-			const bool hitDynamic = RaycastDynamicEntities(m_lmbDragStart, dir, dragLen, entityHit, hitEntity);
 
-			// m_visitedCells is now produced by RaycastWorldMaskDDA, so no secondary sampling pass is needed.
+			auto& bvh = GetEntityManager().GetBVH();
+			bool hitDynamic = bvh.Raycast(m_lmbDragStart, dir, dragLen, entityHit, hitEntity);
 
-			// Determine which hit to use for visualization. If the ray starts inside a solid tile, we will use the synthetic hit at the start position for visualization, but we will also check if 
-			// the DDA reported a different hit further along the ray. If it did, we will draw a line to that hit as well to show the exit point from the wall. If the ray starts in an empty tile, 
-			// we will just use the DDA hit as normal.
+			// Highlight the nearest hit entity if a dynamic hit occurred; otherwise, clear the highlighted entity
+			if (hitDynamic)
+				m_highlightedEntity = hitEntity;
+			else
+				m_highlightedEntity = nullptr;
+
+			// Continue exactly as before — merge static + dynamic hits
 			RaycastHit staticHit;
 			if (startSolid) {
 				staticHit = rayHitStartCell;
@@ -390,6 +453,7 @@ void RayCastScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 				staticHit = rayHitIgnore;
 			}
 
+			// Merge static and dynamic hits to determine the nearest hit along the ray
 			RaycastHit rayHit;
 			if (hitDynamic && staticHit.hit)
 				rayHit = (entityHit.distance <= staticHit.distance) ? entityHit : staticHit;
@@ -398,42 +462,46 @@ void RayCastScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 			else
 				rayHit = staticHit;
 
-			// For visualization, we will draw a line from the drag start to the hit position. If there was a hit, we will clamp the hit position to the ray length in case it exceeds it (which can 
-			// happen if the ray starts inside a solid tile and the DDA reports a hit at the boundary). We will also draw a point at the hit position. If there was no hit, we will draw a line to the drag 
-			// end position and a point there instead. This allows us to visualize the result of the raycast and see where it hit or where it ended if it didn't hit anything.
+			// Visual debug output for the raycast result
 			if (rayHit.hit) {
 				Vec2 hitPos = rayHit.position;
 				float proj = (hitPos.x - m_lmbDragStart.x) * dir.x + (hitPos.y - m_lmbDragStart.y) * dir.y;
+				
+				// Clamp the hit position to the drag length if it exceeds it
 				if (proj > dragLen) {
 					hitPos = Vec2(m_lmbDragStart.x + dir.x * dragLen, m_lmbDragStart.y + dir.y * dragLen);
 				}
+				
+				// If the hit position is within the drag length, add a green debug line and point to visualize the hit
 				if (m_debugLines.size() < 256) {
 					m_debugLines.push_back({m_lmbDragStart, hitPos});
 					m_debugLineColors.push_back(sf::Color::Green);
 				}
+
+				// Add the hit position to the debug points and raw hit points for visualization
 				if (m_debugPoints.size() < 256)
 					m_debugPoints.push_back(hitPos);
+
+				// Add the hit position to the raw hit points for further analysis or rendering
 				if (m_rawHitPoints.size() < 256)
 					m_rawHitPoints.push_back(rayHit.position);
-			}
-			// Otherwise, if there was no hit, we will draw a line to the drag end position and a point there instead. This allows us to visualize the result of the raycast and see where it hit or where 
-			// it ended if it didn't hit anything.
-			else {
+			} else {
+				// If no hit occurred, add a red debug line and point to visualize the raycast path
 				if (m_debugLines.size() < 256) {
 					m_debugLines.push_back({m_lmbDragStart, m_lmbDragEnd});
 					m_debugLineColors.push_back(sf::Color::Red);
 				}
+				// Add the drag end position to the debug points for visualization
 				if (m_debugPoints.size() < 256)
 					m_debugPoints.push_back(m_lmbDragEnd);
 			}
 
 			m_previewActive = false;
 		}
-	}
-	// Only update the preview line if we are currently dragging with the left mouse button. This allows us to show a real-time preview of the raycast as we drag, which can be helpful for aiming and 
-	// visualizing where the ray will go before we release the mouse button to perform the actual raycast.
-	else if (leftMouseDown && m_lmbdragging) {
+	} else if (leftMouseDown && m_lmbdragging) { // Update drag end position while dragging
 		m_lmbDragEnd = mouseWorld;
+		
+		// If visual debug is enabled, update the preview line to show the current drag line
 		if (m_visualDebug)
 			m_previewLine = {m_lmbDragStart, m_lmbDragEnd};
 	}
@@ -483,6 +551,8 @@ void RayCastScene::ProcessMiddleMousePan() {
 ///////////////////////////////
 // Update - handles events, updates the entity manager, and prepares debug visualization data for rendering
 void RayCastScene::Update(float deltaTime) {
+	GetEntityManager().Update(deltaTime);
+
 	if (m_cameraEntity)
 		m_cameraSystem.Update(deltaTime, GetEntityManager());
 	ApplyMainCameraView();
@@ -570,9 +640,9 @@ void RayCastScene::Update(float deltaTime) {
 /////////////////////////////////
 // Render - draws the tile grid and any debug visualization overlays
 void RayCastScene::Render() {
+	//std::cout << "RayCastScene::Render CALLED\n";
 	// Enqueue and flush chunk tiles first so debug ray overlays always render on top.
-	DrawTileGrid();
-	GetEngineRenderQueue().Flush(m_window);
+	GetEntityManager().RenderShapes(); // Render shapes again to ensure they are drawn on top of debug overlays
 
 	DrawDebugLines();
 	DrawHitPoints();
@@ -580,7 +650,18 @@ void RayCastScene::Render() {
 	DrawVisitedCells();
 	DrawPreviewLine();
 
+	// Draw BVH nodes for visualizing the spatial partitioning of the tile map
+	DrawHighlightedEntity(m_window);
+
+	if (m_visualDebug) {
+		auto& bvh = GetEntityManager().GetBVH();
+		DrawBVHNode(m_window, bvh.GetRoot());
+	}
+
 	// Text is rendered by the RenderSystem during EntityManager::Update; no per-scene text draw here to avoid double-rendering.
+
+	DrawTileGrid();
+	GetEngineRenderQueue().Flush(m_window);
 }
 /////////////////////////////////
 
@@ -701,7 +782,69 @@ void RayCastScene::HandleEvent(const std::optional<sf::Event>& event) {
 
 /////////////////////////////////
 // OnEnter - currently empty, but could be used for setup logic that needs to run when the scene becomes active
-void RayCastScene::OnEnter() {}
+void RayCastScene::OnEnter() {
+	std::cout << "RayCastScene::OnEnter\n";
+
+	auto& em = GetEntityManager();
+
+	  // -------------------------
+	// DynamicBox1 (Red)
+	// -------------------------
+	{
+		Vec2 position(200.f, 200.f);
+		Vec2 velocity(0.f, 0.f);
+
+		Entity* e = em.AddEntity(EntityType::DynamicBox1);
+		e->AddComponent<CName>("DynamicBox1");
+		e->AddComponent<CTransform>(position, velocity);
+
+		auto* tform = e->GetComponent<CTransform>();
+		tform->position = Vec2(position.x + 0.4f, position.y - 0.5f);
+
+		// CRectangle
+		auto rect = std::make_unique<CRectangle>(40.f, 40.f);
+		rect->GetShape().setFillColor(sf::Color(255, 0, 0, 180));
+		e->AddComponentPtr<CShape>(std::move(rect));
+	}
+
+	// -------------------------
+	// DynamicBox2 (Green)
+	// -------------------------
+	{
+		Vec2 position(350.f, 250.f);
+		Vec2 velocity(0.f, 0.f);
+
+		Entity* e = em.AddEntity(EntityType::DynamicBox2);
+		e->AddComponent<CName>("DynamicBox2");
+		e->AddComponent<CTransform>(position, velocity);
+
+		auto* tform = e->GetComponent<CTransform>();
+		tform->position = Vec2(position.x + 0.4f, position.y - 0.5f);
+
+		auto rect = std::make_unique<CRectangle>(50.f, 50.f);
+		rect->GetShape().setFillColor(sf::Color(0, 255, 0, 180));
+		e->AddComponentPtr<CShape>(std::move(rect));
+	}
+
+	// -------------------------
+	// DynamicBox3 (Blue)
+	// -------------------------
+	{
+		Vec2 position(500.f, 300.f);
+		Vec2 velocity(0.f, 0.f);
+
+		Entity* e = em.AddEntity(EntityType::DynamicBox3);
+		e->AddComponent<CName>("DynamicBox3");
+		e->AddComponent<CTransform>(position, velocity);
+
+		auto* tform = e->GetComponent<CTransform>();
+		tform->position = Vec2(position.x + 0.4f, position.y - 0.5f);
+
+		auto rect = std::make_unique<CRectangle>(60.f, 60.f);
+		rect->GetShape().setFillColor(sf::Color(0, 128, 255, 180));
+		e->AddComponentPtr<CShape>(std::move(rect));
+	}
+}
 /////////////////////////////////
 
 

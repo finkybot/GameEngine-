@@ -18,6 +18,7 @@ class SoundSystem; // Forward declaration of SoundSystem
 // Includes for the EntityManager class.
 #include <array>
 #include "Entity.h"
+#include "BVHSystem.h"
 /////////////////////////////////
 
 
@@ -123,6 +124,12 @@ public:
 
 
 	/////////////////////////////////
+	const std::vector<std::unique_ptr<Entity>>& GetEntities() const { return m_entities; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Accessor methods for the main systems managed by the EntityManager, including the PhysicsSystem, CollisionSystem, RenderSystem, MusicSystem, and SoundSystem. These methods provide access to the systems for updating and rendering entities, as well as managing music and sound playback.
 	PhysicsSystem& GetPhysicsSystem() { return m_physicsSystem; }
 	CollisionSystem& GetCollisionSystem() { return m_collisionSystem; }
@@ -178,6 +185,18 @@ public:
 
 
 
+	/////////////////////////////////
+	BVHSystem& GetBVH() { return m_bvh; } // BVH system for efficient raycasting and spatial queries
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	void UpdateBVH(); // Rebuild the BVH tree based on current entities
+	/////////////////////////////////
+
+
+
 	//////////////////////////////////
 	// Private helper methods
 private:
@@ -221,6 +240,7 @@ private:
 	std::unique_ptr<MusicSystem> m_musicSystem; // system owning runtime sf::Music objects
 	std::unique_ptr<SoundSystem> m_soundSystem; // system managing sound effects with 3D spatial audio
 	bool m_hasPendingTileMaps = true;
+	BVHSystem m_bvh;
 	/////////////////////////////////
 
 

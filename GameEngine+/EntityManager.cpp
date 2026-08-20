@@ -458,9 +458,38 @@ void EntityManager::SafeKillEntity(Entity* entity) {
 
 
 /////////////////////////////////
-// GetEntities - returns a reference to the vector of active entities in the EntityManager. This allows systems and other parts of the code to access the list of entities for processing, rendering, or other operations.
+// GetEntities - returns a reference to the vector of active entities in the EntityManager. This allows systems and other parts of the code to access the list of entities for processing, 
+// rendering, or other operations.
 EntityVector& EntityManager::GetEntities() {
 	return m_entities;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// UpdateBVH - updates the bounding volume hierarchy (BVH) used for spatial queries. This method collects all dynamic entities (those that are alive and have a shape) and rebuilds the BVH tree to 
+// optimize spatial queries such as raycasting.
+void EntityManager::UpdateBVH() {
+	// BVH update logic would go here if we were using a BVH for spatial queries.
+	// Currently, we are using a SpatialHashGrid, so this function is a placeholder.
+	std::vector<Entity*> dynamicEntities;
+
+	for (auto& e : m_entities) {
+		if (!e->IsAlive())
+			continue;
+		if (!e->GetShape())
+			continue;
+
+		// Skip static geometry
+		if (e->GetType() == EntityType::Tile || e->GetType() == EntityType::TileMap ||
+			e->GetType() == EntityType::Chunk)
+			continue;
+
+		dynamicEntities.push_back(e.get());
+	}
+
+	m_bvh.Rebuild(dynamicEntities);
 }
 /////////////////////////////////
 

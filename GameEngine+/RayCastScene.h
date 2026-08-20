@@ -67,6 +67,8 @@ private:
 	// Rendering helpers for drawing the tile grid, debug lines, hit points, visited cells, and preview line. These methods will be called from the Render method to draw the appropriate visuals based on the current state of the scene and any raycasting interactions.
 	void DrawTileGrid();
 	void DrawDebugLines();
+	void DrawBVHNode(sf::RenderWindow& window, BVHNode* node);
+	void DrawHighlightedEntity(sf::RenderWindow& window);
 	void DrawHitPoints();
 	void DrawRawHitPoints();
 	void DrawVisitedCells();
@@ -113,10 +115,11 @@ private:
 
 	/////////////////////////////////
 	// Debug visualization data for raycasts and tile states. The m_debugLines vector will store pairs of Vec2 representing the start and end points of lines to draw for raycasts, while the m_debugPoints vector will store hit points from raycasts.
-	std::vector<std::pair<Vec2, Vec2>> m_debugLines; // lines to draw for raycasts
-	std::vector<sf::Color> m_debugLineColors;		 // per-line color (contact vs no-contact)
-	std::vector<Vec2> m_debugPoints;				 // hit points
-	std::vector<Vec2> m_rawHitPoints;				 // raw hit positions (before clamping) for debug
+	std::vector<std::pair<Vec2, Vec2>> m_debugLines;	// lines to draw for raycasts
+	std::vector<sf::Color> m_debugLineColors;			// per-line color (contact vs no-contact)
+	std::vector<Vec2> m_debugPoints;					// hit points
+	std::vector<Vec2> m_rawHitPoints;					// raw hit positions (before clamping) for debug
+	Entity* m_highlightedEntity = nullptr;				// currently highlighted entity from raycast
 	/////////////////////////////////
 
 

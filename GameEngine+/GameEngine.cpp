@@ -318,6 +318,9 @@ void GameEngine::Update(float deltaTime) {
 			// Ensure the scene's EntityManager processes game logic (tile system, pending entities)
 			currentScene->GetEntityManager().Update(deltaTime);
 
+			// Update the scene's BVH after entity manager update so any new entities are included in the spatial partitioning for collision detection and rendering.
+			currentScene->GetEntityManager().UpdateBVH();
+
 			// Process sound effects using the SCENE's EntityManager (not global)
 			// This ensures we process sounds for entities in the current active scene
 			soundSystem->Process(currentScene->GetEntityManager(), deltaTime);

@@ -394,6 +394,7 @@ void EntityManager::Update(float deltaTime) {
 	}
 
 	UpdateSpatialHashAndRender();
+	UpdateBVH();
 }
 /////////////////////////////////
 

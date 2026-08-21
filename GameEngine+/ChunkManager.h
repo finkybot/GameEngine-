@@ -196,8 +196,8 @@ public:
 
 	/////////////////////////////////
 	// LRU
-	void TouchChunkLRU(long long key);
-	void RemoveChunkFromLRU(long long key);
+	void TouchChunkLRU(uint64_t key);
+	void RemoveChunkFromLRU(uint64_t key);
 	/////////////////////////////////
 
 	
@@ -399,7 +399,7 @@ public:
 
 	/////////////////////////////////
 	// Accessors for read-only inspection by renderers / scenes. These return references guarded by the caller using the mutex returned by GetMutex().
-	std::unordered_map<long long, Chunk>& GetChunks() { return m_chunks; }
+	std::unordered_map<uint64_t, Chunk>& GetChunks() { return m_chunks; }
 	std::mutex& GetMutex() { return m_mutex; }
 	uint64_t GetWorldRevision() const noexcept { return m_worldRevision.load(std::memory_order_relaxed); }
 	/////////////////////////////////
@@ -420,8 +420,8 @@ public:
 
 	/////////////////////////////////
 	// GetChunkKey - Helper function to combine chunkX and chunkY into a single key for the chunks map
-	static long long GetChunkKey(int chunkX, int chunkY) {
-		return (static_cast<long long>(chunkX) << 32) | static_cast<unsigned int>(chunkY);
+	static uint64_t GetChunkKey(int chunkX, int chunkY) {
+		return (static_cast<uint64_t>(chunkX) << 32) | static_cast<unsigned int>(chunkY);
 	}
 	/////////////////////////////////
 
@@ -478,9 +478,9 @@ private:
 	/////////////////////////////////
 	// Data structures for managing loaded chunks and LRU eviction
 	std::mutex m_mutex;	// Mutex to protect access to the chunks map and LRU list across threads
-	std::unordered_map<long long, Chunk> _GUARDED_BY(m_mutex) m_chunks; // Map of loaded chunks, keyed by a combined chunkX and chunkY value (e.g., (chunkX << 32) | chunkY)
-	std::list<long long> _GUARDED_BY(m_mutex) m_lruList;				// LRU (Least Recently Used) chunks for eviction (stores 64bit chunk keys)
-	std::unordered_map<long long, std::list<long long>::iterator> _GUARDED_BY(m_mutex) m_lruIndex; // O(1) iterator lookup into m_lruList
+	std::unordered_map<uint64_t, Chunk> _GUARDED_BY(m_mutex) m_chunks;	// Map of loaded chunks, keyed by a combined chunkX and chunkY value (e.g., (chunkX << 32) | chunkY)
+	std::list<uint64_t> _GUARDED_BY(m_mutex) m_lruList;					// LRU (Least Recently Used) chunks for eviction (stores 64bit chunk keys)
+	std::unordered_map<uint64_t, std::list<uint64_t>::iterator> _GUARDED_BY(m_mutex) m_lruIndex; // O(1) iterator lookup into m_lruList
 	std::atomic<uint64_t> m_worldRevision{1}; // Monotonic change counter for loaded chunk/world mutation detection
 	/////////////////////////////////
 
@@ -499,8 +499,8 @@ private:
 	/////////////////////////////////
 	// Queue of chunks that need GPU-side vertex rebuilds or collider rebuilds. Only the main thread
 	// should perform the actual SFML/OpenGL work. These structures are guarded by m_mutex.
-	std::vector<long long> m_rebuildQueue; // chunk keys scheduled for rebuild
-	std::unordered_set<long long> m_rebuildSet; // quick membership check to avoid duplicate enqueues
+	std::vector<uint64_t> m_rebuildQueue; // chunk keys scheduled for rebuild
+	std::unordered_set<uint64_t> m_rebuildSet; // quick membership check to avoid duplicate enqueues
 	/////////////////////////////////
 
 
@@ -514,6 +514,26 @@ public:
 	void DrawChunks(sf::RenderWindow& window, const sf::View& view); 
 	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// PackChunkKey - Pack chunkX and chunkY into a single 64-bit key for use in the chunks map. This is used to create a unique 
+	// identifier for each chunk based on its coordinates.
+	inline uint64_t PackChunkKey(int chunkX, int chunkY) const {
+		return (static_cast<uint64_t>(chunkX) << 32) | static_cast<unsigned int>(chunkY);
+	}
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// UnpackChunkKey - Unpack a 64-bit chunk key into its original chunkX and chunkY coordinates. This is used to retrieve the 
+	// individual coordinates from the combined key used in the chunks map.
+	inline void UnpackChunkKey(uint64_t key, int& outChunkX, int& outChunkY) const {
+		outChunkX = static_cast<int>(key >> 32);
+		outChunkY = static_cast<int>(key & 0xFFFFFFFF);
+	}
+	/////////////////////////////////
 
 
 

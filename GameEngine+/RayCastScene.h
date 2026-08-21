@@ -13,6 +13,7 @@
 #include "CameraSystem.h"
 #include <vector>
 #include <string>
+#include "BVHSystem.h"
 /////////////////////////////////
 
 
@@ -70,9 +71,13 @@ private:
 	void DrawBVHNode(sf::RenderWindow& window, BVHNode* node);
 	void DrawHighlightedEntity(sf::RenderWindow& window);
 	void DrawHitPoints();
+	void DrawBVHHitPoint(const Vec2& p);
+	void DrawBVHLeafNode(BVHNode* node);
 	void DrawRawHitPoints();
 	void DrawVisitedCells();
 	void DrawPreviewLine();
+	void DrawBVHNodeColored(BVHNode* node, const sf::Color& color);
+	void DrawBVHTraversal(const BVHDebugTraversal& traversal);
 	/////////////////////////////////
 
 
@@ -118,8 +123,10 @@ private:
 	std::vector<std::pair<Vec2, Vec2>> m_debugLines;	// lines to draw for raycasts
 	std::vector<sf::Color> m_debugLineColors;			// per-line color (contact vs no-contact)
 	std::vector<Vec2> m_debugPoints;					// hit points
+	std::vector<Vec2> m_dynamicHitPoints;
 	std::vector<Vec2> m_rawHitPoints;					// raw hit positions (before clamping) for debug
 	Entity* m_highlightedEntity = nullptr;				// currently highlighted entity from raycast
+	std::vector<BVHDebugTraversal> m_debugTraversals;	// BVH traversal debug data
 	/////////////////////////////////
 
 
@@ -160,7 +167,7 @@ private:
 
 	/////////////////////////////////
 	// Debug toggle state for showing/hiding visual debug overlays. m_visualDebug will indicate whether the debug overlays should be drawn, while m_prevDebugKeyDown will track the previous state of the debug toggle key for edge-triggered toggling.
-	bool m_visualDebug = true;
+	bool m_visualDebug = false;
 	bool m_prevDebugKeyDown = false;
 	/////////////////////////////////
 

@@ -70,13 +70,14 @@ void BVHSystem::Rebuild(const std::vector<Entity*>& entities) {
 
 /////////////////////////////////
 // Raycast - performs a raycast against the BVH tree. This method takes the origin and direction of the ray, along with a maximum distance, and checks for intersections with the entities in the BVH tree.
-bool BVHSystem::Raycast(const Vec2& origin, const Vec2& dirN, float maxDist, RaycastHit& outHit, Entity*& outEntity) const {
+bool BVHSystem::Raycast(const Vec2& origin, const Vec2& dirN, float maxDist, RaycastHit& outHit, Entity*& outEntity,
+						BVHDebugTraversal* debug) const {
 	if (!m_root) return false; // If the BVH tree is empty, there's nothing to raycast against, so return false
 
 	outEntity = nullptr; // Initialize the output entity pointer to null
 	outHit = RaycastHit{}; // Initialize the output hit information to default values
 
-	return RaycastNode(m_root, origin, dirN, maxDist, outHit, outEntity); // Start the recursive raycast from the root of the BVH tree
+	return RaycastNode(m_root, origin, dirN, maxDist, outHit, outEntity, debug); // Start the recursive raycast from the root of the BVH tree
 }
 /////////////////////////////////
 
@@ -149,26 +150,40 @@ void BVHSystem::DestroyRecursive(BVHNode* node) {
 /////////////////////////////////
 // RaycastNode - performs a raycast against the BVH tree starting from the given node. This method recursively traverses the tree, testing the ray against the bounding boxes of each node and
 // its child nodes. It returns true if the ray intersects any entity within the BVH tree and updates the output hit information accordingly.
-bool BVHSystem::RaycastNode(BVHNode* node, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity) const {
+bool BVHSystem::RaycastNode(BVHNode* node, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity, BVHDebugTraversal* debug) const {
+	std::cout << "RaycastNode: testing bounds " << node->bounds.position.x << ", " << node->bounds.position.y
+			  << " size " << node->bounds.size.x << ", " << node->bounds.size.y << "\n";
+
 	float dummyDistance = 0.0f;
 
+	// Record traversal
+	if (debug)
+		debug->visited.push_back(node);
+
 	// Prune subtree if ray misses node bounds
-	if (!RayIntersectsAABB(origin, dirN, 
-							Vec2(node->bounds.position.x, node->bounds.position.y),
-							Vec2(node->bounds.position.x + node->bounds.size.x, 
-								node->bounds.position.y + node->bounds.size.y),
-						   dummyDistance, maxDistance)) {
-		return false; // If the ray does not intersect the node's bounding box, return false to prune this subtree
+	if (!RayIntersectsAABB(
+			origin, dirN, Vec2(node->bounds.position.x, node->bounds.position.y),
+			Vec2(node->bounds.position.x + node->bounds.size.x, node->bounds.position.y + node->bounds.size.y),
+			dummyDistance, maxDistance)) {
+		return false;
+	} else {
+		std::cout << "RaycastNode: ray intersects bounds\n";
 	}
 
 	// Leaf node: perform raycast against entities in the leaf
 	if (node->IsLeaf()) {
-		return RaycastLeaf(node->leafEntities, origin, dirN, maxDistance, outHit, outEntity);
+		bool hit = RaycastLeaf(node->leafEntities, origin, dirN, maxDistance, outHit, outEntity, debug);
+
+		if (hit && debug)
+			debug->hitLeaf = node;
+
+		return hit;
 	}
-	
+
 	// Internal node: traverse left and right children
-	bool hitLeft = RaycastNode(node->left, origin, dirN, maxDistance, outHit, outEntity);
-	bool hitRight = RaycastNode(node->right, origin, dirN, maxDistance, outHit, outEntity);
+	bool hitLeft = RaycastNode(node->left, origin, dirN, maxDistance, outHit, outEntity, debug);
+	bool hitRight = RaycastNode(node->right, origin, dirN, maxDistance, outHit, outEntity, debug);
+
 	return hitLeft || hitRight;
 }
 /////////////////////////////////
@@ -179,7 +194,7 @@ bool BVHSystem::RaycastNode(BVHNode* node, const Vec2& origin, const Vec2& dirN,
 // RaycastLeaf - performs a raycast against the entities contained in a leaf node of the BVH tree. This method checks for intersections between the ray and the bounding boxes of the
 // entities in the leaf node. It iterates through each entity, checks if it is alive and has a valid shape, and then performs a ray-AABB intersection test. If an intersection is found, 
 // it updates the output hit information and returns true.
-bool BVHSystem::RaycastLeaf(const std::vector<Entity*>& leaf, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity) const {
+bool BVHSystem::RaycastLeaf(const std::vector<Entity*>& leaf, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity, BVHDebugTraversal* debug) const {
 	// Iterate through each entity in the leaf node and perform a raycast against its bounding box
 	float nearestDistance = maxDistance;
 	bool hitAny = false;
@@ -225,6 +240,10 @@ bool BVHSystem::RaycastLeaf(const std::vector<Entity*>& leaf, const Vec2& origin
 		}
 		hitAny = true; // Mark that we hit at least one entity
 	}
+
+	   // If this leaf produced a hit, record it
+		if (hitAny && debug) debug->hitLeaf = debug->visited.back(); // last visited node is the leaf
+
 	return hitAny;
 }
 /////////////////////////////////

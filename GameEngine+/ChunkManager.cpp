@@ -215,7 +215,7 @@ void ChunkManager::LoadAllSavedChunks() {
 		{
 			std::lock_guard<std::mutex> lock(m_mutex);
 			for (const auto& [cx, cy] : chunksToCreate) {
-				long long key = GetChunkKey(cx, cy);
+				uint64_t key = GetChunkKey(cx, cy);
 				if (m_chunks.find(key) == m_chunks.end()) {
 					// Create chunk with all layers
 					m_chunks[key] = Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers);
@@ -287,7 +287,7 @@ void ChunkManager::DebugPrintLayer1() {
 	// Print each chunk
 	for (int cy = minCy; cy <= maxCy; ++cy) {
 		for (int cx = minCx; cx <= maxCx; ++cx) {
-			auto key = (static_cast<long long>(cx) << 32) | static_cast<unsigned int>(cy);
+			auto key = GetChunkKey(cx, cy);
 			auto it = m_chunks.find(key);
 
 			if (it == m_chunks.end()) {
@@ -416,7 +416,7 @@ void ChunkManager::ShiftChunksToPositiveCoords() {
 
 	// Collect old chunks and rebuild map with new coordinates
 	std::vector<Chunk> chunksToShift;
-	std::vector<long long> keysToRemove;
+	std::vector<uint64_t> keysToRemove;
 
 	for (auto& [key, chunk] : m_chunks) {
 		chunksToShift.push_back(chunk);
@@ -432,7 +432,7 @@ void ChunkManager::ShiftChunksToPositiveCoords() {
 	for (Chunk& chunk : chunksToShift) {
 		chunk.chunkX += offsetX;
 		chunk.chunkY += offsetY;
-		long long newKey = (static_cast<long long>(chunk.chunkX) << 32) | static_cast<unsigned int>(chunk.chunkY);
+		uint64_t newKey = GetChunkKey(chunk.chunkX, chunk.chunkY);
 		m_chunks[newKey] = chunk;
 	}
 
@@ -901,7 +901,7 @@ void ChunkManager::EnqueueChunks(RenderQueue& queue, const sf::View& view) {
 void ChunkManager::EnsureChunkLoaded(int cx, int cy) {
 	std::lock_guard<std::mutex> lk(m_mutex);
 
-	long long key = GetChunkKey(cx, cy);
+	uint64_t key = GetChunkKey(cx, cy);
 
 	// Already loaded or already created
 	if (m_chunks.find(key) != m_chunks.end()) return;
@@ -925,7 +925,7 @@ void ChunkManager::EnsureChunkLoaded(int cx, int cy) {
 void ChunkManager::EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int maxCy) {
 	std::lock_guard<std::mutex> lk(m_mutex);
 
-	std::vector<long long> toRemove;
+	std::vector<uint64_t> toRemove;
 
 	for (auto& [key, chunk] : m_chunks) {
 		int cx = chunk.chunkX;
@@ -942,7 +942,7 @@ void ChunkManager::EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int
 	// Remove chunks safely
 	EntityManager& em = GameEngine::GetInstance().GetEntityManager();
 
-	for (long long key : toRemove) {
+	for (uint64_t key : toRemove) {
 		Chunk& c = m_chunks[key];
 
 		// Kill generated entities
@@ -996,7 +996,7 @@ Chunk* ChunkManager::GetChunkForPosition(const Vec2& pos) const {
 	int cx = FloorDiv(tileX, m_chunkWidth);
 	int cy = FloorDiv(tileY, m_chunkHeight);
 
-	long long key = GetChunkKey(cx, cy);
+	uint64_t key = GetChunkKey(cx, cy);
 
 	auto it = m_chunks.find(key);
 	if (it == m_chunks.end())
@@ -1016,7 +1016,7 @@ int ChunkManager::GetTileAt(int tileX, int tileY, int layerIndex) {
 	const int chunkY = FloorDiv(tileY, m_chunkHeight);
 	const int localX = tileX - chunkX * m_chunkWidth;
 	const int localY = tileY - chunkY * m_chunkHeight;
-	const long long key = GetChunkKey(chunkX, chunkY);
+	const uint64_t key = GetChunkKey(chunkX, chunkY);
 
 	{
 		std::lock_guard<std::mutex> lock(m_mutex);
@@ -1046,7 +1046,7 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 	const int chunkY = FloorDiv(tileY, m_chunkHeight);
 	const int localX = tileX - chunkX * m_chunkWidth;
 	const int localY = tileY - chunkY * m_chunkHeight;
-	const long long key = GetChunkKey(chunkX, chunkY);
+	const uint64_t key = GetChunkKey(chunkX, chunkY);
 
 	// Track whether we inserted a new chunk placeholder during this call
 	bool insertedNow = false;
@@ -1154,7 +1154,7 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 /////////////////////////////////
 // RemoveChunkFromLRU - Removes the chunk with the specified key from the LRU (Least Recently Used) list. This is called when a chunk is evicted to ensure 
 // it is no longer tracked in the LRU.
-void ChunkManager::RemoveChunkFromLRU(long long key) {
+void ChunkManager::RemoveChunkFromLRU(uint64_t key) {
 	auto it = m_lruIndex.find(key);
 	if (it == m_lruIndex.end())
 		return; // Chunk not in LRU list
@@ -1172,7 +1172,7 @@ void ChunkManager::RemoveChunkFromLRU(long long key) {
 /////////////////////////////////
 // TouchChunkLRU - Updates the LRU (Least Recently Used) list to mark the chunk with the specified key as recently used. If the chunk is already in the LRU list, 
 // it is moved to the front; otherwise, it is added to the front.
-void ChunkManager::TouchChunkLRU(long long key) {
+void ChunkManager::TouchChunkLRU(uint64_t key) {
 	// If key already exists in LRU, move it to the front
 	auto it = m_lruIndex.find(key);
 	if (it != m_lruIndex.end()) {
@@ -1230,7 +1230,7 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 			if (cx < minChunkX || cx > maxChunkX || cy < minChunkY || cy > maxChunkY)
 				continue;
 
-			const long long key = GetChunkKey(cx, cy);
+			const uint64_t key = GetChunkKey(cx, cy);
 			bool needLoad = false;
 
 			{
@@ -1321,7 +1321,7 @@ void ChunkManager::EnsureChunksInTileRect_NoLock(int tileX0, int tileY0, int til
 	for (int cy = cY0; cy <= cY1; ++cy) {
 		for (int cx = cX0; cx <= cX1; ++cx) {
 
-			const long long key = GetChunkKey(cx, cy);
+			const uint64_t key = GetChunkKey(cx, cy);
 
 			// Check existence WITHOUT locking
 			auto it = m_chunks.find(key);
@@ -1421,7 +1421,7 @@ void ChunkManager::UpdateMainThread_NoLock() {
 	}
 
 	// === 2. Process scheduled rebuilds (GPU / SFML dependent work) ===
-	std::vector<long long> rebuilds;
+	std::vector<uint64_t> rebuilds;
 
 	// Swap rebuild queue WITHOUT locking m_mutex (caller already holds it)
 	if (!m_rebuildQueue.empty()) {
@@ -1432,7 +1432,7 @@ void ChunkManager::UpdateMainThread_NoLock() {
 	}
 
 	// === 3. Rebuild vertex arrays + colliders ===
-	for (long long key : rebuilds) {
+	for (uint64_t key : rebuilds) {
 
 		auto it = m_chunks.find(key);
 		if (it == m_chunks.end())
@@ -1758,7 +1758,7 @@ void ChunkManager::RebuildChunkEntities(Chunk& chunk) {
 /////////////////////////////////
 // ScheduleChunkForRebuild - Mark a chunk as requiring GPU/collider rebuild on the main thread.
 void ChunkManager::ScheduleChunkForRebuild(Chunk& c) {
-	long long key = GetChunkKey(c.chunkX, c.chunkY);
+	uint64_t key = GetChunkKey(c.chunkX, c.chunkY);
 	// NOTE: callers (e.g. SetTileAt) may already hold m_mutex. Do not re-lock here
 	// to avoid deadlock / std::system_error from double-locking a non-recursive mutex.
 	if (m_rebuildSet.find(key) == m_rebuildSet.end()) {
@@ -1783,7 +1783,7 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::v
 	// Lock the mutex to ensure thread safety while accessing and modifying the chunk data structures
 	std::lock_guard<std::mutex> lock(m_mutex);
 	
-	long long key = GetChunkKey(chunkX, chunkY);
+	uint64_t key = GetChunkKey(chunkX, chunkY);
 	auto itr = m_chunks.find(key);
 	if (itr == m_chunks.end()) {
 		// Chunk was evicted before we could finalize — discard the load
@@ -1866,7 +1866,7 @@ void ChunkManager::EvictIfNeeded() {
 	while (m_chunks.size() > m_maxLoadedChunks && !m_lruList.empty()) {
 		
 		// Get the least recently used chunk key from the back of the LRU list
-		long long key = m_lruList.back();
+		uint64_t key = m_lruList.back();
 		auto itr = m_chunks.find(key);
 		if (itr != m_chunks.end()) {
 			Chunk& chunk = itr->second;
@@ -1945,7 +1945,7 @@ bool ChunkManager::LoadLevelFromFile(const std::string& path, std::string* outEr
 	//const int newLayerCount = std::max(1, (int)map.layers.size());
 
 	//// Prepare a new chunk map to hold the loaded chunks. This will replace the current m_chunks after loading.
-	//std::unordered_map<long long, Chunk> newChunks;
+	//std::unordered_map<uint64_t, Chunk> newChunks;
 
 	//// Get the width and height of the TileMap in tiles.
 	//worldWidth = map.width;
@@ -1963,18 +1963,18 @@ bool ChunkManager::LoadLevelFromFile(const std::string& path, std::string* outEr
 	//// we now pre-create all chunks, then fill them by chunk with better cache locality.
 
 	//// FIRST PASS: Determine all chunks that need to exist
-	//std::set<long long> chunkKeys; // create a set to hold unique (64-bit) chunk keys
+	//std::set<uint64_t> chunkKeys; // create a set to hold unique (64-bit) chunk keys
 	//for (int y = 0; y < worldHeight; ++y) {
 	//	for (int x = 0; x < worldWidth; ++x) {
 	//		int chunkX = FloorDiv(x, m_chunkWidth);
 	//		int chunkY = FloorDiv(y, m_chunkHeight);
-	//		long long key = GetChunkKey(chunkX, chunkY);
+	//		uint64_t key = GetChunkKey(chunkX, chunkY);
 	//		chunkKeys.insert(key);
 	//	}
 	//}
 
 	//// SECOND PASS: Create all chunks upfront (batch operation, no scatter)
-	//for (long long key : chunkKeys) {
+	//for (uint64_t key : chunkKeys) {
 	//	int chunkX = (int)(key >> 32);
 	//	int chunkY = (int)(key & 0xFFFFFFFF);
 	//	newChunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize, newLayerCount));
@@ -2056,7 +2056,7 @@ bool ChunkManager::LoadLevelFromFile(const std::string& path, std::string* outEr
 	//		m_rebuildSet.clear();
 
 	//		for (auto& chunkPair : m_chunks) {
-	//			const long long key = chunkPair.first;
+	//			const uint64_t key = chunkPair.first;
 	//			m_lruList.push_front(key);
 	//			m_lruIndex[key] = m_lruList.begin();
 	//			m_rebuildQueue.push_back(key);

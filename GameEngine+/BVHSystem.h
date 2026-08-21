@@ -30,6 +30,15 @@ struct BVHNode {
 
 
 /////////////////////////////////
+struct BVHDebugTraversal {
+	std::vector<BVHNode*> visited;
+	BVHNode* hitLeaf = nullptr;
+};
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 //
 //								|
 //								|_______________________________________________________________________
@@ -53,14 +62,14 @@ public:
 
 
 	/////////////////////////////////
-	BVHNode* GetRoot() { return m_root; }
+	BVHNode* GetRoot() const { return m_root; }
 	/////////////////////////////////
 
 
 
 	/////////////////////////////////
-	bool Raycast(const Vec2& origin, const Vec2& dirN, float maxDist,
-                 RaycastHit& outHit, Entity*& outEntity) const;
+	bool Raycast(const Vec2& origin, const Vec2& dirN, float maxDist, RaycastHit& outHit, Entity*& outEntity,
+				 BVHDebugTraversal* debug = nullptr) const;
 	/////////////////////////////////
 
 
@@ -92,7 +101,7 @@ private:
 	/////////////////////////////////
 	// RaycastNode - performs a raycast against the BVH tree starting from the given node. This method recursively traverses the tree, testing the ray against the bounding boxes of each node and 
 	// checking for intersections with the entities contained in leaf nodes.
-	bool RaycastNode(BVHNode* node, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit,Entity*& outEntity) const;
+	bool RaycastNode(BVHNode* node, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit,Entity*& outEntity, BVHDebugTraversal* debug) const;
 	/////////////////////////////////
 
 
@@ -101,7 +110,7 @@ private:
 	// RaycastLeaf - performs a raycast against the entities contained in a leaf node of the BVH tree. This method checks for intersections between the ray and the bounding boxes of the 
 	// entities in the leaf node. It iterates through each entity, checks if it is alive and has a valid shape, and then performs a ray-AABB intersection test. If an intersection is found, 
 	// it updates the output hit information and returns true.
-	bool RaycastLeaf(const std::vector<Entity*>& leaf, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity) const;
+	bool RaycastLeaf(const std::vector<Entity*>& leaf, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity, BVHDebugTraversal* debug) const;
 	/////////////////////////////////
 };
 /////////////////////////////////

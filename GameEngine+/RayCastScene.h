@@ -114,6 +114,7 @@ private:
 	// Reference to the SFML render window for rendering and context and a 2D grid of tile values for rendering. The m_debugLines vector will store pairs of Vec2 
 	// representing the start and end points of lines to draw for raycasts, while the m_debugPoints vector will store hit points from raycasts.
 	sf::RenderWindow& m_window;
+	sf::View m_worldView;
 	/////////////////////////////////
 
 

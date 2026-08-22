@@ -598,59 +598,80 @@ void RayCastScene::Update(float deltaTime) {
 /////////////////////////////////
 // Render - draws the tile grid and any debug visualization overlays
 void RayCastScene::Render() {
-	// 1. Draw entity shapes
-	GetEntityManager().RenderShapes();
 
-	// 2. Raycast lines
-	DrawDebugLines();
+		//
+		// ────────────────────────────────
+		// 1. SET WORLD VIEW
+		// ────────────────────────────────
+		//
+		// Update m_worldView from camera (but don't apply yet)
+		ApplyMainCameraView();
+		// Now apply the world view for all world-space rendering
+		m_window.setView(m_worldView);
 
-	// 3. Static/tile hit points (yellow)
-	DrawHitPoints();
+		//
+		// ────────────────────────────────
+		// 2. WORLD SPACE RENDERING
+		// ────────────────────────────────
+		//
 
-	// 4. Raw hit points (your old debug)
-	DrawRawHitPoints();
+		// Dynamic + static entity shapes
+		GetEntityManager().RenderShapes();
 
-	// 5. DDA visited cells (blue)
-	DrawVisitedCells();
+		// Raycast debug
+		DrawDebugLines();
+		DrawHitPoints();
+		DrawRawHitPoints();
+		DrawVisitedCells();
+		DrawPreviewLine();
+		DrawHighlightedEntity(m_window);
 
-	// 6. Preview line
-	DrawPreviewLine();
+		// BVH debug
+		if (m_visualDebug) {
+			for (auto& [key, chunk] : m_chunkManager.GetChunks()) {
+				if (chunk.dynamicBVH.GetRoot())
+					DrawBVHNode(m_window, chunk.dynamicBVH.GetRoot());
+			}
 
-	// 7. Highlight dynamic entity
-	DrawHighlightedEntity(m_window);
+			for (const auto& traversal : m_debugTraversals)
+				DrawBVHTraversal(traversal);
 
-	if (m_visualDebug) {
-		// 8a. Chunk BVH nodes (blue)
-		for (auto& [key, chunk] : m_chunkManager.GetChunks()) {
-			if (chunk.dynamicBVH.GetRoot())
-				DrawBVHNode(m_window, chunk.dynamicBVH.GetRoot());
+			for (const auto& p : m_dynamicHitPoints)
+				DrawBVHHitPoint(p);
 		}
 
-		// 8b. BVH traversal nodes (yellow)
-		for (const auto& traversal : m_debugTraversals)
-			DrawBVHTraversal(traversal);
+		// Tile grid
+		DrawTileGrid();
 
-		// 8c. BVH leaf node (green)
-		for (const auto& traversal : m_debugTraversals)
-			if (traversal.hitLeaf)
-				DrawBVHLeafNode(traversal.hitLeaf);
+		// Flush world-space queue
+		GetEngineRenderQueue().Flush(m_window);
 
-		// 8d. ⭐ DYNAMIC BVH HIT POINT (GREEN) — DRAW LAST ⭐
-		for (const auto& p : m_dynamicHitPoints)
-			DrawBVHHitPoint(p);
+		//
+		// ────────────────────────────────
+		// 3. SWITCH TO UI VIEW
+		// ────────────────────────────────
+		//
+		m_window.setView(m_window.getDefaultView());
+
+		//
+		// ────────────────────────────────
+		// 4. UI SPACE RENDERING
+		// ────────────────────────────────
+		//
+		GetEntityManager().RenderText();
+
+		//
+		// ────────────────────────────────
+		// 5. RESTORE WORLD VIEW FOR GAMEENGINE
+		// ────────────────────────────────
+		//
+		// Restore world view so GameEngine's RenderShapes() call uses world space
+		m_window.setView(m_worldView);
+
+		// Clear traversal debug
+		m_debugTraversals.clear();
 	}
-
-	// 9. Tile grid (background)
-	DrawTileGrid();
-
-	// 10. Flush
-	GetEngineRenderQueue().Flush(m_window);
-
-	// 11. Clear per-frame traversal data
-	m_debugTraversals.clear();
-}
-
-/////////////////////////////////
+	/////////////////////////////////
 
 
 
@@ -843,6 +864,18 @@ void RayCastScene::OnEnter() {
 
 	auto& em = GetEntityManager();
 
+	// -------------------------
+	// Recreate camera (GameEngine clears all entities on scene switch)
+	// -------------------------
+	sf::Vector2u windowSize = m_window.getSize();
+	m_cameraEntity = em.AddEntity(EntityType::Default);
+	auto camera = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
+	camera->isMainCamera = true;
+	camera->isActive = true;
+	camera->viewportWidth = static_cast<float>(windowSize.x);
+	camera->viewportHeight = static_cast<float>(windowSize.y);
+	camera->smoothness = 0.0f;
+
 	  // -------------------------
 	// DynamicBox1 (Red)
 	// -------------------------
@@ -904,14 +937,73 @@ void RayCastScene::OnEnter() {
 	em.ProcessPending(); // ensure entities are in m_entities
 	em.UpdateBVH();		 // build BVH from current entities
 	std::cout << "EntityManager BVH root: " << em.GetBVH().GetRoot() << "\n";
+
+	// -------------------------
+	// Refresh map bounds from loaded chunks
+	// -------------------------
+	std::cout << "Calling RefreshMapBounds()...\n";
+	RefreshMapBounds();
+	std::cout << "m_haveBounds: " << m_haveBounds << "\n";
+	std::cout << "Map bounds: (" << m_mapMin.x << ", " << m_mapMin.y << ") to (" << m_mapMax.x << ", " << m_mapMax.y << ")\n";
+
+	// -------------------------
+	// Position camera to top-left of level
+	// -------------------------
+	if (m_cameraEntity) {
+		if (auto cam = m_cameraEntity->GetComponent<CCamera>()) {
+			// Get viewport size for proper offset
+			float halfWidth = cam->viewportWidth * 0.5f;
+			float halfHeight = cam->viewportHeight * 0.5f;
+
+			// Position camera so top-left of viewport is at top-left of map bounds
+			Vec2 topLeft = m_haveBounds ? m_mapMin : Vec2(0, 0);
+			cam->position = Vec2(topLeft.x + halfWidth, topLeft.y + halfHeight);
+
+			std::cout << "Viewport size: " << cam->viewportWidth << " x " << cam->viewportHeight << "\n";
+			std::cout << "Top-left target: (" << topLeft.x << ", " << topLeft.y << ")\n";
+			std::cout << "Camera positioned to: (" << cam->position.x << ", " << cam->position.y << ")\n";
+		}
+	} else {
+		std::cout << "WARNING: m_cameraEntity is null!\n";
+	}
 }
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// OnExit - currently empty, but could be used for cleanup logic that needs to run when the scene is no longer active
-void RayCastScene::OnExit() {}
+// OnExit - cleanup logic that runs when the scene is no longer active
+void RayCastScene::OnExit() {
+	std::cout << "RayCastScene::OnExit - Cleaning up resources\n";
+
+	// Clear debug visualization data
+	m_debugLines.clear();
+	m_debugLineColors.clear();
+	m_debugPoints.clear();
+	m_dynamicHitPoints.clear();
+	m_rawHitPoints.clear();
+	m_debugTraversals.clear();
+	m_visitedCells.clear();
+
+	// Clear entity references
+	m_highlightedEntity = nullptr;
+	m_cameraEntity = nullptr;
+
+	// Clear level data
+	m_availableLevels.clear();
+	m_currentLevelName.clear();
+	m_selectedLevelIndex = -1;
+
+	// Reset state flags
+	m_lmbdragging = false;
+	m_previewActive = false;
+	m_visualDebug = false;
+	m_prevDebugKeyDown = false;
+	m_prevLmbMouseDown = false;
+	m_hasLastViewCenter = false;
+
+	std::cout << "RayCastScene::OnExit - Cleanup complete\n";
+}
 /////////////////////////////////
 
 
@@ -932,14 +1024,18 @@ void RayCastScene::OnWindowResized(sf::Vector2u newSize) {
 
 /////////////////////////////////
 void RayCastScene::ApplyMainCameraView() {
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
-	if (!camOpt)
-		return;
+    auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+    if (!camOpt)
+        return;
 
-	CCamera* cam = *camOpt;
-	sf::View v = CameraSystem::BuildViewFromCamera(*cam, m_clampPanToBounds, m_mapMin, m_mapMax, m_haveBounds);
-	cam->position = Vec2(v.getCenter().x, v.getCenter().y);
-	m_window.setView(v);
+    CCamera* cam = *camOpt;
+
+    sf::View v;
+    v.setSize({cam->viewportWidth, cam->viewportHeight});
+	v.setCenter({cam->position.x, cam->position.y});
+
+    // Store it, but DO NOT apply it here
+    m_worldView = v;
 }
 /////////////////////////////////
 
@@ -954,8 +1050,17 @@ void RayCastScene::LoadResources() {}
 
 
 /////////////////////////////////
-// UnloadResources - currently empty, but could be used to free textures, sounds, or other resources when the scene is unloaded
-void RayCastScene::UnloadResources() {}
+// UnloadResources - free textures, sounds, fonts, or other resources when the scene is unloaded
+void RayCastScene::UnloadResources() {
+	std::cout << "RayCastScene::UnloadResources - Unloading fonts\n";
+
+	// Unload fonts that were loaded for this scene
+	// Note: FontManager is managed by GameEngine, but we can remove our specific fonts
+	// if FontManager has an UnloadFont method. For now, just log the intent.
+	// The fonts will be cleaned up when switching scenes or when the engine shuts down.
+
+	std::cout << "RayCastScene::UnloadResources - Complete\n";
+}
 /////////////////////////////////
 
 
@@ -1034,10 +1139,14 @@ void RayCastScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	m_lastSeenWorldRevision = m_chunkManager.GetWorldRevision();
 	if (m_cameraEntity) {
 		if (auto cam = m_cameraEntity->GetComponent<CCamera>()) {
-			Vec2 center = m_haveBounds ? (m_mapMin + m_mapMax) * 0.5f : Vec2(0, 0);
-			cam->position = center;
-			m_lastViewCenter = center;
+			// Position camera to top-left of level (same as OnEnter)
+			float halfWidth = cam->viewportWidth * 0.5f;
+			float halfHeight = cam->viewportHeight * 0.5f;
+			Vec2 topLeft = m_haveBounds ? m_mapMin : Vec2(0, 0);
+			cam->position = Vec2(topLeft.x + halfWidth, topLeft.y + halfHeight);
+			m_lastViewCenter = cam->position;
 			m_hasLastViewCenter = true;
+			std::cout << "InitializeGame: Camera positioned to top-left: (" << cam->position.x << ", " << cam->position.y << ")\n";
 		}
 	}
 	ApplyMainCameraView();
@@ -1051,7 +1160,7 @@ void RayCastScene::InitializeGame(sf::Vector2u /*windowSize*/) {
 	// Create text entities for the scene title and instructions. We create two entities with CTransform and CText components to display the scene title and instructions on the screen. The title is 
 	// displayed in cyan color with a larger font size, while the instructions are displayed in yellow color with a smaller font size. If the font fails to load for either entity, we print an error message to the console.
 	Entity* fontEntity = m_entityManager.AddEntity(EntityType::Default);
-	fontEntity->AddComponent<CTransform>(Vec2(50, 50), Vec2::Zero);
+	fontEntity->AddComponent<CTransform>(Vec2(50.0f, 50.0f), Vec2::Zero);
 	if (!fontEntity->AddComponent<CText>("RayCasting Demo (Chunked 3-Layer)", sf::Color::Cyan, "regular", 60))
 		std::cerr << "Error loading font for text entity" << std::endl;
 

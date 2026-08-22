@@ -334,9 +334,13 @@ void EntityManager::ValidateIntegrity() const {
 
 
 /////////////////////////////////
-// RenderText - renders the text components of all entities using the RenderSystem. Direct render to window.
+// RenderText - renders the text components of all entities using the RenderSystem in screen space (UI coordinates).
+// We switch to the default view before rendering text so it appears in screen space, then restore the previous view.
 void EntityManager::RenderText() {
+	sf::View prevView = m_window.getView();
+	m_window.setView(m_window.getDefaultView());
 	m_renderSystem.RenderText(m_entities, m_window);
+	m_window.setView(prevView);
 }
 /////////////////////////////////
 

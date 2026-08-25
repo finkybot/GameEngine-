@@ -33,6 +33,7 @@
 /////////////////////////////////
 
 
+
 /////////////////////////////////
 // Constructor - initializes the ray cast scene with a reference to the game engine and the render window, and sets up the entity manager
 RayCastScene::RayCastScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
@@ -105,7 +106,7 @@ void RayCastScene::DrawHighlightedEntity(sf::RenderWindow& window) {
 
 
 
-///////////////////////////////
+/////////////////////////////////
 // RefreshAvailableLevels - scans the same APPDATA levels directory used by the level editor.
 void RayCastScene::RefreshMapBounds() {
 	float dMinX, dMinY, dMaxX, dMaxY;
@@ -121,7 +122,7 @@ void RayCastScene::RefreshMapBounds() {
 
 
 
-///////////////////////////////
+/////////////////////////////////
 void RayCastScene::RefreshAvailableLevels() {
 	m_availableLevels.clear();
 	std::error_code ec;
@@ -156,7 +157,7 @@ void RayCastScene::RefreshAvailableLevels() {
 
 
 
-///////////////////////////////
+/////////////////////////////////
 // SwitchToLevel - configure chunk base path for selected level and rebuild scene data.
 bool RayCastScene::SwitchToLevel(const std::string& name) {
 	std::filesystem::path base;
@@ -196,7 +197,7 @@ bool RayCastScene::SwitchToLevel(const std::string& name) {
 
 
 
-///////////////////////////////
+/////////////////////////////////
 // LevelManagerWindow - read-only level selector matching level-editor flow.
 void RayCastScene::LevelManagerWindow() {
 	ImGui::SetNextWindowBgAlpha(0.35f);
@@ -237,7 +238,7 @@ void RayCastScene::LevelManagerWindow() {
 
 
 
-///////////////////////////////
+/////////////////////////////////
 // ProcessDebugToggle - handles debug toggle key (D) to show/hide visual debug overlays
 void RayCastScene::ProcessDebugToggle(bool debugToggle) {
 	if (debugToggle && !m_prevDebugKeyDown)
@@ -469,7 +470,7 @@ void RayCastScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 
 
 
-///////////////////////////////
+/////////////////////////////////
 // ProcessEscapeKey - handles input to close the window when any key is pressed
 void RayCastScene::ProcessEscapeKey(bool keyDown) const {
 	if (keyDown) {
@@ -480,7 +481,7 @@ void RayCastScene::ProcessEscapeKey(bool keyDown) const {
 
 
 
-///////////////////////////////
+/////////////////////////////////
 // ProcessMiddleMousePan - pan the current window view by dragging with middle mouse button (PathTestScene style).
 void RayCastScene::ProcessMiddleMousePan() {
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
@@ -505,22 +506,23 @@ void RayCastScene::ProcessMiddleMousePan() {
 
 
 
-///////////////////////////////
+/////////////////////////////////
 // Update - handles events, updates the entity manager, and prepares debug visualization data for rendering
 void RayCastScene::Update(float deltaTime) {
 	GetEntityManager().Update(deltaTime);
-	GetEntityManager().UpdateBVH();
-
+	// Update camera system and apply main camera view
 	if (m_cameraEntity)
 		m_cameraSystem.Update(deltaTime, GetEntityManager());
 	ApplyMainCameraView();
 
-	// Keep chunk data streaming/ready for rendering using camera-system state as source of truth.
+	// Ensure chunks are loaded for the current camera view
 	const float tileSize = m_chunkManager.GetTileSize();
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (!camOpt)
 		return;
 	CCamera* cam = *camOpt;
+	
+	// Compute camera bounds in world space
 	const Vec2 cameraCenter = cam->position;
 	const float safeZoom = (cam->zoom > 0.0001f) ? cam->zoom : 1.0f;
 	const float worldW = cam->viewportWidth / safeZoom;
@@ -528,10 +530,13 @@ void RayCastScene::Update(float deltaTime) {
 	const float halfW = worldW * 0.5f;
 	const float halfH = worldH * 0.5f;
 
+	// Compute tile coordinates for the camera bounds
 	int tx0 = static_cast<int>(std::floor((cameraCenter.x - halfW) / tileSize));
 	int ty0 = static_cast<int>(std::floor((cameraCenter.y - halfH) / tileSize));
 	int tx1 = static_cast<int>(std::floor((cameraCenter.x + halfW) / tileSize));
 	int ty1 = static_cast<int>(std::floor((cameraCenter.y + halfH) / tileSize));
+	
+	// Ensure chunks are loaded for the camera bounds with a margin of 1 chunk
 	m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, 1);
 	m_chunkManager.UpdateMainThread_NoLock();
 
@@ -541,6 +546,8 @@ void RayCastScene::Update(float deltaTime) {
 	if (worldRevision != m_lastSeenWorldRevision)
 		needsRayRefresh = true;
 
+	// Check if camera has moved far enough to require a raycast refresh (beyond 4 chunks away).
+	// If we have a last view center, check if the camera has moved beyond the teleport threshold.
 	const float teleportThreshold = m_chunkManager.GetTileSize() * static_cast<float>(m_chunkManager.GetChunkWidth() * 4);
 	if (m_hasLastViewCenter) {
 		const float dx = cameraCenter.x - m_lastViewCenter.x;
@@ -548,17 +555,20 @@ void RayCastScene::Update(float deltaTime) {
 		if ((dx * dx + dy * dy) > (teleportThreshold * teleportThreshold))
 			needsRayRefresh = true;
 	}
+
+	// Update last view center and seen world revision
 	m_lastViewCenter = cameraCenter;
 	m_hasLastViewCenter = true;
 
+
+	// If needed, refresh the world bounds and world mask for raycasting.
 	if (needsRayRefresh) {
 		m_chunkManager.RefreshWorldBoundsFromLoadedChunks();
 		m_chunkManager.BuildWorldMask();
 		m_lastSeenWorldRevision = m_chunkManager.GetWorldRevision();
 	}
 
-
-	// Handle events (SFML 3.0: pollEvent returns std::optional<sf::Event>)
+	// Event Handling (SFML 3.0: pollEvent returns std::optional<sf::Event>)
 	while (auto eventOpt = m_gameEngine.window.pollEvent()) {
 		if (eventOpt->is<sf::Event::Closed>()) {
 			m_gameEngine.window.close(); // window X button - always close
@@ -584,8 +594,12 @@ void RayCastScene::Update(float deltaTime) {
 	// Compute mouse world coords AFTER final view is set for this frame.
 	sf::Vector2i mousePixelPos = sf::Mouse::getPosition(m_window);
 	sf::Vector2f mouseWorldF = m_window.mapPixelToCoords(mousePixelPos);
+	
+	// Convert to Vec2 for our internal representation
 	Vec2 mouseWorld(static_cast<float>(mouseWorldF.x), static_cast<float>(mouseWorldF.y));
 	const bool leftMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+	
+	// Handle left mouse drag for raycasting and debug visualization
 	ProcessMouseDragRaycast(leftMouseDown, mouseWorld);
 
 	// Show level picker UI like the level editor (read-only selection in this scene).

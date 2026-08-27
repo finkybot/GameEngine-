@@ -213,11 +213,17 @@
     <ClCompile Include="ChunkAnalysisSystem.cpp">
       <Filter>Source Files\Systems</Filter>
     </ClCompile>
-    <ClCompile Include="KnowledgeParticleSpawnersystem.cpp">
+    <ClCompile Include="KnowledgeParticleSpawnerSystem.cpp">
       <Filter>Source Files\Systems</Filter>
     </ClCompile>
     <ClCompile Include="TechRegistry.cpp">
       <Filter>Source Files\Managers</Filter>
+    </ClCompile>
+    <ClCompile Include="TechUnlockSystem.cpp">
+      <Filter>Source Files\Systems</Filter>
+    </ClCompile>
+    <ClCompile Include="TechSimulationScene.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -461,9 +467,6 @@
     <ClInclude Include="System.h">
       <Filter>Header Files\Systems</Filter>
     </ClInclude>
-    <ClInclude Include="SystemManager.h">
-      <Filter>Source Files\Managers</Filter>
-    </ClInclude>
     <ClInclude Include="CChunkKnowledge.h">
       <Filter>Header Files\Components</Filter>
     </ClInclude>
@@ -491,10 +494,19 @@
     <ClInclude Include="ChunkAnalysisSystem.h">
       <Filter>Header Files\Systems</Filter>
     </ClInclude>
-    <ClInclude Include="KnowledgeParticleSpawnersystem.h">
+    <ClInclude Include="KnowledgeParticleSpawnerSystem.h">
       <Filter>Header Files\Systems</Filter>
     </ClInclude>
     <ClInclude Include="TechRegistry.h">
+      <Filter>Header Files\Managers</Filter>
+    </ClInclude>
+    <ClInclude Include="TechUnlockSystem.h">
+      <Filter>Header Files\Systems</Filter>
+    </ClInclude>
+    <ClInclude Include="TechSimulationScene.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="SystemManager.h">
       <Filter>Header Files\Managers</Filter>
     </ClInclude>
   </ItemGroup>

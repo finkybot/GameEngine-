@@ -23,6 +23,7 @@
 #include "TestScene.h"
 #include "RayCastScene.h"
 #include "TileMapEditorScene.h"
+#include "TechSimulationScene.h"
 #include "MusicVisualizerScene.h"
 #include "LevelEditorScene.h"
 #include "MainMenuScene.h"
@@ -88,6 +89,8 @@ GameEngine::GameEngine() {
 		std::cerr << "Warning: Failed to initialize ImGui::SFML in GameEngine" << std::endl;
 		// continue without ImGui but scenes must tolerate absence, have no idea if they will atm.
 	}
+
+	techRegistry.LoadDefaults(); // Load default rendering techniques for the engine
 }
 /////////////////////////////////
 
@@ -192,6 +195,8 @@ void GameEngine::Run() {
 	AddScene("MusicVisualizer", std::make_shared<MusicVisualizerScene>(*this, window, *entityManager));		// Adding MusicVisualizer	
 	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, window, *entityManager));				// Adding LevelEditor
 	AddScene("PathTestScene", std::make_shared<PathTestScene>(*this, window, *entityManager));				// Adding PathTestScene
+	AddScene("TechSimulationScene",
+			 std::make_shared<TechSimulationScene>(*this, window, *entityManager)); // Adding TechSimulationScene
 
 	ChangeScene("MainMenu");
 

@@ -20,17 +20,12 @@ void TechRegistry::RegisterTechNode(const CTechNode& techNode) {
 
 
 /////////////////////////////////
-// GetTechNode - Retrieves a technology node from the registry based on its unique ID. It takes a string representing the tech node ID as input and returns a pointer to the corresponding CTechNode object if found, or nullptr if not found.
+// GetTech - Retrieves a technology node from the registry based on its unique ID. It takes a string representing the tech node ID as input and returns a pointer to the corresponding CTechNode object if found, or nullptr if not found.
 const CTechNode* TechRegistry::GetTechNode(const std::string& techId) const {
-	// Use find to search for the techId in the unordered_map
-	auto iter = techNodes.find(techId);
+	auto it = techNodes.find(techId);
+	if (it != techNodes.end())
+		return &it->second;
 
-	// Check if the iterator is valid (i.e., the techId was found)
-	if (iter != techNodes.end()) {
-		return &(iter->second);
-	}
-
-	// If the techId was not found, return nullptr
 	return nullptr;
 }
 /////////////////////////////////
@@ -77,5 +72,51 @@ std::vector<std::string> TechRegistry::GetAllTechNodeIDs() const {
 
 	// Return the vector containing all tech node IDs
 	return ids;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// LoadDefaults - Loads default tech nodes into the registry. This function initializes the registry with a predefined set of technology nodes, allowing for a consistent starting point for technology progression in the game.
+void TechRegistry::LoadDefaults() {
+	// --- Agriculture.Basic ---
+	CTechNode basicAgri;
+	basicAgri.id = "agriculture.basic";
+	basicAgri.name = "Basic Agriculture";
+	basicAgri.category = "agriculture";
+	basicAgri.requiredKnowledge = 100.0f;
+	basicAgri.baseDifficulty = 1.0f;
+	basicAgri.mutationPotential = 0.05f;
+	basicAgri.compatibilityTags = {"agriculture", "food"};
+	basicAgri.prerequisites = {}; // none
+
+	RegisterTechNode(basicAgri);
+
+	// --- Agriculture.Irrigation ---
+	CTechNode irrigation;
+	irrigation.id = "agriculture.irrigation";
+	irrigation.name = "Irrigation";
+	irrigation.category = "agriculture";
+	irrigation.requiredKnowledge = 200.0f;
+	irrigation.baseDifficulty = 1.5f;
+	irrigation.mutationPotential = 0.08f;
+	irrigation.compatibilityTags = {"agriculture", "water"};
+	irrigation.prerequisites = {"agriculture.basic"};
+
+	RegisterTechNode(irrigation);
+
+	// --- Agriculture.CropRotation ---
+	CTechNode cropRotation;
+	cropRotation.id = "agriculture.crop_rotation";
+	cropRotation.name = "Crop Rotation";
+	cropRotation.category = "agriculture";
+	cropRotation.requiredKnowledge = 350.0f;
+	cropRotation.baseDifficulty = 2.0f;
+	cropRotation.mutationPotential = 0.12f;
+	cropRotation.compatibilityTags = {"agriculture", "soil"};
+	cropRotation.prerequisites = {"agriculture.irrigation"};
+
+	RegisterTechNode(cropRotation);
 }
 /////////////////////////////////

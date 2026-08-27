@@ -35,6 +35,7 @@ enum class EntityType {
 	DynamicBox3 = 13,
 
 	KnowledgeParticle = 14,
+	Civilisation = 15,
 };
 /////////////////////////////////
 

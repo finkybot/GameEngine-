@@ -11,6 +11,7 @@
 #include "EntityManager.h"
 #include "CCivilisationTech.h"
 #include "CTechNode.h"
+#include "TechRegistry.h"
 #include "Vec2.h"
 /////////////////////////////////
 
@@ -24,6 +25,13 @@ class TechDiffusionSystem : public System {
 	/////////////////////////////////
 	// Public interface for the TechDiffusionSystem class
 public:
+	/////////////////////////////////
+	// Constructor for the TechDiffusionSystem class, taking a reference to a TechRegistry for accessing technology nodes and their properties.
+	TechDiffusionSystem(TechRegistry& registry) : techRegistry(registry) {}
+	/////////////////////////////////
+
+
+
 	/////////////////////////////////
 	float baseDiffusionRate = 0.005f; // Base diffusion rate modifier affecting all civilizations
 	/////////////////////////////////
@@ -41,10 +49,16 @@ public:
 	// Private member variables for the TechDiffusionSystem class. These variables can be used to track internal state, configuration, or other relevant data needed for the system's operation.
 private:
 	/////////////////////////////////
+	// Reference to the TechRegistry for accessing technology nodes and their properties
+	TechRegistry& techRegistry; // Reference to the TechRegistry for accessing technology nodes and their properties
+	/////////////////////////////////
+	
+	
+
+	/////////////////////////////////
 	void ProcessTechDiffusionForCivilisation(Entity* civEntity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt);
 	void ApplyDiffusion(CCivilisationTech* civTech, CCivilisationTech* otherCivTech, float diffusionStrength, EntityManager& entityManager, float dt);
 	float CalculateProximity(Entity* civEntity, Entity* otherCivEntity);
-	CTechNode* FindTechNode(EntityManager& entityManager, const std::string& techId);
 	/////////////////////////////////
 };
 /////////////////////////////////

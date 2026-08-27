@@ -170,7 +170,7 @@
     <ClCompile Include="imgui\imgui_widgets.cpp" />
     <ClCompile Include="InputController.cpp" />
     <ClCompile Include="KnowledgeParticleMovementSystem.cpp" />
-    <ClCompile Include="KnowledgeParticleSpawnersystem.cpp" />
+    <ClCompile Include="KnowledgeParticleSpawnerSystem.cpp" />
     <ClCompile Include="LevelEditorScene.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainMenuScene.cpp" />
@@ -191,6 +191,8 @@
     <ClCompile Include="TechDiffusionSystem.cpp" />
     <ClCompile Include="TechEvolutionSystem.cpp" />
     <ClCompile Include="TechRegistry.cpp" />
+    <ClCompile Include="TechSimulationScene.cpp" />
+    <ClCompile Include="TechUnlockSystem.cpp" />
     <ClCompile Include="TestScene.cpp" />
     <ClCompile Include="TextureAtlas.cpp" />
     <ClCompile Include="TextureManager.cpp" />
@@ -256,7 +258,7 @@
     <ClInclude Include="json.hpp" />
     <ClInclude Include="CKnowledgeParticle.h" />
     <ClInclude Include="KnowledgeParticleMovementSystem.h" />
-    <ClInclude Include="KnowledgeParticleSpawnersystem.h" />
+    <ClInclude Include="KnowledgeParticleSpawnerSystem.h" />
     <ClInclude Include="LevelEditorScene.h" />
     <ClInclude Include="MainMenuScene.h" />
     <ClInclude Include="MainThreadTasks.h" />
@@ -284,6 +286,8 @@
     <ClInclude Include="TechEvolutionSystem.h" />
     <ClInclude Include="CTechNode.h" />
     <ClInclude Include="TechRegistry.h" />
+    <ClInclude Include="TechSimulationScene.h" />
+    <ClInclude Include="TechUnlockSystem.h" />
     <ClInclude Include="TestScene.h" />
     <ClInclude Include="TextureAtlas.h" />
     <ClInclude Include="TextureManager.h" />

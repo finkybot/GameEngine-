@@ -25,6 +25,7 @@ class CTechNode : public Component {
 public:
 	/////////////////////////////////
 	std::string id;									// Unique identifier for the tech node
+	std::string name;								// Display name of the tech node
 	std::string category;							// Category of the tech node (e.g., "military", "agriculture", "science", "cultural")
 	std::vector<std::string> prerequisites;			// List of prerequisite tech node IDs that must be unlocked before this node can be unlocked
 	float baseDifficulty = 1.0f;					// Base difficulty level for unlocking this tech node (higher values = more difficult)

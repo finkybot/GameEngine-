@@ -12,6 +12,7 @@
 #include "CParticleInfluence.h"
 #include "CCivilisationTech.h"
 #include "CChunkKnowledge.h"
+#include "TechRegistry.h"
 #include "CTransform.h"
 #include "Vec2.h"
 

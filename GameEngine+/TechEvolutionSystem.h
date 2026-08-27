@@ -11,6 +11,7 @@
 #include "EntityManager.h"
 #include "CCivilisationTech.h"
 #include "CTechNode.h"
+#include "TechRegistry.h"
 /////////////////////////////////
 
 
@@ -23,6 +24,12 @@ class TechEvolutionSystem : public System {
 	/////////////////////////////////
 	// Public interface for the TechEvolutionSystem class
 public:
+	/////////////////////////////////
+	TechEvolutionSystem(TechRegistry& techRegistry) : techRegistry(techRegistry) {}
+	/////////////////////////////////
+	 
+	 
+	
 	/////////////////////////////////
 	float globalResearchRate = 0.01f; // Global research rate modifier affecting all civilizations
 	/////////////////////////////////
@@ -39,8 +46,10 @@ public:
 	/////////////////////////////////
 	// Private member variables for the TechEvolutionSystem class. These variables can be used to track internal state, configuration, or other relevant data needed for the system's operation.
 private:
+	TechRegistry& techRegistry; // Reference to the TechRegistry for accessing technology nodes and their properties	
+
 	void ProcessCivilisationTech(Entity* entity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt);
-	CTechNode* FindTechNode(EntityManager& entityManager, const std::string& techId);
+	CTechNode* FindTechNode(const std::string& techId);
 	bool PrerequisitesMet(const CCivilisationTech& civTech, const CTechNode& techNode);
 	float CalculateResearchRate(const CCivilisationTech& civTech, const CTechNode& techNode, float baseRate);
 	/////////////////////////////////

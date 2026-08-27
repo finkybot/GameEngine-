@@ -22,6 +22,7 @@
 #include "RenderQueue.h"
 #include "SoundSystem.h"
 #include "ChunkManager.h"
+#include "TechRegistry.h"
 
 #include <map>
 #include <string>
@@ -165,7 +166,7 @@ public:
 
 
 	/////////////////////////////////
-	// Member variables for managing scenes, the game window, the current active scene, the game loop state, and various managers for fonts, textures, 
+	// Public variables for managing scenes, the game window, the current active scene, the game loop state, and various managers for fonts, textures, 
 	// entities, and input. These variables are used throughout the game engine to manage the game state, handle rendering, and provide access to resources 
 	// and systems needed for game development.
 	std::map<std::string, std::shared_ptr<Scene>> scenes;				// Map of scene names to scene instances, allowing for easy scene management and switching
@@ -180,6 +181,8 @@ public:
 	std::unique_ptr<EntityManager> entityManager;						// Unique pointer to the central EntityManager owned by the engine, responsible for managing game entities and providing access to the entity system throughout the game
 	std::unique_ptr<SoundSystem> soundSystem;							// Unique pointer to the SoundSystem owned by the engine, responsible for managing sound effects and audio playback
 	std::unique_ptr<MovementSystem> movementSystem;						// Unique pointer to the MovementSystem owned by the engine, responsible for moving entities along computed paths
+
+	TechRegistry techRegistry;											// TechRegistry instance for managing technology-related entities and interactions in the game, allowing for simulation of technology diffusion, evolution, and unlocking
 	/////////////////////////////////
 
 
@@ -214,7 +217,6 @@ public:
 	// Accessor for the SoundSystem, allowing scenes to control audio playback
 	SoundSystem& GetSoundSystem() const { return *soundSystem; }
 	/////////////////////////////////
-
 
 
 
@@ -258,10 +260,14 @@ public:
 	FileManager& GetFileManager() { return m_fileManager; }
 	/////////////////////////////////
 
+
+
 	/////////////////////////////////
 	// Accessor for engine-owned shared ChunkManager
 	ChunkManager& GetChunkManager() { return m_chunkManager; }
 	/////////////////////////////////
+
+
 
 	/////////////////////////////////
 	// Engine-owned shared chunk manager for chunk streaming/path/raycast scenes

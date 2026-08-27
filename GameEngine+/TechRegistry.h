@@ -29,9 +29,10 @@ public:
 
 
 	/////////////////////////////////
-	// GetTechNode - Retrieves a technology node from the registry based on its unique ID. It takes a string representing the tech node ID as input and returns a pointer to the corresponding CTechNode object if found, or nullptr if not found.
+	// Retrieve a tech node by ID (returns nullptr if not found)
 	const CTechNode* GetTechNode(const std::string& techId) const;
 	/////////////////////////////////
+
 
 
 	/////////////////////////////////
@@ -44,6 +45,13 @@ public:
 	/////////////////////////////////
 	// Get all tech nodes IDs - Returns a vector of strings containing the IDs of all registered technology nodes in the registry. This allows for easy iteration and management of all available technology nodes within the game.
 	std::vector<std::string> GetAllTechNodeIDs() const;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// LoadDefaults - Loads default tech nodes into the registry. This function initializes the registry with a predefined set of technology nodes, allowing for a consistent starting point for technology progression in the game.
+	void LoadDefaults(); // Load default tech nodes into the registry
 	/////////////////////////////////
 
 

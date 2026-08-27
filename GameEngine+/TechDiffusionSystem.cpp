@@ -9,6 +9,10 @@
 /////////////////////////////////
 // Includes
 #include "TechDiffusionSystem.h"
+#include "CTransform.h"
+#include "CKnowledgeParticle.h"
+#include "CParticleInfluence.h"
+#include <cmath>
 /////////////////////////////////
 
 
@@ -43,39 +47,68 @@ void TechDiffusionSystem::Update(float dt, EntityManager& entityManager) {
 
 /////////////////////////////////
 // ProcessTechDiffusionForCivilisation - Processes the technology diffusion for a single civilization entity with a CCivilisationTech. It calculates the diffusion strength based on proximity and other factors, and applies diffusion effects to the civilization's known technologies.
-void TechDiffusionSystem::ProcessTechDiffusionForCivilisation(Entity* civEntity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt) {
+void TechDiffusionSystem::ProcessTechDiffusionForCivilisation(Entity* civEntity, CCivilisationTech* civTech, EntityManager& entityManager, float dt) {
+	// Get the CTransform component from the civilization entity to determine its position in the game world
+	auto* civTransform = civEntity->GetComponent<CTransform>();
+	
+	// If the civilization entity does not have a CTransform component, return early as we cannot calculate proximity
+	if (!civTransform) return;
+
 	// Get a reference to the list of all entities managed by the EntityManager
-	auto& allEntities = entityManager.GetEntities();
+	auto& entities = entityManager.GetEntities();
 
-	// Loop through all other entities to calculate diffusion effects
-	for (auto& otherPtr : allEntities) {
+	// Loop through all entities to find other civilizations and apply diffusion effects
+	for (auto& otherPtr : entities) {
 		// Skip dead entities
-		if (!otherPtr->IsAlive())
-			continue;
-
-		// Skip the current civilization entity to avoid self-diffusion
 		Entity* other = otherPtr.get();
-		if (other == civEntity)
-			continue;
+		if (other == civEntity || !other->IsAlive()) continue;
 
-		// Get the CCivilisationTech from the other entity
+		// Get the CCivilisationTech component from the other entity
 		auto* otherTech = other->GetComponent<CCivilisationTech>();
-		if (!otherTech)
-			continue;
+		
+		// If the other entity does not have a CCivilisationTech component, skip to the next entity
+		if (!otherTech)	continue;
 
 		// Calculate the proximity between the two civilizations
 		float proximity = CalculateProximity(civEntity, other);
-		if (proximity <= 0.0f)
-			continue;
-
-		// Get the openness of the current civilization
-		float openness = civTechComp->openness;
 		
-		// Calculate the diffusion strength based on base rate, openness, and proximity
-		float diffusionStrength = baseDiffusionRate * openness * proximity;
+		// If the proximity is zero or negative, skip to the next entity as there is no diffusion effect
+		if (proximity <= 0.0f) continue;
 
-		// Apply the diffusion effects to the current civilization's known technologies based on the other civilization's known technologies
-		ApplyDiffusion(civTechComp, otherTech, diffusionStrength, entityManager, dt);
+		// Calculate the diffusion strength based on base rate, proximity, openness, and diffusion affinity
+		float openness = civTech->openness;
+		float affinity = civTech->diffusionAffinity;
+		float diffusionStrength = baseDiffusionRate * proximity * openness * affinity;
+
+		// Apply the diffusion effects from the other civilization's known technologies to the current civilization's known technologies
+		ApplyDiffusion(civTech, otherTech, diffusionStrength, entityManager, dt);
+	}
+
+	// Knowledge particle influence
+	for (auto& ePtr : entities) {
+		// Skip dead entities
+		Entity* e = ePtr.get();
+		if (!e->IsAlive()) continue;
+
+		// Get the CKnowledgeParticle, CParticleInfluence, and CTransform components from the entity
+		auto* kp = e->GetComponent<CKnowledgeParticle>();
+		auto* influence = e->GetComponent<CParticleInfluence>();
+		auto* pTransform = e->GetComponent<CTransform>();
+
+		// If any of the required components are missing, skip to the next entity
+		if (!kp || !influence || !pTransform) continue;
+
+		// Calculate the distance between the civilization and the knowledge particle
+		float dist = civTransform->position.Distance(pTransform->position);
+		
+		// If the distance is within the influence radius, apply a passive progress boost to the civilization's known technologies based on the knowledge particle's value and the distance falloff
+		if (dist < influence->influenceRadius) {
+			float falloff = 1.0f - (dist / influence->influenceRadius);
+			float boost = kp->value * falloff;
+
+			// Passive progress boost for the tech carried by the particle
+			civTech->passiveProgress[kp->techId] += boost * dt;
+		}
 	}
 }
 /////////////////////////////////
@@ -92,9 +125,10 @@ void TechDiffusionSystem::ApplyDiffusion(CCivilisationTech* civTech, CCivilisati
 			continue;
 
 		// Find the TechNode for the technology ID
-		CTechNode* techNode = FindTechNode(entityManager, techId);
-		if (!techNode)
-			continue;
+		const CTechNode* techNode = techRegistry.GetTechNode(techId);
+
+		// If the TechNode is not found, skip to the next technology
+		if (!techNode) continue;
 
 		// Update the passive progress towards unlocking the technology
 		float& progress = civTech->passiveProgress[techId];
@@ -113,35 +147,18 @@ void TechDiffusionSystem::ApplyDiffusion(CCivilisationTech* civTech, CCivilisati
 /////////////////////////////////
 // CalculateProximity - Calculates the proximity between two civilization entities based on their positions. It returns a value between 0.0 and 1.0, where 1.0 indicates close proximity and 0.0 indicates distant or no proximity.
 float TechDiffusionSystem::CalculateProximity(Entity* civEntity, Entity* otherCivEntity) {
+	// Get the positions of the two civilization entities
 	Vec2 posA =	civEntity->GetPosition();
 	Vec2 posB = otherCivEntity->GetPosition();
 
+	// Calculate the distance between the two positions
 	float dist = (posA - posB).Mag();
 
-	if (dist > 2000.0f)
-		return 0.0f;
+	// If the distance is greater than 2000 units, return 0.0f to indicate no proximity
+	if (dist > 2000.0f) return 0.0f;
 
-	return 1.0f - (dist / 2000.0f);
-}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// FindTechNode - Searches for a CTechNode in the EntityManager based on the provided techId. Returns a pointer to the CTechNode if found, or nullptr if not found.
-CTechNode* TechDiffusionSystem::FindTechNode(EntityManager& entityManager, const std::string& techId) {
-	auto& allEntities = entityManager.GetEntities();
-
-	for (auto& ePtr : allEntities) {
-		Entity* e = ePtr.get();
-		CTechNode* node = e->GetComponent<CTechNode>();
-		if (!node)
-			continue;
-
-		if (node->id == techId)
-			return node;
-	}
-
-	return nullptr;
+	// Calculate a smooth falloff for proximity based on distance, using a cubic interpolation for a more natural transition
+	float x = dist / 2000.0f;
+	return 1.0f - (x * x * (3 - 2 * x));
 }
 /////////////////////////////////

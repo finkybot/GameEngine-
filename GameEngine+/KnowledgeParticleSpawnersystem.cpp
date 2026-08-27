@@ -7,7 +7,7 @@
 
 /////////////////////////////////
 // Includes
-#include "KnowledgeParticleSpawnersystem.h"
+#include "KnowledgeParticleSpawnerSystem.h"
 #include "EntityManager.h"
 #include "CChunkKnowledge.h"
 #include "CCivilisationTech.h"

@@ -15,34 +15,36 @@
 // Update - Overrides the base class Update method to implement the knowledge particle movement logic. It processes all entities with CKnowledgeParticle, CTransform, and CParticleInfluence components, updating their positions and applying influence to civilizations within their radius.
 void KnowledgeParticleMovementSystem::Update(float dt, EntityManager& entityManager) {
 	// Get a reference to the list of all entities managed by the EntityManager
-	auto& allEntities = entityManager.GetEntities();
+	auto& entities = entityManager.GetEntities();
 
-	// Loop through all entities and process those with CKnowledgeParticle, CTransform, and CParticleInfluence components
-	for (auto& ePtr : allEntities) {
+	// Loop through all entities and process those with CKnowledgeParticle, CTransform, and CParticleInfluence
+	for (auto& ePtr : entities) {
+		// Get the raw pointer to the entity from the unique_ptr
 		Entity* particle = ePtr.get();
 
 		// Skip dead entities
-		if (!particle->IsAlive())
-			continue;
+		if (!particle->IsAlive()) continue;
 
-		// Get the CKnowledgeParticle component for techId and value
+		// Get the CKnowledgeParticle, CTransform, and CParticleInfluence components from the entity
 		auto* kp = particle->GetComponent<CKnowledgeParticle>();
-		if (!kp)
-			continue;
-
-		// Get the CTransform component for position and velocity
 		auto* transform = particle->GetComponent<CTransform>();
-		if (!transform)
-			continue;
-
-		// Get the CParticleInfluence component for influence radius and falloff
 		auto* influence = particle->GetComponent<CParticleInfluence>();
-		if (!influence)
-			continue;
 
-		// Movement is handled by PhysicsSystem via transform->velocity
-		// We only apply influence here.
+		// If any of the required components are missing, skip to the next entity
+		if (!kp || !transform || !influence) continue;
+
+		// Update the position of the knowledge particle based on its velocity and the time delta
+		transform->position += transform->velocity * dt;
+
+		// Optional: simple damping
+		transform->velocity *= 0.99f;
+
+		// Apply the influence of the knowledge particle on civilizations within its influence radius
 		ApplyInfluence(kp, transform, influence, entityManager, dt);
+
+		//	Decrease the value of the knowledge particle over time, and destroy it if its value reaches zero
+		kp->value -= dt * 0.05f;
+		if (kp->value <= 0.0f) particle->Destroy();
 	}
 }
 /////////////////////////////////
@@ -51,41 +53,39 @@ void KnowledgeParticleMovementSystem::Update(float dt, EntityManager& entityMana
 
 /////////////////////////////////
 // ApplyInfluence - Applies the influence of a knowledge particle on civilizations within its influence radius. It calculates the influence strength based on distance and falloff, and updates the known technologies of affected civilizations accordingly.
-void KnowledgeParticleMovementSystem::ApplyInfluence(CKnowledgeParticle* kp, CTransform* particleTransform,
-													 CParticleInfluence* influence, EntityManager& entityManager,
-													 float dt) {
+void KnowledgeParticleMovementSystem::ApplyInfluence(CKnowledgeParticle* kp, CTransform* particleTransform, CParticleInfluence* influence, EntityManager& entityManager, float dt) {
 	// Get a reference to the list of all entities managed by the EntityManager
-	auto& allEntities = entityManager.GetEntities();
+	auto& entities = entityManager.GetEntities();
 
-	// Loop through all entities to find civilizations within the influence radius
-	for (auto& ePtr : allEntities) {
+	// Loop through all entities and process those with CCivilisationTech
+	for (auto& ePtr : entities) {
+		// Get the raw pointer to the entity from the unique_ptr
 		Entity* civ = ePtr.get();
 
 		// Skip dead entities
-		if (!civ->IsAlive())
-			continue;
+		if (!civ->IsAlive()) continue;
 
-		// Get the CCivilisationTech component for technology progress
+		// Get the CCivilisationTech and CTransform components from the civilization entity
 		auto* civTech = civ->GetComponent<CCivilisationTech>();
-		if (!civTech)
-			continue;
-
-		// Get the CTransform component for the civilization's position
 		auto* civTransform = civ->GetComponent<CTransform>();
-		if (!civTransform)
-			continue;
+
+		// If either component is missing, skip to the next entity
+		if (!civTech || !civTransform) continue;
 
 		// Calculate the distance between the knowledge particle and the civilization
 		float dist = (particleTransform->position - civTransform->position).Mag();
-		if (dist > influence->influenceRadius)
-			continue;
 
-		// Calculate the influence strength based on distance and falloff
+		// If the distance is greater than the influence radius, skip to the next entity
+		if (dist > influence->influenceRadius) continue;
+
+		// Calculate the falloff based on distance and influence radius, and apply the influence to the civilization's known technologies
 		float falloff = 1.0f - (dist / influence->influenceRadius);
 		float amount = kp->value * falloff * dt;
 
-		// Update the civilization's passive progress towards the technology represented by the knowledge particle
+		// Passive progress boost
 		civTech->passiveProgress[kp->techId] += amount;
+
+		// Innovation pressure boost (tiny)
 		civTech->innovationPressure += amount * 0.001f;
 	}
 }

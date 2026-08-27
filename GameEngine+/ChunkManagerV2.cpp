@@ -33,8 +33,8 @@ Entity* ChunkManagerV2::CreateChunk(int cx, int cy) {
 	Entity* chunk = m_em.AddEntity(EntityType::Chunk);
 
 	// Attach ChunkComponent
-	chunk->AddComponent<CChunkComponent>();
-	auto* cc = chunk->GetComponent<CChunkComponent>();
+	chunk->AddComponent<CChunk>();
+	auto* cc = chunk->GetComponent<CChunk>();
 	
 	cc->ChunkX = cx;
 	cc->ChunkY = cy;
@@ -60,7 +60,7 @@ void ChunkManagerV2::DestroyChunk(Entity* chunk) {
 		return;
 
 	// Remove from map
-	auto* cc = chunk->GetComponent<CChunkComponent>();
+	auto* cc = chunk->GetComponent<CChunk>();
 	uint64_t id = PackChunkID(cc->ChunkX, cc->ChunkY);
 	m_chunkMap.erase(id);
 
@@ -102,7 +102,7 @@ void ChunkManagerV2::UpdateStreaming(const Vec2& cameraPos, float viewWidth, flo
 	// Deactivate chunks outside range
 	for (auto& pair : m_chunkMap) {
 		Entity* chunk = pair.second;
-		auto* cc = chunk->GetComponent<CChunkComponent>();
+		auto* cc = chunk->GetComponent<CChunk>();
 
 		if (cc->ChunkX < minCx || cc->ChunkX > maxCx || cc->ChunkY < minCy || cc->ChunkY > maxCy) {
 			DeactivateChunk(chunk);
@@ -118,7 +118,7 @@ void ChunkManagerV2::UpdateStreaming(const Vec2& cameraPos, float viewWidth, flo
 void ChunkManagerV2::ActivateChunk(Entity* chunk) {
 	if (!chunk)
 		return;
-	auto* cc = chunk->GetComponent<CChunkComponent>();
+	auto* cc = chunk->GetComponent<CChunk>();
 	cc->IsActive = true;
 }
 /////////////////////////////////
@@ -130,7 +130,7 @@ void ChunkManagerV2::ActivateChunk(Entity* chunk) {
 void ChunkManagerV2::DeactivateChunk(Entity* chunk) {
 	if (!chunk)
 		return;
-	auto* cc = chunk->GetComponent<CChunkComponent>();
+	auto* cc = chunk->GetComponent<CChunk>();
 	cc->IsActive = false;
 }
 /////////////////////////////////
@@ -141,7 +141,7 @@ void ChunkManagerV2::DeactivateChunk(Entity* chunk) {
 // GetTile - Retrieves a reference to the tile at the specified local coordinates (localX, localY) within the given chunk and layer.
 Tile& ChunkManagerV2::GetTile(Entity* chunk, int layerID, int localX, int localY) {
 	// TODO: insert return statement here
-	auto* cc = chunk->GetComponent<CChunkComponent>();
+	auto* cc = chunk->GetComponent<CChunk>();
 	TileLayer& layer = cc->Layers[layerID];
 	return layer.Tiles[localY * cc->TilesWide + localX];
 }
@@ -152,7 +152,7 @@ Tile& ChunkManagerV2::GetTile(Entity* chunk, int layerID, int localX, int localY
 /////////////////////////////////
 // SetTile - Sets the tile at the specified local coordinates (localX, localY) within the given chunk and layer to the provided tile value.
 void ChunkManagerV2::SetTile(Entity* chunk, int layerID, int localX, int localY, const Tile& tile) {
-	auto* cc = chunk->GetComponent<CChunkComponent>();
+	auto* cc = chunk->GetComponent<CChunk>();
 	TileLayer& layer = cc->Layers[layerID];
 	layer.Tiles[localY * cc->TilesWide + localX] = tile;
 	layer.NeedsRebuild = true; // Mark layer for mesh rebuild
@@ -164,7 +164,7 @@ void ChunkManagerV2::SetTile(Entity* chunk, int layerID, int localX, int localY,
 /////////////////////////////////
 // IsTileSolid - Checks if the tile at the specified local coordinates (localX, localY) within the given chunk and layer is solid (collidable).
 bool ChunkManagerV2::IsTileSolid(Entity* chunk, int layerID, int localX, int localY) {
-	auto* cc = chunk->GetComponent<CChunkComponent>();
+	auto* cc = chunk->GetComponent<CChunk>();
 	TileLayer& layer = cc->Layers[layerID];
 
 	if (localX < 0 || localX >= cc->TilesWide || localY < 0 || localY >= cc->TilesHigh)
@@ -180,7 +180,7 @@ bool ChunkManagerV2::IsTileSolid(Entity* chunk, int layerID, int localX, int loc
 /////////////////////////////////
 // BuildCollisionGrid - Builds a collision grid for the specified chunk entity, generating collision data based on the tile properties.
 void ChunkManagerV2::BuildCollisionGrid(Entity* chunk) {
-	CChunkComponent* cc = chunk->GetComponent<CChunkComponent>();
+	CChunk* cc = chunk->GetComponent<CChunk>();
 
 	int w = cc->TilesWide;
 	int h = cc->TilesHigh;
@@ -208,7 +208,7 @@ void ChunkManagerV2::BuildCollisionGrid(Entity* chunk) {
 /////////////////////////////////
 // LoadChunkFromDisk - Loads the specified chunk entity from disk, populating its tile data and other properties as needed.
 void ChunkManagerV2::LoadChunkFromDisk(Entity* chunk) {
-	auto* cc = chunk->GetComponent<CChunkComponent>();
+	auto* cc = chunk->GetComponent<CChunk>();
 
 	std::string filename = "Chunks/chunk_" + std::to_string(cc->ChunkX) + "_" + std::to_string(cc->ChunkY) + ".json";
 

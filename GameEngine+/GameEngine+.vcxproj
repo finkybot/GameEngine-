@@ -148,6 +148,7 @@
   <ItemGroup>
     <ClCompile Include="BVHSystem.cpp" />
     <ClCompile Include="CameraSystem.cpp" />
+    <ClCompile Include="ChunkAnalysisSystem.cpp" />
     <ClCompile Include="ChunkManager.cpp" />
     <ClCompile Include="ChunkManagerV2.cpp" />
     <ClCompile Include="CursorSystem.cpp" />
@@ -168,6 +169,8 @@
     <ClCompile Include="imgui\imgui_tables.cpp" />
     <ClCompile Include="imgui\imgui_widgets.cpp" />
     <ClCompile Include="InputController.cpp" />
+    <ClCompile Include="KnowledgeParticleMovementSystem.cpp" />
+    <ClCompile Include="KnowledgeParticleSpawnersystem.cpp" />
     <ClCompile Include="LevelEditorScene.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainMenuScene.cpp" />
@@ -185,6 +188,9 @@
     <ClCompile Include="Systems\RenderSystem.cpp" />
     <ClCompile Include="Systems\SpawnSystem.cpp" />
     <ClCompile Include="Systems\TileSystem.cpp" />
+    <ClCompile Include="TechDiffusionSystem.cpp" />
+    <ClCompile Include="TechEvolutionSystem.cpp" />
+    <ClCompile Include="TechRegistry.cpp" />
     <ClCompile Include="TestScene.cpp" />
     <ClCompile Include="TextureAtlas.cpp" />
     <ClCompile Include="TextureManager.cpp" />
@@ -199,16 +205,20 @@
     <ClInclude Include="BVHSystem.h" />
     <ClInclude Include="CameraSystem.h" />
     <ClInclude Include="CCamera.h" />
-    <ClInclude Include="CChunkComponent.h" />
+    <ClInclude Include="CChunk.h" />
     <ClInclude Include="CCircle.h" />
     <ClInclude Include="CColliderRect.h" />
     <ClInclude Include="CExplosion.h" />
+    <ClInclude Include="CChunkKnowledge.h" />
+    <ClInclude Include="ChunkAnalysisSystem.h" />
     <ClInclude Include="ChunkManager.h" />
     <ClInclude Include="ChunkManagerV2.h" />
+    <ClInclude Include="CCivilisationTech.h" />
     <ClInclude Include="CLayer.h" />
     <ClInclude Include="CMusic.h" />
     <ClInclude Include="CName.h" />
     <ClInclude Include="Component.h" />
+    <ClInclude Include="CParticleInfluence.h" />
     <ClInclude Include="CPathRequest.h" />
     <ClInclude Include="CRectangle.h" />
     <ClInclude Include="CShape.h" />
@@ -244,6 +254,9 @@
     <ClInclude Include="InputAction.h" />
     <ClInclude Include="InputController.h" />
     <ClInclude Include="json.hpp" />
+    <ClInclude Include="CKnowledgeParticle.h" />
+    <ClInclude Include="KnowledgeParticleMovementSystem.h" />
+    <ClInclude Include="KnowledgeParticleSpawnersystem.h" />
     <ClInclude Include="LevelEditorScene.h" />
     <ClInclude Include="MainMenuScene.h" />
     <ClInclude Include="MainThreadTasks.h" />
@@ -260,11 +273,17 @@
     <ClInclude Include="ShutdownGuard.h" />
     <ClInclude Include="SoundSystem.h" />
     <ClInclude Include="SpatialHashGrid.h" />
+    <ClInclude Include="System.h" />
+    <ClInclude Include="SystemManager.h" />
     <ClInclude Include="Systems\CollisionSystem.h" />
     <ClInclude Include="Systems\PhysicsSystem.h" />
     <ClInclude Include="Systems\RenderSystem.h" />
     <ClInclude Include="Systems\SpawnSystem.h" />
     <ClInclude Include="Systems\TileSystem.h" />
+    <ClInclude Include="TechDiffusionSystem.h" />
+    <ClInclude Include="TechEvolutionSystem.h" />
+    <ClInclude Include="CTechNode.h" />
+    <ClInclude Include="TechRegistry.h" />
     <ClInclude Include="TestScene.h" />
     <ClInclude Include="TextureAtlas.h" />
     <ClInclude Include="TextureManager.h" />

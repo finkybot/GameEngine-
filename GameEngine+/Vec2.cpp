@@ -249,6 +249,16 @@ Vec2 Vec2::RotationResult(float angle, const Vec2& aroundPoint) const {
 
 
 /////////////////////////////////
+// RandomDirection - this method generates a random unit vector (direction) in 2D space. It does this by generating a random angle between 0 and 2π radians, and then calculating the x and y components of the unit vector using the cosine and sine of that angle.
+Vec2 Vec2::RandomDirection() {
+	float angle = static_cast<float>(rand()) / static_cast<float>(RAND_MAX) * 2.0f * 3.14159265358979323846f;
+	return Vec2(cosf(angle), sinf(angle));
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // Friend functions for stream output and scalar multiplication. The stream output operator allows for easy printing of vector values to the console, while the scalar multiplication operator allows for multiplying a scalar value with a vector from the left side.
 std::ostream& operator<<(std::ostream& consoleOut, const Vec2& vector) {
 	consoleOut << "[ " << vector.x << " , " << vector.y << " ]";

@@ -11,7 +11,7 @@
 #include <string>
 #include <unordered_map>
 #include "Vec2.h"
-#include "CChunkComponent.h"
+#include "CChunk.h"
 #include "EntityManager.h"
 /////////////////////////////////
 

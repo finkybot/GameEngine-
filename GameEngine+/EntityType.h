@@ -32,7 +32,9 @@ enum class EntityType {
 	Equalizer = 10,
 	DynamicBox1 = 11,
 	DynamicBox2 = 12,
-	DynamicBox3 = 13
+	DynamicBox3 = 13,
+
+	KnowledgeParticle = 14,
 };
 /////////////////////////////////
 

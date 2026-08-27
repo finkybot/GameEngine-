@@ -21,6 +21,22 @@
 
 
 /////////////////////////////////
+// Helper function to get a color based on progress value (t) for rendering purposes. The function returns a color that transitions from red to yellow to green as the progress value increases from 0 to 1.
+static ImVec4 GetProgressColor(float t) {
+	// t ∈ [0,1]
+	if (t < 0.33f) {
+		return ImVec4(1.0f, 0.0f, 0.0f, 1.0f); // red
+	} else if (t < 0.66f) {
+		return ImVec4(1.0f, 1.0f, 0.0f, 1.0f); // yellow
+	} else {
+		return ImVec4(0.0f, 1.0f, 0.0f, 1.0f); // green
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // Implementation of the TechSimulationScene class
 TechSimulationScene::TechSimulationScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em): Scene(engine, em), m_window(win), m_kpSystem(), m_diffusionSystem(engine.techRegistry),
 																										m_evolutionSystem(engine.techRegistry), m_unlockSystem(engine.techRegistry) {
@@ -40,6 +56,7 @@ TechSimulationScene::~TechSimulationScene() = default;
 /////////////////////////////////
 // OnEnter - Called when the scene is entered. Initializes the game with the current window size.
 void TechSimulationScene::OnEnter() {
+	m_entityManager.ClearAll();  
 	InitializeGame(m_gameEngine.windowSize);
 }
 /////////////////////////////////
@@ -170,6 +187,7 @@ void TechSimulationScene::OnWindowResized(sf::Vector2u newSize) {
 /////////////////////////////////
 // RenderTechDebugWindow - Renders a debug window using ImGui to display information about the civilizations and their technology progress.
 void TechSimulationScene::RenderTechDebugWindow() {
+
 	ImGui::Begin("Tech Simulation Debug");
 
 	auto& entities = m_entityManager.GetEntities();
@@ -179,11 +197,63 @@ void TechSimulationScene::RenderTechDebugWindow() {
 			continue;
 
 		ImGui::Text("Civ %p", e.get());
-		ImGui::BulletText("agriculture.basic known: %.2f", tech->knownTechs["agriculture.basic"]);
-		ImGui::BulletText("passive: %.2f", tech->passiveProgress["agriculture.basic"]);
-		ImGui::BulletText("active: %s", tech->activeResearch.contains("agriculture.basic") ? "yes" : "no");
+
+		const auto knownIt = tech->knownTechs.find("agriculture.basic");
+		const float known = (knownIt != tech->knownTechs.end()) ? knownIt->second : 0.0f;
+
+		const auto passiveIt = tech->passiveProgress.find("agriculture.basic");
+		const float passive = (passiveIt != tech->passiveProgress.end()) ? passiveIt->second : 0.0f;
+
+		const auto activeIt = tech->activeResearch.find("agriculture.basic");
+		const bool isActive = (activeIt != tech->activeResearch.end());
+		const float activeProgress = isActive ? activeIt->second : 0.0f;
+
+		const auto rateIt = tech->debugResearchRate.find("agriculture.basic");
+		const float researchRate = (rateIt != tech->debugResearchRate.end()) ? rateIt->second : 0.0f;
+
+		const auto boostIt = tech->debugKnowledgeBoost.find("agriculture.basic");
+		const float knowledgeBoost = (boostIt != tech->debugKnowledgeBoost.end()) ? boostIt->second : 0.0f;
+
+		const auto diffIt = tech->debugDifficultyFactor.find("agriculture.basic");
+		const float difficultyFactor = (diffIt != tech->debugDifficultyFactor.end()) ? diffIt->second : 0.0f;
+
+		const CTechNode* node = m_gameEngine.techRegistry.GetTechNode("agriculture.basic");
+		const float requiredKnowledge = node ? node->requiredKnowledge : 0.0f;
+
+// Known progress bar (0–1)
+		{
+			float t = known; // already normalized
+			ImVec4 col = GetProgressColor(t);
+			ImGui::BulletText("agriculture.basic known: %.2f", known);
+			ImGui::PushStyleColor(ImGuiCol_PlotHistogram, col);
+			ImGui::ProgressBar(t, ImVec2(200, 12));
+			ImGui::PopStyleColor();
+		}
+
+		// Passive progress bar
+		{
+			float t = requiredKnowledge > 0 ? passive / requiredKnowledge : 0.0f;
+			ImVec4 col = GetProgressColor(t);
+			ImGui::BulletText("passive: %.2f", passive);
+			ImGui::PushStyleColor(ImGuiCol_PlotHistogram, col);
+			ImGui::ProgressBar(t, ImVec2(200, 12));
+			ImGui::PopStyleColor();
+		}
+
+		// Active progress bar
+		{
+			float t = requiredKnowledge > 0 ? activeProgress / requiredKnowledge : 0.0f;
+			ImVec4 col = GetProgressColor(t);
+			ImGui::BulletText("active: %s", isActive ? "yes" : "no");
+			ImGui::PushStyleColor(ImGuiCol_PlotHistogram, col);
+			ImGui::ProgressBar(t, ImVec2(200, 12));
+			ImGui::PopStyleColor();
+		}
+		ImGui::NewLine();
+
 	}
 
 	ImGui::End();
 }
 /////////////////////////////////
+

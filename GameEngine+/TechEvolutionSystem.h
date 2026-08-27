@@ -31,7 +31,7 @@ public:
 	 
 	
 	/////////////////////////////////
-	float globalResearchRate = 0.01f; // Global research rate modifier affecting all civilizations
+	float globalResearchRate = 0.15f; // Global research rate modifier affecting all civilizations
 	/////////////////////////////////
 
 

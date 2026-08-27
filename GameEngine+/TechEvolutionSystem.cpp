@@ -48,43 +48,66 @@ void TechEvolutionSystem::Update(float dt, EntityManager& entityManager) {
 // ProcessCivilisationTech - Processes the technology evolution for a single entity with a CCivilisationTech. It updates research progress, checks prerequisites, and unlocks technologies as appropriate.
 void TechEvolutionSystem::ProcessCivilisationTech(Entity* entity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt) {
 	auto* transform = entity->GetComponent<CTransform>();
-	if (!transform)
-		return;
+	if (!transform)	return;
 
+	// 1) Promote passive → active research (with full skip rules)
+	for (auto& [techId, passive] : civTechComp->passiveProgress) {
+		// Skip if already fully known
+		auto knownIt = civTechComp->knownTechs.find(techId);
+		if (knownIt != civTechComp->knownTechs.end() && knownIt->second >= 1.0f)
+			continue;
+
+		// Skip if already actively researching
+		if (civTechComp->activeResearch.contains(techId))
+			continue;
+
+		// Skip if prerequisites are not met
+		CTechNode* node = FindTechNode(techId);
+		if (!node || !PrerequisitesMet(*civTechComp, *node)) continue;
+
+		// Promote passive → active once threshold reached
+		if (passive >= 5.0f)
+		civTechComp->activeResearch[techId] = passive; // seed progress
+	}
+
+	// 2) Update active research progress
 	for (auto it = civTechComp->activeResearch.begin(); it != civTechComp->activeResearch.end();) {
 		const std::string& techId = it->first;
 		float& progress = it->second;
 
-		// NEW: Use TechRegistry instead of scanning entities
+		// Lookup tech definition
 		CTechNode* techNode = FindTechNode(techId);
 		if (!techNode) {
 			++it;
 			continue;
 		}
 
-		// NEW: Proper prerequisite check
+		// Prerequisite check
 		if (!PrerequisitesMet(*civTechComp, *techNode)) {
 			++it;
 			continue;
 		}
 
-		// NEW: Full research rate calculation
+		// Calculate research rate
 		float researchRate = CalculateResearchRate(*civTechComp, *techNode, globalResearchRate);
 
-		// NEW: Knowledge particle boost
+		
+		// Knowledge particle boost
 		float knowledgeBoost = 0.0f;
 		auto& allEntities = entityManager.GetEntities();
+
+		// Iterate through all entities to find knowledge particles that influence the current entity
 		for (auto& ePtr : allEntities) {
 			Entity* e = ePtr.get();
+				// Skip dead entities
 			if (!e->IsAlive())
-				continue;
+					continue;
 
 			auto* kp = e->GetComponent<CKnowledgeParticle>();
 			auto* influence = e->GetComponent<CParticleInfluence>();
 			auto* pTransform = e->GetComponent<CTransform>();
 
-			if (!kp || !influence || !pTransform)
-				continue;
+			if (!kp || !influence || !pTransform) continue;
 
 			float dist = transform->position.Distance(pTransform->position);
 			if (dist < influence->influenceRadius) {
@@ -94,6 +117,11 @@ void TechEvolutionSystem::ProcessCivilisationTech(Entity* entity, CCivilisationT
 		}
 
 		researchRate += knowledgeBoost;
+
+		// Debug values
+		civTechComp->debugResearchRate[techId] = researchRate;
+		civTechComp->debugKnowledgeBoost[techId] = knowledgeBoost;
+		civTechComp->debugDifficultyFactor[techId] = (1.0f / techNode->baseDifficulty);
 
 		// Apply research
 		progress += researchRate * dt;

@@ -82,6 +82,14 @@ public:
 
 
 	/////////////////////////////////
+	std::unordered_map<std::string, float> debugResearchRate;
+	std::unordered_map<std::string, float> debugKnowledgeBoost;
+	std::unordered_map<std::string, float> debugDifficultyFactor;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Public methods for the CCivilisationTech component
 public:
 	/////////////////////////////////

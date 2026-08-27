@@ -106,6 +106,10 @@ void TechDiffusionSystem::ProcessTechDiffusionForCivilisation(Entity* civEntity,
 			float falloff = 1.0f - (dist / influence->influenceRadius);
 			float boost = kp->value * falloff;
 
+			// Skip if this civ already fully knows the tech
+			auto knownIt = civTech->knownTechs.find(kp->techId);
+			if (knownIt != civTech->knownTechs.end() && knownIt->second >= 1.0f) continue;
+
 			// Passive progress boost for the tech carried by the particle
 			civTech->passiveProgress[kp->techId] += boost * dt;
 		}

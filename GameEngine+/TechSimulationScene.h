@@ -65,7 +65,6 @@ private:
 	/////////////////////////////////
 
 
-
 	/////////////////////////////////
 	// Member variables for the TechSimulationScene class
 	sf::RenderWindow& m_window;

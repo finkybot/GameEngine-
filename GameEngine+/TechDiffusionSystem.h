@@ -33,6 +33,12 @@ public:
 
 
 	/////////////////////////////////
+	void ProcessTechDiffusionForCivilisation(Entity* civEntity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt);
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	float baseDiffusionRate = 0.005f; // Base diffusion rate modifier affecting all civilizations
 	/////////////////////////////////
 
@@ -56,7 +62,6 @@ private:
 	
 
 	/////////////////////////////////
-	void ProcessTechDiffusionForCivilisation(Entity* civEntity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt);
 	void ApplyDiffusion(CCivilisationTech* civTech, CCivilisationTech* otherCivTech, float diffusionStrength, EntityManager& entityManager, float dt);
 	float CalculateProximity(Entity* civEntity, Entity* otherCivEntity);
 	/////////////////////////////////

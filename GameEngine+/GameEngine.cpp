@@ -31,6 +31,7 @@
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 #include "MainThreadTasks.h"
+#include "JobSystem.h"
 /////////////////////////////////
 
 
@@ -184,6 +185,9 @@ void GameEngine::RemoveScene(const std::string& sceneName) {
 // Run - Main game loop that handles scene management, input processing, and rendering. The method initializes the chosen scene, sets up the input controller, and enters a loop that updates the current 
 // scene, processes events, and renders the scene to the window. The loop continues until the window is closed or the running state is set to false.
 void GameEngine::Run() {
+	// Initialise job system before any scenes start scheduling jobs
+	JobSystem::Init();
+
 	// Setup Event Handler.
 	bool running = true; // Create a Boolean variable to manage the engine running state
 
@@ -226,6 +230,9 @@ void GameEngine::Run() {
 		Update(0.016f); // Update the scene with a fixed delta time (16ms for ~60 FPS), I can calculate actual delta time using the deltaClock for variable time steps
 	}
 
+	
+	// Shutdown ImGui-SFML before destroying the window to avoid dangling references
+	JobSystem::Shutdown();
 	// Ensure window closes cleanly when Run exits
 	if (window.isOpen()) window.close();
 }

@@ -255,6 +255,7 @@
     <ClInclude Include="Includes.h" />
     <ClInclude Include="InputAction.h" />
     <ClInclude Include="InputController.h" />
+    <ClInclude Include="JobSystem.h" />
     <ClInclude Include="json.hpp" />
     <ClInclude Include="CKnowledgeParticle.h" />
     <ClInclude Include="KnowledgeParticleMovementSystem.h" />

@@ -16,6 +16,7 @@
 #include "CCivilisationTech.h"
 #include "CKnowledgeParticle.h"
 #include "CParticleInfluence.h"
+#include "JobSystem.h"
 /////////////////////////////////
 
 
@@ -98,37 +99,43 @@ void TechSimulationScene::InitializeGame(sf::Vector2u windowSize) {
 /////////////////////////////////
 // CreateTechTestWorld - Creates a test world with two civilizations and a knowledge particle. Civilization A knows the "agriculture.basic
 void TechSimulationScene::CreateTechTestWorld() {
-	// Civ A
-	Entity* civA = m_entityManager.AddEntity(EntityType::Civilisation);
-	auto* tA = civA->AddComponent<CTransform>();
-	tA->position = Vec2(400, 300);
+	// Spawn many civilisations
+	const int civCount = 100;
+	for (int i = 0; i < civCount; i++) {
+		Entity* civ = m_entityManager.AddEntity(EntityType::Civilisation);
 
-	auto* techA = civA->AddComponent<CCivilisationTech>();
-	techA->knownTechs["agriculture.basic"] = 1.0f;
-	techA->unlockedTechs.insert("agriculture.basic");
+		auto* t = civ->AddComponent<CTransform>();
+		t->position = Vec2(rand() % 2000, rand() % 2000);
 
-	// Civ B
-	Entity* civB = m_entityManager.AddEntity(EntityType::Civilisation);
-	auto* tB = civB->AddComponent<CTransform>();
-	tB->position = Vec2(900, 300);
+		auto* tech = civ->AddComponent<CCivilisationTech>();
 
-	auto* techB = civB->AddComponent<CCivilisationTech>();
-	techB->knownTechs["agriculture.basic"] = 0.0f;
-	techB->passiveProgress["agriculture.basic"] = 0.0f;
+		if (i == 0) {
+			// Civ 0 knows the tech
+			tech->knownTechs["agriculture.basic"] = 1.0f;
+			tech->unlockedTechs.insert("agriculture.basic");
+		} else {
+			tech->knownTechs["agriculture.basic"] = 0.0f;
+			tech->passiveProgress["agriculture.basic"] = 0.0f;
+		}
+	}
 
-	// Knowledge Particle
-	Entity* particle = m_entityManager.AddEntity(EntityType::KnowledgeParticle);
-	auto* kp = particle->AddComponent<CKnowledgeParticle>();
-	kp->techId = "agriculture.basic";
-	kp->value = 1.0f;
+	// Spawn many knowledge particles
+	const int particleCount = 20;
+	for (int i = 0; i < particleCount; i++) {
+		Entity* p = m_entityManager.AddEntity(EntityType::KnowledgeParticle);
 
-	auto* pT = particle->AddComponent<CTransform>();
-	pT->position = Vec2(650, 300);
-	pT->velocity = Vec2(0, 0);
+		auto* kp = p->AddComponent<CKnowledgeParticle>();
+		kp->techId = "agriculture.basic";
+		kp->value = 1.0f;
 
-	auto* influence = particle->AddComponent<CParticleInfluence>();
-	influence->influenceRadius = 500.0f;
-	influence->influenceFalloff = 1.0f;
+		auto* t = p->AddComponent<CTransform>();
+		t->position = Vec2(rand() % 2000, rand() % 2000);
+		t->velocity = Vec2(0, 0);
+
+		auto* inf = p->AddComponent<CParticleInfluence>();
+		inf->influenceRadius = 500.0f;
+		inf->influenceFalloff = 1.0f;
+	}
 }
 /////////////////////////////////
 
@@ -137,12 +144,16 @@ void TechSimulationScene::CreateTechTestWorld() {
 /////////////////////////////////
 // Update - Updates the scene state, running the technology systems and rendering the debug window.
 void TechSimulationScene::Update(float dt) {
-	// Run tech systems
-	m_kpSystem.Update(dt, m_entityManager);
-	m_diffusionSystem.Update(dt, m_entityManager);
-	m_evolutionSystem.Update(dt, m_entityManager);
-	m_unlockSystem.Update(dt, m_entityManager);
+	// --- PARALLEL TECH SYSTEMS ---
+	ScheduleTechEvolutionJobs(dt);
+	ScheduleTechDiffusionJobs(dt);
+	JobSystem::WaitIdle(); // ensure all jobs finish before continuing
 
+	// --- SERIAL SYSTEMS (must stay on main thread) ---
+	m_kpSystem.Update(dt, m_entityManager);		// movement → mutates transforms
+	m_unlockSystem.Update(dt, m_entityManager); // unlocks → triggers events
+
+	// --- DEBUG UI ---
 	RenderTechDebugWindow();
 }
 /////////////////////////////////
@@ -253,7 +264,94 @@ void TechSimulationScene::RenderTechDebugWindow() {
 
 	}
 
+ImGui::SeparatorText("Job System");
+
+	ImGui::Text("Worker Threads: %zu", JobSystem::GetWorkerCount());
+	ImGui::Text("Last Frame Job Time: %.3f ms", JobSystem::GetLastFrameJobTimeMs());
+
+	// Rolling graph
+	static float history[120] = {0};
+	static int index = 0;
+
+	history[index] = (float)JobSystem::GetLastFrameJobTimeMs();
+	index = (index + 1) % 120;
+
+	ImGui::PlotLines("Job Time (ms)", history, 120, 0, nullptr, 0.0f, 20.0f, ImVec2(200, 60));
+
+	// --- FPS Display ---
+	ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
+
+	// --- FPS Graph ---
+	static float fpsHistory[120] = {0};
+	static int fpsIndex = 0;
+
+	fpsHistory[fpsIndex] = ImGui::GetIO().Framerate;
+	fpsIndex = (fpsIndex + 1) % 120;
+
+	ImGui::PlotLines("FPS", fpsHistory, 120, 0, nullptr, 0.0f, 200.0f, ImVec2(200, 60));
+
 	ImGui::End();
 }
 /////////////////////////////////
+ 
+ 
 
+/////////////////////////////////
+// ScheduleTechEvolutionJobs - Schedules technology evolution jobs based on the elapsed time (dt). Currently does nothing, but can be used for scheduling evolution tasks if needed.
+void TechSimulationScene::ScheduleTechEvolutionJobs(float dt) {
+	auto& entities = m_entityManager.GetEntities();
+	const size_t chunkSize = 64;
+
+	for (size_t i = 0; i < entities.size(); i += chunkSize) {
+		size_t begin = i;
+		size_t end = std::min(entities.size(), i + chunkSize);
+
+		JobSystem::Schedule([this, begin, end, dt]() {
+			auto& ents = m_entityManager.GetEntities();
+
+			for (size_t j = begin; j < end; ++j) {
+				Entity* e = ents[j].get();
+				if (!e || !e->IsAlive())
+					continue;
+
+				auto* tech = e->GetComponent<CCivilisationTech>();
+				if (!tech)
+					continue;
+
+				m_evolutionSystem.ProcessCivilisationTech(e, tech, m_entityManager, dt);
+			}
+		});
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// ScheduleTechDiffusionJobs - Schedules technology diffusion jobs based on the elapsed time (dt). Currently does nothing, but can be used for scheduling diffusion tasks if needed.
+void TechSimulationScene::ScheduleTechDiffusionJobs(float dt) {
+	auto& entities = m_entityManager.GetEntities();
+	const size_t chunkSize = 64;
+
+	for (size_t i = 0; i < entities.size(); i += chunkSize) {
+		size_t begin = i;
+		size_t end = std::min(entities.size(), i + chunkSize);
+
+		JobSystem::Schedule([this, begin, end, dt]() {
+			auto& ents = m_entityManager.GetEntities();
+
+			for (size_t j = begin; j < end; ++j) {
+				Entity* civ = ents[j].get();
+				if (!civ || !civ->IsAlive())
+					continue;
+
+				auto* civTech = civ->GetComponent<CCivilisationTech>();
+				if (!civTech)
+					continue;
+
+				m_diffusionSystem.ProcessTechDiffusionForCivilisation(civ, civTech, m_entityManager, dt);
+			}
+		});
+	}
+}
+/////////////////////////////////

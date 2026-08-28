@@ -28,7 +28,12 @@ public:
 	TechEvolutionSystem(TechRegistry& techRegistry) : techRegistry(techRegistry) {}
 	/////////////////////////////////
 	 
-	 
+	
+	/////////////////////////////////
+	void ProcessCivilisationTech(Entity* entity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt);
+	/////////////////////////////////
+
+
 	
 	/////////////////////////////////
 	float globalResearchRate = 0.15f; // Global research rate modifier affecting all civilizations
@@ -48,7 +53,6 @@ public:
 private:
 	TechRegistry& techRegistry; // Reference to the TechRegistry for accessing technology nodes and their properties	
 
-	void ProcessCivilisationTech(Entity* entity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt);
 	CTechNode* FindTechNode(const std::string& techId);
 	bool PrerequisitesMet(const CCivilisationTech& civTech, const CTechNode& techNode);
 	float CalculateResearchRate(const CCivilisationTech& civTech, const CTechNode& techNode, float baseRate);

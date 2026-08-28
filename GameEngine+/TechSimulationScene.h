@@ -65,6 +65,21 @@ private:
 	/////////////////////////////////
 
 
+
+	/////////////////////////////////
+	// Job scheduling methods for the TechSimulationScene class	
+	void ScheduleTechEvolutionJobs(float dt);
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Job scheduling methods for the TechSimulationScene class
+	void ScheduleTechDiffusionJobs(float dt);
+	/////////////////////////////////
+
+
+
 	/////////////////////////////////
 	// Member variables for the TechSimulationScene class
 	sf::RenderWindow& m_window;

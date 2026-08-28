@@ -90,5 +90,13 @@ private:
 	TechEvolutionSystem m_evolutionSystem;
 	TechUnlockSystem m_unlockSystem;
 	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	bool isActive = true; // Flag to indicate whether the scene is currently active and should be updated/rendered
+	size_t civBudget = 200; // process only 200 civs per frame
+	int frameCounter = 0;
+	/////////////////////////////////
 };
 /////////////////////////////////

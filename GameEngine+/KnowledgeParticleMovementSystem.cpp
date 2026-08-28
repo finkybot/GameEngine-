@@ -23,7 +23,7 @@ void KnowledgeParticleMovementSystem::Update(float dt, EntityManager& entityMana
 		Entity* particle = ePtr.get();
 
 		// Skip dead entities
-		if (!particle->IsAlive()) continue;
+		if (!particle || !particle->IsAlive()) continue;
 
 		// Get the CKnowledgeParticle, CTransform, and CParticleInfluence components from the entity
 		auto* kp = particle->GetComponent<CKnowledgeParticle>();

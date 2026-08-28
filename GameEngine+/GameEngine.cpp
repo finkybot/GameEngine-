@@ -133,6 +133,10 @@ std::vector<std::string> GameEngine::GetSceneNames() const {
 // ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions. The method checks if the specified scene exists // in the scenes map and sets it as 
 // the current active scene, enabling the game loop to update and render the new scene. If the scene name is not found, a warning is logged.
 void GameEngine::ChangeScene(const std::string& sceneName) {
+	// Wait for all jobs to finish before changing scenes to avoid dangling references
+	JobSystem::WaitIdle();
+
+	// Clear any pending main thread tasks to avoid executing tasks from the previous scene after switching
 	auto it = scenes.find(sceneName);
 	if (it != scenes.end()) {
 		// notify previous scene it's exiting
@@ -186,7 +190,7 @@ void GameEngine::RemoveScene(const std::string& sceneName) {
 // scene, processes events, and renders the scene to the window. The loop continues until the window is closed or the running state is set to false.
 void GameEngine::Run() {
 	// Initialise job system before any scenes start scheduling jobs
-	JobSystem::Init();
+	JobSystem::Init(4); // Initialize the job system with 4 worker threads (or use std::thread::hardware_concurrency() for dynamic thread count)
 
 	// Setup Event Handler.
 	bool running = true; // Create a Boolean variable to manage the engine running state
@@ -229,7 +233,6 @@ void GameEngine::Run() {
 	while (window.isOpen()) {
 		Update(0.016f); // Update the scene with a fixed delta time (16ms for ~60 FPS), I can calculate actual delta time using the deltaClock for variable time steps
 	}
-
 	
 	// Shutdown ImGui-SFML before destroying the window to avoid dangling references
 	JobSystem::Shutdown();
@@ -249,7 +252,7 @@ void GameEngine::Run() {
 //			5) Updates the current scene and its entity manager,
 void GameEngine::Update(float deltaTime) {
 	// *** MAIN LOOP *** Main loop, game logic is handled in here once per frame, runs while the window is open and handles events, updates, and rendering for the current scene.
-	while (window.isOpen()) {
+	//while (window.isOpen()) {
 		// *** CLEAR WINDOW *** Clear the window at the start of each frame. Use an explicit clear color so fully transparent tiles in the editor reveal the intended background instead of an unintended 
 		// grey fallback.
 		window.clear(sf::Color::Transparent);
@@ -314,7 +317,7 @@ void GameEngine::Update(float deltaTime) {
 				// Reset input controller to new scene controller
 				m_InputController.SetGameController(currentScene->GetGameController());
 				// Skip running the previous scene's Update this frame
-				continue;
+				//continue;
 			}
 		}
 
@@ -374,7 +377,7 @@ void GameEngine::Update(float deltaTime) {
 
 		// *** DISPLAY FRAME *** Display the rendered frame to the window
 		window.display();
-	}
+	//}
 }
 /////////////////////////////////
 

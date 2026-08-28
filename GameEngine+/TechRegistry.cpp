@@ -85,7 +85,7 @@ void TechRegistry::LoadDefaults() {
 	basicAgri.id = "agriculture.basic";
 	basicAgri.name = "Basic Agriculture";
 	basicAgri.category = "agriculture";
-	basicAgri.requiredKnowledge = 100.0f;
+	basicAgri.requiredKnowledge = 20.0f;
 	basicAgri.baseDifficulty = 1.0f;
 	basicAgri.mutationPotential = 0.05f;
 	basicAgri.compatibilityTags = {"agriculture", "food"};
@@ -98,7 +98,7 @@ void TechRegistry::LoadDefaults() {
 	irrigation.id = "agriculture.irrigation";
 	irrigation.name = "Irrigation";
 	irrigation.category = "agriculture";
-	irrigation.requiredKnowledge = 200.0f;
+	irrigation.requiredKnowledge = 60.0f;
 	irrigation.baseDifficulty = 1.5f;
 	irrigation.mutationPotential = 0.08f;
 	irrigation.compatibilityTags = {"agriculture", "water"};
@@ -111,7 +111,7 @@ void TechRegistry::LoadDefaults() {
 	cropRotation.id = "agriculture.crop_rotation";
 	cropRotation.name = "Crop Rotation";
 	cropRotation.category = "agriculture";
-	cropRotation.requiredKnowledge = 350.0f;
+	cropRotation.requiredKnowledge = 60.0f;
 	cropRotation.baseDifficulty = 2.0f;
 	cropRotation.mutationPotential = 0.12f;
 	cropRotation.compatibilityTags = {"agriculture", "soil"};

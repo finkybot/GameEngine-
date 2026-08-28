@@ -100,7 +100,7 @@ void TechEvolutionSystem::ProcessCivilisationTech(Entity* entity, CCivilisationT
 		for (auto& ePtr : allEntities) {
 			Entity* e = ePtr.get();
 				// Skip dead entities
-			if (!e->IsAlive())
+			if (!e ||!e->IsAlive())
 					continue;
 
 			auto* kp = e->GetComponent<CKnowledgeParticle>();

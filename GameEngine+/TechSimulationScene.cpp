@@ -57,6 +57,8 @@ TechSimulationScene::~TechSimulationScene() = default;
 /////////////////////////////////
 // OnEnter - Called when the scene is entered. Initializes the game with the current window size.
 void TechSimulationScene::OnEnter() {
+	isActive = true;
+	JobSystem::WaitIdle(); // ensure all jobs finish before continuing
 	m_entityManager.ClearAll();  
 	InitializeGame(m_gameEngine.windowSize);
 }
@@ -66,7 +68,10 @@ void TechSimulationScene::OnEnter() {
 
 /////////////////////////////////
 // OnExit - Called when the scene is exited. Currently does nothing, but can be used for cleanup if needed.
-void TechSimulationScene::OnExit() {}
+void TechSimulationScene::OnExit() {
+	isActive = false;
+	JobSystem::WaitIdle(); // ensure all jobs finish before continuing
+}
 /////////////////////////////////
 
 
@@ -83,7 +88,7 @@ void TechSimulationScene::LoadResources() {
 /////////////////////////////////
 // UnloadResources - Unloads the resources for the scene. Currently does nothing, but can be used for cleanup if needed.
 void TechSimulationScene::UnloadResources() {}
-///////////////////////////////
+/////////////////////////////////
 
 
 
@@ -100,7 +105,7 @@ void TechSimulationScene::InitializeGame(sf::Vector2u windowSize) {
 // CreateTechTestWorld - Creates a test world with two civilizations and a knowledge particle. Civilization A knows the "agriculture.basic
 void TechSimulationScene::CreateTechTestWorld() {
 	// Spawn many civilisations
-	const int civCount = 100;
+	const int civCount = 150;
 	for (int i = 0; i < civCount; i++) {
 		Entity* civ = m_entityManager.AddEntity(EntityType::Civilisation);
 
@@ -144,9 +149,28 @@ void TechSimulationScene::CreateTechTestWorld() {
 /////////////////////////////////
 // Update - Updates the scene state, running the technology systems and rendering the debug window.
 void TechSimulationScene::Update(float dt) {
+	frameCounter++; // Increment frame counter
+
+	// Update FPS and adjust civBudget based on performance
+	float fps = 1.0f / dt;
+
+	// Adjust civBudget based on FPS to maintain performance
+	if (fps < 30)
+		civBudget = 100;
+	else if (fps < 45)
+		civBudget = 150;
+	else
+		civBudget = 200;
+
 	// --- PARALLEL TECH SYSTEMS ---
-	ScheduleTechEvolutionJobs(dt);
-	ScheduleTechDiffusionJobs(dt);
+	//	Schedule diffusion and evolution jobs at different intervals to balance performance
+	if (frameCounter % 2 == 0)
+		ScheduleTechDiffusionJobs(dt);
+
+	// Schedule evolution jobs every 4 frames to reduce load
+	if (frameCounter % 4 == 0)
+		ScheduleTechEvolutionJobs(dt);
+
 	JobSystem::WaitIdle(); // ensure all jobs finish before continuing
 
 	// --- SERIAL SYSTEMS (must stay on main thread) ---
@@ -155,6 +179,9 @@ void TechSimulationScene::Update(float dt) {
 
 	// --- DEBUG UI ---
 	RenderTechDebugWindow();
+
+	// Reset frame counter to avoid overflow
+	if (frameCounter > 1000000)	frameCounter = 0;
 }
 /////////////////////////////////
 
@@ -198,16 +225,28 @@ void TechSimulationScene::OnWindowResized(sf::Vector2u newSize) {
 /////////////////////////////////
 // RenderTechDebugWindow - Renders a debug window using ImGui to display information about the civilizations and their technology progress.
 void TechSimulationScene::RenderTechDebugWindow() {
-
 	ImGui::Begin("Tech Simulation Debug");
 
+	// Create two columns: left = civ list, right = graphs
+	ImGui::Columns(2, "techColumns", true);
+
+	// ---------------------------
+	// LEFT COLUMN (scrollable civ list)
+	// ---------------------------
+	ImGui::BeginChild("CivList", ImVec2(0, 0), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
+
 	auto& entities = m_entityManager.GetEntities();
+
 	for (auto& e : entities) {
-		auto* tech = e->GetComponent<CCivilisationTech>();
+		Entity* ent = e.get();
+		if (!ent || !ent->IsAlive())
+			continue;
+
+		auto* tech = ent->GetComponent<CCivilisationTech>();
 		if (!tech)
 			continue;
 
-		ImGui::Text("Civ %p", e.get());
+		ImGui::Text("Civ %p", ent);
 
 		const auto knownIt = tech->knownTechs.find("agriculture.basic");
 		const float known = (knownIt != tech->knownTechs.end()) ? knownIt->second : 0.0f;
@@ -219,19 +258,10 @@ void TechSimulationScene::RenderTechDebugWindow() {
 		const bool isActive = (activeIt != tech->activeResearch.end());
 		const float activeProgress = isActive ? activeIt->second : 0.0f;
 
-		const auto rateIt = tech->debugResearchRate.find("agriculture.basic");
-		const float researchRate = (rateIt != tech->debugResearchRate.end()) ? rateIt->second : 0.0f;
-
-		const auto boostIt = tech->debugKnowledgeBoost.find("agriculture.basic");
-		const float knowledgeBoost = (boostIt != tech->debugKnowledgeBoost.end()) ? boostIt->second : 0.0f;
-
-		const auto diffIt = tech->debugDifficultyFactor.find("agriculture.basic");
-		const float difficultyFactor = (diffIt != tech->debugDifficultyFactor.end()) ? diffIt->second : 0.0f;
-
 		const CTechNode* node = m_gameEngine.techRegistry.GetTechNode("agriculture.basic");
 		const float requiredKnowledge = node ? node->requiredKnowledge : 0.0f;
 
-// Known progress bar (0–1)
+		// Known progress bar (0–1)
 		{
 			float t = known; // already normalized
 			ImVec4 col = GetProgressColor(t);
@@ -260,35 +290,42 @@ void TechSimulationScene::RenderTechDebugWindow() {
 			ImGui::ProgressBar(t, ImVec2(200, 12));
 			ImGui::PopStyleColor();
 		}
-		ImGui::NewLine();
 
+
+		ImGui::Separator();
 	}
 
-ImGui::SeparatorText("Job System");
+	ImGui::EndChild();
 
+	// ---------------------------
+	// RIGHT COLUMN (fixed graphs)
+	// ---------------------------
+	ImGui::NextColumn();
+
+	ImGui::BeginChild("GraphsPanel", ImVec2(0, 0), true);
+
+	// Worker threads
 	ImGui::Text("Worker Threads: %zu", JobSystem::GetWorkerCount());
 	ImGui::Text("Last Frame Job Time: %.3f ms", JobSystem::GetLastFrameJobTimeMs());
 
-	// Rolling graph
+	// Job time graph
 	static float history[120] = {0};
 	static int index = 0;
-
-	history[index] = (float)JobSystem::GetLastFrameJobTimeMs();
+	history[index] = JobSystem::GetLastFrameJobTimeMs();
 	index = (index + 1) % 120;
+	ImGui::PlotLines("Job Time (ms)", history, 120, 0, nullptr, 0.0f, 20.0f, ImVec2(250, 80));
 
-	ImGui::PlotLines("Job Time (ms)", history, 120, 0, nullptr, 0.0f, 20.0f, ImVec2(200, 60));
-
-	// --- FPS Display ---
+	// FPS
 	ImGui::Text("FPS: %.1f", ImGui::GetIO().Framerate);
 
-	// --- FPS Graph ---
+	// FPS graph
 	static float fpsHistory[120] = {0};
 	static int fpsIndex = 0;
-
 	fpsHistory[fpsIndex] = ImGui::GetIO().Framerate;
 	fpsIndex = (fpsIndex + 1) % 120;
+	ImGui::PlotLines("FPS", fpsHistory, 120, 0, nullptr, 0.0f, 200.0f, ImVec2(250, 80));
 
-	ImGui::PlotLines("FPS", fpsHistory, 120, 0, nullptr, 0.0f, 200.0f, ImVec2(200, 60));
+	ImGui::EndChild();
 
 	ImGui::End();
 }
@@ -299,14 +336,26 @@ ImGui::SeparatorText("Job System");
 /////////////////////////////////
 // ScheduleTechEvolutionJobs - Schedules technology evolution jobs based on the elapsed time (dt). Currently does nothing, but can be used for scheduling evolution tasks if needed.
 void TechSimulationScene::ScheduleTechEvolutionJobs(float dt) {
+	// Get the list of entities from the entity manager
 	auto& entities = m_entityManager.GetEntities();
-	const size_t chunkSize = 64;
 
-	for (size_t i = 0; i < entities.size(); i += chunkSize) {
+	// Define the chunk size for processing entities in parallel. This determines how many entities will be processed in each job.
+	const size_t chunkSize = 128;
+
+	// Limit the number of civilizations processed per frame to avoid overloading the system. This is a safeguard to ensure that only a manageable number of civilizations are processed in each update cycle.
+	size_t limit = std::min(entities.size(), civBudget);
+
+	for (size_t i = 0; i < limit; i += chunkSize) {
 		size_t begin = i;
-		size_t end = std::min(entities.size(), i + chunkSize);
+		size_t end = std::min(limit, i + chunkSize);
 
+		if (!isActive) return; // Check if the scene is active before scheduling jobs
+		
+		// Schedule a job to process a chunk of entities for technology evolution
 		JobSystem::Schedule([this, begin, end, dt]() {
+			if (!isActive) return; // Check if the scene is active before processing jobs, yes, this is a double-check, but it is necessary to ensure that the scene is still active when the job runs
+
+			// Get the list of entities from the entity manager
 			auto& ents = m_entityManager.GetEntities();
 
 			for (size_t j = begin; j < end; ++j) {
@@ -331,13 +380,19 @@ void TechSimulationScene::ScheduleTechEvolutionJobs(float dt) {
 // ScheduleTechDiffusionJobs - Schedules technology diffusion jobs based on the elapsed time (dt). Currently does nothing, but can be used for scheduling diffusion tasks if needed.
 void TechSimulationScene::ScheduleTechDiffusionJobs(float dt) {
 	auto& entities = m_entityManager.GetEntities();
-	const size_t chunkSize = 64;
+	const size_t chunkSize = 128;
 
 	for (size_t i = 0; i < entities.size(); i += chunkSize) {
 		size_t begin = i;
 		size_t end = std::min(entities.size(), i + chunkSize);
 
+		if (!isActive) return; // Check if the scene is active before scheduling jobs
+
+		// Schedule a job to process a chunk of entities for technology diffusion
 		JobSystem::Schedule([this, begin, end, dt]() {
+			if (!isActive) return; // Check if the scene is active before processing jobs, yes, this is a double-check, but it is necessary to ensure that the scene is still active when the job runs
+
+			// Get the list of entities from the entity manager
 			auto& ents = m_entityManager.GetEntities();
 
 			for (size_t j = begin; j < end; ++j) {

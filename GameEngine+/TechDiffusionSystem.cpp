@@ -23,24 +23,25 @@ void TechDiffusionSystem::Update(float dt, EntityManager& entityManager) {
 	// Get a reference to the list of all entities managed by the EntityManager
 	auto& allEntities = entityManager.GetEntities();
 
-	// Loop through all entities and process those with CivilisationTechComponent
+	// Loop through all entities and process those with CCivilisationTech
 	for (auto& ePtr : allEntities) {
-		// Skip dead entities
-		if (!ePtr->IsAlive())
-			continue;
-
-		// Get the CivilisationTechComponent from the entity
+		// Get the raw pointer to the entity from the unique_ptr
 		Entity* civ = ePtr.get();
-		
-		// Skip entities that don't have a CivilisationTechComponent
-		auto* civTech = civ->GetComponent<CCivilisationTech>();
-		if (!civTech)
-			continue;
 
-		// Process technology diffusion for the civilization entity
+		//	Skip dead entities
+		if (!civ || !civ->IsAlive()) continue;
+
+		// Get the CCivilisationTech component from the civilization entity
+		auto* civTech = civ->GetComponent<CCivilisationTech>();
+		
+		//	If the civilization entity does not have a CCivilisationTech component, skip to the next entity
+		if (!civTech) continue;
+
+		// Process the technology diffusion for the civilization entity
 		ProcessTechDiffusionForCivilisation(civ, civTech, entityManager, dt);
 	}
 }
+
 /////////////////////////////////
 
 
@@ -61,7 +62,7 @@ void TechDiffusionSystem::ProcessTechDiffusionForCivilisation(Entity* civEntity,
 	for (auto& otherPtr : entities) {
 		// Skip dead entities
 		Entity* other = otherPtr.get();
-		if (other == civEntity || !other->IsAlive()) continue;
+		if (!other || other == civEntity || !other->IsAlive()) continue;
 
 		// Get the CCivilisationTech component from the other entity
 		auto* otherTech = other->GetComponent<CCivilisationTech>();
@@ -88,7 +89,7 @@ void TechDiffusionSystem::ProcessTechDiffusionForCivilisation(Entity* civEntity,
 	for (auto& ePtr : entities) {
 		// Skip dead entities
 		Entity* e = ePtr.get();
-		if (!e->IsAlive()) continue;
+		if (!e || !e->IsAlive()) continue;
 
 		// Get the CKnowledgeParticle, CParticleInfluence, and CTransform components from the entity
 		auto* kp = e->GetComponent<CKnowledgeParticle>();
@@ -122,8 +123,13 @@ void TechDiffusionSystem::ProcessTechDiffusionForCivilisation(Entity* civEntity,
 /////////////////////////////////
 // ApplyDiffusion - Applies the diffusion effects from another civilization's known technologies to the current civilization's known technologies. It updates the passive progress towards unlocking new technologies based on the diffusion strength and time delta.
 void TechDiffusionSystem::ApplyDiffusion(CCivilisationTech* civTech, CCivilisationTech* otherCivTech, float diffusionStrength, EntityManager& entityManager, float dt) {
+	// Guard against null pointers for the civilization technology components
+	if (!civTech || !otherCivTech) return;
+	if (otherCivTech->knownTechs.empty()) return;
+
 	// Iterate through the known technologies of the other civilization
 	for (const auto& [techId, knownLevel] : otherCivTech->knownTechs) {
+		
 		// Skip technologies that the current civilization already knows
 		if (civTech->knownTechs.contains(techId))
 			continue;

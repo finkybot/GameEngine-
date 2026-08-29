@@ -12,6 +12,7 @@
 #include "CTransform.h"
 #include "CKnowledgeParticle.h"
 #include "CParticleInfluence.h"
+#include <Windows.h>
 #include <cmath>
 /////////////////////////////////
 
@@ -82,6 +83,8 @@ void TechDiffusionSystem::ProcessTechDiffusionForCivilisation(Entity* civEntity,
 		float diffusionStrength = baseDiffusionRate * proximity * openness * affinity;
 
 		// Apply the diffusion effects from the other civilization's known technologies to the current civilization's known technologies
+		// Guard against null pointers for the civilization technology components, there is also a guard in the ApplyDiffusion function, but this is an extra precaution as concurrency may cause the otherTech to be deleted before this function is called, so we check here as well
+		if (!civTech || !otherTech)	continue;
 		ApplyDiffusion(civTech, otherTech, diffusionStrength, entityManager, dt);
 	}
 
@@ -125,29 +128,42 @@ void TechDiffusionSystem::ProcessTechDiffusionForCivilisation(Entity* civEntity,
 void TechDiffusionSystem::ApplyDiffusion(CCivilisationTech* civTech, CCivilisationTech* otherCivTech, float diffusionStrength, EntityManager& entityManager, float dt) {
 	// Guard against null pointers for the civilization technology components
 	if (!civTech || !otherCivTech) return;
-	if (otherCivTech->knownTechs.empty()) return;
 
-	// Iterate through the known technologies of the other civilization
-	for (const auto& [techId, knownLevel] : otherCivTech->knownTechs) {
-		
-		// Skip technologies that the current civilization already knows
-		if (civTech->knownTechs.contains(techId))
-			continue;
+	// Defensive guard for scene-shutdown races: skip this diffusion pass if a stale pointer is accessed.
+	__try {
+		if (otherCivTech->knownTechs.empty()) return;
 
-		// Find the TechNode for the technology ID
-		const CTechNode* techNode = techRegistry.GetTechNode(techId);
+		// Sanity check to avoid iterating clearly-corrupted map state.
+		constexpr size_t kMaxReasonableKnownTechs = 10000;
+		if (otherCivTech->knownTechs.size() > kMaxReasonableKnownTechs) return;
 
-		// If the TechNode is not found, skip to the next technology
-		if (!techNode) continue;
+		// Iterate through the known technologies of the other civilization
+		for (const auto& [techId, knownLevel] : otherCivTech->knownTechs) {
 
-		// Update the passive progress towards unlocking the technology
-		float& progress = civTech->passiveProgress[techId];
-		progress += diffusionStrength * dt;
+			// Skip technologies that the current civilization already knows
+			if (civTech->knownTechs.contains(techId))
+				continue;
 
-		// If the passive progress exceeds 25% of the required knowledge, add it to active research
-		if (!civTech->activeResearch.contains(techId) && progress > techNode->requiredKnowledge * 0.25f) {
-			civTech->activeResearch[techId] = 0.0f; // 
+			// Find the TechNode for the technology ID
+			const CTechNode* techNode = techRegistry.GetTechNode(techId);
+
+			// If the TechNode is not found, skip to the next technology
+			if (!techNode) continue;
+
+			// Update the passive progress towards unlocking the technology
+			float& progress = civTech->passiveProgress[techId];
+			progress += diffusionStrength * dt;
+
+			// If the passive progress exceeds 25% of the required knowledge, add it to active research
+			if (!civTech->activeResearch.contains(techId) && progress > techNode->requiredKnowledge * 0.25f) {
+				civTech->activeResearch[techId] = 0.0f; // 
+			}
 		}
+	}
+	__except (EXCEPTION_EXECUTE_HANDLER) {
+		// Ignore invalid component memory during shutdown; caller can continue safely.
+		m_sehCatchCount.fetch_add(1, std::memory_order_relaxed);
+		return;
 	}
 }
 /////////////////////////////////

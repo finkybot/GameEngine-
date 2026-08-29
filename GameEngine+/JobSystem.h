@@ -206,12 +206,12 @@ private:
 					job = std::move(myQueue.jobs.front());
 					myQueue.jobs.pop_front();
 					myQueue.jobsExecuted++;
-					--pendingJobs;
 				}
 			}
 
 			if (job) {
 				job();
+				--pendingJobs;
 				continue;
 			}
 
@@ -227,13 +227,13 @@ private:
 					job = std::move(other.jobs.back());
 					other.jobs.pop_back();
 					other.jobsStolen++;
-					--pendingJobs;
 					break;
 				}
 			}
 
 			if (job) {
 				job();
+				--pendingJobs;
 				continue;
 			}
 

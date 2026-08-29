@@ -36,7 +36,7 @@ public:
 
 	
 	/////////////////////////////////
-	float globalResearchRate = 0.15f; // Global research rate modifier affecting all civilizations
+	float globalResearchRate = 0.66f; // Global research rate modifier affecting all civilizations
 	/////////////////////////////////
 
 
@@ -44,6 +44,13 @@ public:
 	/////////////////////////////////
 	// Update - Overrides the base class Update method to implement the technology evolution logic. It processes all entities with CCivilisationTech and CTechNode, updating their research progress and unlocking technologies as appropriate.
 	void Update(float dt, EntityManager& entityManager) override;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// GetTotalTechCompleted - Returns the total number of technologies completed across all civilizations. This can be used for tracking overall progress in the game or for analytics purposes.
+	size_t GetTotalTechCompleted() const { return m_totalTechCompleted;	}
 	/////////////////////////////////
 
 
@@ -57,5 +64,9 @@ private:
 	bool PrerequisitesMet(const CCivilisationTech& civTech, const CTechNode& techNode);
 	float CalculateResearchRate(const CCivilisationTech& civTech, const CTechNode& techNode, float baseRate);
 	/////////////////////////////////
+
+
+	size_t m_totalTechCompleted = 0; // Total number of technologies completed across all civilizations
+
 };
 /////////////////////////////////

@@ -13,6 +13,8 @@
 #include "CTechNode.h"
 #include "TechRegistry.h"
 #include "Vec2.h"
+#include <atomic>
+#include <cstdint>
 /////////////////////////////////
 
 
@@ -40,6 +42,7 @@ public:
 
 	/////////////////////////////////
 	float baseDiffusionRate = 0.005f; // Base diffusion rate modifier affecting all civilizations
+	uint32_t ConsumeSehCatchCount() { return m_sehCatchCount.exchange(0, std::memory_order_acq_rel); }
 	/////////////////////////////////
 
 
@@ -64,6 +67,7 @@ private:
 	/////////////////////////////////
 	void ApplyDiffusion(CCivilisationTech* civTech, CCivilisationTech* otherCivTech, float diffusionStrength, EntityManager& entityManager, float dt);
 	float CalculateProximity(Entity* civEntity, Entity* otherCivEntity);
+	std::atomic<uint32_t> m_sehCatchCount{ 0 };
 	/////////////////////////////////
 };
 /////////////////////////////////

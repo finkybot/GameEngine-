@@ -7,6 +7,13 @@
 /////////////////////////////////
 // Includes
 #include "KnowledgeParticleMovementSystem.h"
+#include "EntityManager.h"
+#include "CKnowledgeParticle.h"
+#include "CTransform.h"
+#include "CParticleInfluence.h"
+#include "CCivilisationTech.h"
+#include "Vec2.h"
+#include <algorithm>
 /////////////////////////////////
 
 
@@ -14,38 +21,49 @@
 /////////////////////////////////
 // Update - Overrides the base class Update method to implement the knowledge particle movement logic. It processes all entities with CKnowledgeParticle, CTransform, and CParticleInfluence components, updating their positions and applying influence to civilizations within their radius.
 void KnowledgeParticleMovementSystem::Update(float dt, EntityManager& entityManager) {
-	// Get a reference to the list of all entities managed by the EntityManager
-	auto& entities = entityManager.GetEntities();
+	// Get a reference to the list of all knowledge particle entities managed by the EntityManager
+	auto& particles = entityManager.GetEntities(EntityType::KnowledgeParticle);
 
-	// Loop through all entities and process those with CKnowledgeParticle, CTransform, and CParticleInfluence
-	for (auto& ePtr : entities) {
-		// Get the raw pointer to the entity from the unique_ptr
-		Entity* particle = ePtr.get();
+	// Determine the number of particles to process this frame based on the particle budget and the total number of particles
+	size_t limit = std::min(particles.size(), m_particleBudget);
+	size_t startIndex = m_lastParticleIndex;
+	size_t endIndex = std::min(startIndex + limit, particles.size());
 
-		// Skip dead entities
+	// Loop through the selected range of knowledge particles and update their positions and influence
+	for (size_t i = startIndex; i < endIndex; ++i) {
+		// Get the raw pointer to the knowledge particle entity from the unique_ptr
+		Entity* particle = particles[i];
+
+		// Skip dead particles
 		if (!particle || !particle->IsAlive()) continue;
 
-		// Get the CKnowledgeParticle, CTransform, and CParticleInfluence components from the entity
+		// Get the CKnowledgeParticle, CTransform, and CParticleInfluence components from the knowledge particle entity
 		auto* kp = particle->GetComponent<CKnowledgeParticle>();
 		auto* transform = particle->GetComponent<CTransform>();
 		auto* influence = particle->GetComponent<CParticleInfluence>();
 
-		// If any of the required components are missing, skip to the next entity
+		// If any of the required components are missing, skip to the next particle
 		if (!kp || !transform || !influence) continue;
 
 		// Update the position of the knowledge particle based on its velocity and the time delta
 		transform->position += transform->velocity * dt;
-
-		// Optional: simple damping
 		transform->velocity *= 0.99f;
 
 		// Apply the influence of the knowledge particle on civilizations within its influence radius
 		ApplyInfluence(kp, transform, influence, entityManager, dt);
 
-		//	Decrease the value of the knowledge particle over time, and destroy it if its value reaches zero
+		// Decrease the value of the knowledge particle over time, and destroy it if its value reaches zero
 		kp->value -= dt * 0.05f;
+
+		// If the knowledge particle's value is less than or equal to zero, destroy the particle entity
 		if (kp->value <= 0.0f) particle->Destroy();
 	}
+
+	// Update the last processed particle index for round-robin processing in the next frame
+	m_lastParticleIndex = endIndex;
+
+	// Wrap around the last particle index if it exceeds the total number of particles
+	if (m_lastParticleIndex >= particles.size()) m_lastParticleIndex = 0;
 }
 /////////////////////////////////
 

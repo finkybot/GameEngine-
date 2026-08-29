@@ -11,6 +11,8 @@
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 #include <imgui/imgui_internal.h>
+#include <Windows.h>
+#include <string>
 
 #include "CTransform.h"
 #include "CCivilisationTech.h"
@@ -57,10 +59,15 @@ TechSimulationScene::~TechSimulationScene() = default;
 /////////////////////////////////
 // OnEnter - Called when the scene is entered. Initializes the game with the current window size.
 void TechSimulationScene::OnEnter() {
-	isActive = true;
+	// Advance generation so any stale jobs from a previous lifetime self-cancel.
+	m_jobGeneration.fetch_add(1, std::memory_order_acq_rel);
+	m_isActive.store(true, std::memory_order_release);
 	JobSystem::WaitIdle(); // ensure all jobs finish before continuing
 	m_entityManager.ClearAll();  
 	InitializeGame(m_gameEngine.windowSize);
+
+	// Reset timers for diffusion and evolution systems
+	m_sceneStartTime = std::chrono::steady_clock::now();
 }
 /////////////////////////////////
 
@@ -69,7 +76,9 @@ void TechSimulationScene::OnEnter() {
 /////////////////////////////////
 // OnExit - Called when the scene is exited. Currently does nothing, but can be used for cleanup if needed.
 void TechSimulationScene::OnExit() {
-	isActive = false;
+	m_isActive.store(false, std::memory_order_release);
+	// Invalidate queued jobs immediately so stale lambdas exit deterministically.
+	m_jobGeneration.fetch_add(1, std::memory_order_acq_rel);
 	JobSystem::WaitIdle(); // ensure all jobs finish before continuing
 }
 /////////////////////////////////
@@ -105,7 +114,7 @@ void TechSimulationScene::InitializeGame(sf::Vector2u windowSize) {
 // CreateTechTestWorld - Creates a test world with two civilizations and a knowledge particle. Civilization A knows the "agriculture.basic
 void TechSimulationScene::CreateTechTestWorld() {
 	// Spawn many civilisations
-	const int civCount = 150;
+	const int civCount = 1550;
 	for (int i = 0; i < civCount; i++) {
 		Entity* civ = m_entityManager.AddEntity(EntityType::Civilisation);
 
@@ -125,7 +134,7 @@ void TechSimulationScene::CreateTechTestWorld() {
 	}
 
 	// Spawn many knowledge particles
-	const int particleCount = 20;
+	const int particleCount = 60;
 	for (int i = 0; i < particleCount; i++) {
 		Entity* p = m_entityManager.AddEntity(EntityType::KnowledgeParticle);
 
@@ -149,29 +158,43 @@ void TechSimulationScene::CreateTechTestWorld() {
 /////////////////////////////////
 // Update - Updates the scene state, running the technology systems and rendering the debug window.
 void TechSimulationScene::Update(float dt) {
-	frameCounter++; // Increment frame counter
+	//frameCounter++; // Increment frame counter
 
 	// Update FPS and adjust civBudget based on performance
 	float fps = 1.0f / dt;
 
 	// Adjust civBudget based on FPS to maintain performance
 	if (fps < 30)
-		civBudget = 100;
+		m_civBudget = 100;
 	else if (fps < 45)
-		civBudget = 150;
+		m_civBudget = 150;
 	else
-		civBudget = 200;
+		m_civBudget = 200;
 
 	// --- PARALLEL TECH SYSTEMS ---
-	//	Schedule diffusion and evolution jobs at different intervals to balance performance
-	if (frameCounter % 2 == 0)
+	// Schedule diffusion and evolution jobs based on their respective intervals, this is frame agnostic and will run jobs at the specified intervals regardless of frame rate.
+	m_diffusionTimer += dt;
+	m_evolutionTimer += dt;
+	
+	if (m_diffusionTimer >= m_diffusionInterval) {
+		m_diffusionTimer = 0.0f;
 		ScheduleTechDiffusionJobs(dt);
+	}
 
-	// Schedule evolution jobs every 4 frames to reduce load
-	if (frameCounter % 4 == 0)
+	if (m_evolutionTimer >= m_evolutionInterval) {
+		m_evolutionTimer = 0.0f;
 		ScheduleTechEvolutionJobs(dt);
+	}
 
-	JobSystem::WaitIdle(); // ensure all jobs finish before continuing
+	// Wait for all scheduled jobs to complete before proceeding to the next frame. This ensures that all technology systems have finished processing before the next update cycle begins.
+	JobSystem::WaitIdle(); 
+
+	// One-frame telemetry: report if defensive SEH was used in diffusion.
+	const uint32_t sehCaughtThisFrame = m_diffusionSystem.ConsumeSehCatchCount();
+	if (sehCaughtThisFrame > 0) {
+		std::string msg = "[TechDiffusion] SEH stale-pointer catches this frame: " + std::to_string(sehCaughtThisFrame) + "\n";
+		::OutputDebugStringA(msg.c_str());
+	}
 
 	// --- SERIAL SYSTEMS (must stay on main thread) ---
 	m_kpSystem.Update(dt, m_entityManager);		// movement → mutates transforms
@@ -179,9 +202,6 @@ void TechSimulationScene::Update(float dt) {
 
 	// --- DEBUG UI ---
 	RenderTechDebugWindow();
-
-	// Reset frame counter to avoid overflow
-	if (frameCounter > 1000000)	frameCounter = 0;
 }
 /////////////////////////////////
 
@@ -325,6 +345,14 @@ void TechSimulationScene::RenderTechDebugWindow() {
 	fpsIndex = (fpsIndex + 1) % 120;
 	ImGui::PlotLines("FPS", fpsHistory, 120, 0, nullptr, 0.0f, 200.0f, ImVec2(250, 80));
 
+	ImGui::Text("Civs with completed tech: %zu", m_evolutionSystem.GetTotalTechCompleted());
+
+	auto elapsed = std::chrono::steady_clock::now() - m_sceneStartTime;
+	double seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
+	int minutes = static_cast<int>(seconds / 60);
+	int secs = static_cast<int>((int)seconds % 60);
+	ImGui::Text("Scene runtime: %d:%02d", minutes, secs);
+
 	ImGui::EndChild();
 
 	ImGui::End();
@@ -343,30 +371,46 @@ void TechSimulationScene::ScheduleTechEvolutionJobs(float dt) {
 	const size_t chunkSize = 128;
 
 	// Limit the number of civilizations processed per frame to avoid overloading the system. This is a safeguard to ensure that only a manageable number of civilizations are processed in each update cycle.
-	size_t limit = std::min(entities.size(), civBudget);
+	size_t limit = std::min(entities.size(), m_civBudget);
 
-	for (size_t i = 0; i < limit; i += chunkSize) {
+
+	// Compute rolling window
+	size_t startIndex = m_lastCivIndex;
+	size_t endIndex = std::min(startIndex + limit, entities.size());
+
+	// Update the last processed index for the next frame, wrapping around if necessary
+    for (size_t i = startIndex; i < endIndex; i += chunkSize) {
 		size_t begin = i;
-		size_t end = std::min(limit, i + chunkSize);
+		size_t end = std::min(endIndex, i + chunkSize);
 
-		if (!isActive) return; // Check if the scene is active before scheduling jobs
+		// Check if the scene is active before scheduling jobs
+		if (!m_isActive) return;
 		
 		// Schedule a job to process a chunk of entities for technology evolution
-		JobSystem::Schedule([this, begin, end, dt]() {
-			if (!isActive) return; // Check if the scene is active before processing jobs, yes, this is a double-check, but it is necessary to ensure that the scene is still active when the job runs
+		const uint64_t generation = m_jobGeneration.load(std::memory_order_acquire);
+		
+		// Schedule a job to process a chunk of entities for technology evolution
+		JobSystem::Schedule([this, begin, end, dt, generation]() {
+			// Check if the scene is active before processing jobs, yes, this is a double-check, but it is necessary to ensure that the scene is still active when the job runs
+			if (!m_isActive.load(std::memory_order_acquire) || generation != m_jobGeneration.load(std::memory_order_acquire)) return; 
 
 			// Get the list of entities from the entity manager
 			auto& ents = m_entityManager.GetEntities();
 
+			// Process each entity in the assigned chunk for technology evolution
 			for (size_t j = begin; j < end; ++j) {
 				Entity* e = ents[j].get();
-				if (!e || !e->IsAlive())
-					continue;
 
+				// Check if the entity is valid and alive before processing it
+				if (!e || !e->IsAlive()) continue;
+
+				// Get the CCivilisationTech component for the entity
 				auto* tech = e->GetComponent<CCivilisationTech>();
-				if (!tech)
-					continue;
 
+				// Check if the entity has a CCivilisationTech component
+				if (!tech) continue;
+
+				// Process technology evolution for the civilization using the TechEvolutionSystem
 				m_evolutionSystem.ProcessCivilisationTech(e, tech, m_entityManager, dt);
 			}
 		});
@@ -379,34 +423,63 @@ void TechSimulationScene::ScheduleTechEvolutionJobs(float dt) {
 /////////////////////////////////
 // ScheduleTechDiffusionJobs - Schedules technology diffusion jobs based on the elapsed time (dt). Currently does nothing, but can be used for scheduling diffusion tasks if needed.
 void TechSimulationScene::ScheduleTechDiffusionJobs(float dt) {
+	// Get the list of entities from the entity manager
 	auto& entities = m_entityManager.GetEntities();
+
+	// Define the chunk size for processing entities in parallel. This determines how many entities will be processed in each job.
 	const size_t chunkSize = 128;
 
-	for (size_t i = 0; i < entities.size(); i += chunkSize) {
-		size_t begin = i;
-		size_t end = std::min(entities.size(), i + chunkSize);
+	// Limit work per frame
+	size_t limit = std::min(entities.size(), m_civBudget);
 
-		if (!isActive) return; // Check if the scene is active before scheduling jobs
+	// Compute rolling window
+	size_t startIndex = m_lastCivIndex;
+	size_t endIndex = std::min(startIndex + limit, entities.size());
+
+	// Schedule jobs for each chunk of entities
+	for (size_t i = startIndex; i < endIndex; i += chunkSize) {
+		size_t begin = i;
+		size_t end = std::min(endIndex, i + chunkSize);
+
+		// Check if the scene is active before scheduling jobs
+		if (!m_isActive) return;
+
+		// Capture the current job generation to ensure that stale jobs do not run after the scene has been exited or reset
+		const uint64_t generation = m_jobGeneration.load(std::memory_order_acquire);
 
 		// Schedule a job to process a chunk of entities for technology diffusion
-		JobSystem::Schedule([this, begin, end, dt]() {
-			if (!isActive) return; // Check if the scene is active before processing jobs, yes, this is a double-check, but it is necessary to ensure that the scene is still active when the job runs
+		JobSystem::Schedule([this, begin, end, dt, generation]() {
+			// Check if the scene is active before processing jobs, yes, this is a double-check, but it is necessary to ensure that the scene is still active when the job runs
+			if (!m_isActive.load(std::memory_order_acquire) || generation != m_jobGeneration.load(std::memory_order_acquire)) return;
 
 			// Get the list of entities from the entity manager
 			auto& ents = m_entityManager.GetEntities();
-
+			
+			// Process each entity in the assigned chunk for technology diffusion
 			for (size_t j = begin; j < end; ++j) {
+				// Check if the scene is still active and the job generation has not changed, which would indicate that the scene has been exited or reset
+				if (generation != m_jobGeneration.load(std::memory_order_acquire)) return;
+
+				// Get the entity pointer from the entity manager
 				Entity* civ = ents[j].get();
-				if (!civ || !civ->IsAlive())
-					continue;
 
+				// Check if the entity is valid and alive before processing it
+				if (!civ || !civ->IsAlive()) continue;
+
+				// Get the CCivilisationTech component for the entity
 				auto* civTech = civ->GetComponent<CCivilisationTech>();
-				if (!civTech)
-					continue;
+				
+				// Check if the entity has a CCivilisationTech component
+				if (!civTech) continue;
 
+				// Process technology diffusion for the civilization using the TechDiffusionSystem
 				m_diffusionSystem.ProcessTechDiffusionForCivilisation(civ, civTech, m_entityManager, dt);
 			}
 		});
 	}
+
+	// Advance index for next frame
+	m_lastCivIndex = endIndex;
+	if (m_lastCivIndex >= entities.size()) m_lastCivIndex = 0; // wrap around
 }
 /////////////////////////////////

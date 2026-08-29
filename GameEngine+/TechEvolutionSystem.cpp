@@ -98,17 +98,22 @@ void TechEvolutionSystem::ProcessCivilisationTech(Entity* entity, CCivilisationT
 
 		// Iterate through all entities to find knowledge particles that influence the current entity
 		for (auto& ePtr : allEntities) {
+			// Get the raw pointer to the entity from the unique_ptr
 			Entity* e = ePtr.get();
-				// Skip dead entities
+				
+			// Skip dead entities
 			if (!e ||!e->IsAlive())
 					continue;
 
+			// Get the CKnowledgeParticle, CParticleInfluence, and CTransform components from the entity
 			auto* kp = e->GetComponent<CKnowledgeParticle>();
 			auto* influence = e->GetComponent<CParticleInfluence>();
 			auto* pTransform = e->GetComponent<CTransform>();
 
+			// If any of the required components are missing, skip to the next entity
 			if (!kp || !influence || !pTransform) continue;
 
+			// Calculate the distance between the civilization and the knowledge particle
 			float dist = transform->position.Distance(pTransform->position);
 			if (dist < influence->influenceRadius) {
 				float falloff = 1.0f - (dist / influence->influenceRadius);
@@ -116,6 +121,7 @@ void TechEvolutionSystem::ProcessCivilisationTech(Entity* entity, CCivilisationT
 			}
 		}
 
+		// Apply knowledge boost to research rate
 		researchRate += knowledgeBoost;
 
 		// Debug values
@@ -130,6 +136,7 @@ void TechEvolutionSystem::ProcessCivilisationTech(Entity* entity, CCivilisationT
 		if (progress >= techNode->requiredKnowledge) {
 			civTechComp->knownTechs[techId] = 1.0f;
 			it = civTechComp->activeResearch.erase(it);
+			m_totalTechCompleted++;
 			continue;
 		}
 

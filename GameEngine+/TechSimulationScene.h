@@ -16,6 +16,8 @@
 #include "TechDiffusionSystem.h"
 #include "TechEvolutionSystem.h"
 #include "TechUnlockSystem.h"
+#include <atomic>
+#include <cstdint>
 /////////////////////////////////
 
 
@@ -84,7 +86,12 @@ private:
 	// Member variables for the TechSimulationScene class
 	sf::RenderWindow& m_window;
 	float m_fps = 0.0f;
+	/////////////////////////////////
 
+
+
+	/////////////////////////////////
+	// Systems for managing different aspects of the technology simulation in the TechSimulationScene class
 	KnowledgeParticleMovementSystem m_kpSystem;
 	TechDiffusionSystem m_diffusionSystem;
 	TechEvolutionSystem m_evolutionSystem;
@@ -94,9 +101,28 @@ private:
 
 
 	/////////////////////////////////
-	bool isActive = true; // Flag to indicate whether the scene is currently active and should be updated/rendered
-	size_t civBudget = 200; // process only 200 civs per frame
-	int frameCounter = 0;
+	// Scene state variables for the TechSimulationScene class
+	std::atomic<bool> m_isActive	{ true };		// Flag to indicate whether the scene is currently active and should be updated/rendered
+	std::atomic<uint64_t> m_jobGeneration{ 0 }; // Monotonic token used to cancel stale scheduled jobs across scene transitions
+	size_t m_civBudget = 200;					// process only 200 civs per frame
+	size_t m_lastCivIndex = 0;					// index of the last civ processed in the previous frame
+	std::chrono::steady_clock::time_point m_sceneStartTime; // Time point marking the start of the scene, used for tracking elapsed time
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Timers for scheduling jobs in the TechSimulationScene class
+	float m_diffusionTimer = 0.0f; // Timer for scheduling diffusion jobs
+	float m_evolutionTimer = 0.0f; // Timer for scheduling evolution jobs
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Intervals for scheduling jobs in the TechSimulationScene class
+	const float m_diffusionInterval = 0.25f; // Interval for scheduling diffusion jobs
+	const float m_evolutionInterval = 0.5f; // Interval for scheduling evolution jobs
 	/////////////////////////////////
 };
 /////////////////////////////////

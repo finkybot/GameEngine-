@@ -40,5 +40,13 @@ private:
 	// ApplyInfluence - Applies the influence of a knowledge particle on civilizations within its influence radius. It calculates the influence strength based on distance and falloff, and updates the known technologies of affected civilizations accordingly.
 	void ApplyInfluence(CKnowledgeParticle* kp, CTransform* particleTransform, CParticleInfluence* influence, EntityManager& entityManager, float dt);
 	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// Particle processing budget for the KnowledgeParticleMovementSystem class
+	size_t m_particleBudget = 20;		// max particles processed per frame
+	size_t m_lastParticleIndex = 0;		// rolling index for round‑robin
+	/////////////////////////////////
 };
 /////////////////////////////////

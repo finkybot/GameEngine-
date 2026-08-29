@@ -110,6 +110,7 @@ public:
 	// active entities, while the overloaded GetEntities method returns a vector of pointers to entities of a specific type. The GetSpatialHash method returns a reference to the spatial hash grid used for spatial queries. 
 	EntityVector& GetEntities();
 	std::vector<Entity*>& GetEntities(EntityType type);
+
 	SpatialHashGrid<Entity>& GetSpatialHash();
 	/////////////////////////////////
 

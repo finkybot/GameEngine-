@@ -23,6 +23,7 @@
 #include "SoundSystem.h"
 #include "ChunkManager.h"
 #include "TechRegistry.h"
+#include "WorldDiffusionConfig.h"
 
 #include <map>
 #include <string>
@@ -183,6 +184,7 @@ public:
 	std::unique_ptr<MovementSystem> movementSystem;						// Unique pointer to the MovementSystem owned by the engine, responsible for moving entities along computed paths
 
 	TechRegistry techRegistry;											// TechRegistry instance for managing technology-related entities and interactions in the game, allowing for simulation of technology diffusion, evolution, and unlocking
+	WorldDiffusionConfig worldDiffusionConfig;							// WorldDiffusionConfig instance for managing configuration related to technology diffusion in the game, allowing for customization of diffusion parameters and behavior
 	/////////////////////////////////
 
 

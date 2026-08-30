@@ -47,27 +47,30 @@ void TechEvolutionSystem::Update(float dt, EntityManager& entityManager) {
 /////////////////////////////////
 // ProcessCivilisationTech - Processes the technology evolution for a single entity with a CCivilisationTech. It updates research progress, checks prerequisites, and unlocks technologies as appropriate.
 void TechEvolutionSystem::ProcessCivilisationTech(Entity* entity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt) {
+	// Get the CTransform component from the entity to determine its position in the game world
 	auto* transform = entity->GetComponent<CTransform>();
+
+	// If the entity does not have a CTransform component, return early as we cannot calculate proximity or apply knowledge particle effects
 	if (!transform)	return;
 
 	// 1) Promote passive → active research (with full skip rules)
 	for (auto& [techId, passive] : civTechComp->passiveProgress) {
 		// Skip if already fully known
 		auto knownIt = civTechComp->knownTechs.find(techId);
-		if (knownIt != civTechComp->knownTechs.end() && knownIt->second >= 1.0f)
-			continue;
+		
+		// If the technology is already known and fully researched, skip to the next technology
+		if (knownIt != civTechComp->knownTechs.end() && knownIt->second >= 1.0f) continue;
 
 		// Skip if already actively researching
-		if (civTechComp->activeResearch.contains(techId))
-			continue;
+		if (civTechComp->activeResearch.contains(techId)) continue;
 
 		// Skip if prerequisites are not met
 		CTechNode* node = FindTechNode(techId);
 		if (!node || !PrerequisitesMet(*civTechComp, *node)) continue;
 
-		// Promote passive → active once threshold reached
-		if (passive >= 5.0f)
-		civTechComp->activeResearch[techId] = passive; // seed progress
+		// Promote passive → active once threshold reached (5%)
+		if (passive >= node->requiredKnowledge * 0.05f)
+			civTechComp->activeResearch[techId] = passive; // seed progress
 	}
 
 	// 2) Update active research progress
@@ -91,19 +94,13 @@ void TechEvolutionSystem::ProcessCivilisationTech(Entity* entity, CCivilisationT
 		// Calculate research rate
 		float researchRate = CalculateResearchRate(*civTechComp, *techNode, globalResearchRate);
 
-		
 		// Knowledge particle boost
 		float knowledgeBoost = 0.0f;
-		auto& allEntities = entityManager.GetEntities();
+		auto& knowledgeParticles = entityManager.GetEntities(EntityType::KnowledgeParticle);
 
-		// Iterate through all entities to find knowledge particles that influence the current entity
-		for (auto& ePtr : allEntities) {
-			// Get the raw pointer to the entity from the unique_ptr
-			Entity* e = ePtr.get();
-				
+		for (Entity* e : knowledgeParticles) {
 			// Skip dead entities
-			if (!e ||!e->IsAlive())
-					continue;
+			if (!e || !e->IsAlive()) continue;
 
 			// Get the CKnowledgeParticle, CParticleInfluence, and CTransform components from the entity
 			auto* kp = e->GetComponent<CKnowledgeParticle>();
@@ -113,23 +110,40 @@ void TechEvolutionSystem::ProcessCivilisationTech(Entity* entity, CCivilisationT
 			// If any of the required components are missing, skip to the next entity
 			if (!kp || !influence || !pTransform) continue;
 
-			// Calculate the distance between the civilization and the knowledge particle
+			// Skip if the knowledge particle does not match the current tech being researched
 			float dist = transform->position.Distance(pTransform->position);
+
+			// If the distance is within the influence radius, apply a knowledge boost based on the knowledge particle's value and the distance falloff
 			if (dist < influence->influenceRadius) {
 				float falloff = 1.0f - (dist / influence->influenceRadius);
-				knowledgeBoost += kp->value * falloff;
+				knowledgeBoost = std::min(knowledgeBoost + kp->value * falloff, 2.0f);
 			}
 		}
 
-		// Apply knowledge boost to research rate
+		// Apply knowledge boost
 		researchRate += knowledgeBoost;
+
+		// -------------------------------
+		// PASSIVE BONUS (max +5%)
+		// -------------------------------
+		float passive = civTechComp->passiveProgress[techId];
+		float passiveFraction = passive / techNode->requiredKnowledge;
+
+		float passiveBonus = 0.0f;
+		if (passiveFraction > 0.10f) {
+			float scaled = (passiveFraction - 0.10f) / 0.90f; // maps 10%→100% to 0→1
+			passiveBonus = scaled * 0.05f;					  // max +5%
+		}
+
+		researchRate *= (1.0f + passiveBonus);
+		// -------------------------------
 
 		// Debug values
 		civTechComp->debugResearchRate[techId] = researchRate;
 		civTechComp->debugKnowledgeBoost[techId] = knowledgeBoost;
 		civTechComp->debugDifficultyFactor[techId] = (1.0f / techNode->baseDifficulty);
 
-		// Apply research
+		// Apply research (real-time stable)
 		progress += researchRate * dt;
 
 		// Unlock tech
@@ -143,6 +157,7 @@ void TechEvolutionSystem::ProcessCivilisationTech(Entity* entity, CCivilisationT
 		++it;
 	}
 }
+
 /////////////////////////////////
 
 

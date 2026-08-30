@@ -41,7 +41,7 @@ static ImVec4 GetProgressColor(float t) {
 
 /////////////////////////////////
 // Implementation of the TechSimulationScene class
-TechSimulationScene::TechSimulationScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em): Scene(engine, em), m_window(win), m_kpSystem(), m_diffusionSystem(engine.techRegistry),
+TechSimulationScene::TechSimulationScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em): Scene(engine, em), m_window(win), m_kpSystem(), m_diffusionSystem(engine.techRegistry, engine.worldDiffusionConfig),
 																										m_evolutionSystem(engine.techRegistry), m_unlockSystem(engine.techRegistry) {
 	ImGui::SFML::Init(engine.window);
 }
@@ -51,7 +51,9 @@ TechSimulationScene::TechSimulationScene(GameEngine& engine, sf::RenderWindow& w
 
 /////////////////////////////////
 // Destructor for the TechSimulationScene class
-TechSimulationScene::~TechSimulationScene() = default;
+TechSimulationScene::~TechSimulationScene() {
+	ImGui::SFML::Shutdown();
+}
 /////////////////////////////////
 
 
@@ -111,15 +113,44 @@ void TechSimulationScene::InitializeGame(sf::Vector2u windowSize) {
 
 
 /////////////////////////////////
-// CreateTechTestWorld - Creates a test world with two civilizations and a knowledge particle. Civilization A knows the "agriculture.basic
+// CreateTechTestWorld - Creates a test world with civilizations and knowledge particles.
 void TechSimulationScene::CreateTechTestWorld() {
-	// Spawn many civilisations
-	const int civCount = 1550;
+
+	// -------------------------------
+	// AUTO‑SCALE DIFFUSION CONFIG
+	// -------------------------------
+	const int civCount = 345;
+
+	float worldW = m_gameEngine.worldDiffusionConfig.worldWidth;
+	float worldH = m_gameEngine.worldDiffusionConfig.worldHeight;
+
+	float worldArea = worldW * worldH;
+
+	// Average spacing between civs (approximate)
+	float avgSpacing = sqrt(worldArea / civCount);
+
+	auto& cfg = m_gameEngine.worldDiffusionConfig;
+
+	// Civ‑to‑civ proximity radius scales with spacing
+	cfg.maxProximityDistance = avgSpacing * 2.5f;
+
+	// Particle influence radius scales with spacing
+	cfg.particleInfluenceRadius = avgSpacing * 1.2f;
+
+	// Diffusion strength scales inversely with civ count
+	cfg.baseDiffusionRate = 0.2f / sqrt(civCount / 50.0f);
+
+	// Diffusion interval scales with civ count
+	cfg.diffusionInterval = 0.25f * sqrt(civCount / 50.0f);
+
+	// -------------------------------
+	// SPAWN CIVILISATIONS
+	// -------------------------------
 	for (int i = 0; i < civCount; i++) {
 		Entity* civ = m_entityManager.AddEntity(EntityType::Civilisation);
 
 		auto* t = civ->AddComponent<CTransform>();
-		t->position = Vec2(rand() % 2000, rand() % 2000);
+		t->position = Vec2(rand() % (int)cfg.worldWidth, rand() % (int)cfg.worldHeight);
 
 		auto* tech = civ->AddComponent<CCivilisationTech>();
 
@@ -133,8 +164,11 @@ void TechSimulationScene::CreateTechTestWorld() {
 		}
 	}
 
-	// Spawn many knowledge particles
-	const int particleCount = 60;
+	// -------------------------------
+	// SPAWN KNOWLEDGE PARTICLES
+	// -------------------------------
+	const int particleCount = 22;
+
 	for (int i = 0; i < particleCount; i++) {
 		Entity* p = m_entityManager.AddEntity(EntityType::KnowledgeParticle);
 
@@ -143,11 +177,11 @@ void TechSimulationScene::CreateTechTestWorld() {
 		kp->value = 1.0f;
 
 		auto* t = p->AddComponent<CTransform>();
-		t->position = Vec2(rand() % 2000, rand() % 2000);
+		t->position = Vec2(rand() % (int)cfg.worldWidth, rand() % (int)cfg.worldHeight);
 		t->velocity = Vec2(0, 0);
 
 		auto* inf = p->AddComponent<CParticleInfluence>();
-		inf->influenceRadius = 500.0f;
+		inf->influenceRadius = cfg.particleInfluenceRadius;
 		inf->influenceFalloff = 1.0f;
 	}
 }
@@ -171,19 +205,26 @@ void TechSimulationScene::Update(float dt) {
 	else
 		m_civBudget = 200;
 
-	// --- PARALLEL TECH SYSTEMS ---
-	// Schedule diffusion and evolution jobs based on their respective intervals, this is frame agnostic and will run jobs at the specified intervals regardless of frame rate.
-	m_diffusionTimer += dt;
-	m_evolutionTimer += dt;
-	
-	if (m_diffusionTimer >= m_diffusionInterval) {
-		m_diffusionTimer = 0.0f;
-		ScheduleTechDiffusionJobs(dt);
+
+	// --- TIME-DRIVEN TECH EVOLUTION (once per second for ALL civs) ---
+	m_techAccumulator += dt;
+	if (m_techAccumulator >= m_techInterval) {
+		m_techAccumulator -= m_techInterval;
+		RunFullTechTick(); // all civs get 1 second of tech progress
 	}
 
-	if (m_evolutionTimer >= m_evolutionInterval) {
-		m_evolutionTimer = 0.0f;
-		ScheduleTechEvolutionJobs(dt);
+
+	// Update timers for diffusion and evolution (deprecated) systems
+	m_diffusionTimer += dt;
+	//m_evolutionTimer += dt;
+	
+	// --- DIFFUSION SYSTEM (runs at configured interval) ---
+	if (m_diffusionTimer >= m_gameEngine.worldDiffusionConfig.diffusionInterval) {
+		// Run diffusion jobs for all civs at the configured interval
+		m_diffusionTimer -= m_gameEngine.worldDiffusionConfig.diffusionInterval;
+
+		// Schedule diffusion jobs for all civilizations based on the configured diffusion interval
+		ScheduleTechDiffusionJobs(m_gameEngine.worldDiffusionConfig.diffusionInterval); // or 0.25f explicitly
 	}
 
 	// Wait for all scheduled jobs to complete before proceeding to the next frame. This ensures that all technology systems have finished processing before the next update cycle begins.
@@ -285,7 +326,7 @@ void TechSimulationScene::RenderTechDebugWindow() {
 		{
 			float t = known; // already normalized
 			ImVec4 col = GetProgressColor(t);
-			ImGui::BulletText("agriculture.basic known: %.2f", known);
+			ImGui::BulletText("agriculture.basic known: %.4f", known);
 			ImGui::PushStyleColor(ImGuiCol_PlotHistogram, col);
 			ImGui::ProgressBar(t, ImVec2(200, 12));
 			ImGui::PopStyleColor();
@@ -295,7 +336,7 @@ void TechSimulationScene::RenderTechDebugWindow() {
 		{
 			float t = requiredKnowledge > 0 ? passive / requiredKnowledge : 0.0f;
 			ImVec4 col = GetProgressColor(t);
-			ImGui::BulletText("passive: %.2f", passive);
+			ImGui::BulletText("passive: %.4f", passive);
 			ImGui::PushStyleColor(ImGuiCol_PlotHistogram, col);
 			ImGui::ProgressBar(t, ImVec2(200, 12));
 			ImGui::PopStyleColor();
@@ -481,5 +522,25 @@ void TechSimulationScene::ScheduleTechDiffusionJobs(float dt) {
 	// Advance index for next frame
 	m_lastCivIndex = endIndex;
 	if (m_lastCivIndex >= entities.size()) m_lastCivIndex = 0; // wrap around
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void TechSimulationScene::RunFullTechTick() {
+	auto& civs = m_entityManager.GetEntities(EntityType::Civilisation);
+
+	for (Entity* civ : civs) {
+		if (!civ || !civ->IsAlive())
+			continue;
+
+		auto* tech = civ->GetComponent<CCivilisationTech>();
+		if (!tech)
+			continue;
+
+		// One second of tech progress
+		m_evolutionSystem.ProcessCivilisationTech(civ, tech, m_entityManager, 1.0f);
+	}
 }
 /////////////////////////////////

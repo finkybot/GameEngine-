@@ -64,6 +64,7 @@ private:
 	// Private helper methods for the TechSimulationScene class
 	void CreateTechTestWorld();
 	void RenderTechDebugWindow();
+	void RunFullTechTick();
 	/////////////////////////////////
 
 
@@ -121,8 +122,15 @@ private:
 
 	/////////////////////////////////
 	// Intervals for scheduling jobs in the TechSimulationScene class
-	const float m_diffusionInterval = 0.25f; // Interval for scheduling diffusion jobs
-	const float m_evolutionInterval = 0.5f; // Interval for scheduling evolution jobs
+	//const float m_diffusionInterval = 0.25f; // Interval for scheduling diffusion jobs
+	//const float m_evolutionInterval = 0.5f; // Interval for scheduling evolution jobs
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	float m_techAccumulator = 0.0f;
+	const float m_techInterval = 1.0f;
 	/////////////////////////////////
 };
 /////////////////////////////////

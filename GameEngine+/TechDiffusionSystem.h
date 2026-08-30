@@ -15,6 +15,7 @@
 #include "Vec2.h"
 #include <atomic>
 #include <cstdint>
+#include "WorldDiffusionConfig.h"
 /////////////////////////////////
 
 
@@ -29,7 +30,8 @@ class TechDiffusionSystem : public System {
 public:
 	/////////////////////////////////
 	// Constructor for the TechDiffusionSystem class, taking a reference to a TechRegistry for accessing technology nodes and their properties.
-	TechDiffusionSystem(TechRegistry& registry) : techRegistry(registry) {}
+	TechDiffusionSystem(TechRegistry& registry, const WorldDiffusionConfig& cfg): techRegistry(registry), config(cfg) {}
+
 	/////////////////////////////////
 
 
@@ -41,7 +43,6 @@ public:
 
 
 	/////////////////////////////////
-	float baseDiffusionRate = 0.005f; // Base diffusion rate modifier affecting all civilizations
 	uint32_t ConsumeSehCatchCount() { return m_sehCatchCount.exchange(0, std::memory_order_acq_rel); }
 	/////////////////////////////////
 
@@ -60,6 +61,7 @@ private:
 	/////////////////////////////////
 	// Reference to the TechRegistry for accessing technology nodes and their properties
 	TechRegistry& techRegistry; // Reference to the TechRegistry for accessing technology nodes and their properties
+	WorldDiffusionConfig config; // Configuration for the diffusion system, containing parameters that affect how technologies diffuse between civilizations
 	/////////////////////////////////
 	
 	

@@ -78,9 +78,9 @@ void TechDiffusionSystem::ProcessTechDiffusionForCivilisation(Entity* civEntity,
 		if (proximity <= 0.0f) continue;
 
 		// Calculate the diffusion strength based on base rate, proximity, openness, and diffusion affinity
-		float openness = civTech->openness;
-		float affinity = civTech->diffusionAffinity;
-		float diffusionStrength = baseDiffusionRate * proximity * openness * affinity;
+		//float openness = civTech->openness;
+		//float affinity = civTech->diffusionAffinity;
+		float diffusionStrength = config.baseDiffusionRate * proximity * civTech->openness * civTech->diffusionAffinity;
 
 		// Apply the diffusion effects from the other civilization's known technologies to the current civilization's known technologies
 		// Guard against null pointers for the civilization technology components, there is also a guard in the ApplyDiffusion function, but this is an extra precaution as concurrency may cause the otherTech to be deleted before this function is called, so we check here as well
@@ -106,8 +106,8 @@ void TechDiffusionSystem::ProcessTechDiffusionForCivilisation(Entity* civEntity,
 		float dist = civTransform->position.Distance(pTransform->position);
 		
 		// If the distance is within the influence radius, apply a passive progress boost to the civilization's known technologies based on the knowledge particle's value and the distance falloff
-		if (dist < influence->influenceRadius) {
-			float falloff = 1.0f - (dist / influence->influenceRadius);
+		if (dist < config.particleInfluenceRadius) {
+			float falloff = 1.0f - (dist / config.particleInfluenceRadius);
 			float boost = kp->value * falloff;
 
 			// Skip if this civ already fully knows the tech
@@ -115,7 +115,7 @@ void TechDiffusionSystem::ProcessTechDiffusionForCivilisation(Entity* civEntity,
 			if (knownIt != civTech->knownTechs.end() && knownIt->second >= 1.0f) continue;
 
 			// Passive progress boost for the tech carried by the particle
-			civTech->passiveProgress[kp->techId] += boost * dt;
+			civTech->passiveProgress[kp->techId] += boost * dt * 3.0f;
 		}
 	}
 }
@@ -141,8 +141,10 @@ void TechDiffusionSystem::ApplyDiffusion(CCivilisationTech* civTech, CCivilisati
 		for (const auto& [techId, knownLevel] : otherCivTech->knownTechs) {
 
 			// Skip technologies that the current civilization already knows
-			if (civTech->knownTechs.contains(techId))
+			auto it = civTech->knownTechs.find(techId);
+			if (it != civTech->knownTechs.end() && it->second >= 1.0f)
 				continue;
+
 
 			// Find the TechNode for the technology ID
 			const CTechNode* techNode = techRegistry.GetTechNode(techId);
@@ -152,12 +154,16 @@ void TechDiffusionSystem::ApplyDiffusion(CCivilisationTech* civTech, CCivilisati
 
 			// Update the passive progress towards unlocking the technology
 			float& progress = civTech->passiveProgress[techId];
-			progress += diffusionStrength * dt;
-
-			// If the passive progress exceeds 25% of the required knowledge, add it to active research
-			if (!civTech->activeResearch.contains(techId) && progress > techNode->requiredKnowledge * 0.25f) {
-				civTech->activeResearch[techId] = 0.0f; // 
+			float threshold = techNode->requiredKnowledge * 0.05f;
+			float factor = 1.0f - (progress / threshold);
+			factor = std::max(0.0f, factor); // safety clamp
+			progress += diffusionStrength * dt * 3.0f * factor;
+			
+			// If the passive progress exceeds 5% of the required knowledge, add it to active research
+			if (!civTech->activeResearch.contains(techId) && progress > techNode->requiredKnowledge * 0.05f) {
+				civTech->activeResearch[techId] = progress; // seed with passive
 			}
+
 		}
 	}
 	__except (EXCEPTION_EXECUTE_HANDLER) {
@@ -180,11 +186,11 @@ float TechDiffusionSystem::CalculateProximity(Entity* civEntity, Entity* otherCi
 	// Calculate the distance between the two positions
 	float dist = (posA - posB).Mag();
 
-	// If the distance is greater than 2000 units, return 0.0f to indicate no proximity
-	if (dist > 2000.0f) return 0.0f;
+	// If the distance is greater than the maximum proximity distance, return 0.0f to indicate no proximity
+	if (dist > config.maxProximityDistance) return 0.0f;
 
 	// Calculate a smooth falloff for proximity based on distance, using a cubic interpolation for a more natural transition
-	float x = dist / 2000.0f;
+	float x = dist / config.maxProximityDistance;
 	return 1.0f - (x * x * (3 - 2 * x));
 }
 /////////////////////////////////

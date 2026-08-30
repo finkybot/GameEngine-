@@ -44,9 +44,31 @@ GameEngine::GameEngine() {
 	//window.setPosition(sf::Vector2i(0, 0));
 	//window.create(sf::VideoMode(windowSize), "SFML Game Engine", sf::Style::Fullscreen);
 
-	window.setFramerateLimit(120);
-	//window.setVerticalSyncEnabled(true);
+	//window.setFramerateLimit(120);
+	window.setVerticalSyncEnabled(true);
+	
 	isRunning = true;
+
+
+	// Set up the world size based on the window size, ensuring that the world dimensions are proportional to the window dimensions. This allows for consistent scaling of game elements and mechanics across different screen resolutions.
+	float worldSize = std::max(windowSize.x, windowSize.y) * 1.0f; // 100% of the larger dimension
+
+	worldDiffusionConfig.worldWidth = windowSize.x;
+	worldDiffusionConfig.worldHeight = windowSize.y;
+
+	// Proximity cutoff (world‑size dependent)
+	worldDiffusionConfig.maxProximityDistance = worldSize * 0.5f;
+
+	// Particle influence radius (world‑size dependent)
+	worldDiffusionConfig.particleInfluenceRadius = worldSize * 0.1f;
+
+	// Base diffusion rate placeholder (world‑size dependent)
+	worldDiffusionConfig.baseDiffusionRate = 0.05f * (worldSize / 200.0f);
+
+	// Diffusion interval placeholder (world‑size dependent)
+	worldDiffusionConfig.diffusionInterval = 0.25f * (200.0f / worldSize);
+	// ******************************* \\
+
 
 	// *** ENTITY MANAGER *** Create a single engine-wide EntityManager and bind shared resources
 	entityManager = std::make_unique<EntityManager>(window);

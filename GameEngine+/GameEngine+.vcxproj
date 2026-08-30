@@ -298,6 +298,7 @@
     <ClInclude Include="Utils.h" />
     <ClInclude Include="Utils\FPSCounter.h" />
     <ClInclude Include="Vec2.h" />
+    <ClInclude Include="WorldDiffusionConfig.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="GameEngine+.rc" />

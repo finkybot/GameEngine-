@@ -16,6 +16,7 @@
 #include <atomic>
 #include <cstdint>
 #include "WorldDiffusionConfig.h"
+#include "ParticleBVHSystem.h"
 /////////////////////////////////
 
 
@@ -31,13 +32,23 @@ public:
 	/////////////////////////////////
 	// Constructor for the TechDiffusionSystem class, taking a reference to a TechRegistry for accessing technology nodes and their properties.
 	TechDiffusionSystem(TechRegistry& registry, const WorldDiffusionConfig& cfg): techRegistry(registry), config(cfg) {}
+	/////////////////////////////////
 
+
+	/////////////////////////////////
+	void SetBVHSystem(ParticleBVHSystem* bvh) { m_bvhSystem = bvh; }
 	/////////////////////////////////
 
 
 
 	/////////////////////////////////
-	void ProcessTechDiffusionForCivilisation(Entity* civEntity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt);
+	void ProcessCivToCivDiffusion(Entity* civEntity, CCivilisationTech* civTech, EntityManager& em, float dt);
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	void ProcessParticleDiffusionForCivilisation(Entity* civEntity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt);
 	/////////////////////////////////
 
 
@@ -70,6 +81,7 @@ private:
 	void ApplyDiffusion(CCivilisationTech* civTech, CCivilisationTech* otherCivTech, float diffusionStrength, EntityManager& entityManager, float dt);
 	float CalculateProximity(Entity* civEntity, Entity* otherCivEntity);
 	std::atomic<uint32_t> m_sehCatchCount{ 0 };
+	ParticleBVHSystem* m_bvhSystem{ nullptr }; // BVH system for spatial partitioning and efficient proximity queries
 	/////////////////////////////////
 };
 /////////////////////////////////

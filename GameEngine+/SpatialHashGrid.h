@@ -10,6 +10,7 @@
 #include "Vec2.h"
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <algorithm>
 /////////////////////////////////
 
@@ -62,10 +63,23 @@ private:
 	static size_t GetCellHash(float x, float y, float cellSize) noexcept {
 		int cellX = static_cast<int>(x / cellSize);
 		int cellY = static_cast<int>(y / cellSize);
+		return GetCellHashFromCell(cellX, cellY);
+	}
 
-		// Cantor pairing function for 2D -> 1D reversable hash
-		size_t hash = ((cellX + cellY) * (cellX + cellY + 1)) / 2 + cellY;
-		return hash;
+	// Signed-int-safe cell hash helper. Maps signed cell coordinates to unsigned space first,
+	// then applies Cantor pairing so negative cell coords do not alias unexpectedly.
+	static size_t GetCellHashFromCell(int cellX, int cellY) noexcept {
+		auto toUnsigned = [](int v) -> unsigned long long {
+			long long lv = static_cast<long long>(v);
+			return (lv >= 0) ? static_cast<unsigned long long>(lv) * 2ULL
+								  : static_cast<unsigned long long>((-lv * 2LL) - 1LL);
+		};
+
+		const unsigned long long ux = toUnsigned(cellX);
+		const unsigned long long uy = toUnsigned(cellY);
+		const unsigned long long sum = ux + uy;
+		const unsigned long long hash = (sum * (sum + 1ULL)) / 2ULL + uy;
+		return static_cast<size_t>(hash);
 	}
 	/////////////////////////////////
 
@@ -100,47 +114,6 @@ public:
 
 
 
-	/////////////////////////////////
-	// Query - Performs a spatial query to find all objects within a specified radius of a position using a grid-based spatial hash. I'll store the results in the provided outFound vector, this version of the method
-	// will include all objects within the query radius, including the object performing the query if it is within the radius. Our query works by checking all cells within a radius of the given position.
-	// For each cell, we calculate the hash and look up any objects in that cell. We then check the distance from each object to the query position to determine if it falls within the query radius,
-	// and if so, we add it to the outFound vector. We also increment our query performance counters for monitoring.
-	void Query(std::vector<T*>& outFound, const Vec2& position, float queryRadius) noexcept {
-		++s_queryCount; // performance monitoring: Increment the query count each time this method is called.
-
-		// Query all cells within radius
-		int cellX = static_cast<int>(position.GetX() / m_cellSize);
-		int cellY = static_cast<int>(position.GetY() / m_cellSize);
-		int cellRadius =
-			static_cast<int>(queryRadius / m_cellSize) +
-			1; // Get the radius in terms of cells but add 1 to ensure we cover the entire query radius even if it extends slightly beyond the last cell boundary.
-
-		// Loop through all cells within the calculated cell radius and check for objects in those cells.
-		for (int x = cellX - cellRadius; x <= cellX + cellRadius; ++x) {
-			for (int y = cellY - cellRadius; y <= cellY + cellRadius; ++y) {
-				size_t hash = ((x + y) * (x + y + 1)) / 2 + y;
-
-				auto it = m_grid.find(hash);
-				if (it != m_grid.end()) {
-					for (T* obj : it->second) {
-						const Vec2& objPos = obj->GetCentrePoint();
-						float dx = objPos.GetX() - position.GetX();
-						float dy = objPos.GetY() - position.GetY();
-						float distSq = dx * dx + dy * dy;
-						float radiusSq = queryRadius * queryRadius;
-
-						if (distSq <= radiusSq) {
-							outFound.push_back(obj);
-							++s_totalObjectsQueried;
-						}
-					}
-				}
-			}
-		}
-
-		++s_totalQueriesThisFrame;
-	}
-	/////////////////////////////////
 
 
 
@@ -151,6 +124,8 @@ public:
 	// and if so, we add it to the outFound vector. We also increment our query performance counters for monitoring.
 	void Query(std::vector<T*>& outFound, const Vec2& position, float queryRadius, const T* excludeObject) noexcept {
 		++s_queryCount; // Increment query count for performance monitoring.
+		outFound.clear();
+		std::unordered_set<T*> seen;
 
 		// Calculate the cell coordinates and radius in terms of cells to determine which cells to query.
 		int cellX = static_cast<int>(position.GetX() / m_cellSize);
@@ -158,25 +133,25 @@ public:
 		int cellRadius =
 			static_cast<int>(queryRadius / m_cellSize) +
 			1; // Get the radius in terms of cells but add 1 to ensure we cover the entire query radius even if it extends slightly beyond the last cell boundary.
+		const float radiusSq = queryRadius * queryRadius;
 
 		// Loop through all cells within the calculated cell radius and check for objects in those cells.
 		for (int x = cellX - cellRadius; x <= cellX + cellRadius; ++x) {
 			for (int y = cellY - cellRadius; y <= cellY + cellRadius; ++y) {
-				size_t hash =
-					((x + y) * (x + y + 1)) / 2 +
-					y; // Calculate the hash for the current cell coordinates using the same method as GetCellHash to ensure consistency.
+				size_t hash = GetCellHashFromCell(x, y); // Calculate the hash for the current cell coordinates using the same method as GetCellHash to ensure consistency.
 
 				auto it = m_grid.find(hash);
 				if (it != m_grid.end()) {
 					for (T* obj : it->second) {
 						if (obj == excludeObject)
 							continue;
+						if (!seen.insert(obj).second)
+							continue;
 
 						const Vec2& objPos = obj->GetCentrePoint();
 						float dx = objPos.GetX() - position.GetX();
 						float dy = objPos.GetY() - position.GetY();
 						float distSq = dx * dx + dy * dy;
-						float radiusSq = queryRadius * queryRadius;
 
 						if (distSq <= radiusSq) {
 							outFound.push_back(obj);

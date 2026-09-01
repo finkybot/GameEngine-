@@ -18,6 +18,8 @@
 #include "TechUnlockSystem.h"
 #include <atomic>
 #include <cstdint>
+#include "ParticleBVHSystem.h"
+#include "SpatialLayerRegistry.h"
 /////////////////////////////////
 
 
@@ -53,6 +55,21 @@ public:
 	void UnloadResources() override;
 
 	void InitializeGame(sf::Vector2u windowSize) override;
+	/////////////////////////////////
+	
+
+	
+	/////////////////////////////////
+	// InitialiseSpatialLayers - Initializes the spatial layers for the scene. Currently does nothing, but can be used for setting up spatial layers if needed.
+	void InitialiseSpatialLayers();
+	/////////////////////////////////
+	
+	
+
+	/////////////////////////////////
+	// SpatialLayerRegistry member variable for managing spatial layers in the TechSimulationScene class. This registry allows for efficient management and retrieval of 
+	// spatial layers based on their names, enabling the organization of entities into different layers for spatial queries and interactions.
+	SpatialLayerRegistry m_spatialLayers;
 	/////////////////////////////////
 
 
@@ -131,6 +148,13 @@ private:
 	/////////////////////////////////
 	float m_techAccumulator = 0.0f;
 	const float m_techInterval = 1.0f;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	ParticleBVHSystem m_particleBVH;
+	float m_civCellSize = 100.0f; // Default cell size, adjust as needed
 	/////////////////////////////////
 };
 /////////////////////////////////

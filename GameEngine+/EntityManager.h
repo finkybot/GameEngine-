@@ -49,6 +49,7 @@ class Entity;
 #include "Systems/CollisionSystem.h"
 #include "Systems/RenderSystem.h"
 #include "CTileMap.h"
+#include "SpatialLayerRegistry.h"
 /////////////////////////////////
 
 
@@ -112,6 +113,8 @@ public:
 	std::vector<Entity*>& GetEntities(EntityType type);
 
 	SpatialHashGrid<Entity>& GetSpatialHash();
+	void SetSpatialLayerRegistry(SpatialLayerRegistry* registry) { m_layerRegistry = registry; }
+	SpatialLayerRegistry* GetSpatialLayerRegistry() const { return m_layerRegistry; }
 	/////////////////////////////////
 
 
@@ -198,6 +201,17 @@ public:
 
 
 
+	/////////////////////////////////
+	void SetSpatialHashCellSize(float cellSize) { m_spatialHash = SpatialHashGrid<Entity>(cellSize); }
+	/////////////////////////////////
+
+
+	/////////////////////////////////
+	bool MatchesFilter(Entity* e, const SpatialLayerFilter& filter);
+	/////////////////////////////////
+
+
+
 	//////////////////////////////////
 	// Private helper methods
 private:
@@ -227,6 +241,7 @@ private:
 	// Private member variables.
 private:
 	SpatialHashGrid<Entity> m_spatialHash;
+	SpatialLayerRegistry* m_layerRegistry =	nullptr; // Optional: pointer to a SpatialLayerRegistry for managing spatial layers (may be nullptr)`
 	EntityVector m_entities;
 	EntityVector m_toAdd;
 	EntityMap m_entityMap;

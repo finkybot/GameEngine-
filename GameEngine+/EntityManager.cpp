@@ -92,6 +92,25 @@ Entity* EntityManager::CreateTileMapEntity(const TileMap& map) {
 
 
 /////////////////////////////////
+// MatchesFilter - checks if an entity matches the specified spatial layer filter. The method iterates over the required and forbidden component lists in the filter, checking if the entity has or does not have the specified components.
+bool EntityManager::MatchesFilter(Entity* e, const SpatialLayerFilter& filter) {
+	// Check if the entity has all required components and does not have any forbidden components. If the entity fails any of these checks, return false; otherwise, return true.
+	for (auto id : filter.requiredComponents)
+		// If the entity does not have a required component, it does not match the filter
+		if (!e->HasComponent(id)) return false;
+
+	// If the entity has any forbidden component, it does not match the filter
+	for (auto id : filter.forbiddenComponents)
+		// If the entity has a forbidden component, it does not match the filter
+		if (e->HasComponent(id)) return false;
+
+	return true;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // AddPendingEntities - processes all entities that were queued for addition to the EntityManager. This method is called during the update cycle to add new entities to the main entity list and update relevant data structures such as the entity map and layer buckets.
 void EntityManager::AddPendingEntities() {
     // Debug: assert caller thread is owner
@@ -299,14 +318,39 @@ void EntityManager::AddTileMapAsEntities(const TileMap& map, int tileValueToTrea
 // that entities are rendered in the correct order based on their layers.
 /////////////////////////////////
 void EntityManager::UpdateSpatialHashAndRender() {
-	// Rebuild spatial hash every frame (very fast)
-	m_spatialHash.Clear();
+	if (!m_layerRegistry) {
+    // Skip spatial layers until scene wires them
+    m_renderSystem.RenderShapes(m_entities, m_window);
+    return;
+}
+	assert(m_layerRegistry != nullptr && "Layer registry not set");
+	// Clear all named layers
+	m_layerRegistry->ClearAllLayers();
+
+	// Rebuild each layer using filters
 	for (auto& entity : m_entities) {
-		m_spatialHash.Insert(entity.get());
+		Entity* e = entity.get();
+
+		for (auto& [name, entry] : m_layerRegistry->GetAllLayers()) {
+			if (MatchesFilter(e, entry.filter))
+				entry.grid.Insert(e);
+		}
 	}
 
-	// Rendering is now controlled explicitly by the engine's render pass.
+	// Rendering stays the same
+	m_renderSystem.RenderShapes(m_entities, m_window);
 }
+ 
+ 
+//void EntityManager::UpdateSpatialHashAndRender() {
+//	// Rebuild spatial hash every frame (very fast)
+//	m_spatialHash.Clear();
+//	for (auto& entity : m_entities) {
+//		m_spatialHash.Insert(entity.get());
+//	}
+//
+//	// Rendering is now controlled explicitly by the engine's render pass.
+//}
 /////////////////////////////////
 
 

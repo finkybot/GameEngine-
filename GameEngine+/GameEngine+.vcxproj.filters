@@ -225,6 +225,9 @@
     <ClCompile Include="TechSimulationScene.cpp">
       <Filter>Source Files\Scenes</Filter>
     </ClCompile>
+    <ClCompile Include="ParticleBVHSystem.cpp">
+      <Filter>Source Files\Systems</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imgui\backends\imgui_impl_dx9.h">
@@ -364,9 +367,6 @@
     </ClInclude>
     <ClInclude Include="ChunkManager.h">
       <Filter>Header Files\Managers</Filter>
-    </ClInclude>
-    <ClInclude Include="CLayer.h">
-      <Filter>Header Files\Misc</Filter>
     </ClInclude>
     <ClInclude Include="DebugStack.h">
       <Filter>Header Files\Misc</Filter>
@@ -514,6 +514,21 @@
     </ClInclude>
     <ClInclude Include="WorldDiffusionConfig.h">
       <Filter>Header Files\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="CLayer.h">
+      <Filter>Header Files\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="AABB.h">
+      <Filter>Header Files\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="ParticleBVHSystem.h">
+      <Filter>Header Files\Systems</Filter>
+    </ClInclude>
+    <ClInclude Include="SpatialLayerRegistry.h">
+      <Filter>Header Files\Managers</Filter>
+    </ClInclude>
+    <ClInclude Include="ComponentTypeId.h">
+      <Filter>Header Files\Components</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

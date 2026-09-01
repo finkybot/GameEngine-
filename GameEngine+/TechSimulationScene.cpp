@@ -106,7 +106,40 @@ void TechSimulationScene::UnloadResources() {}
 /////////////////////////////////
 // InitializeGame - Initializes the game state for the scene. Creates a test world with civilizations and knowledge particles.
 void TechSimulationScene::InitializeGame(sf::Vector2u windowSize) {
+	InitialiseSpatialLayers();
+
+	// Wire registry into EntityManager
+	m_entityManager.SetSpatialLayerRegistry(&m_spatialLayers);
+
+	// Ensure pending entities are added BEFORE civ creation
+	m_entityManager.ProcessPending();
+
 	CreateTechTestWorld();
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// InitialiseSpatialLayers - Initializes the spatial layers for the scene. Currently does nothing, but can be used for setting up spatial layers if needed.	
+void TechSimulationScene::InitialiseSpatialLayers() {
+	float civCellSize = m_civCellSize;
+	float collisionCellSize = 64.0f; // Example value, adjust as needed
+	float dynamicCellSize = 128.0f;	 // Example value, adjust as needed
+
+	SpatialLayerFilter civFilter;
+	civFilter.requiredComponents = {ComponentTypeId::CivilisationTech};
+
+	SpatialLayerFilter collisionFilter;
+	collisionFilter.requiredComponents = {ComponentTypeId::Static, ComponentTypeId::Shape};
+
+	SpatialLayerFilter dynamicFilter;
+	dynamicFilter.requiredComponents = {ComponentTypeId::Shape};
+	dynamicFilter.forbiddenComponents = {ComponentTypeId::Static};
+
+	m_spatialLayers.CreateLayer("Civilisations", civCellSize, civFilter);
+	m_spatialLayers.CreateLayer("Collisions", collisionCellSize, collisionFilter);
+	m_spatialLayers.CreateLayer("DynamicEntities", dynamicCellSize, dynamicFilter);
 }
 /////////////////////////////////
 
@@ -129,6 +162,8 @@ void TechSimulationScene::CreateTechTestWorld() {
 	// Average spacing between civs (approximate)
 	float avgSpacing = sqrt(worldArea / civCount);
 
+	m_civCellSize =	avgSpacing * 1.5f; // Set the spatial hash cell size for the entity manager to optimize spatial queries for civilizations and particles
+
 	auto& cfg = m_gameEngine.worldDiffusionConfig;
 
 	// Civ‑to‑civ proximity radius scales with spacing
@@ -138,7 +173,7 @@ void TechSimulationScene::CreateTechTestWorld() {
 	cfg.particleInfluenceRadius = avgSpacing * 1.2f;
 
 	// Diffusion strength scales inversely with civ count
-	cfg.baseDiffusionRate = 0.2f / sqrt(civCount / 50.0f);
+	cfg.baseDiffusionRate = 0.02f / sqrt(civCount / 50.0f);
 
 	// Diffusion interval scales with civ count
 	cfg.diffusionInterval = 0.25f * sqrt(civCount / 50.0f);
@@ -146,6 +181,10 @@ void TechSimulationScene::CreateTechTestWorld() {
 	// -------------------------------
 	// SPAWN CIVILISATIONS
 	// -------------------------------
+	
+	// Set the spatial hash cell size for the entity manager to optimize spatial queries for civilizations and particles
+	m_entityManager.SetSpatialHashCellSize(m_civCellSize);
+
 	for (int i = 0; i < civCount; i++) {
 		Entity* civ = m_entityManager.AddEntity(EntityType::Civilisation);
 
@@ -216,15 +255,31 @@ void TechSimulationScene::Update(float dt) {
 
 	// Update timers for diffusion and evolution (deprecated) systems
 	m_diffusionTimer += dt;
-	//m_evolutionTimer += dt;
 	
+
 	// --- DIFFUSION SYSTEM (runs at configured interval) ---
 	if (m_diffusionTimer >= m_gameEngine.worldDiffusionConfig.diffusionInterval) {
 		// Run diffusion jobs for all civs at the configured interval
 		m_diffusionTimer -= m_gameEngine.worldDiffusionConfig.diffusionInterval;
 
+		// Rebuild or refit the particle BVH if there are particles present
+		if (!m_particleBVH.particles.empty()) {
+			// Rebuild or refit the particle BVH if there are particles present
+			if (!m_particleBVH.root) {
+				// If the BVH root is null, build the BVH from scratch
+				m_particleBVH.Build(m_entityManager);
+			} else {
+				// else refit the existing BVH to account for particle movement
+				m_particleBVH.Refit();
+			}
+		}
+
+
+		// Set the particle BVH system for the diffusion system
+		m_diffusionSystem.SetBVHSystem(&m_particleBVH);
+
 		// Schedule diffusion jobs for all civilizations based on the configured diffusion interval
-		ScheduleTechDiffusionJobs(m_gameEngine.worldDiffusionConfig.diffusionInterval); // or 0.25f explicitly
+		ScheduleTechDiffusionJobs(m_gameEngine.worldDiffusionConfig.diffusionInterval);
 	}
 
 	// Wait for all scheduled jobs to complete before proceeding to the next frame. This ensures that all technology systems have finished processing before the next update cycle begins.
@@ -514,7 +569,9 @@ void TechSimulationScene::ScheduleTechDiffusionJobs(float dt) {
 				if (!civTech) continue;
 
 				// Process technology diffusion for the civilization using the TechDiffusionSystem
-				m_diffusionSystem.ProcessTechDiffusionForCivilisation(civ, civTech, m_entityManager, dt);
+				m_diffusionSystem.ProcessCivToCivDiffusion(civ, civTech, m_entityManager, dt);
+				m_diffusionSystem.ProcessParticleDiffusionForCivilisation(civ, civTech, m_entityManager, dt);
+
 			}
 		});
 	}

@@ -28,6 +28,7 @@ public:
 	TechEvolutionSystem(TechRegistry& techRegistry) : techRegistry(techRegistry) {}
 	/////////////////////////////////
 	 
+
 	
 	/////////////////////////////////
 	void ProcessCivilisationTech(Entity* entity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt);

@@ -23,6 +23,7 @@
 #include "CColliderRect.h"
 #include "Vec2.h"
 #include "EntityType.h"
+#include "ComponentTypeId.h"
 /////////////////////////////////
 
 
@@ -184,6 +185,38 @@ public:
 
 
 	/////////////////////////////////
+	// Method to check if the entity has a component of a specific type based on the ComponentTypeId enum. This allows for checking components without needing to know the exact C++ type.
+	bool HasComponent(ComponentTypeId id) const {
+		switch (id) {
+		case ComponentTypeId::Transform:
+			return HasComponent<CTransform>();
+		case ComponentTypeId::CivilisationTech:
+			return HasComponent<CCivilisationTech>();
+		case ComponentTypeId::Static:
+			return HasComponent<CStatic>();
+		case ComponentTypeId::Shape:
+			return HasComponent<CShape>();
+		case ComponentTypeId::Rectangle:
+			return HasComponent<CRectangle>();
+		case ComponentTypeId::Circle:
+			return HasComponent<CCircle>();
+		case ComponentTypeId::Explosion:
+			return HasComponent<CExplosion>();
+		case ComponentTypeId::TileMap:
+			return HasComponent<CTileMap>();
+		case ComponentTypeId::Music:
+			return HasComponent<CMusic>();
+		//case ComponentTypeId::Sound:
+		//	return HasComponent<CSound>();
+		default:
+			return false;
+		}
+	}
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Template method to remove a component of type T from the entity. If the component does not exist, this method does nothing.
 	template <typename T>
 	void RemoveComponent() {
@@ -209,10 +242,12 @@ public:
 
 
 	/////////////////////////////////
-	// Convenience methods to get properties from the CShape component if it exists, or return default values if the component is not present.
+	// Convenience methods to get properties from the CShape component if it exists; otherwise fallback to transform position.
 	inline Vec2 GetCentrePoint() const {
 		auto shape = GetComponent<CShape>();
-		return shape ? shape->GetCentrePoint() : Vec2::Zero;
+		if (shape) return shape->GetCentrePoint();
+		auto transform = GetComponent<CTransform>();
+		return transform ? transform->position : Vec2::Zero;
 	}
 	/////////////////////////////////
 

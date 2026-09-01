@@ -177,6 +177,7 @@
     <ClCompile Include="MainThreadTasks.cpp" />
     <ClCompile Include="MusicSystem.cpp" />
     <ClCompile Include="MusicVisualizerScene.cpp" />
+    <ClCompile Include="ParticleBVHSystem.cpp" />
     <ClCompile Include="PathFinder.cpp" />
     <ClCompile Include="PathFindingSystem.cpp" />
     <ClCompile Include="PathTestScene.cpp" />
@@ -203,6 +204,7 @@
     <ClCompile Include="Vec2.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="AABB.h" />
     <ClInclude Include="AssetManager.h" />
     <ClInclude Include="BVHSystem.h" />
     <ClInclude Include="CameraSystem.h" />
@@ -220,6 +222,7 @@
     <ClInclude Include="CMusic.h" />
     <ClInclude Include="CName.h" />
     <ClInclude Include="Component.h" />
+    <ClInclude Include="ComponentTypeId.h" />
     <ClInclude Include="CParticleInfluence.h" />
     <ClInclude Include="CPathRequest.h" />
     <ClInclude Include="CRectangle.h" />
@@ -265,6 +268,7 @@
     <ClInclude Include="MainThreadTasks.h" />
     <ClInclude Include="MusicSystem.h" />
     <ClInclude Include="MusicVisualizerScene.h" />
+    <ClInclude Include="ParticleBVHSystem.h" />
     <ClInclude Include="PathFinder.h" />
     <ClInclude Include="PathFindingSystem.h" />
     <ClInclude Include="PathTestScene.h" />
@@ -276,6 +280,7 @@
     <ClInclude Include="ShutdownGuard.h" />
     <ClInclude Include="SoundSystem.h" />
     <ClInclude Include="SpatialHashGrid.h" />
+    <ClInclude Include="SpatialLayerRegistry.h" />
     <ClInclude Include="System.h" />
     <ClInclude Include="SystemManager.h" />
     <ClInclude Include="Systems\CollisionSystem.h" />

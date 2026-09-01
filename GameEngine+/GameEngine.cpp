@@ -57,7 +57,7 @@ GameEngine::GameEngine() {
 	worldDiffusionConfig.worldHeight = windowSize.y;
 
 	// Proximity cutoff (world‑size dependent)
-	worldDiffusionConfig.maxProximityDistance = worldSize * 0.5f;
+	worldDiffusionConfig.maxProximityDistance = worldSize * 0.05f;
 
 	// Particle influence radius (world‑size dependent)
 	worldDiffusionConfig.particleInfluenceRadius = worldSize * 0.1f;

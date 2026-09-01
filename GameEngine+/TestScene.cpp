@@ -24,6 +24,9 @@
 #include "InputAction.h"
 #include "InputController.h"
 #include "Vec2.h"
+#include "SpatialLayerRegistry.h"
+#include "SpatialHashGrid.h"
+
 
 #include <SFML/Window/Event.hpp>
 #include <SFML/System/Vector2.hpp>
@@ -128,16 +131,14 @@ void TestScene::Update(float deltaTime) {
 	// Update game logic (entities, collisions, rendering)
 	UpdateExplosions();
 
-	m_entityManager.GetPhysicsSystem().Update(
-		m_entityManager.GetEntities(), deltaTime, m_window.getSize().x,
-		m_window.getSize().y); // Do physics and boundary collisions first for spatial hash accuracy.
-
-	m_entityManager.GetCollisionSystem().DetectAndResolve(
-		m_entityManager.GetEntities(), m_entityManager.GetSpatialHash(),
-		deltaTime); // Then do collision detection and resolution, which may mark entities as dead and spawn explosions.
+	m_entityManager.GetPhysicsSystem().Update(m_entityManager.GetEntities(), deltaTime, m_window.getSize().x, m_window.getSize().y); // Do physics and boundary collisions first for spatial hash accuracy.
+	m_entityManager.GetCollisionSystem().DetectAndResolve(m_entityManager.GetEntities(), m_spatialLayers.GetLayer("TestScene"), deltaTime);
+	//m_entityManager.GetCollisionSystem().DetectAndResolve(m_entityManager.GetEntities(), m_entityManager.GetSpatialHash(), deltaTime); // Then do collision detection and resolution, which may mark entities as dead and spawn explosions.
 
 	// Set listener position for 3D spatial audio (at center of screen)
 	Vec2 listenerPos(m_window.getSize().x / 2.0f, m_window.getSize().y / 2.0f);
+	
+	// Update the sound system's listener position if the sound system is available
 	if (m_entityManager.GetSoundSystem()) {
 		m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
 	}
@@ -222,7 +223,11 @@ void TestScene::UnloadResources() { /* unload resources */ }
 
 /////////////////////////////////
 // InitializeGame - responsible for initializing the game state for the scene, including spawning entities with random properties and setting up any necessary game logic or mechanics.
-void TestScene::InitializeGame(sf::Vector2u windowSize) {
+void TestScene::InitialiseGame(sf::Vector2u windowSize) {
+	InitialiseSpatialLayers();
+
+
+
 	// Initialize random number generator ONCE (not per entity)
 	std::random_device randDevice;
 	std::default_random_engine generator(randDevice());
@@ -286,22 +291,27 @@ void TestScene::InitializeGame(sf::Vector2u windowSize) {
 /////////////////////////////////
 // SpawnEntityByType - Spawns an entity of the specified team type with random properties and adds it to the EntityManager. It takes the EntityManager reference, team type (0-4), radius, color, position, 
 // velocity, and alpha as parameters. The team type is mapped to a specific EntityType enum value, and the new entity is created and added to the EntityManager using the addEntity method.
-void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 color, Vec2 position, Vec2 velocity,
-								  int alpha) {
-	const EntityType teamTypes[] = {EntityType::TeamEagle, EntityType::TeamHawk, EntityType::TeamBoogaloo,
-									EntityType::TeamRocket, EntityType::TeamMonkey};
+void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha) {
+	// Map teamType (0-4) to EntityType enum values
+	const EntityType teamTypes[] = {EntityType::TeamEagle, EntityType::TeamHawk, EntityType::TeamBoogaloo, EntityType::TeamRocket, EntityType::TeamMonkey};
+	
+	// Ensure teamType is within bounds (0-4), otherwise default to TeamMonkey
 	EntityType type = (teamType < 5) ? teamTypes[teamType] : EntityType::TeamMonkey;
 
+	// Create a new entity of the specified type and add it to the EntityManager
 	Entity* en = m_entityManager.AddEntity(type);
 
-	en->AddComponent<CTransform>(position, velocity);
+	//en->AddComponent<CTransform>(position, velocity); // already added in by the Entity Manager's AddEntity() call, so we don't need to add it again here
 	en->AddComponent<CName>();
 
+	// Retrieve the CTransform component from the entity to set its position and velocity
 	auto* tform = en->GetComponent<CTransform>();
+	
 	// Use CTransform's public members (position / velocity)
 	tform->position = Vec2(position.x + 0.4f, position.y - 0.5f);
 	tform->velocity = Vec2(velocity.x, velocity.y);
 
+	// Add a shape component based on the entity type (Explosion or Circle)
 	if (EntityType::Explosion == type) {
 		auto explosion = std::make_unique<CExplosion>();
 		explosion->SetRadius(radius);
@@ -313,6 +323,8 @@ void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 colo
 		circle->SetColor(color.x, color.y, color.z, alpha);
 		en->AddComponentPtr<CShape>(std::move(circle));
 	}
+
+	m_spatialLayers.GetLayer("TestScene").Insert(en); // Insert the entity into the spatial hash layer for collision detection and spatial queries
 }
 /////////////////////////////////
 
@@ -413,5 +425,18 @@ void TestScene::UpdateExplosions() {
 			}
 		}
 	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void TestScene::InitialiseSpatialLayers() {
+	// Wire this registry into the EntityManager
+	m_entityManager.SetSpatialLayerRegistry(&m_spatialLayers);
+
+	// Create a dedicated layer for TestScene entities
+	// Balls are small, so use a small cell size for accurate collisions
+	m_spatialLayers.CreateLayer("TestScene", 16.0f);
 }
 /////////////////////////////////

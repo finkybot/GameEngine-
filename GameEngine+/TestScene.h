@@ -65,7 +65,7 @@ public:
 
 	/////////////////////////////////
 	// InitializeGame - responsible for initializing the game state for the scene, including spawning entities with random properties and setting up any necessary game logic or mechanics. This method will be called when the scene is entered to set up the initial state of the game.
-	void InitializeGame(sf::Vector2u windowSize);
+	void InitialiseGame(sf::Vector2u windowSize);
 	/////////////////////////////////
 
 
@@ -88,6 +88,7 @@ private:
 	/////////////////////////////////
 	// UpdateExplosions - Updates the state of all active explosions in the scene. This method iterates through the tracked explosion entities, calculates their age based on their creation time, updates their color alpha for a fading effect, and removes them if they have exceeded their lifespan.
 	void UpdateExplosions();
+	void InitialiseSpatialLayers();
 	/////////////////////////////////
 
 
@@ -122,6 +123,14 @@ private:
 	// ReportFPS - Reports the current frames per second (FPS) by calculating the number of frames rendered in the last second and applying an exponential moving average to smooth out fluctuations. This method takes references to the frame count, 
 	// last time point, and smoothed FPS value, as well as a smoothing factor alpha for the moving average calculation.
 	void ReportFPS(int& fpsFrames, std::chrono::steady_clock::time_point& fpsLast, double& fpsSmooth, const double	alpha);
+	/////////////////////////////////
+
+	
+
+	/////////////////////////////////
+	// SpatialLayerRegistry member variable for managing spatial layers in the TechSimulationScene class. This registry allows for efficient management and retrieval of
+	// spatial layers based on their names, enabling the organization of entities into different layers for spatial queries and interactions.
+	SpatialLayerRegistry m_spatialLayers;
 	/////////////////////////////////
 
 

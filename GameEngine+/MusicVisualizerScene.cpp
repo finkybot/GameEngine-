@@ -1575,7 +1575,7 @@ void MusicVisualizerScene::UnloadResources() {}
 // covers the entire window, which we can use for visual effects or as a background grid. We will calculate the number of columns and rows needed based on the window size and a defined 
 // tile size, and then create a TileMap instance with those dimensions. This will allow us to easily draw a grid overlay in the RenderDebugOverlay function and potentially use the 
 // tile map for other visual effects in the future.
-void MusicVisualizerScene::InitializeGame(sf::Vector2u windowSize) {
+void MusicVisualizerScene::InitialiseGame(sf::Vector2u windowSize) {
 	const float tileSize = 32.0f;
 	int cols = static_cast<int>(windowSize.x / static_cast<unsigned int>(tileSize)) + 2;
 	int rows = static_cast<int>(windowSize.y / static_cast<unsigned int>(tileSize)) + 2;

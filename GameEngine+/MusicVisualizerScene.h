@@ -72,7 +72,7 @@ public:
 	// Resource management and initialization (overrides from Scene). LoadResources and UnloadResources will handle loading and freeing any resources needed by the scene, while InitializeGame can be used to set up the initial state of the scene when the game starts.
 	void LoadResources() override;
 	void UnloadResources() override;
-	void InitializeGame(sf::Vector2u windowSize) override;
+	void InitialiseGame(sf::Vector2u windowSize) override;
 	/////////////////////////////////
 
 

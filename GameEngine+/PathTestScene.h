@@ -49,7 +49,7 @@ public:
 	void OnWindowResized(sf::Vector2u newSize) override;
 	void LoadResources() override {}
 	void UnloadResources() override;
-	void InitializeGame(sf::Vector2u windowSize) override;
+	void InitialiseGame(sf::Vector2u windowSize) override;
 	/////////////////////////////////
 
 

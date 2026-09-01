@@ -180,7 +180,7 @@ void GameEngine::ChangeScene(const std::string& sceneName) {
 		// initialize the new scene so it has window size, input controller, and resources set up
 		if (currentScene) {
 			try {
-				currentScene->InitializeGame(windowSize);
+				currentScene->InitialiseGame(windowSize);
 			} catch (...) {}
 			// update input controller to use the new scene's game controller
 			try { m_InputController.SetGameController(currentScene->GetGameController()); } catch (...) {}
@@ -232,7 +232,7 @@ void GameEngine::Run() {
 
 	// Initialize the chosen scene if it was found. ChangeScene() logs a warning when the scene name is not found; guard against a null current scene to avoid dereferencing a nullptr.
 	if (currentScene) {
-		currentScene->InitializeGame(windowSize);
+		currentScene->InitialiseGame(windowSize);
 
 		// FontManager already bound to engine-owned EntityManager in constructor
 		m_InputController.SetGameController(currentScene->GetGameController());

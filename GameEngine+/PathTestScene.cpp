@@ -52,7 +52,7 @@ PathTestScene::~PathTestScene() = default;
 
 /////////////////////////////////
 // InitializeGame - Initializes the game scene, setting up the camera entity, map bounds, and scanning for available levels.
-void PathTestScene::InitializeGame(sf::Vector2u /*windowSize*/) {
+void PathTestScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	SwitchToLevel(m_currentLevelName);
 	// Create  and setup a camera entity, similar to the LevelEditorScene
 	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Default);

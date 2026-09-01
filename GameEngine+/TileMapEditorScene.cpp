@@ -709,7 +709,7 @@ void TileMapEditorScene::UnloadResources() {}
 /////////////////////////////////
 // InitializeGame - initializes the tile map editor scene by creating a default tile map based on the window size 
 // and setting up a CTileMap entity for rendering.
-void TileMapEditorScene::InitializeGame(sf::Vector2u windowSize) {
+void TileMapEditorScene::InitialiseGame(sf::Vector2u windowSize) {
 	// create a default map sized to the window
 	const float tileSize = 32.0f;
 	int cols = static_cast<int>(windowSize.x / static_cast<unsigned int>(tileSize)) + 2;

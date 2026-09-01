@@ -31,7 +31,7 @@ MainMenuScene::~MainMenuScene() = default;
 /////////////////////////////////
 // InitializeGame - Initializes the main menu scene by retrieving the list of available scene names from the game engine, allowing the menu to display options for players to select different scenes to play. This method is called when the scene is 
 // first entered and sets up the necessary state for the main menu.
-void MainMenuScene::InitializeGame(sf::Vector2u windowSize) {
+void MainMenuScene::InitialiseGame(sf::Vector2u windowSize) {
 	m_sceneNames = m_gameEngine.GetSceneNames();
 	// Remove the MainMenu entry itself so we don't show an option for the current scene
 	m_sceneNames.erase(std::remove(m_sceneNames.begin(), m_sceneNames.end(), std::string("MainMenu")), m_sceneNames.end());

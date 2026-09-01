@@ -46,7 +46,7 @@ public:
 	virtual void OnWindowResized(sf::Vector2u newSize) = 0;
 	virtual void LoadResources() = 0;
 	virtual void UnloadResources() = 0;
-	virtual void InitializeGame(sf::Vector2u windowSize) = 0;
+	virtual void InitialiseGame(sf::Vector2u windowSize) = 0;
 	/////////////////////////////////
 
 

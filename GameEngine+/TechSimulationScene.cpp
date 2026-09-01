@@ -66,7 +66,7 @@ void TechSimulationScene::OnEnter() {
 	m_isActive.store(true, std::memory_order_release);
 	JobSystem::WaitIdle(); // ensure all jobs finish before continuing
 	m_entityManager.ClearAll();  
-	InitializeGame(m_gameEngine.windowSize);
+	InitialiseGame(m_gameEngine.windowSize);
 
 	// Reset timers for diffusion and evolution systems
 	m_sceneStartTime = std::chrono::steady_clock::now();
@@ -104,8 +104,8 @@ void TechSimulationScene::UnloadResources() {}
 
 
 /////////////////////////////////
-// InitializeGame - Initializes the game state for the scene. Creates a test world with civilizations and knowledge particles.
-void TechSimulationScene::InitializeGame(sf::Vector2u windowSize) {
+// InitialiseGame - Initialises the game state for the scene. Creates a test world with civilizations and knowledge particles.
+void TechSimulationScene::InitialiseGame(sf::Vector2u windowSize) {
 	InitialiseSpatialLayers();
 
 	// Wire registry into EntityManager

@@ -1,219 +1,199 @@
 /////////////////////////////////
-// TechEvolutionSystem.cpp - Implementation of the TechEvolutionSystem class, responsible for managing technology evolution in the game. It updates research progress and unlocks technologies for civilizations based on their research rates and other factors.
+// TechEvolutionSystem.cpp
+// Implementation of the TechEvolutionSystem class, which manages
+// the evolution and unlocking of technologies for civilizations.
+// It uses passive progress, active research, prerequisites, and
+// proximity-based bonuses via the "Civilisations" spatial layer.
 /////////////////////////////////
 
 
 
 /////////////////////////////////
 // Includes
-#pragma once
 #include "TechEvolutionSystem.h"
 #include "CTransform.h"
-#include "CKnowledgeParticle.h"
-#include "CParticleInfluence.h"
-#include "CChunkKnowledge.h"
+#include "Entity.h"
 #include <cmath>
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// Update - Overrides the base class Update method to implement the technology evolution logic. It processes all entities with CCivilisationTech and CTechNode, updating their research progress and unlocking technologies as appropriate.
+// Update - legacy entry point (unused; evolution is driven by jobs)
 void TechEvolutionSystem::Update(float dt, EntityManager& entityManager) {
-	// Get a reference to the list of all entities managed by the EntityManager
-	auto& entities = entityManager.GetEntities();
+	(void)dt;
+	(void)entityManager;
+}
+/////////////////////////////////
 
-	// Loop through all entities and process those with CCivilisationTech
-	for (auto& up : entities) {
-		Entity* entity = up.get();
 
-		// Skip dead entities
-		if (!entity->IsAlive())
-			continue;
 
-		// Get the CCivilisationTech component from the entity
-		auto civTechComp = entity->GetComponent<CCivilisationTech>();
-		
-		// If the entity has a CCivilisationTech, process its technology evolution
-		if (civTechComp) {
-			ProcessCivilisationTech(entity, civTechComp, entityManager, dt);
-		}
-	}
+
+/////////////////////////////////
+// FindTechNode - helper to look up a tech node by ID
+const CTechNode* TechEvolutionSystem::FindTechNode(const std::string& techId) {
+	return techRegistry.GetTechNode(techId);
 }
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// ProcessCivilisationTech - Processes the technology evolution for a single entity with a CCivilisationTech. It updates research progress, checks prerequisites, and unlocks technologies as appropriate.
-void TechEvolutionSystem::ProcessCivilisationTech(Entity* entity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt) {
-	// Get the CTransform component from the entity to determine its position in the game world
-	auto* transform = entity->GetComponent<CTransform>();
-
-	// If the entity does not have a CTransform component, return early as we cannot calculate proximity or apply knowledge particle effects
-	if (!transform)	return;
-
-	// 1) Promote passive → active research (with full skip rules)
-	for (auto& [techId, passive] : civTechComp->passiveProgress) {
-		// Skip if already fully known
-		auto knownIt = civTechComp->knownTechs.find(techId);
-		
-		// If the technology is already known and fully researched, skip to the next technology
-		if (knownIt != civTechComp->knownTechs.end() && knownIt->second >= 1.0f) continue;
-
-		// Skip if already actively researching
-		if (civTechComp->activeResearch.contains(techId)) continue;
-
-		// Skip if prerequisites are not met
-		CTechNode* node = FindTechNode(techId);
-		if (!node || !PrerequisitesMet(*civTechComp, *node)) continue;
-
-		// Promote passive → active once threshold reached (5%)
-		if (passive >= node->requiredKnowledge * 0.05f)
-			civTechComp->activeResearch[techId] = passive; // seed progress
+// PrerequisitesMet - checks if all prerequisites for a tech are known
+bool TechEvolutionSystem::PrerequisitesMet(const CCivilisationTech& civTech, const CTechNode& techNode) {
+	// Check if all prerequisites for the given tech node are met based on the known technologies of the civilization.
+	for (const auto& prereqId : techNode.prerequisites) {
+		// If a prerequisite is not known or has a progress less than 1.0, return false.
+		auto it = civTech.knownTechs.find(prereqId);
+		if (it == civTech.knownTechs.end() || it->second < 1.0f)
+			return false;
 	}
 
-	// 2) Update active research progress
-	for (auto it = civTechComp->activeResearch.begin(); it != civTechComp->activeResearch.end();) {
-		const std::string& techId = it->first;
-		float& progress = it->second;
+	// All prerequisites are met, return true.
+	return true;
+}
+/////////////////////////////////
 
-		// Lookup tech definition
-		CTechNode* techNode = FindTechNode(techId);
-		if (!techNode) {
-			++it;
-			continue;
-		}
 
-		// Prerequisite check
-		if (!PrerequisitesMet(*civTechComp, *techNode)) {
-			++it;
-			continue;
-		}
 
-		// Calculate research rate
-		float researchRate = CalculateResearchRate(*civTechComp, *techNode, globalResearchRate);
+/////////////////////////////////
+// CalculateResearchRate - base research rate modified by civ stats
+float TechEvolutionSystem::CalculateResearchRate(const CCivilisationTech& civTech, const CTechNode& techNode, float baseRate) {
+	// Start with the base research rate
+	float rate = baseRate;
 
-		// Knowledge particle boost
-		float knowledgeBoost = 0.0f;
-		auto& knowledgeParticles = entityManager.GetEntities(EntityType::KnowledgeParticle);
+	// Literacy and openness can boost research
+	rate *= civTech.literacy;
+	rate *= civTech.openness;
 
-		for (Entity* e : knowledgeParticles) {
-			// Skip dead entities
-			if (!e || !e->IsAlive()) continue;
+    // Difficulty scaling (higher difficulty → slower research)
+	if (techNode.baseDifficulty > 0.0f)
+		rate *= (1.0f / techNode.baseDifficulty);
 
-			// Get the CKnowledgeParticle, CParticleInfluence, and CTransform components from the entity
-			auto* kp = e->GetComponent<CKnowledgeParticle>();
-			auto* influence = e->GetComponent<CParticleInfluence>();
-			auto* pTransform = e->GetComponent<CTransform>();
+	// Clamp to avoid extreme values
+	if (rate < 0.0f)
+		rate = 0.0f;
+	if (rate > 10.0f)
+		rate = 10.0f;
 
-			// If any of the required components are missing, skip to the next entity
-			if (!kp || !influence || !pTransform) continue;
+	// Return the final calculated research rate
+	return rate;
+}
+/////////////////////////////////
 
-			// Skip if the knowledge particle does not match the current tech being researched
-			float dist = transform->position.Distance(pTransform->position);
 
-			// If the distance is within the influence radius, apply a knowledge boost based on the knowledge particle's value and the distance falloff
-			if (dist < influence->influenceRadius) {
-				float falloff = 1.0f - (dist / influence->influenceRadius);
-				knowledgeBoost = std::min(knowledgeBoost + kp->value * falloff, 2.0f);
+
+/////////////////////////////////
+// ProcessCivilisationTech - main evolution step for a single civ
+void TechEvolutionSystem::ProcessCivilisationTech(Entity* civ, CCivilisationTech* civTech, EntityManager& em, float dt) {
+	// Ensure valid pointers to civilisation entity and technology component
+	if (!civ || !civTech) return;
+
+	// -----------------------------
+	// 1. Base research rate
+	// -----------------------------
+	float baseRate = globalResearchRate;
+
+	// -----------------------------
+	// 2. Spatial proximity bonus
+	//    via "Civilisations" layer
+	// -----------------------------
+	float proximityBoost = 1.0f;
+
+	// Access the spatial layer registry to query nearby civilizations
+	auto* registry = em.GetSpatialLayerRegistry();
+	
+	// If the registry exists, query the "Civilisations" layer for nearby civilizations
+	if (registry) {
+		// Get the "Civilisations" spatial layer for proximity queries
+		auto& civLayer = registry->GetLayer("Civilisations");
+
+		// Get the position of the current civilization entity
+		auto* t = civ->GetComponent<CTransform>();
+		const Vec2 civPos = t ? t->position : civ->GetCentrePoint();
+
+		// Use diffusion config for proximity radius if available
+		const float maxDist = m_diffusionConfig ? m_diffusionConfig->maxProximityDistance : 250.0f;
+
+
+		// Query the spatial layer for nearby civilizations within the specified distance
+		std::vector<Entity*> nearby;
+
+		// Perform the query to find nearby civilizations, excluding the current civilization entity
+		civLayer.Query(nearby, civPos, maxDist, civ);
+
+		// Iterate through the nearby civilizations to calculate the proximity boost based on their known technologies
+		for (Entity* other : nearby) {
+			// Skip if the other civilization is null, not alive, or is the same as the current civilization
+			if (!other || !other->IsAlive() || other == civ) continue;
+
+			// Get the technology component of the other civilization
+			auto* otherTech = other->GetComponent<CCivilisationTech>();
+
+			// Skip if the other civilization does not have a technology component
+			if (!otherTech)	continue;
+
+			// Get the position of the other civilization entity
+			auto* ot = other->GetComponent<CTransform>();
+			const Vec2 otherPos = ot ? ot->position : other->GetCentrePoint();
+
+			// Calculate the distance between the current civilization and the other civilization
+			float dx = otherPos.x - civPos.x;
+			float dy = otherPos.y - civPos.y;
+			float dist = std::sqrt(dx * dx + dy * dy); // Euclidean distance
+
+			// Skip if the distance exceeds the maximum proximity distance
+			if (dist > maxDist)	continue;
+
+			// Calculate a proximity factor based on distance, using a smoothstep function for gradual falloff
+			float p = 1.0f - (dist / maxDist);
+			p = p * p * (3.0f - 2.0f * p); // smoothstep
+
+			// Civs with more knowledge accelerate research
+			for (const auto& [techId, otherKnown] : otherTech->knownTechs) {
+				// Check if the current civilization knows this technology
+				float selfKnown = civTech->knownTechs[techId];
+
+				// If the other civilization knows more about this technology than the current civilization, apply a proximity boost
+				if (otherKnown > selfKnown) {
+					proximityBoost += p * 0.25f; // tune multiplier
+				}
 			}
 		}
+	}
 
-		// Apply knowledge boost
-		researchRate += knowledgeBoost;
+	// Clamp proximity boost
+	if (proximityBoost < 0.5f)
+		proximityBoost = 0.5f;
+	if (proximityBoost > 3.0f)
+		proximityBoost = 3.0f;
 
-		// -------------------------------
-		// PASSIVE BONUS (max +5%)
-		// -------------------------------
-		float passive = civTechComp->passiveProgress[techId];
-		float passiveFraction = passive / techNode->requiredKnowledge;
+	// -----------------------------
+	// 3. Apply research to active techs
+	// -----------------------------
+	for (auto& [techId, progress] : civTech->activeResearch) {
+		// Find the corresponding tech node in the registry
+		const CTechNode* node = FindTechNode(techId);
 
-		float passiveBonus = 0.0f;
-		if (passiveFraction > 0.10f) {
-			float scaled = (passiveFraction - 0.10f) / 0.90f; // maps 10%→100% to 0→1
-			passiveBonus = scaled * 0.05f;					  // max +5%
-		}
+		// Skip if the tech node is not found
+		if (!node) continue;
 
-		researchRate *= (1.0f + passiveBonus);
-		// -------------------------------
+		// Check if prerequisites are met for this tech node
+		if (!PrerequisitesMet(*civTech, *node)) continue;
 
-		// Debug values
-		civTechComp->debugResearchRate[techId] = researchRate;
-		civTechComp->debugKnowledgeBoost[techId] = knowledgeBoost;
-		civTechComp->debugDifficultyFactor[techId] = (1.0f / techNode->baseDifficulty);
+		// Calculate the research rate for this tech node, factoring in base rate and proximity boost
+		float rate = CalculateResearchRate(*civTech, *node, baseRate);
+		rate *= proximityBoost;
 
-		// Apply research (real-time stable)
-		progress += researchRate * dt;
+		// Update the progress for this tech node based on the calculated rate and delta time
+		progress += rate * dt;
 
-		// Unlock tech
-		if (progress >= techNode->requiredKnowledge) {
-			civTechComp->knownTechs[techId] = 1.0f;
-			it = civTechComp->activeResearch.erase(it);
+		// Completion check
+		if (progress >= node->requiredKnowledge) {
+			civTech->knownTechs[techId] = 1.0f;
+			civTech->unlockedTechs.insert(techId);
 			m_totalTechCompleted++;
-			continue;
 		}
-
-		++it;
 	}
-}
-
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// FindTechNode - Retrieves a pointer to a CTechNode from the TechRegistry based on the provided techId. Returns nullptr if the techId is not found in the registry.
-CTechNode* TechEvolutionSystem::FindTechNode(const std::string& techId) {
-	return const_cast<CTechNode*>(techRegistry.GetTechNode(techId));
-}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// PrerequisitesMet - Checks if the prerequisites for a given CTechNode are met based on the known technologies in the civTech. Returns true if all prerequisites are met, false otherwise.
-bool TechEvolutionSystem::PrerequisitesMet(const CCivilisationTech& civTech, const CTechNode& techNode) {
-	// Iterate through all prerequisites of the CTechNode
-	for (const auto& prereq : techNode.prerequisites) {
-		
-		// Check if the prerequisite is not known in the civTech
-		auto it = civTech.knownTechs.find(prereq);
-		if (it == civTech.knownTechs.end() || it->second < 1.0f) return false;
-	}
-	
-	return true; // All prerequisites are met
-}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// CalculateResearchRate - Calculates the research rate for a given CTechNode based on the CCivilisationTech and a baseRate. Returns the calculated research rate as a float.
-float TechEvolutionSystem::CalculateResearchRate(const CCivilisationTech& civTech, const CTechNode& techNode, float baseRate) {
-	// Civilisation traits
-	float literacyFactor = 0.5f + civTech.literacy;				// literacy ∈ [0,1]
-	float innovationFactor = 0.5f + civTech.innovationPressure; // innovation ∈ [0,1]
-	float categoryBiasFactor = 1.0f;							// Default factor for category bias
-	
-	// Check if the techNode's category has a bias in civTech
-	auto it = civTech.categoryBias.find(techNode.category);
-	
-	// If a bias is found, adjust the categoryBiasFactor accordingly
-	if (it != civTech.categoryBias.end()) {
-		categoryBiasFactor = 0.5f + it->second; // category bias ∈ [0,1]
-	}
-
-	// Tech difficulty scaling
-	float difficultyFactor = 1.0f / techNode.baseDifficulty; // higher difficulty → slower research
-
-	// Combine factors
-	float rate = baseRate * globalResearchRate;
-	rate *= literacyFactor;
-	rate *= innovationFactor;
-	rate *= categoryBiasFactor;
-	rate *= difficultyFactor;
-
-	return rate;
 }
 /////////////////////////////////

@@ -114,6 +114,7 @@ private:
 	TechDiffusionSystem m_diffusionSystem;
 	TechEvolutionSystem m_evolutionSystem;
 	TechUnlockSystem m_unlockSystem;
+	ChunkManager& m_chunkManager;
 	/////////////////////////////////
 
 

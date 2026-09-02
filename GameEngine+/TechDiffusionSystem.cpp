@@ -19,30 +19,10 @@
 
 
 /////////////////////////////////
-// Update - Overrides the base class Update method to implement the  diffusion logic. It processes all entities with CivilisationTechComponent and TechNodeComponent, updating their known technologies based on interactions with other civilizations. (lagacy, not used) 
-// Note: dont feed the functions, its called by entity manager but I am running the diffusion system in a job system, so this is not used.. (I'll leave the code here for now, but it is not used, I mean its not to be fucking used)
+// Update - Overrides the base class Update method 
 void TechDiffusionSystem::Update(float dt, EntityManager& entityManager) {
-	//// Get a reference to the list of all entities managed by the EntityManager
-	//auto& allEntities = entityManager.GetEntities();
-
-	//// Loop through all entities and process those with CCivilisationTech
-	//for (auto& ePtr : allEntities) {
-	//	// Get the raw pointer to the entity from the unique_ptr
-	//	Entity* civ = ePtr.get();
-
-	//	//	Skip dead entities
-	//	if (!civ || !civ->IsAlive()) continue;
-
-	//	// Get the CCivilisationTech component from the civilization entity
-	//	auto* civTech = civ->GetComponent<CCivilisationTech>();
-	//	
-	//	//	If the civilization entity does not have a CCivilisationTech component, skip to the next entity
-	//	if (!civTech) continue;
-
-	//	// Process the technology diffusion for the civilization entity
-	//	ProcessCivToCivDiffusion(civ, civTech, entityManager, dt);
-	//	ProcessParticleDiffusionForCivilisation(civ, civTech, entityManager, dt);
-	//}
+	(void)dt; // Unused parameter, but kept for consistency with the base class interface
+	(void)entityManager; // Unused parameter, but kept for consistency with the base class interface
 }
 
 /////////////////////////////////
@@ -50,54 +30,68 @@ void TechDiffusionSystem::Update(float dt, EntityManager& entityManager) {
 
 
 /////////////////////////////////
-// ProcessCivToCivDiffusion - Processes the technology diffusion between two civilizations based on their proximity and other factors. It calculates the diffusion strength and applies diffusion effects from one civilization's known technologies to another's.
+// ProcessCivToCivDiffusion - Processes technology diffusion between civilizations based on proximity and other factors. This method queries nearby civilizations and applies diffusion effects based on their openness, literacy, and other attributes.
 void TechDiffusionSystem::ProcessCivToCivDiffusion(Entity* civEntity, CCivilisationTech* civTech, EntityManager& em, float dt) {
-	// Get a reference to the spatial hash grid from the EntityManager for efficient proximity queries
-	//auto& grid = em.GetSpatialHash();
-	auto& grid = em.GetSpatialLayerRegistry()->GetLayer("Civilisations");
-	// Get the position of the civilization entity in the game world
+	// Guard against null pointers for the civilization entity and its technology component. If either is null, we cannot proceed with diffusion processing.
+	if (!civEntity || !civTech) return;
+
+	// Get the CTransform component from the civilization entity to determine its position in the game world
 	auto* civTransform = civEntity->GetComponent<CTransform>();
+
+	// Determine the position of the civilization entity. If the CTransform component is not available, we fall back to using the entity's center point.
 	const Vec2 civPos = civTransform ? civTransform->position : civEntity->GetCentrePoint();
 
-	// Get the maximum proximity distance from the configuration for determining which civilizations are close enough to influence each other
+	// Get the maximum proximity distance from the configuration, which defines how far we will search for nearby civilizations to apply diffusion effects.
 	const float maxDist = config.maxProximityDistance;
 
-	// Query the spatial hash grid for nearby entities within the maximum proximity distance, excluding the civilization entity itself
+	// Get the spatial layer registry from the entity manager to access the "Civilisations" layer for querying nearby civilizations.
+	auto* registry = em.GetSpatialLayerRegistry();
+
+	// Guard against null pointer for the spatial layer registry. If it is not available, we cannot perform spatial queries for nearby civilizations.
+	if (!registry) return;
+
+	// Get the "Civilisations" spatial layer from the registry, which contains all civilization entities for proximity queries.
+	auto& civLayer = registry->GetLayer("Civilisations");
+
+	// Query the spatial layer for nearby civilization entities within the maximum proximity distance, excluding the current civilization entity itself. The results are stored in the nearby vector.
 	std::vector<Entity*> nearby;
-	grid.Query(nearby, civPos, maxDist, civEntity);
+	civLayer.Query(nearby, civPos, maxDist, civEntity);
 
-	    std::cout << "[Diffusion] Civ at (" << civPos.x << ", " << civPos.y << ") "
-			  << "found " << nearby.size() << " neighbours\n";
-
-	// Loop through the nearby entities and apply diffusion effects based on proximity and other factors
+	// Loop through the nearby civilization entities and apply diffusion effects based on their proximity and attributes.
 	for (Entity* other : nearby) {
-		// Get the CCivilisationTech component from the other entity
+		// Guard against null pointer for the other civilization entity, check if it is alive, and ensure it is not the same as the current civilization entity. If any of these conditions are true, we skip processing for this entity.
+		if (!other || !other->IsAlive() || other == civEntity) continue;
+
+		// Get the CCivilisationTech component from the other civilization entity to access its technology attributes for diffusion processing.
 		auto* otherTech = other->GetComponent<CCivilisationTech>();
 
-		// If the other entity does not have a CCivilisationTech component, skip to the next entity
-		if (!otherTech)	continue;
+		// Guard against null pointer for the other civilization's technology component. If it is not available, we cannot apply diffusion effects from this entity.
+		if (!otherTech) continue;
 
-		// Calculate the distance between the two civilizations
+		//Get the CTransform component from the other civilization entity to determine its position in the game world
 		auto* otherTransform = other->GetComponent<CTransform>();
 		const Vec2 otherPos = otherTransform ? otherTransform->position : other->GetCentrePoint();
+
+		// Calculate the distance between the current civilization and the other civilization. If the distance exceeds the maximum proximity distance, we skip processing for this entity.
 		float dx = otherPos.x - civPos.x;
 		float dy = otherPos.y - civPos.y;
-		float dist = std::sqrt(dx * dx + dy * dy); // Euclidean distance, Euclid was a wierd guy, but he was right about this one
+		float dist = std::sqrt(dx * dx + dy * dy);
 
-		// If the distance is greater than the maximum proximity distance, skip to the next entity
-		if (dist > maxDist)	continue;
-		
-		// Calculate the proximity between the two civilizations
+		// Guard against the case where the distance is greater than the maximum proximity distance. If so, we skip processing for this entity.
+		if (dist > maxDist) continue;
+
+		// Calculate the proximity factor based on the distance and maximum proximity distance. This factor will be used to scale the diffusion strength based on how close the other civilization is.
 		float proximity = 1.0f - (dist / maxDist);
-		proximity = proximity * proximity * (3 - 2 * proximity); // smoothstep
+		proximity = proximity * proximity * (3.0f - 2.0f * proximity); // smoothstep
 
-		// If the proximity is zero or negative, skip to the next entity as there is no diffusion effect
-		if (proximity <= 0.0f)	continue;
+		// Guard against the case where the proximity factor is less than or equal to zero. If so, we skip processing for this entity.
+		if (proximity <= 0.0f) continue;
 
-		// Calculate the diffusion strength based on base rate, proximity, openness, and diffusion affinity
+		// Calculate the diffusion strength based on the base diffusion rate from the configuration, the proximity factor, and the openness and diffusion affinity of the other civilization's technology component. 
+		// This value will determine how much influence the other civilization has on the current civilization's technology progress.
 		float diffusionStrength = config.baseDiffusionRate * proximity * civTech->openness * civTech->diffusionAffinity;
 
-		// Apply the diffusion effects from the other civilization's known technologies to the current civilization's known technologies
+		// Guard against the case where the diffusion strength is less than or equal to zero. If so, we skip processing for this entity.
 		ApplyDiffusion(civTech, otherTech, diffusionStrength, em, dt);
 	}
 }
@@ -106,72 +100,71 @@ void TechDiffusionSystem::ProcessCivToCivDiffusion(Entity* civEntity, CCivilisat
 
 
 /////////////////////////////////
-// ProcessParticleDiffusionForCivilisation - 
+// ProcessParticleDiffusionForCivilisation - Processes technology diffusion from knowledge particles to a civilization based on proximity and other factors. This method queries nearby knowledge particles and applies diffusion effects to the civilization's passive progress towards unlocking new technologies.
 void TechDiffusionSystem::ProcessParticleDiffusionForCivilisation(Entity* civEntity, CCivilisationTech* civTech, EntityManager& entityManager, float dt) {
+	// Guard against null pointers for the civilization entity and its technology component. If either is null, we cannot proceed with diffusion processing.
+	(void)entityManager;
+
 	// Get the CTransform component from the civilization entity to determine its position in the game world
 	auto* civTransform = civEntity->GetComponent<CTransform>();
-	
-	// Guard against null pointer for the CTransform component, if it is not set, we skip the particle diffusion processing; Bitches! We be guarding!
+
+	// Guard against null pointer for the CTransform component. If it is not available, we cannot perform spatial queries for nearby knowledge particles.
 	if (!civTransform) return;
 
-// --- PARTICLE INFLUENCE (BVH version) ---
-	// Guard against null pointer for the BVH system, if it is not set, we skip the particle influence processing
+	// Guard against null pointer for the BVH system. If it is not available, we cannot perform spatial queries for nearby knowledge particles.
 	if (!m_bvhSystem) return;
 
-	// Query the BVH system for nearby knowledge particles within the influence radius of the civilization's position
+	// Query the BVH system for nearby knowledge particles within the particle influence radius defined in the configuration. The results are stored in the nearby vector.
 	std::vector<ParticleData*> nearby;
 	m_bvhSystem->QuerySphere(civTransform->position, config.particleInfluenceRadius, nearby);
 
-	// Loop through the nearby knowledge particles and apply their influence on the civilization's known technologies
+	// Loop through the nearby knowledge particles and apply diffusion effects based on their proximity and influence on the civilization's passive progress towards unlocking new technologies.
 	for (auto* pdata : nearby) {
-		// Guard against null pointer for the ParticleData
-		if (!pdata)	continue; 
+		// Guard against null pointer for the ParticleData. If it is not available, we skip processing for this particle.
+		if (!pdata)	continue;
 
-		// Get the entity associated with the knowledge particle
+		// Guard against null pointer for the entity associated with the ParticleData. If it is not available or if the entity is not alive, we skip processing for this particle.
 		Entity* pEntity = pdata->entity;
 
-		// Guard against null pointer for the entity and check if it is alive, if not, we skip the influence processing for this particle
-		if (!pEntity || !pEntity->IsAlive())
-			continue;
+		// Guard against null pointer for the entity associated with the ParticleData. If it is not available or if the entity is not alive, we skip processing for this particle.
+		if (!pEntity || !pEntity->IsAlive()) continue;
 
-		// Skip dead entities
+		// Get the CKnowledgeParticle component from the entity to access its technology influence and value. If it is not available, we skip processing for this particle.
 		auto* kp = pEntity->GetComponent<CKnowledgeParticle>();
-		
-		// Guess what? Guard against null pointer for the CKnowledgeParticle component, if it is not set, we skip the influence processing for this particle
-		if (!kp) continue;
-
 		auto* pTransform = pEntity->GetComponent<CTransform>();
-		// Annnnnnd guard against null pointer for the CTransform component of the knowledge particle, if it is not set, we skip the influence processing for this particle
-		if (!pTransform) continue;
 
-		// Exact distance check
+		// Guard against null pointers for the CKnowledgeParticle and CTransform components. If either is not available, we skip processing for this particle.
+		if (!kp || !pTransform)	continue;
+
+		// Calculate the distance between the civilization and the knowledge particle. If the distance exceeds the particle influence radius, we skip processing for this particle.
 		float dx = pTransform->position.x - civTransform->position.x;
 		float dy = pTransform->position.y - civTransform->position.y;
 		float dist = std::sqrt(dx * dx + dy * dy);
+		if (dist >= config.particleInfluenceRadius) continue;
 
-		// Annnnnnnd guard against the case where the distance is greater than or equal to the particle's influence radius, if so, we skip the influence processing for this particle. 
-		// Not a crash issue but a logic issue, so we continue to the next particle
-		if (dist >= config.particleInfluenceRadius)	continue;
-
-		// Calculate the falloff based on distance and the particle's influence radius, and compute the boost to passive progress
+		// Calculate the falloff factor based on the distance and particle influence radius. This factor will be used to scale the influence of the knowledge particle on the civilization's passive progress.
 		float falloff = 1.0f - (dist / config.particleInfluenceRadius);
+		
+		// Calculate the boost value based on the knowledge particle's value and the falloff factor. This value represents the effective influence of the knowledge particle on the civilization's passive progress towards unlocking new technologies.
 		float boost = kp->value * falloff;
 
-		// Skip if civ already knows the tech fully
+		// Check if the civilization already knows the technology represented by the knowledge particle. If it does, we skip processing for this particle to avoid redundant progress updates.
 		auto knownIt = civTech->knownTechs.find(kp->techId);
 
-		// Use a read-only check to see if the civilization already knows the technology fully (progress >= 1.0f). 
-		// If so, skip applying the influence from this knowledge particle. (this should be thread-safe since we are only reading the map, not modifying it)
+		// Guard against the case where the civilization already knows the technology fully (progress >= 1.0f). If so, we skip processing for this particle to avoid redundant progress updates.
 		if (knownIt != civTech->knownTechs.end() && knownIt->second >= 1.0f) continue;
 
+		// Get the tech node from the registry to access its properties, such as required knowledge for unlocking. If the tech node is not found, we skip processing for this particle.
 		float& progress = civTech->passiveProgress[kp->techId];
-
-		 // Assuming the required knowledge is equal to the particle's value for simplicity. Adjust as needed based on game design.
 		float required = kp->value;
 
 		// Normalized passive progress [0..1]
 		float norm = progress / required;
+
+		// Damping curve: fast early, slow late, never zero
 		float factor = 1.0f - norm;
+
+		// Ensure that the factor does not fall below a minimum threshold to prevent the passive progress from freezing completely. This allows for continued progress even as it approaches the required knowledge.
 		factor = std::max(0.02f, factor);
 
 		// Passive gain rate (tune this for ~20 min to reach 100%)
@@ -185,53 +178,52 @@ void TechDiffusionSystem::ProcessParticleDiffusionForCivilisation(Entity* civEnt
 
 /////////////////////////////////
 // ApplyDiffusion - Applies the diffusion effects from another civilization's known technologies to the current civilization's known technologies. It updates the passive progress towards unlocking new technologies based on the diffusion strength and time delta.
-void TechDiffusionSystem::ApplyDiffusion(CCivilisationTech* civTech, CCivilisationTech* otherCivTech, float diffusionStrength, EntityManager& entityManager, float dt) {
-	// Guard against null pointers for the civilization technology components
-	if (!civTech || !otherCivTech) return;
+void TechDiffusionSystem::ApplyDiffusion(CCivilisationTech* civTech, CCivilisationTech* otherCivTech,
+										 float diffusionStrength, EntityManager& entityManager, float dt) {
+	// Guard against null pointers for the civilization technology components. If either is null, we cannot proceed with applying diffusion effects.
+	(void)entityManager;
 
-	// Guard against empty known technologies in the other civilization, as there is nothing to diffuse
+	// Guard against null pointers for the civilization technology components. If either is null, we cannot proceed with applying diffusion effects.
+	if (!civTech || !otherCivTech)
+		return;
+
+	// Guard against the case where the other civilization has no known technologies. If it does not, we cannot apply any diffusion effects.
 	__try {
-		if (otherCivTech->knownTechs.empty()) return;
+		// Guard against the case where the other civilization has an unreasonably large number of known technologies. If it does, we skip processing to avoid potential performance issues or unrealistic diffusion effects.
+		if (otherCivTech->knownTechs.empty())
+			return;
 
-		// Guard against excessive known technologies in the other civilization, as this may indicate a bug or exploit. We set a reasonable limit to prevent performance issues or unintended behavior. 
-		constexpr size_t kMaxReasonableKnownTechs =	10000; // sounds err....reasonable? (tune this to taste, but this is a sanity check)
-		
-		// If the other civilization has more known technologies than the maximum reasonable limit, we skip applying diffusion to prevent potential performance issues or unintended behavior.
-		if (otherCivTech->knownTechs.size() > kMaxReasonableKnownTechs)	return;
+		// Guard against the case where the other civilization has an unreasonably large number of known technologies. If it does, we skip processing to avoid potential performance issues or unrealistic diffusion effects.
+		constexpr size_t kMaxReasonableKnownTechs = 10000;
+		if (otherCivTech->knownTechs.size() > kMaxReasonableKnownTechs)
+			return;
 
-		// Loop through the known technologies of the other civilization and apply diffusion effects to the current civilization's known technologies
+		// Loop through the other civilization's known technologies and apply diffusion effects to the current civilization's passive progress towards unlocking new technologies.
 		for (const auto& [techId, knownLevel] : otherCivTech->knownTechs) {
-			// Skip if civ already fully knows the tech
+			// Guard against the case where the known level of the technology is less than or equal to zero. If it is, we skip processing for this technology as it does not contribute to diffusion.
 			auto it = civTech->knownTechs.find(techId);
-			
-			// Use a read-only check to see if the civilization already knows the technology fully (progress >= 1.0f).
-			if (it != civTech->knownTechs.end() && it->second >= 1.0f) continue;
+			if (it != civTech->knownTechs.end() && it->second >= 1.0f)
+				continue;
 
-			// Get the tech node from the registry to access its properties, such as required knowledge for unlocking
+			// Guard against the case where the known level of the technology is less than or equal to zero. If it is, we skip processing for this technology as it does not contribute to diffusion.
 			const CTechNode* techNode = techRegistry.GetTechNode(techId);
-			
-			// If the tech node is not found in the registry, skip to the next technology as we cannot apply diffusion effects without its properties
-			if (!techNode) continue;
+			if (!techNode)
+				continue;
 
-			// Update passive progress towards unlocking the technology based on diffusion strength, time delta, and a damping curve to ensure smooth progression. 
-			// The damping curve ensures that the passive progress slows down as it approaches the required knowledge, preventing it from freezing completely.
+			// Guard against the case where the required knowledge for the technology is less than or equal to zero. If it is, we skip processing for this technology as it does not contribute to diffusion.
 			float& progress = civTech->passiveProgress[techId];
 			float required = techNode->requiredKnowledge;
 
-			// Normalized passive progress [0..1]
+			// Guard against the case where the required knowledge for the technology is less than or equal to zero. If it is, we skip processing for this technology as it does not contribute to diffusion.
 			float norm = progress / required;
-
-			// Damping curve: fast early, slow late, never zero
 			float factor = 1.0f - norm;
-			factor = std::max(0.05f, factor); // <-- ensures passive never freezes
+			factor = std::max(0.05f, factor);
 
 			// Passive gain rate (tune this for ~20 min to reach 100%)
-			const float passiveScale = 0.12f; // <-- adjust to taste
-
-			// Update the passive progress based on diffusion strength, time delta, passive scale, and the damping factor
+			const float passiveScale = 0.12f;
 			progress += diffusionStrength * dt * passiveScale * factor;
 
-			// Trigger active research once past 5%
+			// If the current civilization does not have this technology in its active research and the progress exceeds 5% of the required knowledge, we add it to the active research list to indicate that it is being actively researched.
 			if (!civTech->activeResearch.contains(techId) && progress > required * 0.05f) {
 				civTech->activeResearch[techId] = progress;
 			}
@@ -241,26 +233,27 @@ void TechDiffusionSystem::ApplyDiffusion(CCivilisationTech* civTech, CCivilisati
 		return;
 	}
 }
-
-/////////////////////////////////
+	/////////////////////////////////
 
 
 
 /////////////////////////////////
 // CalculateProximity - Calculates the proximity between two civilization entities based on their positions. It returns a value between 0.0 and 1.0, where 1.0 indicates close proximity and 0.0 indicates distant or no proximity.
 float TechDiffusionSystem::CalculateProximity(Entity* civEntity, Entity* otherCivEntity) {
-	// Get the positions of the two civilization entities
-	Vec2 posA =	civEntity->GetPosition();
+	// Guard against null pointers for the civilization entities. If either is null, we cannot calculate proximity and return 0.0f.
+	Vec2 posA = civEntity->GetPosition();
 	Vec2 posB = otherCivEntity->GetPosition();
 
-	// Calculate the distance between the two positions
+	// Calculate the distance between the two civilization entities using their positions. If the distance exceeds the maximum proximity distance defined in the configuration, we return 0.0f to indicate no proximity.
 	float dist = (posA - posB).Mag();
 
-	// If the distance is greater than the maximum proximity distance, return 0.0f to indicate no proximity
-	if (dist > config.maxProximityDistance) return 0.0f;
+	// Guard against the case where the distance is greater than the maximum proximity distance. If so, we return 0.0f to indicate no proximity.
+	if (dist > config.maxProximityDistance)	return 0.0f;
 
-	// Calculate a smooth falloff for proximity based on distance, using a cubic interpolation for a more natural transition
+	// Calculate the proximity factor based on the distance and maximum proximity distance. This factor will be used to scale the diffusion strength based on how close the other civilization is.
 	float x = dist / config.maxProximityDistance;
-	return 1.0f - (x * x * (3 - 2 * x));
+
+	// Use a smoothstep function to calculate the proximity value, which provides a smooth transition from 1.0 (close) to 0.0 (distant) based on the normalized distance.
+	return 1.0f - (x * x * (3.0f - 2.0f * x));
 }
 /////////////////////////////////

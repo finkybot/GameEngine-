@@ -27,8 +27,7 @@
 
 /////////////////////////////////
 // DetectAndResolve - detects and resolves collisions between entities. It iterates through the list of entities, queries the spatial hash for nearby entities, checks for actual collisions, and applies the appropriate collision response based on entity types.
-void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities,
-									   SpatialHashGrid<Entity>& spatialHash, float deltaTime) {
+void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime) {
 	static std::vector<Entity*> nearbyEntities;
 	static size_t lastEntityCount = 0;
 
@@ -52,13 +51,17 @@ void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>
 		// Skip static tiles as they are handled separately and do not move
 		if (currentEntity->HasComponent<CStatic>())
 			continue;
+		
+		if (!m_spatialIndex)
+			continue;
 
 		const Vec2& position = currentEntity->GetPosition();
 		float radius = currentEntity->GetRadius();
 
 		// Query nearby entities using spatial hash
 		nearbyEntities.clear();
-		spatialHash.Query(nearbyEntities, position, radius * 3.0f, currentEntity);
+		m_spatialIndex->QueryEntities(nearbyEntities, position, radius * 3.0f, currentEntity);
+
 
 		for (Entity* entityPtr : nearbyEntities) {
 			// Validate pointer is still alive (safety check)
@@ -274,6 +277,7 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const {
 		Vec2 pos2 = entity2->GetComponent<CTransform>()->position;
 
 		entity1->GetComponent<CTransform>()->position =
+			Vec2(pos1.x - correction * unitNorm.x, pos1.y - correction * unitNorm.y);
 			Vec2(pos1.x - correction * unitNorm.x, pos1.y - correction * unitNorm.y);
 		entity2->GetComponent<CTransform>()->position =
 			Vec2(pos2.x + correction * unitNorm.x, pos2.y + correction * unitNorm.y);

@@ -988,6 +988,41 @@ void ChunkManager::EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int
 
 
 /////////////////////////////////
+// BuildWorldMask - Builds a world mask from the loaded chunks. The mask is a 2D array of uint8_t values where 1 indicates an occupied tile and 0 indicates an empty tile.
+void ChunkManager::BuildWorldMask(std::vector<uint8_t>& outMask, int& outW, int& outH) {
+	std::lock_guard<std::mutex> lk(m_mutex);
+	outW = worldWidth;
+	outH = worldHeight;
+	outMask.assign(worldWidth * worldHeight, 0);
+	for (const auto& [key, chunk] : m_chunks) {
+		int baseX = chunk.chunkX * chunk.width;
+		int baseY = chunk.chunkY * chunk.height;
+		for (int y = 0; y < chunk.height; ++y) {
+			for (int x = 0; x < chunk.width; ++x) {
+				int worldX = baseX + x;
+				int worldY = baseY + y;
+				int maskX = worldX - worldOffsetX;
+				int maskY = worldY - worldOffsetY;
+				if (maskX < 0 || maskY < 0 || maskX >= worldWidth || maskY >= worldHeight)
+					continue;
+				// If any layer has a non-zero tile, mark the mask as occupied
+				bool occupied = false;
+				for (int layer = 0; layer < chunk.numLayers; ++layer) {
+					if (chunk.tilesPerLayer[layer][y * chunk.width + x] != 0) {
+						occupied = true;
+						break;
+					}
+				}
+				outMask[maskY * worldWidth + maskX] = occupied ? 1 : 0;
+			}
+		}
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // GetChunkForPosition - Retrieves the chunk that contains the specified world position (pos). Returns nullptr if the chunk is not loaded.
 Chunk* ChunkManager::GetChunkForPosition(const Vec2& pos) const {
 	int tileX = static_cast<int>(pos.x / m_tileSize);

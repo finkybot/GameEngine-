@@ -41,8 +41,10 @@ static ImVec4 GetProgressColor(float t) {
 
 /////////////////////////////////
 // Implementation of the TechSimulationScene class
-TechSimulationScene::TechSimulationScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em): Scene(engine, em), m_window(win), m_kpSystem(), m_diffusionSystem(engine.techRegistry, engine.worldDiffusionConfig),
-																										m_evolutionSystem(engine.techRegistry), m_unlockSystem(engine.techRegistry) {
+TechSimulationScene::TechSimulationScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em) : Scene(engine, em), m_window(win), m_chunkManager(engine.GetChunkManager()), 
+						m_kpSystem(), m_diffusionSystem(engine.techRegistry, engine.worldDiffusionConfig), m_evolutionSystem(engine.techRegistry), m_unlockSystem(engine.techRegistry) {
+	// Set the diffusion configuration for the evolution system based on the engine's world diffusion configuration
+	m_evolutionSystem.SetDiffusionConfig(&engine.worldDiffusionConfig);
 	ImGui::SFML::Init(engine.window);
 }
 /////////////////////////////////
@@ -183,7 +185,13 @@ void TechSimulationScene::CreateTechTestWorld() {
 	// -------------------------------
 	
 	// Set the spatial hash cell size for the entity manager to optimize spatial queries for civilizations and particles
-	m_entityManager.SetSpatialHashCellSize(m_civCellSize);
+	//m_entityManager.SetSpatialHashCellSize(m_civCellSize);
+	//m_entityManager.GetSpatialIndex()->SetCellSize(m_civCellSize);
+	//m_entityManager.GetSpatialIndex()->Rebuild(m_entityManager.GetEntities(), m_entityManager.GetChunkManager());
+
+	auto* si = m_entityManager.GetSpatialIndex();
+	si->Rebuild(m_entityManager.GetEntities(), &m_chunkManager);
+
 
 	for (int i = 0; i < civCount; i++) {
 		Entity* civ = m_entityManager.AddEntity(EntityType::Civilisation);

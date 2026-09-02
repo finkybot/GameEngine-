@@ -12,6 +12,7 @@
 #include "CCivilisationTech.h"
 #include "CTechNode.h"
 #include "TechRegistry.h"
+#include "WorldDiffusionConfig.h"
 /////////////////////////////////
 
 
@@ -57,16 +58,23 @@ public:
 
 
 	/////////////////////////////////
+	// SetDiffusionConfig - Sets the configuration for world diffusion
+	void SetDiffusionConfig(WorldDiffusionConfig* cfg) { m_diffusionConfig = cfg; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Private member variables for the TechEvolutionSystem class. These variables can be used to track internal state, configuration, or other relevant data needed for the system's operation.
 private:
 	TechRegistry& techRegistry; // Reference to the TechRegistry for accessing technology nodes and their properties	
 
-	CTechNode* FindTechNode(const std::string& techId);
+	const CTechNode* FindTechNode(const std::string& techId);
 	bool PrerequisitesMet(const CCivilisationTech& civTech, const CTechNode& techNode);
 	float CalculateResearchRate(const CCivilisationTech& civTech, const CTechNode& techNode, float baseRate);
 	/////////////////////////////////
 
-
+	WorldDiffusionConfig* m_diffusionConfig = nullptr;
 	size_t m_totalTechCompleted = 0; // Total number of technologies completed across all civilizations
 
 };

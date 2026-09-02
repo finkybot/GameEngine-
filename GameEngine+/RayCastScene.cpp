@@ -251,8 +251,7 @@ void RayCastScene::ProcessDebugToggle(bool debugToggle) {
 
 /////////////////////////////////
 // RaycastDynamicEntities - Query nearby entities from spatial hash and run narrowphase ray-vs-AABB against candidates.
-bool RayCastScene::RaycastDynamicEntities(const Vec2& origin, const Vec2& dir, float maxDistance, RaycastHit& outHit,
-										  Entity*& outEntity) {
+bool RayCastScene::RaycastDynamicEntities(const Vec2& origin, const Vec2& dir, float maxDistance, RaycastHit& outHit, Entity*& outEntity) {
 	outEntity = nullptr;
 	outHit = RaycastHit{};
 	if (maxDistance <= 0.0f)
@@ -262,47 +261,12 @@ bool RayCastScene::RaycastDynamicEntities(const Vec2& origin, const Vec2& dir, f
 	if (dirN.Mag2() <= 1e-12f)
 		return false;
 
-	ChunkManager& cm = m_chunkManager;
-	std::lock_guard<std::mutex> lock(cm.GetMutex());
+	// Use unified spatial index instead of chunk BVHs
+	auto* si = GetEntityManager().GetSpatialIndex();
+	if (!si)
+		return false;
 
-	// === 1. Collect chunks along the ray ===
-	std::vector<std::pair<int, int>> rayChunks;
-	Raycast::CollectChunksAlongRay(origin, dirN, maxDistance, cm.GetTileSize(), cm.GetChunkWidth(), cm.GetChunkHeight(),
-								   rayChunks);
-
-	// === 2. Raycast each chunk's BVH ===
-	float nearest = maxDistance;
-	Entity* bestEntity = nullptr;
-	RaycastHit bestHit;
-
-	for (auto& [cx, cy] : rayChunks) {
-		long long key = ChunkManager::GetChunkKey(cx, cy);
-		auto it = cm.GetChunks().find(key);
-		if (it == cm.GetChunks().end())
-			continue;
-
-		Chunk& chunk = it->second;
-
-		RaycastHit hit;
-		Entity* hitEntity = nullptr;
-
-		if (chunk.dynamicBVH.Raycast(origin, dirN, maxDistance, hit, hitEntity)) {
-			if (hit.distance < nearest) {
-				nearest = hit.distance;
-				bestHit = hit;
-				bestEntity = hitEntity;
-			}
-		}
-	}
-
-	// === 3. Return nearest hit ===
-	if (bestEntity) {
-		outHit = bestHit;
-		outEntity = bestEntity;
-		return true;
-	}
-
-	return false;
+	return si->RaycastEntities(origin, dirN, maxDistance, outHit, outEntity);
 }
 /////////////////////////////////
 
@@ -394,22 +358,20 @@ void RayCastScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 				m_visitedCells = std::move(visitedCellsTemp);
 			}
 
-			// --- Dynamic BVH raycast ---
+			// --- Dynamic raycast using unified spatial index ---
 			RaycastHit entityHit;
 			Entity* hitEntity = nullptr;
-			BVHDebugTraversal traversal;
+
+			auto* si = GetEntityManager().GetSpatialIndex();
 			bool hitDynamic = false;
 
-			auto& bvh = GetEntityManager().GetBVH();
-			hitDynamic = bvh.Raycast(m_lmbDragStart, dir, dragLen, entityHit, hitEntity, &traversal);
-			std::cout << "Dynamic hit pos: " << entityHit.position.x << ", " << entityHit.position.y << "\n";
-
-			if (m_visualDebug && !traversal.visited.empty())
-				m_debugTraversals.push_back(traversal);
+			if (si) {
+				hitDynamic = si->RaycastEntities(m_lmbDragStart, dir, dragLen, entityHit, hitEntity);
+			}
 
 			m_highlightedEntity = hitDynamic ? hitEntity : nullptr;
 
-			// --- Merge static + dynamic for ray line only ---
+			// --- Merge static + dynamic ---
 			RaycastHit staticHit = startSolid ? startCellHit : staticIgnoreHit;
 
 			RaycastHit finalHit;
@@ -433,15 +395,15 @@ void RayCastScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 				m_debugLines.push_back({m_lmbDragStart, hitPos});
 				m_debugLineColors.push_back(sf::Color::Green);
 
-				// --- STATIC hit (yellow) ---
+				// STATIC hit (yellow)
 				if (staticHit.hit)
 					m_debugPoints.push_back(staticHit.position);
 
-				// --- DYNAMIC hit (green) ---
+				// DYNAMIC hit (green)
 				if (hitDynamic)
 					m_dynamicHitPoints.push_back(entityHit.position);
 
-				// --- RAW static hit (blue) ---
+				// RAW static hit (blue)
 				if (staticHit.hit && !hitDynamic)
 					m_rawHitPoints.push_back(staticHit.position);
 			} else {
@@ -949,8 +911,8 @@ void RayCastScene::OnEnter() {
 	}
 
 	em.ProcessPending(); // ensure entities are in m_entities
-	em.UpdateBVH();		 // build BVH from current entities
-	std::cout << "EntityManager BVH root: " << em.GetBVH().GetRoot() << "\n";
+	//em.UpdateBVH();		 // build BVH from current entities
+	//std::cout << "EntityManager BVH root: " << em.GetBVH().GetRoot() << "\n";
 
 	// -------------------------
 	// Refresh map bounds from loaded chunks

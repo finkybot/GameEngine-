@@ -443,8 +443,9 @@ void LevelEditorScene::HandleEvent(const std::optional<sf::Event>& event) {
 // Update - Main update loop for the level editor scene. This will be called every frame by the game engine. In this function, we will handle camera updates, ensure the necessary chunks are loaded 
 // based on the camera's position, and process user input for editing the level.
 void LevelEditorScene::Update(float deltaTime) {
-	// update camera logic (smoothing, shake)
-	m_cameraSystem.Update(deltaTime, GetEntityManager());
+	// Editor camera is controlled directly by panning/zoom logic in this scene.
+	// Skip CameraSystem::Update here to avoid generic clamping forcing the camera back.
+	(void)deltaTime;
 
 	// apply active camera view to window before rendering world
 	ApplyMainCameraView();

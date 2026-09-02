@@ -132,7 +132,7 @@ void TestScene::Update(float deltaTime) {
 	UpdateExplosions();
 
 	m_entityManager.GetPhysicsSystem().Update(m_entityManager.GetEntities(), deltaTime, m_window.getSize().x, m_window.getSize().y); // Do physics and boundary collisions first for spatial hash accuracy.
-	m_entityManager.GetCollisionSystem().DetectAndResolve(m_entityManager.GetEntities(), m_spatialLayers.GetLayer("TestScene"), deltaTime);
+	m_entityManager.GetCollisionSystem().DetectAndResolve(m_entityManager.GetEntities(), deltaTime);
 	//m_entityManager.GetCollisionSystem().DetectAndResolve(m_entityManager.GetEntities(), m_entityManager.GetSpatialHash(), deltaTime); // Then do collision detection and resolution, which may mark entities as dead and spawn explosions.
 
 	// Set listener position for 3D spatial audio (at center of screen)

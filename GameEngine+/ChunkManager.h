@@ -161,6 +161,13 @@ public:
 	
 
 	/////////////////////////////////
+	// BuildWorldMask - Builds a world mask for collision/pathfinding based on the currently loaded chunks. The world mask is a 2D grid of uint8_t values, where each value corresponds to a specific tile's collision properties.
+	void BuildWorldMask(std::vector<uint8_t>& outMask, int& outW, int& outH);
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Public member variables for the ChunkManager class for world mask for collision, pathfinding, and other gameplay mechanics. 
 	// Each value corresponds to a specific tile's collision properties.
 	std::vector<uint8_t> worldMask;

@@ -12,6 +12,7 @@
 #include <memory>
 #include "../Vec2.h"
 #include "../SpatialHashGrid.h"
+#include "SpatialIndexUnified.h"
 /////////////////////////////////
 
 
@@ -52,10 +53,14 @@ public:
 	~CollisionSystem() = default;
 	/////////////////////////////////
 
+
+
 	/////////////////////////////////
 	// SetSpawnSystem - Set the SpawnSystem reference for explosion spawning
 	void SetSpawnSystem(Spawn::SpawnSystem* spawnSystem) { m_spawnSystem = spawnSystem; }
 	/////////////////////////////////
+
+
 
 	/////////////////////////////////
 	// SetSoundSystem - Set the SoundSystem reference for checking concurrent sound limits
@@ -67,8 +72,14 @@ public:
 	/////////////////////////////////
 	// DetectAndResolve method - Detects and resolves collisions between entities. It iterates through the list of entities, queries the spatial hash for nearby entities, checks for actual collisions, and applies the appropriate collision response based on entity types.
 	// It returns the number of entities destroyed as a result of collisions (e.g. 2 for enemy collisions, 0 for ally bounces).
-	void DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities, SpatialHashGrid<Entity>& spatialHash,
-						  float deltaTime);
+	void DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime);
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	// SetSpatialIndex - Set the ISpatialIndex reference for spatial queries
+	void SetSpatialIndex(ISpatialIndex* idx) { m_spatialIndex = idx; }
 	/////////////////////////////////
 
 
@@ -83,14 +94,24 @@ private:
 		m_entityManager; // Pointer to the EntityManager for accessing entities and spawning explosions during collision resolution
 	/////////////////////////////////
 
+
+
 	/////////////////////////////////
 	// Pointer to the SpawnSystem for spawning explosions during collision resolution. Allows CollisionSystem to delegate explosion creation through SpawnSystem instead of directly creating entities.
 	Spawn::SpawnSystem* m_spawnSystem = nullptr;
 	/////////////////////////////////
 
+
+
 	/////////////////////////////////
 	// Pointer to the SoundSystem for checking concurrent sound limits before creating new explosion sounds.
 	SoundSystem* m_soundSystem = nullptr;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	ISpatialIndex* m_spatialIndex = nullptr;
 	/////////////////////////////////
 
 

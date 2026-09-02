@@ -10,6 +10,7 @@
 class TileSystem; // Forward declaration of TileSystem.
 class MusicSystem; // Forward declaration of MusicSystem
 class SoundSystem; // Forward declaration of SoundSystem
+class ChunkManager; // Forward declaration of ChunkManager
 /////////////////////////////////
 
 
@@ -41,7 +42,6 @@ class Entity;
 #include <chrono>
 #include <thread>
 
-#include "SpatialHashGrid.h"
 #include "Vec2.h"
 #include "EntityType.h"
 #include "Raycast.h"
@@ -50,6 +50,7 @@ class Entity;
 #include "Systems/RenderSystem.h"
 #include "CTileMap.h"
 #include "SpatialLayerRegistry.h"
+#include "SpatialIndexUnified.h"
 /////////////////////////////////
 
 
@@ -112,7 +113,7 @@ public:
 	EntityVector& GetEntities();
 	std::vector<Entity*>& GetEntities(EntityType type);
 
-	SpatialHashGrid<Entity>& GetSpatialHash();
+	//SpatialHashGrid<Entity>& GetSpatialHash();
 	void SetSpatialLayerRegistry(SpatialLayerRegistry* registry) { m_layerRegistry = registry; }
 	SpatialLayerRegistry* GetSpatialLayerRegistry() const { return m_layerRegistry; }
 	/////////////////////////////////
@@ -159,7 +160,13 @@ public:
 	bool HasPendingTileMaps() const { return m_hasPendingTileMaps; }
 	/////////////////////////////////
 	 
-	 
+
+
+	/////////////////////////////////
+	ISpatialIndex* GetSpatialIndex() const { return m_spatialIndex.get(); }
+	/////////////////////////////////
+
+
 	
 	/////////////////////////////////
 	// Commit pending entities without running full Update(). This moves entities from the add-queue into the active list so systems can see them.
@@ -190,19 +197,19 @@ public:
 
 
 	/////////////////////////////////
-	BVHSystem& GetBVH() { return m_bvh; } // BVH system for efficient raycasting and spatial queries
+	//BVHSystem& GetBVH() { return m_bvh; } // BVH system for efficient raycasting and spatial queries
 	/////////////////////////////////
 
 
 
 	/////////////////////////////////
-	void UpdateBVH(); // Rebuild the BVH tree based on current entities
+	//void UpdateBVH(); // Rebuild the BVH tree based on current entities
 	/////////////////////////////////
 
 
 
 	/////////////////////////////////
-	void SetSpatialHashCellSize(float cellSize) { m_spatialHash = SpatialHashGrid<Entity>(cellSize); }
+	//void SetSpatialHashCellSize(float cellSize) { m_spatialHash = SpatialHashGrid<Entity>(cellSize); }
 	/////////////////////////////////
 
 
@@ -240,8 +247,11 @@ private:
 	/////////////////////////////////
 	// Private member variables.
 private:
-	SpatialHashGrid<Entity> m_spatialHash;
+	//SpatialHashGrid<Entity> m_spatialHash;
 	SpatialLayerRegistry* m_layerRegistry =	nullptr; // Optional: pointer to a SpatialLayerRegistry for managing spatial layers (may be nullptr)`
+	std::unique_ptr<ISpatialIndex> m_spatialIndex =	nullptr; // Optional: pointer to a spatial index for efficient spatial queries (may be nullptr)
+	ChunkManager* m_chunks = nullptr; // Optional shared chunk manager reference (not owned)
+
 	EntityVector m_entities;
 	EntityVector m_toAdd;
 	EntityMap m_entityMap;
@@ -252,11 +262,13 @@ private:
 	PhysicsSystem m_physicsSystem;
 	CollisionSystem m_collisionSystem;
 	RenderSystem m_renderSystem;
+	
 	std::unique_ptr<TileSystem> m_tileSystem;
 	std::unique_ptr<MusicSystem> m_musicSystem; // system owning runtime sf::Music objects
 	std::unique_ptr<SoundSystem> m_soundSystem; // system managing sound effects with 3D spatial audio
+	
 	bool m_hasPendingTileMaps = true;
-	BVHSystem m_bvh;
+	//BVHSystem m_bvh;
 	/////////////////////////////////
 
 

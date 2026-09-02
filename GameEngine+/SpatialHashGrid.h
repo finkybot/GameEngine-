@@ -122,7 +122,7 @@ public:
 	// will include any objects found within the query radius, excluding the object passed to the query (e.g. the object performing the query so theres no self collision). The query works by checking all cells within a radius
 	// of the given position. For each cell, we calculate the hash and look up any objects in that cell. We then check the distance from each object to the query position to determine if it falls within the query radius,
 	// and if so, we add it to the outFound vector. We also increment our query performance counters for monitoring.
-	void Query(std::vector<T*>& outFound, const Vec2& position, float queryRadius, const T* excludeObject) noexcept {
+	void Query(std::vector<T*>& outFound, const Vec2& position, float queryRadius, const T* excludeObject) const noexcept {
 		++s_queryCount; // Increment query count for performance monitoring.
 		outFound.clear();
 		std::unordered_set<T*> seen;

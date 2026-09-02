@@ -184,6 +184,7 @@
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="ShutdownGuard.cpp" />
     <ClCompile Include="SoundSystem.cpp" />
+    <ClCompile Include="SpatialIndexUnified.cpp" />
     <ClCompile Include="Systems\CollisionSystem.cpp" />
     <ClCompile Include="Systems\PhysicsSystem.cpp" />
     <ClCompile Include="Systems\RenderSystem.cpp" />
@@ -258,6 +259,7 @@
     <ClInclude Include="Includes.h" />
     <ClInclude Include="InputAction.h" />
     <ClInclude Include="InputController.h" />
+    <ClInclude Include="ISpatialIndex.h" />
     <ClInclude Include="JobSystem.h" />
     <ClInclude Include="json.hpp" />
     <ClInclude Include="CKnowledgeParticle.h" />
@@ -280,6 +282,7 @@
     <ClInclude Include="ShutdownGuard.h" />
     <ClInclude Include="SoundSystem.h" />
     <ClInclude Include="SpatialHashGrid.h" />
+    <ClInclude Include="SpatialIndexUnified.h" />
     <ClInclude Include="SpatialLayerRegistry.h" />
     <ClInclude Include="System.h" />
     <ClInclude Include="SystemManager.h" />

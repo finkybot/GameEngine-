@@ -26,22 +26,30 @@
 #include "Systems/TileSystem.h"
 #include "MusicSystem.h"
 #include "SoundSystem.h"
+#include "ChunkManager.h"
 /////////////////////////////////
 
 
 
 /////////////////////////////////
 // EntityManager implementation - takes reference to SFML render window for drawing and FPS reporting
-EntityManager::EntityManager(sf::RenderWindow& window, float cellSize): m_window(window), m_spatialHash(cellSize), m_collisionSystem(this) {
+EntityManager::EntityManager(sf::RenderWindow& window, float cellSize): m_window(window), m_collisionSystem(this) {
 	// Initialize main systems with reference to this EntityManager
+	// TileSystem is responsible for processing tile maps and generating colliders based on tile data. It requires a pointer to the EntityManager to access entities and create new collider entities.
 	m_tileSystem = std::make_unique<TileSystem>(this);
+	
+	// MusicSystem is responsible for managing music playback based on CMusic components in entities. It requires a reference to the EntityManager to access entities and their components.
 	m_musicSystem = std::make_unique<MusicSystem>(*this);
+	
+	// SoundSystem is responsible for managing sound effects based on CSoundEffect components in entities. It requires a reference to the EntityManager to access entities and their components.
 	m_soundSystem = std::make_unique<SoundSystem>();
 	m_soundSystem->Initialize();
 	m_soundSystem->InitializePool(*this, 64);  // Initialize sound effect pool with 64 entities
 
 	// Store the ID of the thread that created this EntityManager instance for debugging purposes. This allows us to assert that certain methods are only called from the owning thread, which can help catch threading issues during development.
 	m_ownerThreadId = std::this_thread::get_id();
+
+	m_spatialIndex = std::make_unique<SpatialIndexUnified>(100.0f); // Initialize the spatial index with a reference to this EntityManager
 }
 /////////////////////////////////
 
@@ -66,7 +74,7 @@ void EntityManager::ClearAll() {
 	m_toAdd.clear();
 	m_entityMap.clear();
 	for (auto& bucket : m_layerBuckets) bucket.clear();
-	m_spatialHash.Clear();
+	//m_spatialHash.Clear();
 	m_entities.clear();
 	m_deathCountThisFrame = 0;
 	m_hasPendingTileMaps = false;
@@ -256,7 +264,7 @@ void EntityManager::AddTileMapAsEntities(const TileMap& map, int tileValueToTrea
 		return;
 	// Ensure spatial hash cell size matches tile size for optimal alignment and query accuracy
 	// Recreate the spatial hash with the tile size so tiles map 1:1 to cells when possible
-	m_spatialHash = SpatialHashGrid<Entity>(map.tileSize);
+	//m_spatialHash = SpatialHashGrid<Entity>(map.tileSize);
 
 	// 2D greedy rectangle merging: create maximal rectangles of contiguous solid tiles
 	std::vector<char> used(map.width * map.height, 0);
@@ -340,19 +348,6 @@ void EntityManager::UpdateSpatialHashAndRender() {
 	// Rendering stays the same
 	m_renderSystem.RenderShapes(m_entities, m_window);
 }
- 
- 
-//void EntityManager::UpdateSpatialHashAndRender() {
-//	// Rebuild spatial hash every frame (very fast)
-//	m_spatialHash.Clear();
-//	for (auto& entity : m_entities) {
-//		m_spatialHash.Insert(entity.get());
-//	}
-//
-//	// Rendering is now controlled explicitly by the engine's render pass.
-//}
-/////////////////////////////////
-
 
 
 /////////////////////////////////
@@ -411,7 +406,9 @@ void EntityManager::RenderAll(RenderSystem::RenderMode mode) {
 // Update - the main update method for the EntityManager, called once per frame to update all systems, process pending entities, and manage the lifecycle of entities. This method handles adding new entities, removing dead entities, updating the spatial hash grid, 
 // and allowing systems like the MusicSystem and TileSystem to process their logic.
 void EntityManager::Update(float deltaTime) {
-	SpatialHashGrid<Entity>::ResetQueryStats();
+	if (m_spatialIndex)	m_spatialIndex->Rebuild(m_entities, m_chunks);
+
+	//SpatialHashGrid<Entity>::ResetQueryStats();
 
 	m_deathCountThisFrame = 0;
 
@@ -430,6 +427,8 @@ void EntityManager::Update(float deltaTime) {
 
 	// Wire CollisionSystem to SoundSystem for explosion sound creation
 	m_collisionSystem.SetSoundSystem(m_soundSystem.get());
+	m_collisionSystem.SetSpatialIndex(m_spatialIndex.get());
+
 
 	// Process tilemaps into tile entities before rebuilding spatial hash
 	if (m_tileSystem && m_hasPendingTileMaps) {
@@ -442,7 +441,7 @@ void EntityManager::Update(float deltaTime) {
 	}
 
 	UpdateSpatialHashAndRender();
-	UpdateBVH();
+	//UpdateBVH();
 }
 /////////////////////////////////
 
@@ -519,27 +518,27 @@ EntityVector& EntityManager::GetEntities() {
 /////////////////////////////////
 // UpdateBVH - updates the bounding volume hierarchy (BVH) used for spatial queries. This method collects all dynamic entities (those that are alive and have a shape) and rebuilds the BVH tree to 
 // optimize spatial queries such as raycasting.
-void EntityManager::UpdateBVH() {
-	// BVH update logic would go here if we were using a BVH for spatial queries.
-	// Currently, we are using a SpatialHashGrid, so this function is a placeholder.
-	std::vector<Entity*> dynamicEntities;
-
-	for (auto& e : m_entities) {
-		if (!e->IsAlive())
-			continue;
-		if (!e->GetShape())
-			continue;
-
-		// Skip static geometry
-		if (e->GetType() == EntityType::Tile || e->GetType() == EntityType::TileMap ||
-			e->GetType() == EntityType::Chunk)
-			continue;
-
-		dynamicEntities.push_back(e.get());
-	}
-
-	m_bvh.Rebuild(dynamicEntities);
-}
+//void EntityManager::UpdateBVH() {
+//	// BVH update logic would go here if we were using a BVH for spatial queries.
+//	// Currently, we are using a SpatialHashGrid, so this function is a placeholder.
+//	std::vector<Entity*> dynamicEntities;
+//
+//	for (auto& e : m_entities) {
+//		if (!e->IsAlive())
+//			continue;
+//		if (!e->GetShape())
+//			continue;
+//
+//		// Skip static geometry
+//		if (e->GetType() == EntityType::Tile || e->GetType() == EntityType::TileMap ||
+//			e->GetType() == EntityType::Chunk)
+//			continue;
+//
+//		dynamicEntities.push_back(e.get());
+//	}
+//
+//	m_bvh.Rebuild(dynamicEntities);
+//}
 /////////////////////////////////
 
 
@@ -557,7 +556,7 @@ std::vector<Entity*>& EntityManager::GetEntities(EntityType type) {
 /////////////////////////////////
 // GetSpatialHash - returns a reference to the spatial hash grid used for spatial queries. This allows systems like the CollisionSystem to perform efficient spatial queries for nearby entities based on their positions, 
 // which can improve performance for collision detection and other spatial operations.
-SpatialHashGrid<Entity>& EntityManager::GetSpatialHash() {
-	return m_spatialHash;
-}
+//SpatialHashGrid<Entity>& EntityManager::GetSpatialHash() {
+//	return m_spatialHash;
+//}
 /////////////////////////////////

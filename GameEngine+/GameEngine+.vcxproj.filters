@@ -58,6 +58,9 @@
     <Filter Include="Source Files\Misc">
       <UniqueIdentifier>{248660d2-6aa6-4d62-ace5-1dfb652a9429}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\Interfaces">
+      <UniqueIdentifier>{195556e7-140d-4fbc-af44-972dbb822d55}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="imgui\backends\imgui_impl_dx9.cpp">
@@ -227,6 +230,9 @@
     </ClCompile>
     <ClCompile Include="ParticleBVHSystem.cpp">
       <Filter>Source Files\Systems</Filter>
+    </ClCompile>
+    <ClCompile Include="SpatialIndexUnified.cpp">
+      <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -529,6 +535,12 @@
     </ClInclude>
     <ClInclude Include="ComponentTypeId.h">
       <Filter>Header Files\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="ISpatialIndex.h">
+      <Filter>Header Files\Interfaces</Filter>
+    </ClInclude>
+    <ClInclude Include="SpatialIndexUnified.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

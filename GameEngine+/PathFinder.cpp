@@ -377,31 +377,31 @@ std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goa
 			
 		}
 
-		// Explore neighbors
+		// Explore neighbours
 		for (auto& d : dirs8) {
 			int nx = cur.x + d[0];
 			int ny = cur.y + d[1];
 
-			// Check bounds and if the neighbor is blocked
+			// Check bounds and if the neighbour is blocked
 			if (!InBounds(nx, ny) || IsBlocked(nx, ny))
 				continue;
 
 			// Prevent diagonal corner cutting
 			if (d[0] != 0 && d[1] != 0) {
-				// If either orthogonal neighbor is blocked, diagonal is illegal
+				// If either orthogonal neighbour is blocked, diagonal is illegal
 				if (IsBlocked(cur.x + d[0], cur.y) || IsBlocked(cur.x, cur.y + d[1])) {
 					continue;
 				}
 			}
 
-			// Calculate g-cost for neighbor
+			// Calculate g-cost for neighbour
 			float ng = cur.g + ((d[0] == 0 || d[1] == 0) ? 1.0f : 1.41421356f); // diagonal movement cost
 			
 			// Check if this neighbor has been visited or if we found a better path
 			NodeKey nk{nx, ny};
 			auto nit = nodes.find(nk);
 
-			// If the neighbor is not in the nodes map or we found a better g-cost, update it
+			// If the neighbour is not in the nodes map or we found a better g-cost, update it
 			if (nit == nodes.end() || ng < nit->second.g) {
 				Node n;
 				n.x = nx;

@@ -171,15 +171,24 @@ void TechEvolutionSystem::ProcessCivilisationTech(Entity* civ, CCivilisationTech
 	// -----------------------------
 	// 3. Apply research to active techs
 	// -----------------------------
-	for (auto& [techId, progress] : civTech->activeResearch) {
+	for (auto it = civTech->activeResearch.begin(); it != civTech->activeResearch.end();) {
+		const std::string techId = it->first;
+		float& progress = it->second;
+
 		// Find the corresponding tech node in the registry
 		const CTechNode* node = FindTechNode(techId);
 
 		// Skip if the tech node is not found
-		if (!node) continue;
+		if (!node) {
+			++it;
+			continue;
+		}
 
 		// Check if prerequisites are met for this tech node
-		if (!PrerequisitesMet(*civTech, *node)) continue;
+		if (!PrerequisitesMet(*civTech, *node)) {
+			++it;
+			continue;
+		}
 
 		// Calculate the research rate for this tech node, factoring in base rate and proximity boost
 		float rate = CalculateResearchRate(*civTech, *node, baseRate);
@@ -190,10 +199,16 @@ void TechEvolutionSystem::ProcessCivilisationTech(Entity* civ, CCivilisationTech
 
 		// Completion check
 		if (progress >= node->requiredKnowledge) {
+			progress = node->requiredKnowledge;
 			civTech->knownTechs[techId] = 1.0f;
-			civTech->unlockedTechs.insert(techId);
-			m_totalTechCompleted++;
+			if (civTech->unlockedTechs.insert(techId).second) {
+				m_totalTechCompleted++;
+			}
+			it = civTech->activeResearch.erase(it);
+			continue;
 		}
+
+		++it;
 	}
 }
 /////////////////////////////////

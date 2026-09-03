@@ -449,7 +449,14 @@ void TechSimulationScene::RenderTechDebugWindow() {
 	fpsIndex = (fpsIndex + 1) % 120;
 	ImGui::PlotLines("FPS", fpsHistory, 120, 0, nullptr, 0.0f, 200.0f, ImVec2(250, 80));
 
-	ImGui::Text("Civs with completed tech: %zu", m_evolutionSystem.GetTotalTechCompleted());
+	size_t civsWithCompletedTech = 0;
+	for (Entity* civ : m_entityManager.GetEntities(EntityType::Civilisation)) {
+		if (!civ || !civ->IsAlive()) continue;
+		auto* tech = civ->GetComponent<CCivilisationTech>();
+		if (!tech) continue;
+		if (!tech->unlockedTechs.empty()) ++civsWithCompletedTech;
+	}
+	ImGui::Text("Civs with completed tech: %zu", civsWithCompletedTech);
 
 	auto elapsed = std::chrono::steady_clock::now() - m_sceneStartTime;
 	double seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();

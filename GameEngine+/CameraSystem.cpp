@@ -247,15 +247,20 @@ void CameraSystem::SetMainCamera(EntityManager& entityManager, Entity* cameraEnt
 }
 /////////////////////////////////
  
- 
+
 
 /////////////////////////////////
 // ClearMainCamera - Clears the main camera designation from all cameras. This iterates through all entities and sets the isMainCamera flag to false on any entity with a CCamera component.
 void CameraSystem::ClearMainCamera(EntityManager& entityManager) {
+	// Clear shake and pan data
+	s_shakeDataMap.clear();
+	s_panDataMap.clear();
+
+	// Clear main camera flags on all camera components
 	for (auto& uniquePtr : entityManager.GetEntities()) {
-		Entity* entity = uniquePtr.get(); // Get raw pointer from unique_ptr for easier access
-		if (auto camera = entity->GetComponent<CCamera>()) {
-			camera->isMainCamera = false; // Clear the main camera designation
+		if (auto camera = uniquePtr->GetComponent<CCamera>()) {
+			camera->isMainCamera = false;
+			camera->isActive = false;
 		}
 	}
 }

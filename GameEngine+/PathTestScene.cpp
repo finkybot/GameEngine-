@@ -794,7 +794,31 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 
 
 /////////////////////////////////
-void PathTestScene::OnEnter() {}
+// OnEnter - Called when the scene becomes active. Resets camera, chunk manager, render queue, and input states to ensure a clean start for the scene.
+void PathTestScene::OnEnter()
+{
+    // Reset camera system
+    m_cameraSystem.ClearMainCamera(GetEntityManager());
+    
+    // Reset SFML view
+    m_window.setView(m_window.getDefaultView());
+
+    // Reset chunk manager layer state
+    m_chunkManager.SetUnselectedLayerAlpha(0.35f);
+    m_chunkManager.SetActiveLayer(0);
+
+    // Reset render queue
+    m_renderQueue.Clear();
+
+    // Reset input edges
+    m_panning = false;
+
+    // Reset ImGui capture
+    ImGui::GetIO().WantCaptureMouse = false;
+    ImGui::GetIO().WantCaptureKeyboard = false;
+}
+/////////////////////////////////
+
 void PathTestScene::OnExit() {
 	// Unload resources when exiting the scene
 	UnloadResources();

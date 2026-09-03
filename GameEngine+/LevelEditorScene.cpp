@@ -259,29 +259,23 @@ void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	cam->viewportHeight = (float)m_window.getSize().y;
 	cam->smoothness = 0.0f; // Disable smoothing - editor controls camera directly via panning and clamping
 
+	// Reset shared chunk state when entering editor so previous scenes cannot leak loaded maps.
+	m_chunkManager.ClearAllLoadedChunks();
+	m_chunkManager.SetNumLayers((int)m_layerNames.size());
+
 	// Ensure initial world area is larger than the screen so the user can pan around. Make the logical map area 3x the screen size centered on the camera.
 	{
 		float mapPxW = cam->viewportWidth * 3.0f;
 		float mapPxH = cam->viewportHeight * 3.0f;
-		
+
 		// store world bounds so camera panning can be clamped
 		m_mapMin = Vec2(cam->position.x - mapPxW * 0.5f, cam->position.y - mapPxH * 0.5f);
 		m_mapMax = Vec2(cam->position.x + mapPxW * 0.5f, cam->position.y + mapPxH * 0.5f);
-		int tx0 = (int)std::floor((cam->position.x - mapPxW * 0.5f) / m_tileSize);
-		int ty0 = (int)std::floor((cam->position.y - mapPxH * 0.5f) / m_tileSize);
-		int tx1 = (int)std::floor((cam->position.x + mapPxW * 0.5f) / m_tileSize);
-		int ty1 = (int)std::floor((cam->position.y + mapPxH * 0.5f) / m_tileSize);
-		m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, m_marginChunks);
-		
-		// finalize any background loads immediately so chunks are ready
-		m_chunkManager.UpdateMainThread_NoLock();
-		m_chunkManager.RebuildAllChunksFromTileset();
 	}
 
 	// Set persistence path for chunks
-	// Default path points inside the current level folder. If no level selected, do not set a writable path and prevent editing.
+	// Default path points inside the current level folder. If no level selected, keep editor empty.
 	if (!m_levelSelected) {
-		// use a dummy path that won't be written to until a level is selected
 		m_chunkManager.SetBasePath("");
 	} else {
 		if (m_currentLevelName.empty()) m_chunkManager.SetBasePath("levels/chunks");
@@ -289,11 +283,12 @@ void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	}
 
 	m_chunkManager.SetMaxLoadedChunks(256);
-	// Load any previously-saved chunk files so saved maps appear on startup
-	m_chunkManager.LoadAllSavedChunks();
-	// finalize any loads immediately
-	m_chunkManager.UpdateMainThread_NoLock();
-	m_chunkManager.RebuildAllChunksFromTileset();
+	if (m_levelSelected) {
+		// Load only selected level data; avoid pulling stale maps when no level is selected.
+		m_chunkManager.LoadAllSavedChunks();
+		m_chunkManager.UpdateMainThread_NoLock();
+		m_chunkManager.RebuildAllChunksFromTileset();
+	}
 
 	// Compute fixed map bounds from saved chunk files on disk.
 	// These bounds are stable and do not grow as new chunks are loaded at runtime.
@@ -353,7 +348,36 @@ void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 /////////////////////////////////
 // OnEnter and OnExit methods - called when the level editor scene becomes active or inactive. 
 // OnEnter is currently empty, but we could add logic here if needed (e.g., to reset state or load specific resources). 
-void LevelEditorScene::OnEnter() {}
+void LevelEditorScene::OnEnter() {
+	// Keep the camera created in InitialiseGame intact.
+	// Clearing main camera here can leave the scene without an active camera after scene transitions.
+
+	// Reset render queue
+	m_renderQueue.Clear();
+
+	// Reset cursor
+	m_gameEngine.GetCursorSystem().SetMode(CursorSystem::Mode::Default);
+
+	// Reset input edges from live hardware state to avoid stale press-edge behavior after scene switches.
+	m_prevLmb = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+	m_prevRmb = sf::Mouse::isButtonPressed(sf::Mouse::Button::Right);
+	m_prevDKey = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
+	m_prevMiddleDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Middle);
+	m_panning = false;
+	m_inputReady = false;
+
+	// Reset ImGui focus/capture
+	ImGui::GetIO().WantCaptureMouse = false;
+	ImGui::GetIO().WantCaptureKeyboard = false;
+
+	// Reset SFML view
+	m_window.setView(m_window.getDefaultView());
+
+	// Reset chunk manager layer state
+	m_chunkManager.SetActiveLayer(0);
+	m_chunkManager.SetUnselectedLayerAlpha(0.35f);
+}
+
 /////////////////////////////////
  
  

@@ -79,6 +79,7 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	m_chunkManager.ClearAllLoadedChunks();
 	m_currentLevelName = name;
 	m_levelSelected = !m_currentLevelName.empty();
+	m_haveBounds = false; // no bounds yet - will be computed from saved chunks on disk
 	
 	// Update chunk manager path
 	// Use same APPDATA-based path as RefreshAvailableLevels
@@ -203,8 +204,11 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 		int worldW = maxTileX - minTileX;
 		int worldH = maxTileY - minTileY;
 
-		m_chunkManager.SetWorldOffset(minTileX, minTileY); // <-- safe now
+		//m_chunkManager.SetWorldOffset(minTileX, minTileY); // <-- safe now
+		//m_chunkManager.SetWorldSize(worldW, worldH); // <-- safe now
+		m_chunkManager.SetWorldOffset(0, 0); // <-- safe now
 		m_chunkManager.SetWorldSize(worldW, worldH); // <-- safe now
+
 	}
 }
 /////////////////////////////////
@@ -235,6 +239,7 @@ void LevelEditorScene::RefreshMapBounds() {
 	if (m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
 		m_mapMin = Vec2(dMinX, dMinY);
 		m_mapMax = Vec2(dMaxX, dMaxY);
+		m_chunkManager.ShiftChunksToPositiveCoords();
 		m_haveBounds = true;
 	} else {
 		m_haveBounds = false;
@@ -264,14 +269,15 @@ void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	m_chunkManager.SetNumLayers((int)m_layerNames.size());
 
 	// Ensure initial world area is larger than the screen so the user can pan around. Make the logical map area 3x the screen size centered on the camera.
-	{
-		float mapPxW = cam->viewportWidth * 3.0f;
-		float mapPxH = cam->viewportHeight * 3.0f;
+	//{
+	//	float mapPxW = cam->viewportWidth * 3.0f;
+	//	float mapPxH = cam->viewportHeight * 3.0f;
 
-		// store world bounds so camera panning can be clamped
-		m_mapMin = Vec2(cam->position.x - mapPxW * 0.5f, cam->position.y - mapPxH * 0.5f);
-		m_mapMax = Vec2(cam->position.x + mapPxW * 0.5f, cam->position.y + mapPxH * 0.5f);
-	}
+	//	// store world bounds so camera panning can be clamped
+	//	m_mapMin = Vec2(cam->position.x - mapPxW * 0.5f, cam->position.y - mapPxH * 0.5f);
+	//	m_mapMax = Vec2(cam->position.x + mapPxW * 0.5f, cam->position.y + mapPxH * 0.5f);
+	//}
+	m_haveBounds = false; // no bounds yet - will be computed from saved chunks on disk
 
 	// Set persistence path for chunks
 	// Default path points inside the current level folder. If no level selected, keep editor empty.
@@ -556,7 +562,7 @@ void LevelEditorScene::Update(float deltaTime) {
 
 	// If we are currently panning, calculate the delta from the initial mouse position and move the camera in the opposite direction of the mouse drag for a natural panning feel. We also clamp 
 	// the camera's new position within the bounds of the map to prevent panning into empty space. Finally, we update the camera entity's transform to ensure that any smoothing logic in the 
-	// CameraSystem does not pull it back to a previous position.
+	// CameraSystem does not pull it back to a previous position.	
 	if (m_panning) {
 		sf::Vector2i delta = mousePos - m_panStart;
 		// move camera opposite to mouse drag for natural panning
@@ -799,6 +805,8 @@ void LevelEditorScene::Render() {
 		ImGui::SeparatorText("Mouse Position");
 		ImGui::Text("World: (%.1f, %.1f)", mouseWorldPos.x, mouseWorldPos.y);
 		ImGui::Text("Tile:  (%d, %d)", mouseTileX, mouseTileY);
+		ImGui::Checkbox("Clamp Camera to Level Bounds", &m_haveBounds);
+
 	}
 
 	ImGui::Separator();

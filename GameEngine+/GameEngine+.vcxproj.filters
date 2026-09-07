@@ -168,7 +168,7 @@
     <ClCompile Include="LevelEditorScene.cpp">
       <Filter>Source Files\Scenes</Filter>
     </ClCompile>
-    <ClCompile Include="MusicVisualizerScene.cpp">
+    <ClCompile Include="MusicVisualiserScene.cpp">
       <Filter>Source Files\Scenes</Filter>
     </ClCompile>
     <ClCompile Include="MainMenuScene.cpp">
@@ -458,7 +458,7 @@
     <ClInclude Include="CColliderRect.h">
       <Filter>Header Files\Components</Filter>
     </ClInclude>
-    <ClInclude Include="MusicVisualizerScene.h">
+    <ClInclude Include="MusicVisualiserScene.h">
       <Filter>Header Files\Scenes</Filter>
     </ClInclude>
     <ClInclude Include="MainThreadTasks.h">

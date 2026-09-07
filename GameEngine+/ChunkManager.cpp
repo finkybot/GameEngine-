@@ -1862,6 +1862,14 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::v
 				int maskX = worldX - worldOffsetX;
 				int maskY = worldY - worldOffsetY;
 
+				if (maskX >= worldWidth || maskY >= worldHeight) {
+					int newWidth = std::max(worldWidth, maskX + 1);
+					int newHeight = std::max(worldHeight, maskY + 1);
+					worldWidth = newWidth;
+					worldHeight = newHeight;
+					worldMask.resize((size_t)worldWidth * (size_t)worldHeight, false);
+				}
+
 				if (maskX < 0 || maskY < 0 || maskX >= worldWidth || maskY >= worldHeight)
 					continue;
 

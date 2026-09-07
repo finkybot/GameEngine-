@@ -152,6 +152,7 @@ private:
 	Vec2 m_mapMin = Vec2::Zero;
 	Vec2 m_mapMax = Vec2::Zero;
 	bool m_haveBounds = false;
+	bool m_clampPositive = false;
 	/////////////////////////////////
 
 

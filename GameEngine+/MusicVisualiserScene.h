@@ -1,11 +1,11 @@
 /////////////////////////////////
-// MusicVisualizerScene.h - Music visualizer scene adapted from TileMapEditorScene
+// MusicVisualiserScene.h - Music visualiser scene adapted from TileMapEditorScene
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// Includes for the MusicVisualizerScene class.
+// Includes for the MusicVisualiserScene class.
 #pragma once
 #include "Scene.h"
 #include "TileMap.h"
@@ -14,6 +14,9 @@
 #include <optional>
 #include "FileDialog.h"
 #include <filesystem>
+
+#include <SFML/OpenGL.hpp>
+#include <glad/glad.h>
 /////////////////////////////////
 
 
@@ -34,14 +37,14 @@ class SpawnSystem;
 // and implements audio-reactive visual effects such as explosions and equalizer bars based on the music being played.
 //								|
 //								|_______________________________________________________________________
-class MusicVisualizerScene : public Scene {
+class MusicVisualiserScene : public Scene {
 	/////////////////////////////////
 	// Public methods
 public:
 	/////////////////////////////////
 	// Constructor and destructor
-	MusicVisualizerScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager);
-	~MusicVisualizerScene() override;
+	MusicVisualiserScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager);
+	~MusicVisualiserScene() override;
 	/////////////////////////////////
 
 
@@ -77,6 +80,9 @@ public:
 
 
 
+
+
+
 	/////////////////////////////////
 	// Deprecated equalizer active state management (commented out for now, as equalizer bars are always active when enabled, but this could be reintroduced if we want to allow toggling the equalizer bars on/off separately from the music playback)
 	//bool IsEqualizerActive() const { return m_EqualizerActive; }
@@ -89,11 +95,10 @@ public:
 	// Private helper methods
 private:
 	/////////////////////////////////
-	// Helper methods for grid rendering, input processing, tile toggling, and explosion updates
+	// Helper methods for grid rendering, input processing, and tile toggling.
 	void DrawGrid();
 	void ProcessInput();
 	void ToggleTileAt(int tx, int ty, bool setSolid);
-	void UpdateExplosions();
 	/////////////////////////////////
 
 
@@ -116,6 +121,43 @@ private:
 
 
 	/////////////////////////////////
+	sf::VertexArray m_equaliserVA;
+	size_t m_eqBarCount = 0;
+	
+	float m_eqBarWidth = 0.0f;
+	float m_eqMargin = 40.0f;
+	float m_eqWindowWidth = 0.0f;
+	float m_eqWindowHeight = 0.0f;
+
+	// Max explosions handled by VA
+	static constexpr std::size_t kMaxExplosionsVA = 512;
+
+	struct ExplosionVA {
+		sf::Vector2f center;
+		float radius;
+		float age;
+		float lifetime;
+		sf::Color color;
+		bool alive;
+	};
+
+	sf::VertexArray m_explosionVA;			 // triangles
+	std::vector<ExplosionVA> m_explosionsVA; // logical explosions
+	std::size_t m_activeExplosionsVA = 0;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
+	void InitialiseExplosionsVA();
+	void SpawnExplosionVA(const sf::Vector2f& center, float radius, float lifetime, const sf::Color& color);
+	void UpdateExplosionsVA(float deltaTime);
+	void RenderExplosionsVA();
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// UI helpers extracted from Update()
 	void ShowOpenFileBrowser();
 	void DrawAudioReactiveWindow();
@@ -127,9 +169,7 @@ private:
 
 	/////////////////////////////////
 	// Refresh directory listing helper
-	bool RefreshDirectoryListing(const std::filesystem::path& dir,
-								 std::vector<std::filesystem::directory_entry>& outEntries, std::string& outError,
-								 int& outSkipped, bool showNonAudio);
+	bool RefreshDirectoryListing(const std::filesystem::path& dir, std::vector<std::filesystem::directory_entry>& outEntries, std::string& outError, int& outSkipped, bool showNonAudio);
 	/////////////////////////////////
 
 
@@ -146,10 +186,12 @@ private:
 	/////////////////////////////////
 	// Equalizer bar management: pre-allocated bars that are lit based on spectrum
     // Initialize visualizer bars: visualCount = number of bars drawn; independent from spectrum band count
-	void InitializeEqualizerBars(size_t visualCount);
-	void UpdateEqualizerBars(const std::vector<float>& bands);
-	void HideEqualizerBars();
+	void InitialiseEqualiserBars(size_t visualCount);
+	void UpdateEqualiserBars(const std::vector<float>& bands);
+	void HideEqualiserBars();
 	/////////////////////////////////
+
+
 
 
 
@@ -250,13 +292,13 @@ private:
 
 
 	/////////////////////////////////
-	// Audio-reactive spawn state
+	// Audio-reactive VA spawn state
 	Entity* m_musicEntity = nullptr;
 	bool m_audioReactive = false;
 	float m_spawnThreshold = 0.02f;
 	float m_spawnCooldown = 0.12f;
 	float m_spawnTimer = 0.0f;
-	int m_explosionCount = 0;
+	bool m_prevSpawnAboveThreshold = false;
 	/////////////////////////////////
 
 
@@ -351,5 +393,8 @@ private:
 	std::vector<std::shared_ptr<sf::RectangleShape>> m_tempGridShapes; // Temporary grid rectangles
 	int m_nextTempShapeId = 0;
 	/////////////////////////////////
+
+
+
 };
 /////////////////////////////////

@@ -26,6 +26,7 @@ class CExplosion : public CShape {
 	// Public data members for CExplosion
 public:
 	sf::CircleShape m_circle; // SFML CircleShape object representing the visual circle shape
+	uint64_t age = 0; // Age of the explosion in frames or time units, used for managing the lifecycle of the explosion
 	/////////////////////////////////
 
 

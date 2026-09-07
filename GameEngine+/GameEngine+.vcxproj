@@ -176,7 +176,7 @@
     <ClCompile Include="MainMenuScene.cpp" />
     <ClCompile Include="MainThreadTasks.cpp" />
     <ClCompile Include="MusicSystem.cpp" />
-    <ClCompile Include="MusicVisualizerScene.cpp" />
+    <ClCompile Include="MusicVisualiserScene.cpp" />
     <ClCompile Include="ParticleBVHSystem.cpp" />
     <ClCompile Include="PathFinder.cpp" />
     <ClCompile Include="PathFindingSystem.cpp" />
@@ -269,7 +269,7 @@
     <ClInclude Include="MainMenuScene.h" />
     <ClInclude Include="MainThreadTasks.h" />
     <ClInclude Include="MusicSystem.h" />
-    <ClInclude Include="MusicVisualizerScene.h" />
+    <ClInclude Include="MusicVisualiserScene.h" />
     <ClInclude Include="ParticleBVHSystem.h" />
     <ClInclude Include="PathFinder.h" />
     <ClInclude Include="PathFindingSystem.h" />

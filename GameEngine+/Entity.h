@@ -347,6 +347,13 @@ public:
 
 
 	/////////////////////////////////
+	bool IsActive() const { return m_active; }
+	void SetActive(bool active) { m_active = active; }
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 	// Private member variables and methods for internal state management. These are not accessible outside of the Entity class and are used to 
 	// manage the entity's rendering layer and bucket metadata for rendering optimization.
 private:
@@ -355,6 +362,7 @@ private:
     // per-entity bucket metadata for EntityManager layer buckets
 	int m_bucketId = -1;
 	int m_bucketPos = -1;
+	bool m_active = true;
 	/////////////////////////////////
 };
 /////////////////////////////////

@@ -24,7 +24,7 @@
 #include "RayCastScene.h"
 #include "TileMapEditorScene.h"
 #include "TechSimulationScene.h"
-#include "MusicVisualizerScene.h"
+#include "MusicVisualiserScene.h"
 #include "LevelEditorScene.h"
 #include "MainMenuScene.h"
 #include "PathTestScene.h"
@@ -222,7 +222,7 @@ void GameEngine::Run() {
 	AddScene("TestScene", std::make_shared<TestScene>(*this, window, *entityManager));						// Adding TestScene
 	AddScene("RayCastScene", std::make_shared<RayCastScene>(*this, window, *entityManager));				// Adding TileMapScene, old tilemap (deprecated)
 	//AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, window, *entityManager));		// Adding TileMapEditor, will need to revisit this later to implement new tilemap editor with new tilemap system
-	AddScene("MusicVisualizer", std::make_shared<MusicVisualizerScene>(*this, window, *entityManager));		// Adding MusicVisualizer	
+	AddScene("MusicVisualizer", std::make_shared<MusicVisualiserScene>(*this, window, *entityManager));		// Adding MusicVisualizer	
 	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, window, *entityManager));				// Adding LevelEditor
 	AddScene("PathTestScene", std::make_shared<PathTestScene>(*this, window, *entityManager));				// Adding PathTestScene
 	AddScene("TechSimulationScene",

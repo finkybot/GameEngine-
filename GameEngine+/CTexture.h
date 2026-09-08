@@ -23,8 +23,13 @@ public:
 	// Member variables
 	std::string atlasKey; // key used with TextureManager
 	int tileIndex = 0;	  // index into the atlas (0-based)
+	int gpuIndex = -1;    // index into the GPU texture array (used by the sprite shader)
+
+	sf::Color color = sf::Color::White; // color tint for the texture
+
 	bool visible = true;
 	float zOrder = 0.0f;
+	float rotation = 0.0f; // rotation in degrees
 	/////////////////////////////////
 
 

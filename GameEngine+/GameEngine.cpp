@@ -26,6 +26,7 @@
 #include "TechSimulationScene.h"
 #include "MusicVisualiserScene.h"
 #include "LevelEditorScene.h"
+#include "TestRenderGLScene.h"
 #include "MainMenuScene.h"
 #include "PathTestScene.h"
 #include <imgui/imgui.h>
@@ -252,8 +253,8 @@ void GameEngine::Run() {
 	AddScene("MusicVisualizer", std::make_shared<MusicVisualiserScene>(*this, window, *entityManager));		// Adding MusicVisualizer	
 	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, window, *entityManager));				// Adding LevelEditor
 	AddScene("PathTestScene", std::make_shared<PathTestScene>(*this, window, *entityManager));				// Adding PathTestScene
-	AddScene("TechSimulationScene",
-			 std::make_shared<TechSimulationScene>(*this, window, *entityManager)); // Adding TechSimulationScene
+	AddScene("TechSimulationScene", std::make_shared<TechSimulationScene>(*this, window, *entityManager));	// Adding TechSimulationScene
+	AddScene("TestRenderGLScene", std::make_shared<TestRenderGLScene>(*this, window, *entityManager));		// Adding TestRenderGLScene
 
 	ChangeScene("MainMenu");
 

@@ -128,3 +128,29 @@ public:
 	/////////////////////////////////
 };
 /////////////////////////////////
+
+
+
+/////////////////////////////////
+// CCircleGPU component - represents a circle shape with properties and methods for drawing, movement, and collision handling for GPU Rendering,
+// there is no SFML shape object, but rather properties for radius, color, and z-order for rendering control.
+//						|
+//						|___________________________________________________________________________________
+class CCircleGPU : public Component {
+	/////////////////////////////////
+	// Public data members for CCircleGPU
+public:
+	/////////////////////////////////
+	// Member variables
+	float radius = 10.0f;
+	sf::Color color = sf::Color::White;
+	float zOrder = 0.0f;
+
+	CCircleGPU() = default;
+
+	explicit CCircleGPU(float r) : radius(r) {}
+
+	CCircleGPU(float r, sf::Color c) : radius(r), color(c) {}
+	/////////////////////////////////
+};
+/////////////////////////////////

@@ -243,6 +243,9 @@
     <ClCompile Include="RenderSystemGL.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="TestRenderGLScene.cpp">
+      <Filter>Source Files\Scenes</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imgui\backends\imgui_impl_dx9.h">
@@ -556,6 +559,9 @@
     </ClInclude>
     <ClInclude Include="RenderSystemGL.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="TestRenderGLScene.h">
+      <Filter>Header Files\Scenes</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

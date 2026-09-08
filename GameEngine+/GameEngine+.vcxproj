@@ -198,6 +198,7 @@
     <ClCompile Include="TechRegistry.cpp" />
     <ClCompile Include="TechSimulationScene.cpp" />
     <ClCompile Include="TechUnlockSystem.cpp" />
+    <ClCompile Include="TestRenderGLScene.cpp" />
     <ClCompile Include="TestScene.cpp" />
     <ClCompile Include="TextureAtlas.cpp" />
     <ClCompile Include="TextureManager.cpp" />
@@ -302,6 +303,7 @@
     <ClInclude Include="TechRegistry.h" />
     <ClInclude Include="TechSimulationScene.h" />
     <ClInclude Include="TechUnlockSystem.h" />
+    <ClInclude Include="TestRenderGLScene.h" />
     <ClInclude Include="TestScene.h" />
     <ClInclude Include="TextureAtlas.h" />
     <ClInclude Include="TextureManager.h" />

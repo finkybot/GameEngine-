@@ -14,9 +14,7 @@
 #include <optional>
 #include "FileDialog.h"
 #include <filesystem>
-
-#include <SFML/OpenGL.hpp>
-#include <glad/glad.h>
+#include "GPURenderSystem.h"
 /////////////////////////////////
 
 
@@ -27,6 +25,7 @@
 //								|_______________________________________________________________________
 namespace Spawn {
 class SpawnSystem;
+struct SpawnerConfig;
 }
 /////////////////////////////////
 
@@ -121,7 +120,6 @@ private:
 
 
 	/////////////////////////////////
-	sf::VertexArray m_equaliserVA;
 	size_t m_eqBarCount = 0;
 	
 	float m_eqBarWidth = 0.0f;
@@ -138,10 +136,10 @@ private:
 		float age;
 		float lifetime;
 		sf::Color color;
+		float velY;
 		bool alive;
 	};
 
-	sf::VertexArray m_explosionVA;			 // triangles
 	std::vector<ExplosionVA> m_explosionsVA; // logical explosions
 	std::size_t m_activeExplosionsVA = 0;
 	/////////////////////////////////
@@ -150,7 +148,7 @@ private:
 
 	/////////////////////////////////
 	void InitialiseExplosionsVA();
-	void SpawnExplosionVA(const sf::Vector2f& center, float radius, float lifetime, const sf::Color& color);
+	void SpawnExplosionVA(const sf::Vector2f& center, float radius, float lifetime, float velY, const sf::Color& color);
 	void UpdateExplosionsVA(float deltaTime);
 	void RenderExplosionsVA();
 	/////////////////////////////////
@@ -175,10 +173,12 @@ private:
 
 
 	/////////////////////////////////
-    // Audio-reactive visual effects
+	// Audio-reactive visual effects
 	void SpawnAudioReactiveExplosion(bool resetSpawnTimer = true);
 	void SpawnCircularExplosion(bool resetSpawnTimer = true);
 	void SpawnCircularExplosionByLevel(float level, bool resetSpawnTimer = true);
+	void SpawnConfiguredExplosion(const Spawn::SpawnerConfig& cfg, float level, bool resetSpawnTimer = true);
+	void UpdateTrippyTunnelTravel(float deltaTime);
 	/////////////////////////////////
 
 
@@ -318,10 +318,18 @@ private:
 
 
 	/////////////////////////////////
-	// Circular spawn state (deterministic circular spawns)
+	// Circular/pattern spawn state for GPU-only visual effects
 	float m_circularAngle = 0.0f;	 // radians
 	float m_circularRadius = 250.0f; // pixels from screen center
 	float m_circularSpeed = 0.06f;	 // radians per spawn call
+	float m_patternTime = 0.0f;
+	float m_spiralRadius = 20.0f;
+	int m_patternSpawnCount = 0;
+	float m_tunnelCenterX = 0.0f;
+	float m_tunnelCenterY = 0.0f;
+	float m_tunnelTargetX = 0.0f;
+	float m_tunnelTargetY = 0.0f;
+	float m_tunnelRetargetTimer = 0.0f;
 	/////////////////////////////////
 
 
@@ -396,5 +404,10 @@ private:
 
 
 
+	/////////////////////////////////
+	GPURenderSystem m_gpuRenderer;
+	std::vector<GPUInstanceData> m_explosionInstances;
+	std::vector<GPUBarInstanceData> m_equaliserInstances;
+	/////////////////////////////////
 };
 /////////////////////////////////

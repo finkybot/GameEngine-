@@ -6,6 +6,7 @@
 
 /////////////////////////////////
 // Includes and forward declarations for the main function.
+#include <glad/glad.h>
 #include <imgui/backends/imgui-SFML.h>
 #include "GameEngine.h"
 

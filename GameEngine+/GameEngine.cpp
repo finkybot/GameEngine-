@@ -32,6 +32,7 @@
 #include <imgui/backends/imgui-SFML.h>
 #include "MainThreadTasks.h"
 #include "JobSystem.h"
+#include <glad/glad.h>
 /////////////////////////////////
 
 
@@ -40,7 +41,17 @@
 GameEngine::GameEngine() {
 	// Setup the SFML window as borderless (fullscreen-windowed) to avoid exclusive fullscreen quirks
 	windowSize = sf::VideoMode::getDesktopMode().size;
-	window.create(sf::VideoMode(windowSize), "SFML Game Engine", sf::Style::None);
+
+	// Request a compatibility-profile OpenGL context because SFML graphics and ImGui-SFML
+	// both rely on SFML-managed rendering state. Requesting a core profile would break them.
+	sf::ContextSettings contextSettings;
+	contextSettings.depthBits = 24;
+	contextSettings.stencilBits = 8;
+	contextSettings.majorVersion = 3;
+	contextSettings.minorVersion = 3;
+	contextSettings.attributeFlags = sf::ContextSettings::Default;
+	window.create(sf::VideoMode(windowSize), "SFML Game Engine", sf::Style::None, sf::State::Windowed, contextSettings);
+
 	//window.setPosition(sf::Vector2i(0, 0));
 	//window.create(sf::VideoMode(windowSize), "SFML Game Engine", sf::Style::Fullscreen);
 
@@ -48,8 +59,7 @@ GameEngine::GameEngine() {
 	window.setVerticalSyncEnabled(true);
 	
 	isRunning = true;
-
-
+	
 	// Set up the world size based on the window size, ensuring that the world dimensions are proportional to the window dimensions. This allows for consistent scaling of game elements and mechanics across different screen resolutions.
 	float worldSize = std::max(windowSize.x, windowSize.y) * 1.0f; // 100% of the larger dimension
 
@@ -114,6 +124,23 @@ GameEngine::GameEngine() {
 	}
 
 	techRegistry.LoadDefaults(); // Load default rendering techniques for the engine
+
+	// *** OPENGL CONTEXT *** Initialize OpenGL context with glad for advanced rendering features
+	window.setActive(true);
+	if (!gladLoadGL()) {
+		throw std::runtime_error("Failed to initialize OpenGL context with glad");
+	}
+
+	auto actualSettings = window.getSettings();
+	std::cout << "[GameEngine] OpenGL context initialized with glad: OpenGL version: " << glGetString(GL_VERSION) << std::endl;
+	std::cout << "[GameEngine] OpenGL renderer: " << glGetString(GL_RENDERER) << std::endl;
+	std::cout << "[GameEngine] OpenGL vendor: " << glGetString(GL_VENDOR) << std::endl;
+	std::cout << "[GameEngine] Context settings: " << actualSettings.majorVersion << "." << actualSettings.minorVersion
+			  << ", depth=" << actualSettings.depthBits
+			  << ", stencil=" << actualSettings.stencilBits
+			  << ", aa=" << actualSettings.antiAliasingLevel
+			  << ", flags=" << actualSettings.attributeFlags
+			  << std::endl;
 }
 /////////////////////////////////
 

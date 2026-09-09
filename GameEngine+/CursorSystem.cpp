@@ -40,9 +40,9 @@ void CursorSystem::LoadCursors() {
 		m_pointerCursor = sf::Cursor::createFromSystem(sf::Cursor::Type::Hand);
 		
 		if (m_defaultCursor && m_crosshairCursor && m_pointerCursor) {
-			std::cout << "Successfully loaded cursors\n";
+			std::cout << "\x1b[32m[CursorSystem] Successfully loaded cursors\x1b[0m\n";
 		} else {
-			std::cerr << "Failed to load cursors\n";
+			std::cerr << "\x1b[91m[CursorSystem] Failed to load cursors\x1b[0m\n";
 			m_defaultCursor.reset();
 			m_crosshairCursor.reset();
 			m_pointerCursor.reset();

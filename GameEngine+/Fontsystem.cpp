@@ -30,19 +30,19 @@ bool Fontsystem::LoadBMFont(const std::string& fontName, const std::string& file
 
 	// Parse the BMFont text file to extract font metrics and glyph data
 	if (!ParseBMFontText(filePath, font)) {
-		std::cerr << "[Fontsystem] Failed to parse BMFont text file: " << filePath << std::endl;
+		std::cerr << "\x1b[91m[Fontsystem] Failed to parse BMFont text file: " << filePath << "\x1b[0m" << std::endl;
 		return false;
 	}
 
 	// Validate the parsed font metrics to ensure they are positive values
 	if (font.scaleW <= 0 || font.scaleH <= 0) {
-		std::cerr << "[FontSystem] Invalid BMFont atlas size: " << font.scaleW << "x" << font.scaleH << "\n";
+		std::cerr << "\x1b[91m[FontSystem] Invalid BMFont atlas size: " << font.scaleW << "x" << font.scaleH << "\x1b[0m\n";
 		return false;
 	}
 	
 	// Load the associated texture for the BMFont
 	if (!LoadBMFontTexture(pngPath, font)) {
-		std::cerr << "[Fontsystem] Failed to load BMFont texture: " << pngPath << std::endl;
+		std::cerr << "\x1b[91m[Fontsystem] Failed to load BMFont texture: " << pngPath << "\x1b[0m" << std::endl;
 		return false;
 	}
 
@@ -137,7 +137,7 @@ bool Fontsystem::ParseBMFontText(const std::string& filePath, FontAsset& fontAss
 
 	// Check if the file was successfully opened
 	if (!file.is_open()) {
-		std::cerr << "[Fontsystem] Failed to open BMFont text file: " << filePath << std::endl;
+		std::cerr << "\x1b[91m[Fontsystem] Failed to open BMFont text file: " << filePath << "\x1b[0m" << std::endl;
 		return false;
 	}
 
@@ -274,7 +274,7 @@ bool Fontsystem::LoadBMFontTexture(const std::string& pngPath, FontAsset& fontAs
 	unsigned char* data = stbi_load(pngPath.c_str(), &width, &height, &channels, 4); // Force 4 channels (RGBA)
 
 	if (!data) {
-		std::cerr << "[Fontsystem] Failed to load BMFont texture: " << pngPath << std::endl;
+		std::cerr << "\x1b[91m[Fontsystem] Failed to load BMFont texture: " << pngPath << "\x1b[0m" << std::endl;
 		return false;
 	}
 

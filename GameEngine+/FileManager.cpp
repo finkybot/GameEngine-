@@ -120,7 +120,7 @@ std::filesystem::path FileManager::ResolvePath(const std::string& path) const
 void FileManager::SetBasePath(const std::filesystem::path& basePath)
 {
 	m_basePath = basePath;
-	std::cout << "FileManager: Base path set to " << basePath.string() << std::endl;
+	//std::cout << "FileManager: Base path set to " << basePath.string() << std::endl;
 }
 /////////////////////////////////
 

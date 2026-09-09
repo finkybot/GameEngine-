@@ -364,27 +364,24 @@ void RenderSystem::RenderText(const std::vector<std::unique_ptr<Entity>>& entiti
 // It also handles text alignment and positioning based on the entity's transform and text offset.
 void RenderSystem::RenderTextEntity(Entity* entity, sf::RenderWindow& window) const {
 	//Guard clause: if no CText component or if text is not visible, skip rendering.
-	if (!entity)
-		return;
+	if (!entity) return;
 
 	// Get CText component and check visibility; if no text component or if text is not visible, skip rendering, and get out of here.
 	auto txt = entity->GetComponent<CText>();
-	if (!txt || !txt->visible)
-		return;
+	if (!txt || !txt->visible) return;
 
 	// Resolve font via the configured FontManager
-	if (!m_fontManager)
-		return;
+	if (!m_fontManager)	return;
+
+	// Attempt to get the font from the FontManager using the fontKey from CText. If the font is not found, skip rendering.
 	auto fontOpt = m_fontManager->GetFont(txt->fontKey);
-	if (!fontOpt.has_value() || !(*fontOpt)) {
-		// Font not found - nothing to draw or fallback behavior could be added here.
-		return;
-	}
+	if (!fontOpt.has_value() || !(*fontOpt)) return;
+	
+	// Dereference the optional to get the shared_ptr<sf::Font> for rendering text.
 	std::shared_ptr<sf::Font> font = *fontOpt;
 
-	// Build sf::Text
+	// Build reusable sf::Text for per-line alignment
 	sf::Text sfTxt(*font);
-	sfTxt.setString(txt->text);
 	sfTxt.setCharacterSize(txt->charSize);
 	sfTxt.setFillColor(txt->color);
 
@@ -393,23 +390,56 @@ void RenderSystem::RenderTextEntity(Entity* entity, sf::RenderWindow& window) co
 	if (auto transform = entity->GetComponent<CTransform>(); transform) {
 		worldPos = transform->position;
 	}
+
 	// Apply offset from CText
-	sf::Vector2f pos(worldPos.x + txt->offset.x, worldPos.y + txt->offset.y);
-	sfTxt.setPosition(pos);
+	sf::Vector2f basePos(worldPos.x + txt->offset.x, worldPos.y + txt->offset.y);
 
-	// Horizontal alignment: measure local bounds and set origin appropriately
-	sf::FloatRect bounds = sfTxt.getLocalBounds();
-
-	// Set origin based on alignment. SFML 3.0 changed setOrigin to take a Vector2f for the origin point, so we calculate the appropriate origin based on the desired alignment and the text bounds.
-	if (txt->align == CText::Align::Center) {
-		sfTxt.setOrigin(
-			sf::Vector2f(bounds.position.x + bounds.size.x * 0.5f, bounds.position.y + bounds.size.y * 0.5f));
-	} else if (txt->align == CText::Align::Right) {
-		sfTxt.setOrigin(sf::Vector2f(bounds.position.x + bounds.size.x, bounds.position.y));
-	} else {
-		sfTxt.setOrigin(sf::Vector2f(bounds.position.x, bounds.position.y + bounds.size.y * 0.0f));
+	// Create a vector of lines for multi-line text rendering. This allows us to handle '\n' characters in the text and render each line separately with proper alignment.
+	std::vector<std::string> lines;
+	
+	// Preallocate space for lines to reduce allocations; most text will be 1-8 lines.
+	lines.reserve(8);
+	{
+		// Split the text into lines based on '\n' characters. This allows us to render multi-line text with proper alignment and spacing.
+		std::string current;
+		for (char c : txt->text) {
+			if (c == '\n') {
+				lines.push_back(current);
+				current.clear();
+			} else {
+				current.push_back(c);
+			}
+		}
+		// Push the last line if any
+		lines.push_back(current);
 	}
 
-	window.draw(sfTxt);
+	// Calculate line spacing based on the font and character size. This will be used to position each line of text vertically.
+	const float lineSpacing = font->getLineSpacing(txt->charSize);
+
+	// Render each line of text with proper alignment and positioning. The base position is adjusted for each line based on the line spacing.
+	for (size_t lineIndex = 0; lineIndex < lines.size(); ++lineIndex) {
+		// Set the string for the current line and position it based on the base position and line spacing.
+		sfTxt.setString(lines[lineIndex]);
+		sfTxt.setPosition(sf::Vector2f(basePos.x, basePos.y + lineSpacing * static_cast<float>(lineIndex)));
+
+		// Adjust origin based on alignment setting in CText. This allows us to center or right-align the text as needed.
+		const sf::FloatRect bounds = sfTxt.getLocalBounds();
+		
+		// Set origin based on alignment
+		if (txt->align == CText::Align::Center) {
+			// Center the text by setting the origin to the center of the text bounds
+			sfTxt.setOrigin(sf::Vector2f(bounds.position.x + bounds.size.x * 0.5f, bounds.position.y + bounds.size.y * 0.5f));
+		} else if (txt->align == CText::Align::Right) {
+			// Right-align the text by setting the origin to the right edge of the text bounds
+			sfTxt.setOrigin(sf::Vector2f(bounds.position.x + bounds.size.x, bounds.position.y));
+		} else {
+			// Left-align (default) - set origin to the left edge of the text bounds
+			sfTxt.setOrigin(sf::Vector2f(bounds.position.x, bounds.position.y));
+		}
+
+		//	Draw the text to the render window. This will render the current line of text with the specified font, size, color, and alignment.
+		window.draw(sfTxt);
+	}
 }
 /////////////////////////////////

@@ -33,33 +33,33 @@ SoundSystem::~SoundSystem() {
 /////////////////////////////////
 // Initialize - Enumerate SFML 3.1 PlaybackDevice and set the default output device
 void SoundSystem::Initialize() {
-	std::cout << "[SoundSystem] Initializing audio system..." << std::endl;
+	std::cout << "\x1b[35m[SoundSystem]\x1b[0m Initializing audio system..." << std::endl;
 	std::cout.flush();
 
 	// SFML 3.1 requires explicit device selection via sf::PlaybackDevice
 	auto devices = sf::PlaybackDevice::getAvailableDevices();
-	std::cout << "[SoundSystem] Available playback devices (" << devices.size() << "):" << std::endl;
+	std::cout << "\x1b[35m[SoundSystem]\x1b[0m Available playback devices \x1b[32m(" << devices.size() << "):\x1b[0m" << std::endl;
 	
 	for (const auto& d : devices) 
-		std::cout << "  - " << d << std::endl;
+		std::cout << "\x1b[33m  - " << d << "\x1b[0m" << std::endl;
 
 	auto defaultDevice = sf::PlaybackDevice::getDefaultDevice();
 	if (defaultDevice.has_value()) {
-		std::cout << "[SoundSystem] Default device: " << *defaultDevice << std::endl;
+		std::cout << "\x1b[35m[SoundSystem]\x1b[0m Default device: \x1b[32m" << *defaultDevice << "\x1b[0m" << std::endl;
 		if (sf::PlaybackDevice::setDevice(*defaultDevice))
-			std::cout << "[SoundSystem] Playback device set to: " << *defaultDevice << std::endl;
+			std::cout << "\x1b[35m[SoundSystem]\x1b[0m Playback device set to: \x1b[32m" << *defaultDevice << "\x1b[0m" << std::endl;
 		else
-			std::cerr << "[SoundSystem ERROR] Failed to set playback device: " << *defaultDevice << std::endl;
+			std::cerr << "\x1b[35m[SoundSystem ERROR]\x1b[0m Failed to set playback device: \x1b[32m" << *defaultDevice << "\x1b[0m" << std::endl;
 	} else {
-		std::cerr << "[SoundSystem ERROR] No default playback device found!" << std::endl;
+		std::cerr << "\x1b[35m[SoundSystem ERROR]\x1b[0m No default playback device found!" << std::endl;
 	}
 
 	// Log the currently active device
 	auto currentDevice = sf::PlaybackDevice::getDevice();
 	if (currentDevice.has_value()) {
-		std::cout << "[SoundSystem] Currently active device: " << *currentDevice << std::endl;
+		std::cout << "\x1b[35m[SoundSystem]\x1b[0m Currently active device: \x1b[32m" << *currentDevice << "\x1b[0m" << std::endl;
 	} else {
-		std::cout << "[SoundSystem] Currently active device: (none)" << std::endl;
+		std::cout << "\x1b[35m[SoundSystem]\x1b[0m Currently active device: \x1b[32m(none)\x1b[0m" << std::endl;
 	}
 
 	std::cout.flush();
@@ -74,7 +74,7 @@ void SoundSystem::InitializePool(EntityManager& em, size_t poolSize) {
 	m_poolSize = poolSize;
 	m_entityManager = &em;
 
-	std::cout << "[SoundSystem] Initializing sound effect pool with " << poolSize << " entities" << std::endl;
+	std::cout << "\x1b[35m[SoundSystem]\x1b[0m Initializing sound effect pool with \x1b[32m" << poolSize << "\x1b[0m entities" << std::endl;
 
 	// Pre-allocate sound entities from the pending entities
 	// Note: We'll manually manage them rather than adding to EntityManager
@@ -84,7 +84,7 @@ void SoundSystem::InitializePool(EntityManager& em, size_t poolSize) {
 		m_soundEffectPool.push_back(soundEntity);
 	}
 
-	std::cout << "[SoundSystem] Sound pool initialized successfully" << std::endl;
+	std::cout << "\x1b[35m[SoundSystem]\x1b[0m Sound pool initialized successfully" << std::endl;
 }
 /////////////////////////////////
 
@@ -229,7 +229,7 @@ void SoundSystem::Process(EntityManager& em, float deltaTime) {
 
 	if (soundEffectCount == 0 && entities.size() > 0) {
 		// Don't spam this warning - most entities won't have sound effects
-		// std::cout << "[SoundSystem] WARNING: Found " << entities.size() << " entities but 0 CSoundEffect components" << std::endl;
+		// std::cout << "\x1b[35m[SoundSystem WARNING]\x1b[0m Found " << entities.size() << " entities but 0 CSoundEffect components" << std::endl;
 	}
 
 	// Culling is now handled at creation time via CanPlayNewSound check in CollisionSystem
@@ -291,7 +291,7 @@ void SoundSystem::Update(float deltaTime) {
 void SoundSystem::SetMasterVolume(float volume) {
 	volume = std::clamp(volume, 0.0f, 100.0f);
 	m_masterVolume = volume;
-	std::cout << "[SoundSystem] Master volume set to: " << m_masterVolume << " (0-100)" << std::endl;
+	std::cout << "\x1b[35m[SoundSystem]\x1b[0m Master volume set to: " << m_masterVolume << " (0-100)" << std::endl;
 
 	// Update all active sounds
 	if (m_entityManager) {
@@ -422,7 +422,7 @@ sf::SoundBuffer* SoundSystem::GetOrLoadBuffer(const std::string& path) {
 			std::ifstream tryFile(tryPath);
 			if (tryFile.good()) {
 				actualPath = tryPath;
-				std::cout << "[SoundSystem] Found file at: " << actualPath << std::endl;
+				std::cout << "\x1b[32m[SoundSystem]\x1b[0m Found file at: " << actualPath << "" << std::endl;
 				tryFile.close();
 				break;
 			}
@@ -433,13 +433,13 @@ sf::SoundBuffer* SoundSystem::GetOrLoadBuffer(const std::string& path) {
 
 	auto newBuffer = std::make_unique<sf::SoundBuffer>();
 	if (!newBuffer->loadFromFile(actualPath)) {
-		std::cerr << "[SoundSystem ERROR] Failed to load audio file: " << actualPath << std::endl;
-		std::cerr << "  Original path was: " << path << std::endl;
-		std::cerr << "  Make sure the file exists and is in a supported format (WAV, OGG, FLAC, etc.)" << std::endl;
+		std::cerr << "\x1b[91m[SoundSystem ERROR] Failed to load audio file: " << actualPath << "\x1b[0m" << std::endl;
+		std::cerr << "\x1b[91m[SoundSystem ERROR] Original path was: " << path << "\x1b[0m" << std::endl;
+		std::cerr << "\x1b[91m[SoundSystem ERROR] Make sure the file exists and is in a supported format (WAV, OGG, FLAC, etc.)\x1b[0m" << std::endl;
 		return nullptr; // Failed to load
 	}
 
-	std::cout << "[SoundSystem] Successfully loaded: " << actualPath << std::endl;
+	std::cout << "\x1b[32m[SoundSystem] Successfully loaded: " << actualPath << "\x1b[0m" << std::endl;
 	std::cout << "  Duration: " << newBuffer->getDuration().asSeconds() << "s" << std::endl;
 	std::cout << "  Channels: " << newBuffer->getChannelCount() << std::endl;
 	std::cout << "  Sample rate: " << newBuffer->getSampleRate() << " Hz" << std::endl;

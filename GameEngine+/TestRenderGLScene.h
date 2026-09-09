@@ -5,6 +5,7 @@
 #include "EntityManager.h"
 #include "CTransform.h"
 #include "CTexture.h"
+#include <random>
 /////////////////////////////////
 
 
@@ -27,6 +28,11 @@ public:
 
 private:
 	sf::RenderWindow& m_window;
-	RenderSystemGL m_renderGL;
+	//RenderSystemGL m_renderGL;
+
+	std::mt19937 rng{std::random_device{}()};
+	std::uniform_real_distribution<float> randomValue{0.05f, 0.15f};
+
+	float GetRandomFloat() { return randomValue(rng); }
 };
 /////////////////////////////////

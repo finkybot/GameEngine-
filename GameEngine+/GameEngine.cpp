@@ -88,8 +88,11 @@ GameEngine::GameEngine() {
 	// Debug: Print current working directory
 	char cwd[260];
 	if (_getcwd(cwd, sizeof(cwd)) != nullptr) {
-		std::cout << "[GameEngine] Current working directory: " << cwd << std::endl;
+		std::cout << "\x1b[36m[GameEngine]\x1b[0m Current working directory: \x1b[32m" << cwd << "\x1b[0m" << std::endl;
 	}
+
+
+
 
 	// *** AUDIO *** Create and initialize the SoundSystem
 	soundSystem = std::make_unique<SoundSystem>();
@@ -97,9 +100,12 @@ GameEngine::GameEngine() {
 	soundSystem->InitializePool(*entityManager, 64);  // Initialize sound pool with 64 entities
 	soundSystem->SetMasterVolume(70.0f);  // Set master volume to 70% (0-100 scale)
 
+
+
 	// Bind the SoundSystem to the CollisionSystem so it can check for concurrent sound limits when playing collision sounds (bit of coupling here, but it's a simple solution for now)
 	entityManager->GetCollisionSystem().SetSoundSystem(soundSystem.get());
-	std::cout << "[GameEngine] Audio system initialized (using SFML defaults)"  << std::endl; // Log audio system initialization
+	std::cout << "\x1b[36m[GameEngine]\x1b[0m Audio system initialized (using SFML defaults)"  << std::endl; // Log audio system initialization
+
 
 
 	// *** FONTS *** Try to load a default font for in-engine text (used by MainMenu and CText). Expect file at assets/fonts/tech.ttf
@@ -107,15 +113,23 @@ GameEngine::GameEngine() {
 		std::cerr << "Warning: failed to load default font at assets/fonts/tech.ttf" << std::endl;
 	}
 
+
+
 	// *** CURSOR SYSTEM *** Initialize the cursor system with the game window
 	m_cursorSystem = std::make_unique<CursorSystem>();
 	m_cursorSystem->Initialize(&window);
 
+
+
 	// *** MOVEMENT SYSTEM *** Initialize MovementSystem for path following
 	movementSystem = std::make_unique<MovementSystem>();
 
+
+
 	// *** FILE MANAGER *** Initialize FileManager with current working directory for asset loading
 	m_fileManager.SetBasePath(".");
+
+
 
 	// Do not preload atlases automatically. Atlases should be loaded explicitly via the editor UI so users can choose which atlas to use at runtime.
 	// *** IMGUI *** Initialize ImGui-SFML early so scenes can safely call ImGui during Update
@@ -126,17 +140,40 @@ GameEngine::GameEngine() {
 
 	techRegistry.LoadDefaults(); // Load default rendering techniques for the engine
 
-	// *** OPENGL CONTEXT *** Initialize OpenGL context with glad for advanced rendering features
-	window.setActive(true);
+
+
+
+	// *** OPENGL CONTEXT *** Initialise OpenGL context with glad for advanced rendering features
+	//window.setActive(true);
 	if (!gladLoadGL()) {
 		throw std::runtime_error("Failed to initialize OpenGL context with glad");
 	}
 
+
+
+	// ** OpenGL Font System ** Initialise the Fontsystem for OpenGL text rendering
+	if (!fontsystem.LoadBMFont("default", "assets/fonts/tech_32.fnt", "assets/fonts/tech_32_0.png")) {
+		std::cerr << "Warning: failed to load default font for OpenGL rendering at assets/fonts/tech_32.fnt and "
+					 "assets/fonts/tech_32_0.png"
+				  << std::endl;
+	} else {
+		std::cout << "\x1b[36m[GameEngine]\x1b[0m OpenGL Fontsystem initialised with default font" << std::endl;
+	}
+
+
+	// --- Bind FontSystem BEFORE Initialise() ---
+	entityManager->GetRenderSystemGL().SetFontSystem(&fontsystem);
+
+	// --- NOW Initialise the OpenGL renderer ---
+	entityManager->GetRenderSystemGL().Initialise();
+
+
+
 	auto actualSettings = window.getSettings();
-	std::cout << "[GameEngine] OpenGL context initialized with glad: OpenGL version: " << glGetString(GL_VERSION) << std::endl;
-	std::cout << "[GameEngine] OpenGL renderer: " << glGetString(GL_RENDERER) << std::endl;
-	std::cout << "[GameEngine] OpenGL vendor: " << glGetString(GL_VENDOR) << std::endl;
-	std::cout << "[GameEngine] Context settings: " << actualSettings.majorVersion << "." << actualSettings.minorVersion
+	std::cout << "\x1b[36m[GameEngine]\x1b[0m OpenGL context initialised with glad: OpenGL version: \x1b[32m" << glGetString(GL_VERSION) << "\x1b[0m" << std::endl;
+	std::cout << "\x1b[36m[GameEngine]\x1b[0m OpenGL renderer: \x1b[32m" << glGetString(GL_RENDERER) << "\x1b[0m" << std::endl;
+	std::cout << "\x1b[36m[GameEngine]\x1b[0m OpenGL vendor: \x1b[32m" << glGetString(GL_VENDOR) << "\x1b[0m" << std::endl;
+	std::cout << "\x1b[36m[GameEngine]\x1b[0m Context settings: \x1b[32m" << actualSettings.majorVersion << "." << actualSettings.minorVersion
 			  << ", depth=" << actualSettings.depthBits
 			  << ", stencil=" << actualSettings.stencilBits
 			  << ", aa=" << actualSettings.antiAliasingLevel

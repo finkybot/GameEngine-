@@ -36,9 +36,9 @@ public:
 	// Alignment options for text rendering. This determines how the text is aligned relative to the entity's position when rendered. The default alignment is Left, meaning the text will be rendered starting from the entity's position
 	// and extending to the right. Center alignment will center the text on the entity's position, while Right alignment will render the text ending at the entity's position and extending to the left.
 	enum class Align {
-		Left,
-		Center,
-		Right
+		Left = 0,
+		Center = 1,
+		Right = 2	
 	} align = Align::Left; // horizontal alignment of text relative to position (default to left)
 	/////////////////////////////////
 

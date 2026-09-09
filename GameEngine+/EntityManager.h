@@ -48,6 +48,7 @@ class Entity;
 #include "Systems/PhysicsSystem.h"
 #include "Systems/CollisionSystem.h"
 #include "Systems/RenderSystem.h"
+#include "RenderSystemGL.h"
 #include "CTileMap.h"
 #include "SpatialLayerRegistry.h"
 #include "SpatialIndexUnified.h"
@@ -139,6 +140,7 @@ public:
 	PhysicsSystem& GetPhysicsSystem() { return m_physicsSystem; }
 	CollisionSystem& GetCollisionSystem() { return m_collisionSystem; }
 	RenderSystem& GetRenderSystem() { return m_renderSystem; }	
+	RenderSystemGL& GetRenderSystemGL() { return m_renderSystemGL; } // Optional: OpenGL-based render system for advanced rendering (may be nullptr)
 	MusicSystem* GetMusicSystem() { return m_musicSystem.get(); } // Accessor for MusicSystem (may be nullptr)
 	SoundSystem* GetSoundSystem() { return m_soundSystem.get(); } // Accessor for SoundSystem (may be nullptr)
 	/////////////////////////////////
@@ -262,6 +264,7 @@ private:
 	PhysicsSystem m_physicsSystem;
 	CollisionSystem m_collisionSystem;
 	RenderSystem m_renderSystem;
+	RenderSystemGL m_renderSystemGL; // Optional: OpenGL-based render system for advanced rendering (may be nullptr)
 	
 	std::unique_ptr<TileSystem> m_tileSystem;
 	std::unique_ptr<MusicSystem> m_musicSystem; // system owning runtime sf::Music objects

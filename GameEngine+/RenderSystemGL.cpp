@@ -19,6 +19,19 @@
 
 
 /////////////////////////////////
+// Quad covering (0,0) to (1,1) — scaled in shader using w/h
+static const float quadVertices[] = {
+	// x, y
+    -1.0f, -1.0f,
+     1.0f, -1.0f,
+    -1.0f,  1.0f,
+     1.0f,  1.0f
+};
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // VERTEX AND FRAGMENT SHADER SOURCES
 
 
@@ -172,36 +185,44 @@ void main()
 static const char* textVertexSrc = R"(
 #version 330 core
 
-layout(location = 0) in vec2 aPos;
-layout(location = 9) in vec2 iPos;
-layout(location = 10) in float iScale;
-layout(location = 11) in vec4 iColor;
+layout(location = 0) in vec2 aPos;          // quad vertex (0..1)
+layout(location = 9) in vec2 iPos;          // glyph position
+layout(location = 10) in vec2 iSize;        // glyph size
+layout(location = 11) in vec4 iUV;          // u0,v0,u1,v1
+layout(location = 12) in vec4 iColor;       // glyph color
 
 uniform vec2 uViewportSize;
 
+out vec2 vUV;
 out vec4 vColor;
 
 void main()
 {
-    // Convert position to NDC
+    // Convert glyph position to NDC
     vec2 posNDC = vec2(
         (iPos.x / uViewportSize.x) * 2.0 - 1.0,
         1.0 - (iPos.y / uViewportSize.y) * 2.0
     );
 
-    // Convert scale from pixel space to NDC space
-    vec2 ndcScale = vec2(
-        iScale / uViewportSize.x,
-        iScale / uViewportSize.y
+    // Convert glyph size to NDC
+    vec2 ndcSize = vec2(
+        iSize.x / uViewportSize.x,
+        iSize.y / uViewportSize.y
     );
 
-    // Scale the position by scale factor in NDC space
-    vec2 scaledPos = aPos * ndcScale;
+    // Scale quad
+    vec2 scaledPos = aPos * ndcSize;
 
     gl_Position = vec4(posNDC + scaledPos, 0.0, 1.0);
+
+    // Interpolate UVs
+	vec2 uvT = clamp(aPos, 0.0, 1.0);
+    vUV = mix(iUV.xy, iUV.zw, uvT);
+
     vColor = iColor;
 }
 )";
+
 
 
 
@@ -211,12 +232,17 @@ void main()
 static const char* textFragmentSrc = R"(
 #version 330 core
 
+in vec2 vUV;
 in vec4 vColor;
+
+uniform sampler2D uAtlas;
+
 out vec4 fragColor;
 
 void main()
 {
-    fragColor = vColor;   // solid quad for now
+    float alpha = texture(uAtlas, vUV).r;
+    fragColor = vec4(vColor.rgb, vColor.a * alpha);
 }
 )";
 
@@ -243,6 +269,12 @@ void RenderSystemGL::Initialise() {
 	// Check if already initialised, get out if so
 	if (m_initialised) return; 
 
+	// Check if the Fontsystem pointer is set before proceeding with initialization
+	if (!m_fontSystem) {
+		std::cerr << "[RenderSystemGL] Fontsystem not set before Initialise()" << std::endl;
+		return;
+	}
+
 	// Check for OpenGL context and required functions
 	const GLubyte* version = glGetString(GL_VERSION);
 	if (!version) {
@@ -268,9 +300,13 @@ void RenderSystemGL::Initialise() {
 	CreateCircleResources();
 	CreateTextResources();
 
+
+	CreateTextGlyphResources(); // VAO/VBO for glyph instances
+	LoadTextShader();			// shader for glyph rendering
+
 	// Set initialised flag to true after successful setup
 	m_initialised = true;
-	printf("[RenderSystemGL::Initialise] Initialization complete\n");
+	printf("\x1b[36m[RenderSystemGL::Initialise]\x1b[0m Initialization complete\n");
 }
 /////////////////////////////////
 
@@ -352,7 +388,7 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 	glClear(GL_COLOR_BUFFER_BIT);
 	
 	// *** DEBUGGING: Print a message indicating that glClear has been called
-	printf("[RenderSystemGL::Render] Called glClear\n");
+	//printf("[RenderSystemGL::Render] Called glClear\n");
 
 	// Prepare viewport dimensions for rendering
 	std::vector<GPUSpriteInstance> spriteInstances;
@@ -415,19 +451,14 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 			// ---------------------------------
 			// Check if the entity has a CText component, which is required for text rendering
 			if (auto text = entity->GetComponent<CText>()) {
-				GPUTextInstance textInstance{};
-
-				textInstance.x = transform->position.x;
-				textInstance.y = transform->position.y;
-
-				textInstance.scale = static_cast<float>(text->charSize);
-
-				textInstance.r = text->color.r / 255.f;
-				textInstance.g = text->color.g / 255.f;
-				textInstance.b = text->color.b / 255.f;
-				textInstance.a = text->color.a / 255.f;
-
-				textInstances.push_back(textInstance);
+				// Retrieve the font asset from the Fontsystem using the font key specified in the CText component
+				const FontAsset* font = m_fontSystem->GetFont(text->fontKey);
+				
+				// Build glyph instances for the text using the CText component, CTransform component, and the retrieved font asset
+				auto glyphs = BuildGlyphInstances(*text, *transform, *font);
+				
+				// Append the generated glyph instances to the main text glyph instance vector for rendering
+				m_textGlyphInstances.insert(m_textGlyphInstances.end(), glyphs.begin(), glyphs.end());
 			}
 		}
 	}
@@ -443,8 +474,13 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 		RenderCircles(circleInstances);
 	}
 
-	if (!textInstances.empty()) {
-		RenderText(textInstances);
+	// ---------------------------------
+	// Render text glyphs if there are any glyph instances to render
+	// ---------------------------------
+	if (!m_textGlyphInstances.empty()) {
+		//std::cout << "Glyph count: " << m_textGlyphInstances.size() << std::endl;
+		UploadGlyphInstances();
+		RenderTextGlyphs();
 	}
 }
 /////////////////////////////////
@@ -587,19 +623,19 @@ void RenderSystemGL::CreateSpriteResources() {
 	glBindBuffer(GL_ARRAY_BUFFER, m_spriteInstanceVBO);
 
 	std::size_t stride = sizeof(GPUSpriteInstance);
-	printf("[CreateSpriteResources] Sprite stride: %zu bytes\n", stride);
+	printf("\x1b[33m[CreateSpriteResources]\x1b[0m Sprite stride: %zu bytes\n", stride);
 
 	// Position (location = 1)
 	glEnableVertexAttribArray(1);
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
 	glVertexAttribDivisor(1, 1); // Advance per instance
-	printf("[CreateSpriteResources] Set up location 1 (position)\n");
+	printf("\x1b[33m[CreateSpriteResources]\x1b[0m Set up location 1 (position)\n");
 
 	// Size (location = 2)
 	glEnableVertexAttribArray(2);
 	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 2));
 	glVertexAttribDivisor(2, 1); // Advance per instance
-	printf("[CreateSpriteResources] Set up location 2 (size)\n");
+	printf("\x1b[33m[CreateSpriteResources]\x1b[0m Set up location 2 (size)\n");
 
 	// Rotation (location = 3)
 	glEnableVertexAttribArray(3);
@@ -619,7 +655,7 @@ void RenderSystemGL::CreateSpriteResources() {
 	// Unbind the VBO and VAO to avoid accidental modification
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
-	printf("[CreateSpriteResources] Sprite VAO setup complete\n");
+	printf("\x1b[33m[CreateSpriteResources]\x1b[0m Sprite VAO setup complete\n");
 }
 /////////////////////////////////
 
@@ -635,7 +671,7 @@ void RenderSystemGL::CreateCircleResources() {
 
 	// Check if shader program creation was successful
 	if (!m_circleShaderProgram) {
-		std::cerr << "[RenderSystemGL] Failed to create circle shader program" << std::endl;
+		std::cerr << "\x1b[39m[RenderSystemGL]\x1b[0m Failed to create circle shader program" << std::endl;
 		return;
 	}
 
@@ -702,7 +738,7 @@ void RenderSystemGL::CreateTextResources() {
 
 	// Check if shader program creation was successful
 	if (!m_textShaderProgram) {
-		std::cerr << "[RenderSystemGL] Failed to create text shader program" << std::endl;
+		std::cerr << "\x1b[39m[RenderSystemGL]\x1b[0m Failed to create text shader program" << std::endl;
 		return;
 	}
 
@@ -723,30 +759,48 @@ void RenderSystemGL::CreateTextResources() {
 	glGenVertexArrays(1, &m_textVAO);
 	glBindVertexArray(m_textVAO);
 
-    // Bind shared quad geometry VBO (attribute 0)
-	glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+// --- Create a dedicated quad VBO for text (0..1 space) ---
+	GLuint textQuadVBO;
+	glGenBuffers(1, &textQuadVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, textQuadVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVertices), quadVertices, GL_STATIC_DRAW);
+
+	// Attribute 0 → aPos (0..1 quad)
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, (void*)0);
 
 	// Bind text instance VBO (attributes 9, 10, 11)
 	glBindBuffer(GL_ARRAY_BUFFER, m_textInstanceVBO);
 
-	std::size_t stride = sizeof(GPUTextInstance);
+	std::size_t stride = sizeof(GPUTextGlyphInstance);
 
-	// Position (location = 9)
+    // ---------------------------------
+	// Attribute 9 → x, y
+	// ---------------------------------
 	glEnableVertexAttribArray(9);
-	glVertexAttribPointer(9, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
+	glVertexAttribPointer(9, 2, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTextGlyphInstance, x));
 	glVertexAttribDivisor(9, 1);
 
-	// Scale (location = 10)
+	// ---------------------------------
+	// Attribute 10 → w, h
+	// ---------------------------------
 	glEnableVertexAttribArray(10);
-	glVertexAttribPointer(10, 1, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 2));
+	glVertexAttribPointer(10, 2, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTextGlyphInstance, w));
 	glVertexAttribDivisor(10, 1);
 
-	// Color (location = 11)
+	// ---------------------------------
+	// Attribute 11 → u0, v0, u1, v1
+	// ---------------------------------
 	glEnableVertexAttribArray(11);
-	glVertexAttribPointer(11, 4, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 3));
+	glVertexAttribPointer(11, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTextGlyphInstance, u0));
 	glVertexAttribDivisor(11, 1);
+
+	// ---------------------------------
+	// Attribute 12 → r, g, b, a
+	// ---------------------------------
+	glEnableVertexAttribArray(12);
+	glVertexAttribPointer(12, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTextGlyphInstance, r));
+	glVertexAttribDivisor(12, 1);
 
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -758,7 +812,7 @@ void RenderSystemGL::CreateTextResources() {
 /////////////////////////////////
 // EnsureSpriteBufferCapacity - Ensures that the sprite instance buffer has enough capacity to hold the required number of instances. If not, it reallocates the buffer with increased capacity.
 void RenderSystemGL::EnsureSpriteBufferCapacity(std::size_t requiredInstances) {
-	printf("[EnsureSpriteBufferCapacity] Required: %zu, Current capacity: %zu\n", requiredInstances, m_spriteBufferCapacity);
+	//printf("[EnsureSpriteBufferCapacity] Required: %zu, Current capacity: %zu\n", requiredInstances, m_spriteBufferCapacity);
 
 	// If we already have enough capacity, return early
 	if (requiredInstances <= m_spriteBufferCapacity) {
@@ -918,7 +972,251 @@ void RenderSystemGL::EnsureTextBufferCapacity(std::size_t requiredInstances) {
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
+/////////////////////////////////
 
+
+
+/////////////////////////////////
+// BuildGlyphInstances - Builds a vector of GPUTextGlyphInstance objects based on the provided CText and CTransform components, along with the specified FontAsset.
+std::vector<GPUTextGlyphInstance> RenderSystemGL::BuildGlyphInstances(const CText& textComp, const CTransform& transformComp, const FontAsset& font) {
+	std::vector<GPUTextGlyphInstance> glyphInstances;
+	glyphInstances.reserve(textComp.text.size());
+
+	if (!m_fontSystem) {
+		std::cerr << "\x1b[91m[RenderSystemGL] Font system is not initialized\x1b[0m" << std::endl;
+		return glyphInstances;
+	}
+
+	// ----------------------------------------------------
+	// Split text into lines
+	// ----------------------------------------------------
+	std::vector<std::string> lines;
+	{
+		std::string current;
+		for (char c : textComp.text) {
+			if (c == '\n') {
+				lines.push_back(current);
+				current.clear();
+			} else {
+				current.push_back(c);
+			}
+		}
+		lines.push_back(current);
+	}
+
+	// ----------------------------------------------------
+	// Measure line width using xadvance (correct for alignment)
+	// ----------------------------------------------------
+	auto MeasureLine = [&](const std::string& line) {
+		float width = 0.f;
+		int prev = -1;
+		bool first = true;
+
+		for (char c : line) {
+			const Glyph* g = m_fontSystem->GetGlyph(font, (int)c);
+			if (!g)
+				continue;
+
+			if (prev >= 0)
+				width += m_fontSystem->GetKerning(font, prev, (int)c);
+
+			if (first) {
+				width += g->xoffset; // IMPORTANT
+				first = false;
+			}
+
+			width += g->xadvance;
+			prev = (int)c;
+		}
+
+		return width;
+	};
+
+	// ----------------------------------------------------
+	// Build glyphs line-by-line
+	// ----------------------------------------------------
+	float cursorY = transformComp.position.y;
+
+	for (const std::string& line : lines) {
+		int i = 0;
+
+		float lineWidth = MeasureLine(line);
+
+		// ----------------------------------------------------
+		// Independent alignment per line
+		// ----------------------------------------------------
+		float cursorX = transformComp.position.x;
+
+		switch (textComp.align) {
+		case CText::Align::Center:
+			cursorX -= lineWidth * 0.5f;
+			break;
+
+		case CText::Align::Right:
+			cursorX -= lineWidth;
+			break;
+
+		default:
+			break; // Left
+		}
+
+		int prevChar = -1;
+
+		// ----------------------------------------------------
+		// Glyph loop
+		// ----------------------------------------------------
+		for (char c : line) {
+
+			const Glyph* glyph = m_fontSystem->GetGlyph(font, (int)c);
+			if (!glyph)
+				continue;
+
+			if (prevChar >= 0)
+				cursorX += m_fontSystem->GetKerning(font, prevChar, (int)c);
+
+			GPUTextGlyphInstance gi{};
+
+			gi.x = cursorX + glyph->xoffset;
+			gi.y = cursorY + glyph->yoffset;
+
+			gi.w = glyph->w;
+			gi.h = glyph->h;
+
+			float invW = 1.0f / font.scaleW;
+			float invH = 1.0f / font.scaleH;
+
+			gi.u0 = glyph->u0 * invW;
+			gi.v0 = glyph->v0 * invH;
+			gi.u1 = glyph->u1 * invW;
+			gi.v1 = glyph->v1 * invH;
+
+			gi.r = textComp.color.r / 255.f;
+			gi.g = textComp.color.g / 255.f;
+			gi.b = textComp.color.b / 255.f;
+			gi.a = textComp.color.a / 255.f;
+
+			glyphInstances.push_back(gi);
+
+			cursorX += glyph->xadvance; // matches MeasureLine()
+			prevChar = (int)c;
+		}
+
+		cursorY += font.lineHeight;
+	}
+
+	return glyphInstances;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// UploadGlyphInstances - Uploads the current glyph instances to the GPU for rendering. This method should be called after building the glyph instances and before rendering text.
+void RenderSystemGL::UploadGlyphInstances() {
+	if (m_textGlyphInstances.empty())
+		return;
+
+	// Bind instance buffer and upload all glyphs
+	glBindBuffer(GL_ARRAY_BUFFER, m_textInstanceVBO);
+	glBufferData(GL_ARRAY_BUFFER, m_textGlyphInstances.size() * sizeof(GPUTextGlyphInstance),
+				 m_textGlyphInstances.data(), GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// RenderTextGlyphs - Renders the uploaded glyph instances using instanced rendering. This method should be called after uploading the glyph instances to the GPU.
+void RenderSystemGL::RenderTextGlyphs() {
+	if (m_textGlyphInstances.empty())
+		return;
+
+	glUseProgram(m_textShaderProgram);
+
+	if (m_textViewportUniformLocation >= 0) {
+		glUniform2f(m_textViewportUniformLocation, static_cast<float>(m_viewportWidth),
+					static_cast<float>(m_viewportHeight));
+	}
+
+	// Bind atlas from the same font used in BuildGlyphInstances
+	const FontAsset* font = m_fontSystem->GetFont("default"); // or batch per fontKey
+	if (font) {
+		glActiveTexture(GL_TEXTURE0);
+		glBindTexture(GL_TEXTURE_2D, font->textureID);
+	} else {
+		std::cerr << "\x1b[91m[RenderSystemGL]No font atlas bound for text rendering\x1b[0m\n";
+	}
+
+	glBindVertexArray(m_textVAO);
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, m_textGlyphInstances.size());
+	glBindVertexArray(0);
+
+	glUseProgram(0);
+
+	// Optional: clear after draw so next frame starts fresh
+	m_textGlyphInstances.clear();
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void RenderSystemGL::CreateTextGlyphResources() {
+	glGenVertexArrays(1, &m_textGlyphVAO);
+	glBindVertexArray(m_textGlyphVAO);
+
+	glGenBuffers(1, &m_textGlyphVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, m_textGlyphVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(GPUTextGlyphInstance) * 4096, nullptr, GL_DYNAMIC_DRAW);
+
+	// pos + size (x,y,w,h)
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(GPUTextGlyphInstance),
+						  (void*)offsetof(GPUTextGlyphInstance, x));
+	glEnableVertexAttribArray(1);
+	glVertexAttribDivisor(1, 1);
+
+	// UVs (u0,v0,u1,v1)
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(GPUTextGlyphInstance),
+						  (void*)offsetof(GPUTextGlyphInstance, u0));
+	glEnableVertexAttribArray(2);
+	glVertexAttribDivisor(2, 1);
+
+	// color (r,g,b,a)
+	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(GPUTextGlyphInstance),
+						  (void*)offsetof(GPUTextGlyphInstance, r));
+	glEnableVertexAttribArray(3);
+	glVertexAttribDivisor(3, 1);
+
+	glBindVertexArray(0);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void RenderSystemGL::LoadTextShader() {
+	// We already created m_textShaderProgram in CreateTextResources()
+	if (!m_textShaderProgram) {
+		std::cerr << "\x1b[91m[RenderSystemGL]LoadTextShader called but m_textShaderProgram is null\x1b[0m\n";
+		return;
+	}
+
+	glUseProgram(m_textShaderProgram);
+
+	// Cache viewport uniform if not already
+	m_textViewportUniformLocation = glGetUniformLocation(m_textShaderProgram, "uViewportSize");
+
+	// Bind sampler to texture unit 0
+	GLint atlasLoc = glGetUniformLocation(m_textShaderProgram, "uAtlas");
+	if (atlasLoc >= 0) {
+		glUniform1i(atlasLoc, 0); // uAtlas → GL_TEXTURE0
+	} else {
+		std::cerr << "\x1b[91m[RenderSystemGL] Failed to locate uAtlas uniform in text shader\x1b[0m\n";
+	}
+
+	glUseProgram(0);
+}
 /////////////////////////////////
 
 
@@ -1121,5 +1419,4 @@ GLuint RenderSystemGL::CreateShaderProgram(const char* vertexSrc, const char* fr
 
 	return program;
 }
-
 /////////////////////////////////

@@ -9,6 +9,7 @@
 #pragma once
 #include <glad/glad.h>
 #include <vector>
+#include "Fontsystem.h"
 /////////////////////////////////
 
 
@@ -16,6 +17,8 @@
 /////////////////////////////////
 // Forward Declarations
 class EntityManager;
+class CText;
+class CTransform;
 /////////////////////////////////
 
 
@@ -66,6 +69,7 @@ struct GPUTextInstance {
 //								|
 //								|_______________________________________________________________________
 struct GPUTextGlyphInstance {
+	float texID;		// texture ID for the font atlas
 	float x, y;			// glyph position in pixels
 	float w, h;			// glyph size in pixels
 
@@ -96,6 +100,8 @@ public:
 
 	void Render(const EntityManager& entityManager);
 	void OnResize(int width, int height);
+
+	void SetFontSystem(Fontsystem* fontSystem) { m_fontSystem = fontSystem; }
 	/////////////////////////////////
 
 
@@ -163,6 +169,18 @@ private:
 
 
 	/////////////////////////////////
+	// Text glyph GPU data
+	GLuint m_textGlyphVAO = 0;
+	GLuint m_textGlyphVBO = 0;
+	std::vector<GPUTextGlyphInstance> m_textGlyphInstances;
+
+	// Text shader
+	GLuint m_textShader = 0;
+	/////////////////////////////////
+
+
+
+	/////////////////////////////////
 private:
 	/////////////////////////////////
 	// Internal helper methods for shader compilation, buffer creation, and viewport preparation
@@ -177,10 +195,19 @@ private:
 	void EnsureCircleBufferCapacity(std::size_t requiredInstances);
 	void EnsureTextBufferCapacity(std::size_t requiredInstances);
 
+	std::vector<GPUTextGlyphInstance> BuildGlyphInstances(const CText& CText, const CTransform& CTransform, const FontAsset& font);
+	void UploadGlyphInstances();
+	void RenderTextGlyphs();
+	void CreateTextGlyphResources();
+	void LoadTextShader();
+
+
 	void RenderSprites(const std::vector<GPUSpriteInstance>& instances);
 	void RenderCircles(const std::vector<GPUCircleInstance>& instances);
 	void RenderText(const std::vector<GPUTextInstance>& instances);
 
 	GLuint CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc);
+
+	Fontsystem* m_fontSystem = nullptr; // Pointer to the FontSystem for accessing font assets
 };
 /////////////////////////////////

@@ -10,8 +10,9 @@
 TestRenderGLScene::TestRenderGLScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em)
 	: m_window(win), Scene(engine, em) {
 	// Initialise GL renderer AFTER SFML window exists
-	m_renderGL.Initialise();
-	m_renderGL.OnResize(engine.windowSize.x, engine.windowSize.y);
+	//m_renderGL.Initialise();
+
+	m_entityManager.GetRenderSystemGL().OnResize(engine.windowSize.x, engine.windowSize.y);
 }
 /////////////////////////////////
 
@@ -66,15 +67,29 @@ void TestRenderGLScene::OnEnter() {
 
 	// Add a CTransform component to the third entity and set its position to the bottom-right corner of the window
 	auto* t3 = e3->AddComponent<CTransform>();
-	t3->position = Vec2(size.x * 0.75f, size.y * 0.75f);
+	t3->position = Vec2(size.x * 0.02f, size.y * 0.02f);
 
 	// Add a CText component to the third entity and set its properties for rendering
 	auto* text = e3->AddComponent<CText>();
-	text->charSize = 64;
+
+	// Recommended: that we keep multi lines between one to eight lines of text.
+
+	text->text =	"Testing RenderGL Scene - This scene is for testing purposes only.\n"
+					"It will use the RenderSystemGL for rendering and display a quad, circle and this text component.\n"
+					"Please note that this scene is not intended for production use and may be subject to change or removal in future versions of the engine.\n"
+					"RenderGL will eventually replace the lagacy Render Manager on every scene!";
+
+
+
+	text->fontKey = "default";
+
+	text->charSize = 18;
 	text->color = sf::Color::Red;
 	text->visible = true;
+	text->align = CText::Align::Left;
 
-	m_renderGL.OnResize(size.x, size.y);
+	//m_renderGL.OnResize(size.x, size.y);
+	m_entityManager.GetRenderSystemGL().OnResize(size.x, size.y);
 }
 /////////////////////////////////
 
@@ -102,7 +117,8 @@ void TestRenderGLScene::Update(float dt) {
 /////////////////////////////////
 void TestRenderGLScene::Render() {
 	// Draw the GL quad
-	m_renderGL.Render(m_entityManager);
+	//m_renderGL.Render(m_entityManager);
+	m_entityManager.GetRenderSystemGL().Render(m_entityManager);
 
 	// DO NOT call SFML rendering here
 	// GameEngine will still call EntityManager.RenderAll() afterwards,
@@ -121,7 +137,8 @@ void TestRenderGLScene::OnWindowResized(sf::Vector2u newSize) {
 	m_window.setView(view);
 
 	// Update GL viewport
-	m_renderGL.OnResize(newSize.x, newSize.y);
+	//m_renderGL.OnResize(newSize.x, newSize.y);
+	m_entityManager.GetRenderSystemGL().OnResize(newSize.x, newSize.y);
 }
 /////////////////////////////////
 

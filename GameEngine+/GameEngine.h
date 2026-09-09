@@ -23,6 +23,8 @@
 #include "SoundSystem.h"
 #include "ChunkManager.h"
 #include "TechRegistry.h"
+#include "Fontsystem.h"
+#include "RenderSystemGL.h"
 #include "WorldDiffusionConfig.h"
 
 #include <map>
@@ -179,6 +181,7 @@ public:
 	sf::Vector2u windowSize = {0, 0};									// Size of the game window, initialized to zero and set in the constructor based on the desktop mode
 
 	FontManager	fontManager;											// Font manager instance for managing fonts across the game, allowing for loading, retrieving, and unloading fonts in a centralized manner
+	Fontsystem	fontsystem;												// Fontsystem instance for managing font rendering and text display in the game, providing functionality for rendering text with various fonts and styles
 	std::unique_ptr<EntityManager> entityManager;						// Unique pointer to the central EntityManager owned by the engine, responsible for managing game entities and providing access to the entity system throughout the game
 	std::unique_ptr<SoundSystem> soundSystem;							// Unique pointer to the SoundSystem owned by the engine, responsible for managing sound effects and audio playback
 	std::unique_ptr<MovementSystem> movementSystem;						// Unique pointer to the MovementSystem owned by the engine, responsible for moving entities along computed paths

@@ -158,6 +158,7 @@
     <ClCompile Include="FileDialog.cpp" />
     <ClCompile Include="FileManager.cpp" />
     <ClCompile Include="FontManager.cpp" />
+    <ClCompile Include="Fontsystem.cpp" />
     <ClCompile Include="GameController.cpp" />
     <ClCompile Include="GameEngine.cpp" />
     <ClCompile Include="glad.c" />
@@ -246,6 +247,7 @@
     <ClInclude Include="FileDialog.h" />
     <ClInclude Include="FileManager.h" />
     <ClInclude Include="FontManager.h" />
+    <ClInclude Include="Fontsystem.h" />
     <ClInclude Include="GameController.h" />
     <ClInclude Include="GameEngine+\MovementSystem.h" />
     <ClInclude Include="GameEngine.h" />
@@ -290,6 +292,7 @@
     <ClInclude Include="SpatialHashGrid.h" />
     <ClInclude Include="SpatialIndexUnified.h" />
     <ClInclude Include="SpatialLayerRegistry.h" />
+    <ClInclude Include="stb_image.h" />
     <ClInclude Include="System.h" />
     <ClInclude Include="SystemManager.h" />
     <ClInclude Include="Systems\CollisionSystem.h" />

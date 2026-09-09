@@ -19,19 +19,60 @@ TestRenderGLScene::TestRenderGLScene(GameEngine& engine, sf::RenderWindow& win, 
 
 /////////////////////////////////
 void TestRenderGLScene::OnEnter() {
-	// Create a single test entity
+	
+	// ---------------------------------
+	// Step 1: Create test entity quad for rendering
+	// ---------------------------------
+
+	// Create first test entity (a simple quad) in the middle of the window
 	auto* e = m_entityManager.AddEntity(EntityType::TeamBoogaloo);
 
+	// Add a CTransform component to the entity and set its position to the center of the window
 	auto* t = e->AddComponent<CTransform>();
 	auto size = m_gameEngine.window.getSize();
 	t->position = Vec2(size.x * 0.5f, size.y * 0.5f);
 
+	// Add a CTexture component to the entity and set its properties for rendering
 	auto* tex = e->AddComponent<CTexture>();
 	tex->areaW = 120.f;
 	tex->areaH = 120.f;
 	tex->gpuIndex = 0; // no texture array yet
 	tex->color = sf::Color::White;
 	tex->visible = true;
+
+	// ---------------------------------
+	// Step 2: Create a second test entity (a circle) for rendering
+	// ---------------------------------
+
+	// Create a second test entity (a circle) in the top-left corner
+	auto* e2 = m_entityManager.AddEntity(EntityType::TeamBoogaloo);
+
+	// Add a CTransform component to the second entity and set its position to the top-left corner of the window
+	auto* t2 = e2->AddComponent<CTransform>();
+	auto size2 = m_gameEngine.window.getSize();
+	t2->position = Vec2(size2.x * 0.25f, size2.y * 0.25f);
+
+	// Add a CCircleGPU component to the second entity and set its properties for rendering
+	auto* circle = e2->AddComponent<CCircleGPU>();
+	circle->radius = 50.f;
+	circle->color = sf::Color::Green;
+	circle->visible = true;
+
+	// ---------------------------------
+	// Step 3: Create a third test entity (a text) for rendering
+	// ---------------------------------
+	// Create a third test entity (a text) in the bottom-right corner (it wont actually be text but a quad for now)
+	auto* e3 = m_entityManager.AddEntity(EntityType::TeamBoogaloo);
+
+	// Add a CTransform component to the third entity and set its position to the bottom-right corner of the window
+	auto* t3 = e3->AddComponent<CTransform>();
+	t3->position = Vec2(size.x * 0.75f, size.y * 0.75f);
+
+	// Add a CText component to the third entity and set its properties for rendering
+	auto* text = e3->AddComponent<CText>();
+	text->charSize = 64;
+	text->color = sf::Color::Red;
+	text->visible = true;
 
 	m_renderGL.OnResize(size.x, size.y);
 }

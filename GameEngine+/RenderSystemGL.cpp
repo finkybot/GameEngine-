@@ -118,32 +118,28 @@ layout(location = 8) in vec4 iColor;
 uniform vec2 uViewportSize;
 
 out vec2 vLocalPos;
-out float vRadius;
 out vec4 vColor;
 
 void main()
 {
-    // Convert position to NDC
     vec2 posNDC = vec2(
         (iPos.x / uViewportSize.x) * 2.0 - 1.0,
         1.0 - (iPos.y / uViewportSize.y) * 2.0
     );
 
-    // Convert radius from pixel space to NDC space
     vec2 ndcRadius = vec2(
         iRadius / uViewportSize.x,
         iRadius / uViewportSize.y
     );
 
-    // Scale the position by radius in NDC space
     vec2 scaledPos = aPos * ndcRadius;
 
     gl_Position = vec4(posNDC + scaledPos, 0.0, 1.0);
 
-    vLocalPos = aPos;
-    vRadius = iRadius;
+    vLocalPos = aPos;   // unit circle space
     vColor = iColor;
 }
+
 )";
 
 
@@ -155,7 +151,6 @@ static const char* circleFragmentSrc = R"(
 #version 330 core
 
 in vec2 vLocalPos;
-in float vRadius;
 in vec4 vColor;
 
 out vec4 fragColor;
@@ -163,7 +158,7 @@ out vec4 fragColor;
 void main()
 {
     float dist = length(vLocalPos);
-    if (dist > 1.0) discard;   // unit circle mask
+    if (dist > 1.0) discard;
 
     fragColor = vColor;
 }
@@ -350,10 +345,13 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 		return;
 	}
 
-	printf("[RenderSystemGL::Render] Starting render with %zu entities\n", entityManager.GetEntities().size());
+	// *** DEBUGGING: Print the number of entities to be rendered
+	//printf("[RenderSystemGL::Render] Starting render with %zu entities\n", entityManager.GetEntities().size());
 
 	// Clear the color buffer
 	glClear(GL_COLOR_BUFFER_BIT);
+	
+	// *** DEBUGGING: Print a message indicating that glClear has been called
 	printf("[RenderSystemGL::Render] Called glClear\n");
 
 	// Prepare viewport dimensions for rendering
@@ -454,7 +452,7 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 
 
 /////////////////////////////////
-// OnResize - Handles window resize events. This method can be used to update viewport dimensions or other rendering parameters when the window size changes. Currently, it is a placeholder and does not perform any actions.
+// OnResize - Handles window resize events. This method can be used to update viewport dimensions or other rendering parameters when the window size changes.
 void RenderSystemGL::OnResize(int width, int height) {
 	// Update cached viewport dimensions
 	m_viewportWidth = width;
@@ -505,10 +503,10 @@ void RenderSystemGL::CreateQuadGeometry() {
 	// Create a simple quad geometry for instanced rendering
 	// Quad vertices in Normalized Device Coordinates (NDC) space (x, y) half-size quad centered at the origin. The vertex shader will scale and translate these based on instance data.
 	const float quadVerts[] = {
-		-0.5f, -0.5f, // Bottom-left
-		-0.5f,  0.5f, // Top-left
-		 0.5f, -0.5f, // Bottom-right
-		 0.5f,  0.5f  // Top-right
+		-1.0f, -1.0f, // Bottom-left
+		-1.0f,  1.0f, // Top-left
+		 1.0f, -1.0f, // Bottom-right
+		 1.0f,  1.0f  // Top-right
 	};
 
 	// Create and bind the quad vertex array object (VAO)
@@ -533,7 +531,7 @@ void RenderSystemGL::CreateQuadGeometry() {
 
 
 /////////////////////////////////
-// CreateSpriteResources - Creates OpenGL resources (shaders, VAO, VBO) for rendering sprites. This method is a placeholder and does not perform any actions in this implementation.
+// CreateSpriteResources - Creates OpenGL resources (shaders, VAO, VBO) for rendering sprites.
 void RenderSystemGL::CreateSpriteResources() {
 	// ---------------------------------
 	// 1. Compile sprite shaders (vertex and fragment) and create shader program
@@ -628,7 +626,7 @@ void RenderSystemGL::CreateSpriteResources() {
 
 
 /////////////////////////////////
-// CreateCircleResources - Creates OpenGL resources (shaders, VAO, VBO) for rendering circles. This method is a placeholder and does not perform any actions in this implementation.
+// CreateCircleResources - Creates OpenGL resources (shaders, VAO, VBO) for rendering circles.
 void RenderSystemGL::CreateCircleResources() {
 	// ---------------------------------
 	// 1. Compile circle shaders
@@ -656,7 +654,17 @@ void RenderSystemGL::CreateCircleResources() {
 	// ---------------------------------
 	// 3. Create VAO for circle rendering
 	// ---------------------------------
-	glBindVertexArray(m_quadVAO); // Use the shared quad VAO
+	glGenVertexArrays(1, &m_circleVAO);
+	glBindVertexArray(m_circleVAO); // Use the circle VAO
+
+	// ---------------------------------
+	// Bind the shared quad VBO for circle rendering
+	// ---------------------------------
+	glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, (void*)0); // 2 floats per vertex (x, y)
+
+
 	glBindBuffer(GL_ARRAY_BUFFER, m_circleInstanceVBO);
 
 	std::size_t stride = sizeof(GPUCircleInstance);
@@ -698,10 +706,9 @@ void RenderSystemGL::CreateTextResources() {
 		return;
 	}
 
+	// Use the text shader program to get the uniform location for viewport size
 	glUseProgram(m_textShaderProgram);
-
 	m_textViewportUniformLocation = glGetUniformLocation(m_textShaderProgram, "uViewportSize");
-
 	glUseProgram(0); // Unbind shader program after setup
 
 	// ---------------------------------
@@ -713,32 +720,36 @@ void RenderSystemGL::CreateTextResources() {
 	// ---------------------------------
 	// 3. Create VAO for text rendering
 	// ---------------------------------
-	glBindVertexArray(m_quadVAO); // Use the shared quad VAO
+	glGenVertexArrays(1, &m_textVAO);
+	glBindVertexArray(m_textVAO);
+
+    // Bind shared quad geometry VBO (attribute 0)
+	glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, (void*)0);
+
+	// Bind text instance VBO (attributes 9, 10, 11)
 	glBindBuffer(GL_ARRAY_BUFFER, m_textInstanceVBO);
 
 	std::size_t stride = sizeof(GPUTextInstance);
 
-	// Position
+	// Position (location = 9)
 	glEnableVertexAttribArray(9);
 	glVertexAttribPointer(9, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
-	glVertexAttribDivisor(9, 1); // Advance per instance
+	glVertexAttribDivisor(9, 1);
 
-
-	// Scale
+	// Scale (location = 10)
 	glEnableVertexAttribArray(10);
 	glVertexAttribPointer(10, 1, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 2));
-	glVertexAttribDivisor(10, 1); // Advance per instance
+	glVertexAttribDivisor(10, 1);
 
-
-	// Color
+	// Color (location = 11)
 	glEnableVertexAttribArray(11);
 	glVertexAttribPointer(11, 4, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 3));
-	glVertexAttribDivisor(11, 1); // Advance per instance
+	glVertexAttribDivisor(11, 1);
 
-
-	// Unbind the VBO and VAO to avoid accidental modification
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 /////////////////////////////////
 
@@ -749,9 +760,12 @@ void RenderSystemGL::CreateTextResources() {
 void RenderSystemGL::EnsureSpriteBufferCapacity(std::size_t requiredInstances) {
 	printf("[EnsureSpriteBufferCapacity] Required: %zu, Current capacity: %zu\n", requiredInstances, m_spriteBufferCapacity);
 
-	// If we already have enough capacity, do nothing
+	// If we already have enough capacity, return early
 	if (requiredInstances <= m_spriteBufferCapacity) {
-		printf("[EnsureSpriteBufferCapacity] Capacity sufficient, returning\n");
+		
+		// DEBUG: Print a message indicating that the current capacity is sufficient
+		// printf("[EnsureSpriteBufferCapacity] Capacity sufficient, returning\n");
+		
 		return;
 	}
 
@@ -765,7 +779,9 @@ void RenderSystemGL::EnsureSpriteBufferCapacity(std::size_t requiredInstances) {
 
 	// Create a new buffer with the new capacity
 	m_spriteBufferCapacity = newCapacity;
-	printf("[EnsureSpriteBufferCapacity] Allocating new buffer with capacity: %zu\n", m_spriteBufferCapacity);
+
+	// DEBUG: Print a message indicating that a new buffer is being allocated
+	// printf("[EnsureSpriteBufferCapacity] Allocating new buffer with capacity: %zu\n", m_spriteBufferCapacity);
 
 	// Bind the VAO first to establish the buffer binding
 	glBindVertexArray(m_quadVAO);
@@ -863,55 +879,52 @@ void RenderSystemGL::EnsureCircleBufferCapacity(std::size_t requiredInstances) {
 /////////////////////////////////
 // EnsureTextBufferCapacity - Ensures that the text instance buffer has enough capacity to hold the required number of instances. If not, it reallocates the buffer with increased capacity.
 void RenderSystemGL::EnsureTextBufferCapacity(std::size_t requiredInstances) {
-	if (requiredInstances <= m_textBufferCapacity)
-		return;
+	// If we already have enough capacity, get out early
+	if (requiredInstances <= m_textBufferCapacity)	return;
 
 	// Calculate new capacity (double the current capacity or set to requiredInstances if current is 0)
 	std::size_t newCapacity = m_textBufferCapacity > 0 ? m_textBufferCapacity * 2 : requiredInstances;
 
 	// Keep doubling until we have enough capacity
-	while (newCapacity < requiredInstances) {
-		newCapacity *= 2; // Keep doubling until we have enough capacity
-	}
+	while (newCapacity < requiredInstances)	newCapacity *= 2;
 
 	// Create a new buffer with the new capacity
 	m_textBufferCapacity = newCapacity;
 
 	// Bind the VAO first to establish the buffer binding
-	glBindVertexArray(m_quadVAO);
+	glBindVertexArray(m_textVAO);
 
-	// Allocate new buffer on GPU
+	// Reallocate instance buffer
 	glBindBuffer(GL_ARRAY_BUFFER, m_textInstanceVBO);
 	glBufferData(GL_ARRAY_BUFFER, m_textBufferCapacity * sizeof(GPUTextInstance), nullptr, GL_DYNAMIC_DRAW);
 
 	// Re-setup vertex attribute pointers after buffer reallocation
 	std::size_t stride = sizeof(GPUTextInstance);
 
-	// Position
+	// Rebind attributes
 	glEnableVertexAttribArray(9);
 	glVertexAttribPointer(9, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
 	glVertexAttribDivisor(9, 1);
 
-	// Scale
 	glEnableVertexAttribArray(10);
 	glVertexAttribPointer(10, 1, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 2));
 	glVertexAttribDivisor(10, 1);
 
-	// Color
 	glEnableVertexAttribArray(11);
 	glVertexAttribPointer(11, 4, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 3));
 	glVertexAttribDivisor(11, 1);
 
-	// Unbind the buffer and VAO
-	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	// Unbind the buffer and VAO to avoid accidental modification
 	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
-/////////////////////////////////
-
-
 
 /////////////////////////////////
-// RenderSprites - Renders a batch of sprite instances using instanced rendering. This method is a placeholder and does not perform any actions in this implementation.
+
+
+
+/////////////////////////////////
+// RenderSprites - Renders a batch of sprite instances using instanced rendering.
 void RenderSystemGL::RenderSprites(const std::vector<GPUSpriteInstance>& instances) {
 	// Ensure we have enough buffer capacity for the instances to be rendered
 	if (instances.empty() || !m_spriteShaderProgram || !m_quadVAO) {
@@ -964,10 +977,10 @@ void RenderSystemGL::RenderSprites(const std::vector<GPUSpriteInstance>& instanc
 
 
 /////////////////////////////////
-// RenderCircles - Renders a batch of circle instances using instanced rendering. This method is a placeholder and does not perform any actions in this implementation.
+// RenderCircles - Renders a batch of circle instances using instanced rendering.
 void RenderSystemGL::RenderCircles(const std::vector<GPUCircleInstance>& instances) {
 	// Ensure we have enough buffer capacity for the instances to be rendered
-	if (instances.empty() || !m_circleShaderProgram || !m_quadVAO) return;
+	if (instances.empty() || !m_circleShaderProgram || !m_circleVAO) return;
 
 	// Ensure the instance buffer has enough capacity for the number of instances to be rendered
 	EnsureCircleBufferCapacity(instances.size());
@@ -979,11 +992,8 @@ void RenderSystemGL::RenderCircles(const std::vector<GPUCircleInstance>& instanc
 	// Bind the shader program and set the viewport uniform
 	glUseProgram(m_circleShaderProgram);
 
-	// Bind the quad VAO for rendering
-	glBindVertexArray(m_quadVAO);
-
-	// Make sure the instance VBO is bound to the VAO
-	glBindBuffer(GL_ARRAY_BUFFER, m_circleInstanceVBO);
+	// Bind the circle VAO for rendering
+	glBindVertexArray(m_circleVAO);
 
 	// Draw the instances using instanced rendering
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, instances.size());
@@ -1003,35 +1013,22 @@ void RenderSystemGL::RenderCircles(const std::vector<GPUCircleInstance>& instanc
 /////////////////////////////////
 // RenderText - Renders a batch of text instances using instanced rendering. This method is a placeholder and does not perform any actions in this implementation.
 void RenderSystemGL::RenderText(const std::vector<GPUTextInstance>& instances) {
-	// Ensure we have enough buffer capacity for the instances to be rendered
-	if (instances.empty() || !m_textShaderProgram || !m_quadVAO) return;
+	if (instances.empty() || !m_textShaderProgram || !m_textVAO)
+		return;
 
-	// Ensure the instance buffer has enough capacity for the number of instances to be rendered
 	EnsureTextBufferCapacity(instances.size());
 
-	// Upload instance data to the GPU
 	glBindBuffer(GL_ARRAY_BUFFER, m_textInstanceVBO);
 	glBufferSubData(GL_ARRAY_BUFFER, 0, instances.size() * sizeof(GPUTextInstance), instances.data());
 
-	// Bind the shader program and set the viewport uniform
 	glUseProgram(m_textShaderProgram);
 
-	// Bind the quad VAO for rendering
-	glBindVertexArray(m_quadVAO);
-
-	// Make sure the instance VBO is bound to the VAO
-	glBindBuffer(GL_ARRAY_BUFFER, m_textInstanceVBO);
-
-	// Draw the instances using instanced rendering
+	glBindVertexArray(m_textVAO);
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, instances.size());
-
-	// Unbind the VAO to avoid accidental modification
 	glBindVertexArray(0);
 
-	// Unbind the shader program
 	glUseProgram(0);
-
-	glBindBuffer(GL_ARRAY_BUFFER, 0); // Unbind the buffer to avoid accidental modification
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
 /////////////////////////////////
 

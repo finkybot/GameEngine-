@@ -62,6 +62,23 @@ struct GPUTextInstance {
 
 
 /////////////////////////////////
+// GPUTextGlyphInstance - Represents a single glyph instance for GPU text rendering, including position, size, UV coordinates, and color. This struct is used for instanced rendering of individual glyphs in OpenGL, allowing for efficient rendering of text with varying properties.
+//								|
+//								|_______________________________________________________________________
+struct GPUTextGlyphInstance {
+	float x, y;			// glyph position in pixels
+	float w, h;			// glyph size in pixels
+
+	float u0, v0;		// UV top-left
+	float u1, v1;		// UV bottom-right
+
+	float r, g, b, a;	// color
+};
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // RenderSystemGL - Dedicated OpenGL rendering subsystem for the game engine. This class manages the rendering of various graphical elements, including sprites, circles, and text, using GPU instancing for efficient rendering. It provides methods for 
 // initializing OpenGL resources, rendering instances, and handling viewport resizing.
 //								|
@@ -88,6 +105,10 @@ private:
 	/////////////////////////////////
 	// OpenGL resource handles
 	GLuint m_quadVAO = 0;
+	GLuint m_circleVAO = 0;
+	GLuint m_textVAO = 0;
+
+	// Shared quad vertex buffer object (VBO) for instanced rendering
 	GLuint m_quadVBO = 0;
 	/////////////////////////////////
 

@@ -144,6 +144,7 @@ public:
 	// Member variables
 	float radius = 10.0f;
 	sf::Color color = sf::Color::White;
+	bool visible = true;
 	float zOrder = 0.0f;
 
 	CCircleGPU() = default;

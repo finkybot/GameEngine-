@@ -53,231 +53,85 @@ class Scene; // Forward declaration of Scene class to avoid circular dependency 
 //								|
 //								|_______________________________________________________________________
 class GameEngine {
-	/////////////////////////////////
-	// Private constructor and destructor to enforce singleton pattern. The constructor initializes the game engine, sets up the window, and 
-	// prepares for the game loop, while the destructor cleans up resources and shuts down the game engine.
+
 private:
 	GameEngine();  // Constructor - initializes the game engine, sets up the window, and prepares for the game loop
 	~GameEngine(); // Destructor - cleans up resources and shuts down the game engine
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// Private member variable/s
 	InputController m_InputController; // Input controller
-	/////////////////////////////////
 
 
+public:	
+	InputController& GetInputController() { return m_InputController; }	// Access to the engine-wide InputController
 
-	/////////////////////////////////
-	// Public interface for accessing the singleton instance of the GameEngine and managing scenes. The copy constructor and copy assignment 
-	// operator are deleted to prevent copying of the game engine instance, ensuring that only one instance exists throughout the application. 
-	// The GetInstance method provides access to the singleton instance, while AddScene, ChangeScene, RemoveScene, Run, and Update methods provide 
-	// functionality for scene management and the main game loop.
-public:
-	// Access to the engine-wide InputController
-	InputController& GetInputController() { return m_InputController; }
-	/////////////////////////////////
+	GameEngine(const GameEngine&) = delete;				// Deleted copy constructor and copy assignment operator to prevent copying of the game engine instance, ensuring that only one instance exists throughout the application.
+	GameEngine& operator=(const GameEngine&) =	delete; // Operator= is deleted to prevent copying of the game engine instance, ensuring that only one instance exists throughout the application.
 
 
-
-	/////////////////////////////////
-	// Deleted copy constructor and copy assignment operator to prevent copying of the game engine instance, ensuring that only one instance 
-	// exists throughout the application.
-	GameEngine(const GameEngine&) = delete;
-	/////////////////////////////////
-
-
-
-	//////////////////////////////////
-	// Operator= is deleted to prevent copying of the game engine instance, ensuring that only one instance exists throughout the application.
-	GameEngine& operator=(const GameEngine&) =	delete; 
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// GetInstance - Static method to access the singleton instance of the GameEngine, ensuring only one instance exists throughout the application. 
-	// The static local variable inside this method is initialized on the first call and destroyed when the program ends, providing a thread-safe and 
-	// lazy-initialized singleton implementation.
+	// GetInstance - Singleton pattern implementation to provide a single instance of the GameEngine class. This method returns a reference to the static instance of the GameEngine, ensuring that only one instance exists throughout the application and providing global access to it.
 	static GameEngine&	GetInstance() { 
 		static GameEngine instance;
 		return instance;
 	}
-	/////////////////////////////////
 
- 
-
-	/////////////////////////////////
-	// AddScene - Adds a new scene to the game engine with the given name and scene instance, allowing for dynamic scene management. 
-	// The scene is stored in a map of scene names to scene instances, enabling easy retrieval and switching between scenes during the game loop.
-	void AddScene(const std::string& sceneName, std::shared_ptr<Scene>	scene);
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions. The method checks 
-	// if the specified scene exists in the scenes map and sets it as the current active scene, enabling the game loop to update and render the new scene.
-	void ChangeScene(const std::string& sceneName);
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// RemoveScene - Removes a scene from the game engine by its name, allowing for cleanup and resource management of scenes that are no longer needed. 
-	// The method checks if the specified scene exists in the scenes map and removes it, freeing up resources associated with that scene and ensuring 
-	// it is no longer updated or rendered in the game loop.
-	void RemoveScene(const std::string& sceneName);
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// Run - Main game loop that handles events, updates the game state, and renders frames until the window is closed. The loop continuously processes 
-	// input events, updates the current scene based on the elapsed time since the last frame, and renders the current scene to the window, providing a 
-	// real-time interactive experience for the player.
-	void Run();
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// GetSceneNames - Return a list of registered scene names (useful for UI like a main menu)
-	std::vector<std::string> GetSceneNames() const;
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// GetCursorSystem - Accessor for the cursor system, allowing scenes and other game components to interact with the cursor system through the game 
-	// engine's centralized management. This method returns a reference to the CursorSystem instance owned by the engine, enabling scenes to change the 
-	// cursor mode and update/render the cursor as needed.
-	CursorSystem& GetCursorSystem() { return *m_cursorSystem; }
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// Update - Updates the current scene and game state based on the elapsed time since the last frame, allowing for time-based updates and game logic 
-	// processing. The method calculates the delta time using the SFML clock and calls the update method of the current active scene, enabling smooth 
-	// and consistent updates regardless of frame rate variations.
-	void Update(float deltaTime);
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// Public variables for managing scenes, the game window, the current active scene, the game loop state, and various managers for fonts, textures, 
-	// entities, and input. These variables are used throughout the game engine to manage the game state, handle rendering, and provide access to resources 
-	// and systems needed for game development.
-	std::map<std::string, std::shared_ptr<Scene>> scenes;				// Map of scene names to scene instances, allowing for easy scene management and switching
-	sf::RenderWindow window;											// SFML RenderWindow for rendering the game, handling events, and managing the main game window
-	std::shared_ptr<Scene>	currentScene;								// Pointer to the current active scene, used to determine which scene to update and render during the game loop
-	bool isRunning =	false;											// Flag to indicate whether the game loop is currently running, used to control the main game loop execution
-
-	sf::Clock deltaClock;												// SFML Clock to measure the time elapsed between frames, used for calculating delta time for updates and game logic processing
-	sf::Vector2u windowSize = {0, 0};									// Size of the game window, initialized to zero and set in the constructor based on the desktop mode
-
-	FontManager	fontManager;											// Font manager instance for managing fonts across the game, allowing for loading, retrieving, and unloading fonts in a centralized manner
-	Fontsystem	fontsystem;												// Fontsystem instance for managing font rendering and text display in the game, providing functionality for rendering text with various fonts and styles
-	std::unique_ptr<EntityManager> entityManager;						// Unique pointer to the central EntityManager owned by the engine, responsible for managing game entities and providing access to the entity system throughout the game
-	std::unique_ptr<SoundSystem> soundSystem;							// Unique pointer to the SoundSystem owned by the engine, responsible for managing sound effects and audio playback
-	std::unique_ptr<MovementSystem> movementSystem;						// Unique pointer to the MovementSystem owned by the engine, responsible for moving entities along computed paths
-
-	TechRegistry techRegistry;											// TechRegistry instance for managing technology-related entities and interactions in the game, allowing for simulation of technology diffusion, evolution, and unlocking
-	WorldDiffusionConfig worldDiffusionConfig;							// WorldDiffusionConfig instance for managing configuration related to technology diffusion in the game, allowing for customization of diffusion parameters and behavior
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// Accessor methods for the various managers and systems. These methods provide access to the font manager, texture manager, entity manager, and FPS counter, 
-	// allowing scenes and other game components to interact with these systems through the game engine's centralized management.
-	FontManager& GetFontManager() { return fontManager; } // Accessor for shared font manager
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// Texture manager for atlases/tilesets
-	FPSCounter m_fpsCounter; // Shared FPS counter that scenes and UI can query
-	FPSCounter& GetFPSCounter() { return m_fpsCounter; }
-	TextureManager m_textureManager;
-	TextureManager& GetTextureManager() { return m_textureManager; }
-	/////////////////////////////////
-
-
+	// AddScene - Adds a new scene to the game engine by its name, allowing for scene management and transitions. The method takes a scene name and a shared pointer to the scene instance, storing it in the scenes map for later retrieval and activation.
+	void AddScene(const std::string& sceneName,	std::shared_ptr<Scene> scene); 
 	
-	/////////////////////////////////
-	// Accessor for central entity manager, returns a reference to the EntityManager instance owned by the engine, allowing scenes and 
-	// other game components to access and manage entities through the engine's central entity management system
-	EntityManager& GetEntityManager() const { return *entityManager; } 
-	/////////////////////////////////
+	// ChangeScene - Changes the current active scene to the specified scene by its name, allowing for scene transitions and updates. The method checks if the specified scene exists in the scenes map and sets it as the current active scene, calling the OnExit 
+	// method of the previous scene and the OnEnter method of the new scene to handle any necessary cleanup and initialization.
+	void ChangeScene(const std::string& sceneName);
+
+	// RemoveScene - Removes a scene from the game engine by its name, allowing for scene management and cleanup. The method checks if the specified scene exists in the scenes map and removes it, freeing any associated resources and ensuring that the scene is no longer accessible or active within the game engine.
+	void RemoveScene(const std::string& sceneName);
+
+	// Run - Starts the main game loop, handling events, updating the current scene, and rendering the game. The method continuously processes input events, updates the game state based on the elapsed time since the last frame, and renders the current scene to the window until the game is exited or closed.
+	void Run();
+
+	// GetSceneNames - Returns a vector of scene names currently managed by the game engine, allowing for easy retrieval and display of available scenes. The method iterates through the scenes map and collects the names of all registered scenes, returning them as a vector of strings for use in menus, debugging, or other purposes.
+	std::vector<std::string> GetSceneNames() const;
+
+	// GetCursorSystem - Returns a reference to the engine-owned CursorSystem, allowing scenes and systems to access and manage the cursor's appearance and behavior. The method provides centralized control over the cursor, enabling consistent handling of cursor states and interactions across different scenes and game components.
+	CursorSystem& GetCursorSystem() { return *m_cursorSystem; }
+
+	// Update - Updates the game engine state based on the elapsed time since the last frame, allowing for time-based updates and game logic processing. The method calculates the delta time, updates the current scene, and handles any necessary state changes or interactions within the game engine.
+	void Update(float deltaTime);
 
 
+	std::map<std::string, std::shared_ptr<Scene>> scenes;	// Map of scene names to scene instances, allowing for easy scene management and switching
+	sf::RenderWindow window;								// SFML RenderWindow for rendering the game, handling events, and managing the main game window
+	std::shared_ptr<Scene>	currentScene;					// Pointer to the current active scene, used to determine which scene to update and render during the game loop
+	bool isRunning =	false;								// Flag to indicate whether the game loop is currently running, used to control the main game loop execution
 
-	/////////////////////////////////
-	// Accessor for the SoundSystem, allowing scenes to control audio playback
-	SoundSystem& GetSoundSystem() const { return *soundSystem; }
-	/////////////////////////////////
+	sf::Clock deltaClock;									// SFML Clock to measure the time elapsed between frames, used for calculating delta time for updates and game logic processing
+	sf::Vector2u windowSize = {0, 0};						// Size of the game window, initialized to zero and set in the constructor based on the desktop mode
 
+	FontManager	fontManager;								// Font manager instance for managing fonts across the game, allowing for loading, retrieving, and unloading fonts in a centralized manner
+	Fontsystem	fontsystem;									// Fontsystem instance for managing font rendering and text display in the game, providing functionality for rendering text with various fonts and styles
+	std::unique_ptr<EntityManager> entityManager;			// Unique pointer to the central EntityManager owned by the engine, responsible for managing game entities and providing access to the entity system throughout the game
+	std::unique_ptr<SoundSystem> soundSystem;				// Unique pointer to the SoundSystem owned by the engine, responsible for managing sound effects and audio playback
+	std::unique_ptr<MovementSystem> movementSystem;			// Unique pointer to the MovementSystem owned by the engine, responsible for moving entities along computed paths
 
-
-	/////////////////////////////////
-	// Accessor for the MovementSystem, allowing scenes and systems to move entities along paths
-	MovementSystem& GetMovementSystem() { return *movementSystem; }
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// Cursor system for global cursor handling
-	std::unique_ptr<CursorSystem> m_cursorSystem;
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// Engine-wide render queue for depth-sorted rendering across all scenes
-	RenderQueue m_renderQueue;
-	/////////////////////////////////
+	TechRegistry techRegistry;								// TechRegistry instance for managing technology-related entities and interactions in the game, allowing for simulation of technology diffusion, evolution, and unlocking
+	WorldDiffusionConfig worldDiffusionConfig;				// WorldDiffusionConfig instance for managing configuration related to technology diffusion in the game, allowing for customization of diffusion parameters and behavior
+	FPSCounter m_fpsCounter;								// FPSCounter instance for tracking and calculating the frames per second (FPS) of the game, providing performance metrics and allowing for optimization and debugging of the game loop		
+	TextureManager m_textureManager;						// Texture manager instance for managing textures across the game, allowing for loading, retrieving, and unloading textures in a centralized manner	
+	std::unique_ptr<CursorSystem> m_cursorSystem;			// Unique pointer to the CursorSystem owned by the engine, responsible for managing the cursor's appearance and behavior across different scenes and game components
+	RenderQueue	m_renderQueue;								// RenderQueue instance for managing the rendering order of drawables in the game, allowing for efficient rendering of entities and other visual elements based on depth and priority
+	FileManager m_fileManager;								// FileManager instance for managing file operations, allowing for loading, saving, and organizing game assets and data
+	ChunkManager m_chunkManager;							// ChunkManager instance for managing chunks in the game world, responsible for loading, unloading, and updating chunks as needed
 
 
-
-	/////////////////////////////////
-	// Centralized file manager for loading all types of engine assets (tilemaps, configs, etc.)
-	FileManager m_fileManager;
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// Accessor for engine-wide render queue
-	RenderQueue& GetRenderQueue() { return m_renderQueue; }
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// Accessor for centralized file manager, allowing scenes and systems to load assets
+	FontManager& GetFontManager() { return fontManager; }				// Accessor for shared font manager
+	FPSCounter& GetFPSCounter() { return m_fpsCounter; }				// Accessor for shared FPS counter
+	
+	TextureManager& GetTextureManager() { return m_textureManager; }	// Accessor for shared texture manager
+	EntityManager& GetEntityManager() const { return *entityManager; }	// Accessor for engine-owned shared EntityManager
+	SoundSystem& GetSoundSystem() const { return *soundSystem; }		// Accessor for engine-owned shared SoundSystem
+	MovementSystem& GetMovementSystem() { return *movementSystem; }		// Accessor for engine-owned shared MovementSystem
+	RenderQueue& GetRenderQueue() { return m_renderQueue; }				// Accessor for engine-owned shared RenderQueue
 	FileManager& GetFileManager() { return m_fileManager; }
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// Accessor for engine-owned shared ChunkManager
-	ChunkManager& GetChunkManager() { return m_chunkManager; }
-	/////////////////////////////////
-
-
-
-	/////////////////////////////////
-	// Engine-owned shared chunk manager for chunk streaming/path/raycast scenes
-	ChunkManager m_chunkManager;
-	/////////////////////////////////
-
+	ChunkManager& GetChunkManager() { return m_chunkManager; }	
 };
 /////////////////////////////////

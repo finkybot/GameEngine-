@@ -94,7 +94,7 @@ void TestRenderGLScene::OnEnter() {
 	// ---------------------------------
 	TextureManager* texManager = nullptr;
 	m_entityManager.GetRenderSystemGL().GetTextureManager(texManager);
-	texManager->LoadAtlas("terrain", "assets/World_tiles.png", 16, 16);
+	texManager->LoadAtlas("terrain", "assets/World_tiles.png", 32, 32);
 	texManager->LoadAtlasGL("terrain");
 
 	// ---------------------------------
@@ -108,8 +108,8 @@ void TestRenderGLScene::OnEnter() {
 	auto* tileSprite = tileEntity->AddComponent<CTileSprite>();
 	tileSprite->atlasKey = "terrain"; // matches LoadAtlas()
 	tileSprite->tileIndex = 0;		  // first tile in atlas
-	tileSprite->w = 16.f;
-	tileSprite->h = 16.f;
+	tileSprite->w = 32.f;
+	tileSprite->h = 32.f;
 	tileSprite->color = sf::Color::White;
 	tileSprite->visible = true;
 

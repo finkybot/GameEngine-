@@ -23,7 +23,6 @@
 //								|_______________________________________________________________________
 class TextureManager {
 public:
-	/////////////////////////////////
 	// Constructor and destructor for the TextureManager class. The default constructor initializes an empty manager, and the destructor cleans up any loaded atlases.
 	TextureManager() = default;
 	~TextureManager() = default;
@@ -46,10 +45,9 @@ public:
 
 	bool LoadAtlasGL(const std::string& key);												// Load GL texture and build GL rects for an already loaded atlas.
 	std::optional<std::shared_ptr<TextureAtlas>> GetAtlasGL(const std::string& key) const;	// Get atlas by key (GL)
-	/////////////////////////////////
+
+
 private:
-	/////////////////////////////////
 	std::unordered_map<std::string, std::shared_ptr<TextureAtlas>> m_atlases;
-	/////////////////////////////////
 };
 /////////////////////////////////

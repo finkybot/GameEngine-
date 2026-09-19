@@ -19,9 +19,7 @@
 // 								|
 //								|_______________________________________________________________________
 struct CKnowledgeParticle : public Component {
-	/////////////////////////////////
 	std::string techId; // The tech this particle represents
 	float value = 1.0f; // Amount of knowledge carried
-	/////////////////////////////////
 };
 /////////////////////////////////

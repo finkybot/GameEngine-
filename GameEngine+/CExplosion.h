@@ -22,39 +22,31 @@
 /////////////////////////////////
 // CExplosion component - represents an explosion shape with properties and methods for drawing, movement, and collision handling
 class CExplosion : public CShape {
-	/////////////////////////////////
 	// Public data members for CExplosion
 public:
 	sf::CircleShape m_circle; // SFML CircleShape object representing the visual circle shape
 	uint64_t age = 0; // Age of the explosion in frames or time units, used for managing the lifecycle of the explosion
-	/////////////////////////////////
 
 
 
-	/////////////////////////////////
-	// Protected member variables for shape-specific properties
+
 protected:
-	void ApplyPosition(float x, float y) override { m_circle.setPosition(sf::Vector2f(x, y)); }
-	/////////////////////////////////
+	// ApplyPosition - applies the position to the underlying SFML shape. This method updates the position of the explosion shape based on the provided x and y coordinates.
+	void ApplyPosition(float x, float y) override { m_circle.setPosition(sf::Vector2f(x, y)); } 
 
 
 
-	/////////////////////////////////
-	// Public methods for shape manipulation and rendering
+
 public:
-	/////////////////////////////////
-	// Constructors for the CExplosion component. The default constructor initializes the circle with default properties
+
+	// Constructorr for the CExplosion component. The default constructor initializes the circle with default properties
 	CExplosion() {
 		m_circle = sf::CircleShape(3.f);
 		m_midLength = 4.f;
 		m_circle.setFillColor(sf::Color(220, 80, 40, 220));
 		m_circle.setOrigin(sf::Vector2f(3.f, 3.f));
 	}		
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Constructor with size parameter - initializes the circle with a specified radius
 	CExplosion(float size) {
 		m_circle = sf::CircleShape(size);
@@ -62,71 +54,35 @@ public:
 		m_circle.setFillColor(sf::Color(220, 120, 40, 220));
 		m_circle.setOrigin(sf::Vector2f(size, size));
 	}
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// GetHeight - returns the height of the circle shape, which is equivalent to the diameter (twice the radius).
 	float GetHeight() const override { return m_circle.getRadius() * 2.f; }
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// GetMidLength - returns the mid-length property of the circle shape, which is equivalent to the radius.
 	float GetMidLength() const override { return m_midLength; }
 
-
-
-	/////////////////////////////////
 	// GetRadius - returns the radius of the circle shape, which is used for circular collision detection and quadtree inclusion.
 	float GetRadius() const override { return m_circle.getRadius(); }
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// GetWidth - returns the width of the circle shape, which is equivalent to the diameter (twice the radius).
 	float GetWidth() const override { return m_circle.getRadius() * 2.f; }
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// GetColor - returns the current fill color of the circle shape as an SFML Color object.
 	sf::Color GetColor() const { return m_circle.getFillColor(); }
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// GetShape - returns a reference to the underlying SFML shape object, which is used for drawing and collision detection.
 	sf::Shape& GetShape() override { return m_circle; } 	
-	/////////////////////////////////
-	
-	
-	
-	/////////////////////////////////
+
 	// GetCentrePoint - returns the center point of the circle shape, which is the position plus the radius in both x and y directions. This is used for collision detection and spatial hashing.
 	Vec2 GetCentrePoint() const	override { return Vec2(m_circle.getPosition().x + m_circle.getRadius(), m_circle.getPosition().y + m_circle.getRadius()); }
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// SetColor - sets the fill color of the explosion shape using RGBA values, where alpha is an integer in the range [0, 255]. This method updates the fill color of the underlying SFML CircleShape object.
 	void SetColor(float r, float g, float b, int alpha) { m_circle.setFillColor(sf::Color(static_cast<int>(r), static_cast<int>(g), static_cast<int>(b), alpha)); }
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	//	SetRadius - sets the radius of the explosion shape. This method updates the radius of the underlying SFML CircleShape object and also updates the origin to keep the shape centered as it expands.
 	void SetRadius(float radius) override {
 		m_circle.setRadius(radius);
 		m_circle.setOrigin(sf::Vector2f(radius, radius));
 	}
-	/////////////////////////////////
 };
 /////////////////////////////////

@@ -20,10 +20,7 @@
 //								|
 //								|_______________________________________________________________________
 class CTechNode : public Component {
-	/////////////////////////////////
-	// Public member variables for the TechNode component
 public:
-	/////////////////////////////////
 	std::string id;									// Unique identifier for the tech node
 	std::string name;								// Display name of the tech node
 	std::string category;							// Category of the tech node (e.g., "military", "agriculture", "science", "cultural")
@@ -33,19 +30,12 @@ public:
 	float requiredKnowledge = 1.0f;					// Total knowledge required to unlock this tech node (e.g., 100.0 = fully unlocked)
 	float mutationPotential = 0.0f;					// Chance for this tech node to mutate into a different tech node (0.0 = no mutation, 1.0 = guaranteed mutation)
 	std::vector<std::string> compatibilityTags;		// List of tags indicating compatibility with other tech nodes or game mechanics (e.g., "compatible_with_advanced_military")
-	/////////////////////////////////
 
 
 
-	/////////////////////////////////
-	// Public methods for the TechNode component
 public:	
-		CTechNode() = default;
-	/////////////////////////////////
+	CTechNode() = default;
 
-
-	/////////////////////////////////
 	explicit CTechNode(const std::string& techId) :id(techId) {}
-	/////////////////////////////////
 };
 /////////////////////////////////

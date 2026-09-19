@@ -90,7 +90,6 @@ struct GPUTextGlyphInstance {
 //								|_______________________________________________________________________
 class RenderSystemGL {
 public:
-	/////////////////////////////////
 	RenderSystemGL();
 	~RenderSystemGL();
 
@@ -105,9 +104,10 @@ public:
 	void SetTextureManager(TextureManager* texManager) { m_textureManager = texManager; }
 	void GetTextureManager(TextureManager*& texManager) { texManager = m_textureManager; }
 
-	////////////////////////////////
+
+
+
 private:	
-	/////////////////////////////////
 	// OpenGL resource handles
 	GLuint m_quadVAO = 0;
 	GLuint m_circleVAO = 0;
@@ -118,9 +118,9 @@ private:
 
 
 	// Instance buffers for different types of renderable objects
-	GLuint m_spriteInstanceVBO = 0;
-	GLuint m_circleInstanceVBO = 0;
-	GLuint m_textInstanceVBO = 0;
+	GLuint m_spriteInstanceVBO	=	0;
+	GLuint m_circleInstanceVBO	=	0;
+	GLuint m_textInstanceVBO	=	0;
 
 
 	// Shader program handles for different types of renderable objects
@@ -168,9 +168,9 @@ private:
 	std::size_t m_tileBufferCapacity = 0;
 	TextureManager* m_textureManager = nullptr; // Pointer to the TextureManager for accessing texture atlases
 
-	/////////////////////////////////
+
+
 private:
-	/////////////////////////////////
 	// Internal helper methods for shader compilation, buffer creation, and viewport preparation
 	void CreateQuadGeometry();
 
@@ -203,6 +203,5 @@ private:
 	GLuint CreateShaderProgramFromFiles(const std::string& vertexPath, const std::string& fragmentPath);
 
 	Fontsystem* m_fontSystem = nullptr; // Pointer to the FontSystem for accessing font assets
-	/////////////////////////////////
 };
 /////////////////////////////////

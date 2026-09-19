@@ -16,16 +16,11 @@
 //								|
 //								|_______________________________________________________________________
 struct CColliderRect: public Component {
-	/////////////////////////////////
 	float w;
 	float h;
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// Constructor for CColliderRect, allowing optional width and height parameters. Defaults to 0.0f for both dimensions.
 	CColliderRect(float width = 0.0f, float height = 0.0f) : w(width), h(height) {}
-	/////////////////////////////////
 };
 /////////////////////////////////

@@ -14,9 +14,7 @@
 // 								|
 //								|_______________________________________________________________________
 struct CParticleInfluence : public Component {
-	/////////////////////////////////
 	float influenceRadius = 100.0f; // The radius within which this particle can influence civilizations
 	float influenceFalloff = 1.0f; // The strength of the influence this particle has on civilizations within its radius
-	/////////////////////////////////
 };
 /////////////////////////////////

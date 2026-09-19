@@ -14,6 +14,7 @@
 #include <SFML/System/Vector2.hpp>
 
 #include "glad/glad.h"
+#include "BindlessGL.h"
 #include <iostream>
 /////////////////////////////////
 
@@ -290,6 +291,22 @@ bool TextureAtlas::LoadGLTexture() {
 
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	
+	// --- Bindless texture setup ---
+	if (glGetTextureHandleARB_impl && glMakeTextureHandleResidentARB_impl) {
+		uint64_t handle = glGetTextureHandleARB_impl(m_glHandle);
+		if (handle != 0) {
+			glMakeTextureHandleResidentARB_impl(handle);
+			m_bindlessHandle = handle;
+			std::cout << "[TextureAtlas] Bindless handle created: " << handle << std::endl;
+		} else {
+			std::cerr << "[TextureAtlas] Failed to get bindless handle\n";
+		}
+	} else {
+		std::cerr << "[TextureAtlas] Bindless textures not available\n";
+	}
+
+
 
 	return true;
 }

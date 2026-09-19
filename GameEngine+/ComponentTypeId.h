@@ -36,13 +36,14 @@ enum class ComponentTypeId {
 	//Sound,
 	// Add more as needed
 };
+/////////////////////////////////
 
-template <typename T>
-constexpr ComponentTypeId GetComponentTypeId();
+
 
 /////////////////////////////////
 // Template specializations
-/////////////////////////////////
+template <typename T>
+constexpr ComponentTypeId GetComponentTypeId();
 
 template <>
 constexpr ComponentTypeId GetComponentTypeId<CTransform>() {
@@ -93,7 +94,4 @@ constexpr ComponentTypeId GetComponentTypeId<CMusic>() {
 //constexpr ComponentTypeId GetComponentTypeId<CSound>() {
 //	return ComponentTypeId::Sound;
 //}
-
-/////////////////////////////////
-// End of ComponentTypeId.h
 /////////////////////////////////

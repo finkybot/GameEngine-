@@ -42,7 +42,6 @@ struct QuadTemplate {
 //								|_______________________________________________________________________
 class TextureAtlas {
 public:
-	/////////////////////////////////
 	// Constructor and destructor for the TextureAtlas class. The default constructor initializes an empty texture atlas, while the destructor ensures that any loaded texture resources are properly cleaned up when the atlas is destroyed.
 	TextureAtlas() = default;
 	~TextureAtlas() = default;
@@ -56,6 +55,7 @@ public:
 	void BuildQuadTemplates();												// BuildQuadTemplates - Precomputes quad templates for each tile in the atlas, allowing
 	const QuadTemplate& GetQuadTemplate(size_t tileIndex) const;			// GetQuadTemplate - Retrieves the precomputed quad template for the specified tile index.
 
+	uint64_t GetBindlessHandle() const {return m_bindlessHandle;}			// GetBindlessHandle - Returns the OpenGL bindless texture handle for the atlas, allowing for efficient binding of the texture in OpenGL shaders and rendering pipelines.
 
 	// TileRect struct - Simple rect type for tile coordinates
 	struct TileRect {
@@ -101,9 +101,10 @@ public:
 	// Accessors for GL renderer
 	GLuint GetGLHandle() const { return m_glHandle; }
 	const UVRect& GetGLUVRect(size_t tileIndex) const { return m_glUVRects[tileIndex]; }
-	/////////////////////////////////
+
+
+
 private:
-	/////////////////////////////////
 	// ----------------------------------------------
 	// SFML - only data
 	// ----------------------------------------------
@@ -122,8 +123,8 @@ private:
 	// OpenGL - only data
 	// ----------------------------------------------
 
+	uint64_t m_bindlessHandle = 0;
 	GLuint m_glHandle =	0;				// OpenGL texture handle (GLuint) for the loaded texture, used for binding the texture in OpenGL rendering pipelines.
 	std::vector<UVRect>	m_glUVRects;	// Vector of UVRect structs representing the normalized texture coordinates (UVs) for each tile in the atlas. This allows for efficient rendering of tiles in OpenGL by mapping the correct texture coordinates to the corresponding tile regions.
-	/////////////////////////////////
 };
 /////////////////////////////////

@@ -212,6 +212,7 @@
   <ItemGroup>
     <ClInclude Include="AABB.h" />
     <ClInclude Include="AssetManager.h" />
+    <ClInclude Include="BindlessGL.h" />
     <ClInclude Include="BVHSystem.h" />
     <ClInclude Include="CameraSystem.h" />
     <ClInclude Include="CCamera.h" />

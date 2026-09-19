@@ -21,6 +21,7 @@
 #include "CTileSprite.h"
 #include "TextureAtlas.h"
 #include "TextureManager.h"
+#include "BindlessGL.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -39,8 +40,9 @@
 typedef uint64_t(*PFN_GET_TEXTURE_HANDLE)(GLuint texture);
 typedef void(*PFN_MAKE_TEXTURE_HANDLE_RESIDENT)(uint64_t handle);
 
-static PFN_GET_TEXTURE_HANDLE glGetTextureHandleARB_impl = nullptr;
-static PFN_MAKE_TEXTURE_HANDLE_RESIDENT glMakeTextureHandleResidentARB_impl = nullptr;
+PFN_GET_TEXTURE_HANDLE glGetTextureHandleARB_impl = nullptr;
+PFN_MAKE_TEXTURE_HANDLE_RESIDENT glMakeTextureHandleResidentARB_impl = nullptr;
+
 
 // Helper functions
 inline uint64_t GetTextureBindlessHandle(GLuint tex) {
@@ -145,6 +147,7 @@ void main()
     vColor = iColor;
 }
 )";
+/////////////////////////////////
 
 
 
@@ -169,6 +172,7 @@ void main()
    fragColor = texColor * vColor;
 }
 )";
+/////////////////////////////////
 
 
 
@@ -207,8 +211,8 @@ void main()
     vLocalPos = aPos;   // unit circle space
     vColor = iColor;
 }
-
 )";
+/////////////////////////////////
 
 
 
@@ -231,7 +235,7 @@ void main()
     fragColor = vColor;
 }
 )";
-
+/////////////////////////////////
 
 
 // --------------------------------
@@ -277,7 +281,7 @@ void main()
     vColor = iColor;
 }
 )";
-
+/////////////////////////////////
 
 
 
@@ -300,6 +304,8 @@ void main()
     fragColor = vec4(vColor.rgb, vColor.a * alpha);
 }
 )";
+/////////////////////////////////
+
 
 
 /////////////////////////////////
@@ -644,7 +650,7 @@ void RenderSystemGL::CreateSpriteResources() {
 
 	// Check if shader program creation was successful
 	if (!m_spriteShaderProgram) {
-		std::cerr << "[RenderSystemGL] Failed to create sprite shader program" << std::endl;
+		std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mFailed to create sprite shader program\x1b[0m" << std::endl;
 		return;
 	}
 
@@ -655,7 +661,7 @@ void RenderSystemGL::CreateSpriteResources() {
 		std::string uniformName = "uTextures[" + std::to_string(i) + "]";
 		GLint location = glGetUniformLocation(m_spriteShaderProgram, uniformName.c_str());
 		if (location < 0) {
-			std::cerr << "[RenderSystemGL] Failed to locate sprite texture uniform: " << uniformName << std::endl;
+			std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mFailed to locate sprite texture uniform: " << uniformName << "\x1b[0m" << std::endl;
 		}
 	}
 
@@ -691,19 +697,19 @@ void RenderSystemGL::CreateSpriteResources() {
 	glBindBuffer(GL_ARRAY_BUFFER, m_spriteInstanceVBO);
 
 	std::size_t stride = sizeof(GPUSpriteInstance);
-	printf("\x1b[33m[CreateSpriteResources]\x1b[0m Sprite stride: %zu bytes\n", stride);
+	printf("\x1b[93m[CreateSpriteResources]\x1b[0m Sprite stride: %zu bytes\n", stride);
 
 	// Position (location = 1)
 	glEnableVertexAttribArray(1);
 	glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, stride, (void*)0);
 	glVertexAttribDivisor(1, 1); // Advance per instance
-	printf("\x1b[33m[CreateSpriteResources]\x1b[0m Set up location 1 (position)\n");
+	printf("\x1b[93m[CreateSpriteResources]\x1b[0m Set up location 1 (position)\n");
 
 	// Size (location = 2)
 	glEnableVertexAttribArray(2);
 	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void*)(sizeof(float) * 2));
 	glVertexAttribDivisor(2, 1); // Advance per instance
-	printf("\x1b[33m[CreateSpriteResources]\x1b[0m Set up location 2 (size)\n");
+	printf("\x1b[93m[CreateSpriteResources]\x1b[0m Set up location 2 (size)\n");
 
 	// Rotation (location = 3)
 	glEnableVertexAttribArray(3);
@@ -723,7 +729,7 @@ void RenderSystemGL::CreateSpriteResources() {
 	// Unbind the VBO and VAO to avoid accidental modification
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
-	printf("\x1b[33m[CreateSpriteResources]\x1b[0m Sprite VAO setup complete\n");
+	printf("\x1b[93m[CreateSpriteResources]\x1b[0m Sprite VAO setup complete\n");
 }
 /////////////////////////////////
 
@@ -739,7 +745,7 @@ void RenderSystemGL::CreateCircleResources() {
 
 	// Check if shader program creation was successful
 	if (!m_circleShaderProgram) {
-		std::cerr << "\x1b[39m[RenderSystemGL]\x1b[0m Failed to create circle shader program" << std::endl;
+		std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mFailed to create circle shader program\x1b[0m" << std::endl;
 		return;
 	}
 
@@ -806,7 +812,7 @@ void RenderSystemGL::CreateTextResources() {
 
 	// Check if shader program creation was successful
 	if (!m_textShaderProgram) {
-		std::cerr << "\x1b[39m[RenderSystemGL]\x1b[0m Failed to create text shader program" << std::endl;
+		std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mFailed to create text shader program\x1b[0m" << std::endl;
 		return;
 	}
 
@@ -882,13 +888,13 @@ void RenderSystemGL::CreateTileResources() {
 	// --- Create shader ---
 	m_tileShaderProgram = CreateShaderProgramFromFiles("assets/tile.vert", "assets/tile.frag");
 	if (!m_tileShaderProgram) {
-		std::cerr << "[RenderSystemGL] Failed to create tile shader\n";
+		std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mFailed to create tile shader\x1b[0m\n";
 		return;
 	}
 
 	m_tileViewportUniformLocation = glGetUniformLocation(m_tileShaderProgram, "uViewportSize");
 	if (m_tileViewportUniformLocation < 0) {
-		std::cerr << "[RenderSystemGL] WARNING: tile viewport uniform not found" << std::endl;
+		std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mWARNING: tile viewport uniform not found\x1b[0m" << std::endl;
 	}
 
 	// --- Quad VBO ---
@@ -929,6 +935,14 @@ void RenderSystemGL::CreateTileResources() {
 	glEnableVertexAttribArray(3);
 	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTileInstance, x));
 	glVertexAttribDivisor(3, 1);
+
+	// Bindless texture handle → attrib 4 (two uint32s)
+	glEnableVertexAttribArray(4);
+	glVertexAttribIPointer(4,
+						   2, // uvec2
+						   GL_UNSIGNED_INT, stride, (void*)offsetof(GPUTileInstance, handleLo));
+	glVertexAttribDivisor(4, 1);
+
 
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -1015,6 +1029,12 @@ void RenderSystemGL::RenderTiles(const EntityManager& entityManager) {
 		inst.w = tile->w;
 		inst.h = tile->h;
 
+		// Bindless texture handle
+		uint64_t handle = atlas->GetBindlessHandle();
+		inst.handleLo = static_cast<std::uint32_t>(handle & 0xFFFFFFFFu);
+		inst.handleHi = static_cast<std::uint32_t>(handle >> 32);
+
+		// Add to instance list
 		instances.push_back(inst);
 	}
 
@@ -1031,30 +1051,30 @@ void RenderSystemGL::RenderTiles(const EntityManager& entityManager) {
 	// Bind shader
 	glUseProgram(m_tileShaderProgram);
 
-	// Bind atlas GL texture (not SFML native handle)
-	auto atlasOpt2 = m_textureManager->GetAtlas("terrain");
-	if (atlasOpt2.has_value()) {
-		auto atlas2 = atlasOpt2.value();
-		GLuint texID = atlas2->GetGLHandle(); // <- use GL handle
+	//// Bind atlas GL texture (not SFML native handle)
+	//auto atlasOpt2 = m_textureManager->GetAtlas("terrain");
+	//if (atlasOpt2.has_value()) {
+	//	auto atlas2 = atlasOpt2.value();
+	//	GLuint texID = atlas2->GetGLHandle(); // <- use GL handle
 
 
-		if (texID != 0) {
-			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, texID);
+	//	if (texID != 0) {
+	//		glActiveTexture(GL_TEXTURE0);
+	//		glBindTexture(GL_TEXTURE_2D, texID);
 
-			GLint loc = glGetUniformLocation(m_tileShaderProgram, "uTileAtlas");
-			if (loc >= 0)
-				glUniform1i(loc, 0);
-		}
-	}
+	//		GLint loc = glGetUniformLocation(m_tileShaderProgram, "uTileAtlas");
+	//		if (loc >= 0)
+	//			glUniform1i(loc, 0);
+	//	}
+	//}
 
 	glBindVertexArray(m_tileVAO);
 
-	//std::cout << "[RenderSystemGL] Rendering tiles..." << std::endl;
+ 	std::cout << "\x1b[93m[RenderSystemGL]\x1b[0m Rendering tiles..." << std::endl;
 	// OMG three days, code rewrites, three fucking days and its was the fucking file location of the vert and frag files, ffs
 	glDrawArraysInstanced(GL_TRIANGLES, 0, 6, instances.size());
 
-	std::cout << "Got here...." << std::endl;
+	//std::cout << "Got here...." << std::endl;
 	glBindVertexArray(0);
 
 	//std::cout << "also got here....." << std::endl;
@@ -1240,7 +1260,7 @@ std::vector<GPUTextGlyphInstance> RenderSystemGL::BuildGlyphInstances(const CTex
 	glyphInstances.reserve(textComp.text.size());
 
 	if (!m_fontSystem) {
-		std::cerr << "\x1b[91m[RenderSystemGL] Font system is not initialized\x1b[0m" << std::endl;
+		std::cerr << "\x1b[m[RenderSystemGL]\x1b[0m  \x1b[91mFont system is not initialized\x1b[0m" << std::endl;
 		return glyphInstances;
 	}
 
@@ -1402,7 +1422,7 @@ void RenderSystemGL::RenderTextGlyphs() {
 		glActiveTexture(GL_TEXTURE0);
 		glBindTexture(GL_TEXTURE_2D, font->textureID);
 	} else {
-		std::cerr << "\x1b[91m[RenderSystemGL]No font atlas bound for text rendering\x1b[0m\n";
+		std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mNo font atlas bound for text rendering\x1b[0m\n";
 	}
 
 	glBindVertexArray(m_textVAO);
@@ -1455,7 +1475,7 @@ void RenderSystemGL::CreateTextGlyphResources() {
 void RenderSystemGL::LoadTextShader() {
 	// We already created m_textShaderProgram in CreateTextResources()
 	if (!m_textShaderProgram) {
-		std::cerr << "\x1b[91m[RenderSystemGL]LoadTextShader called but m_textShaderProgram is null\x1b[0m\n";
+		std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mLoadTextShader called but m_textShaderProgram is null\x1b[0m\n";
 		return;
 	}
 
@@ -1469,7 +1489,7 @@ void RenderSystemGL::LoadTextShader() {
 	if (atlasLoc >= 0) {
 		glUniform1i(atlasLoc, 0); // uAtlas → GL_TEXTURE0
 	} else {
-		std::cerr << "\x1b[91m[RenderSystemGL] Failed to locate uAtlas uniform in text shader\x1b[0m\n";
+		std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mFailed to locate uAtlas uniform in text shader\x1b[0m\n";
 	}
 
 	glUseProgram(0);
@@ -1483,7 +1503,7 @@ void RenderSystemGL::LoadTileShader() {
 	m_tileShaderProgram = CreateShaderProgramFromFiles("assets/tile.vert", "assets/tile.frag");
 
 	if (!m_tileShaderProgram) {
-		std::cerr << "[RenderSystemGL] Failed to load tile shader\n";
+		std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mFailed to load tile shader\x1b[0m\n";
 		return;
 	}
 
@@ -1614,7 +1634,7 @@ void RenderSystemGL::RenderText(const std::vector<GPUTextInstance>& instances) {
 // CreateShaderProgram - Compiles vertex and fragment shaders, links them into a shader program, and returns the program ID. If compilation or linking fails, it prints the error log and returns 0.
 GLuint RenderSystemGL::CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc) {
 	// ------------------------------------------------------------
-	// Compile vertex shader
+	// Compile vertex shader C language GLSL
 	// ------------------------------------------------------------
 	GLuint vertShader = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertShader, 1, &vertexSrc, nullptr);
@@ -1631,13 +1651,13 @@ GLuint RenderSystemGL::CreateShaderProgram(const char* vertexSrc, const char* fr
 		std::string log(logLength, '\0');
 		glGetShaderInfoLog(vertShader, logLength, nullptr, log.data());
 
-		printf("Vertex shader compilation failed:\n%s\n", log.c_str());
+		printf("\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mVertex shader compilation failed:\n%s\n\x1b[0m", log.c_str());
 		glDeleteShader(vertShader);
 		return 0;
 	}
 
 	// ------------------------------------------------------------
-	// Compile fragment shader
+	// Compile fragment shader C language GLSL
 	// ------------------------------------------------------------
 	GLuint fragShader = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(fragShader, 1, &fragmentSrc, nullptr);
@@ -1655,14 +1675,14 @@ GLuint RenderSystemGL::CreateShaderProgram(const char* vertexSrc, const char* fr
 		std::string log(logLength, '\0');
 		glGetShaderInfoLog(fragShader, logLength, nullptr, log.data());
 
-		printf("Fragment shader compilation failed:\n%s\n", log.c_str());
+		printf("\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mFragment shader compilation failed:\n%s\n\x1b[0m", log.c_str());
 		glDeleteShader(vertShader);
 		glDeleteShader(fragShader);
 		return 0;
 	}
 
 	// ------------------------------------------------------------
-	// Link program
+	// Link program C language GLSL
 	// ------------------------------------------------------------
 	GLuint program = glCreateProgram();
 	glAttachShader(program, vertShader);
@@ -1706,7 +1726,7 @@ GLuint RenderSystemGL::CreateShaderProgramFromFiles(const std::string& vertexPat
 	// --- Load vertex shader file ---
 	std::ifstream vFile(vertexPath);
 	if (!vFile.is_open()) {
-		std::cerr << "[RenderSystemGL] Failed to open vertex shader file: " << vertexPath << std::endl;
+		std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mFailed to open vertex shader file: " << vertexPath << "\x1b[0m" << std::endl;
 		return 0;
 	}
 	std::stringstream vBuffer;
@@ -1716,7 +1736,7 @@ GLuint RenderSystemGL::CreateShaderProgramFromFiles(const std::string& vertexPat
 	// --- Load fragment shader file ---
 	std::ifstream fFile(fragmentPath);
 	if (!fFile.is_open()) {
-		std::cerr << "[RenderSystemGL] Failed to open fragment shader file: " << fragmentPath << std::endl;
+		std::cerr << "\x1b[32m[RenderSystemGL]\x1b[0m  \x1b[91mFailed to open fragment shader file: " << fragmentPath << "\x1b[0m" << std::endl;
 		return 0;
 	}
 	std::stringstream fBuffer;

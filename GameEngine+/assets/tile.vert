@@ -4,11 +4,13 @@ layout(location = 0) in vec2 inPos;
 layout(location = 1) in vec4 inUV;
 layout(location = 2) in vec4 inColor;
 layout(location = 3) in vec4 inWorld;
+layout(location = 4) in uvec2 inHandle;   // <-- bindless handle
 
 uniform vec2 uViewportSize;
 
 out vec2 uv;
 out vec4 tint;
+flat out uvec2 texHandle;                      // <-- pass to fragment shader
 
 void main()
 {
@@ -20,6 +22,8 @@ void main()
 
     gl_Position = vec4(ndcX, ndcY, 0.0, 1.0);
 
-   uv = mix(inUV.xy, inUV.zw, inPos);
-   tint = inColor;
+    uv = mix(inUV.xy, inUV.zw, inPos);
+    tint = inColor;
+    texHandle = inHandle;                 // <-- forward bindless handle
 }
+

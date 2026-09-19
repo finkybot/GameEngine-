@@ -61,6 +61,12 @@
     <Filter Include="Header Files\Interfaces">
       <UniqueIdentifier>{195556e7-140d-4fbc-af44-972dbb822d55}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Source Files\Vert">
+      <UniqueIdentifier>{1e2c0945-d4cb-4223-9276-5d8e76df67af}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source Files\Frag">
+      <UniqueIdentifier>{01f2959a-0dd2-458c-804c-ab0beb152fbb}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="imgui\backends\imgui_impl_dx9.cpp">
@@ -572,6 +578,12 @@
     <ClInclude Include="stb_image.h">
       <Filter>Header Files\Misc</Filter>
     </ClInclude>
+    <ClInclude Include="CTileSprite.h">
+      <Filter>Header Files\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="GPUTileInstance.h">
+      <Filter>Header Files\Misc</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="GameEngine+.rc">
@@ -586,5 +598,11 @@
     <None Include="RENDER_QUEUE_PHASE1.md" />
     <None Include="DIALOGUE_SYSTEM_SCHEMA.md" />
     <None Include="README.md" />
+    <None Include="tile.vert">
+      <Filter>Source Files\Vert</Filter>
+    </None>
+    <None Include="tile.frag">
+      <Filter>Source Files\Frag</Filter>
+    </None>
   </ItemGroup>
 </Project>

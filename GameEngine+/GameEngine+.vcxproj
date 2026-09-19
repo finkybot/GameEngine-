@@ -238,6 +238,7 @@
     <ClInclude Include="CText.h" />
     <ClInclude Include="CTexture.h" />
     <ClInclude Include="CTileMap.h" />
+    <ClInclude Include="CTileSprite.h" />
     <ClInclude Include="CTransform.h" />
     <ClInclude Include="CursorSystem.h" />
     <ClInclude Include="DebugStack.h" />
@@ -252,6 +253,7 @@
     <ClInclude Include="GameEngine+\MovementSystem.h" />
     <ClInclude Include="GameEngine.h" />
     <ClInclude Include="GPURenderSystem.h" />
+    <ClInclude Include="GPUTileInstance.h" />
     <ClInclude Include="ImageManagementSystem.h" />
     <ClInclude Include="imgui\backends\imgui_impl_dx9.h" />
     <ClInclude Include="imgui\backends\imgui_impl_win32.h" />
@@ -329,6 +331,8 @@
     <None Include="imgui.ini" />
     <None Include="README.md" />
     <None Include="RENDER_QUEUE_PHASE1.md" />
+    <None Include="tile.frag" />
+    <None Include="tile.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

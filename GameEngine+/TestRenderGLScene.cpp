@@ -3,6 +3,7 @@
 #include "GameEngine.h"
 #include "Entity.h"
 #include <SFML/Window/Event.hpp>
+#include "CTileSprite.h"
 /////////////////////////////////
 
 
@@ -20,7 +21,7 @@ TestRenderGLScene::TestRenderGLScene(GameEngine& engine, sf::RenderWindow& win, 
 
 /////////////////////////////////
 void TestRenderGLScene::OnEnter() {
-	
+
 	// ---------------------------------
 	// Step 1: Create test entity quad for rendering
 	// ---------------------------------
@@ -87,6 +88,31 @@ void TestRenderGLScene::OnEnter() {
 	text->color = sf::Color::Red;
 	text->visible = true;
 	text->align = CText::Align::Left;
+
+    // ---------------------------------
+	// Step 4: Load atlas (via RenderSystemGL)
+	// ---------------------------------
+	TextureManager* texManager = nullptr;
+	m_entityManager.GetRenderSystemGL().GetTextureManager(texManager);
+	texManager->LoadAtlas("terrain", "assets/World_tiles.png", 16, 16);
+	texManager->LoadAtlasGL("terrain");
+
+	// ---------------------------------
+	// Step 5: Create a tile entity
+	// ---------------------------------
+	auto* tileEntity = m_entityManager.AddEntity(EntityType::TeamBoogaloo);
+
+	auto* tileTransform = tileEntity->AddComponent<CTransform>();
+	tileTransform->position = Vec2(size.x * 0.5f, size.y * 0.8f);
+
+	auto* tileSprite = tileEntity->AddComponent<CTileSprite>();
+	tileSprite->atlasKey = "terrain"; // matches LoadAtlas()
+	tileSprite->tileIndex = 0;		  // first tile in atlas
+	tileSprite->w = 16.f;
+	tileSprite->h = 16.f;
+	tileSprite->color = sf::Color::White;
+	tileSprite->visible = true;
+
 
 	//m_renderGL.OnResize(size.x, size.y);
 	m_entityManager.GetRenderSystemGL().OnResize(size.x, size.y);

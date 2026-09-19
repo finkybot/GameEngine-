@@ -13,14 +13,14 @@
 #include <SFML/Graphics/Texture.hpp>
 #include <SFML/System/Vector2.hpp>
 
+#include "glad/glad.h"
 #include <iostream>
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// GetQuadTemplate
-// Retrieves the precomputed quad template for the specified tile index. Each quad template contains vertex positions and texture 
+// GetQuadTemplate - Retrieves the precomputed quad template for the specified tile index. Each quad template contains vertex positions and texture 
 // coordinates for rendering the corresponding tile from the texture atlas. This allows for efficient rendering of tiles without recalculating vertex data each time.
 const QuadTemplate& TextureAtlas::GetQuadTemplate(size_t tileIndex) const {
 	return quadTemplates[tileIndex];
@@ -173,8 +173,7 @@ bool TextureAtlas::LoadFromFile(const std::string& filePath, int tileW, int tile
 
 
 /////////////////////////////////
-// BuildQuadTemplates
-// Builds quad templates for each tile in the atlas, precomputing vertex positions and texture coordinates for efficient rendering. Each tile is represented as two triangles 
+// BuildQuadTemplates - Builds quad templates for each tile in the atlas, precomputing vertex positions and texture coordinates for efficient rendering. Each tile is represented as two triangles 
 // forming a quad, with vertices defined in a clockwise order. The texture coordinates are normalized based on the size of the texture to ensure correct mapping of the tile's 
 // image onto the quad.
 void TextureAtlas::BuildQuadTemplates() {
@@ -231,8 +230,7 @@ void TextureAtlas::BuildQuadTemplates() {
 
 
 /////////////////////////////////
-// GetRectForTile
-// Get the TileRect for a tile index, returning std::nullopt if the index is out of bounds.
+// GetRectForTile - Get the TileRect for a tile index, returning std::nullopt if the index is out of bounds.
 std::optional<TextureAtlas::TileRect> TextureAtlas::GetRectForTile(size_t index) const {
 	if (index >= m_rects.size())
 		return std::nullopt;
@@ -243,8 +241,7 @@ std::optional<TextureAtlas::TileRect> TextureAtlas::GetRectForTile(size_t index)
 
 
 /////////////////////////////////
-// GetSfFloatRectForTile
-// Get the SFML FloatRect for a tile index, converting from the stored TileRect. Returns std::nullopt if the index is out of bounds.
+// GetSfFloatRectForTile - Get the SFML FloatRect for a tile index, converting from the stored TileRect. Returns std::nullopt if the index is out of bounds.
 std::optional<sf::Rect<float>> TextureAtlas::GetSfFloatRectForTile(size_t index) const {
 	if (index >= m_rects.size())
 		return std::nullopt;
@@ -258,5 +255,79 @@ std::optional<sf::Rect<float>> TextureAtlas::GetSfFloatRectForTile(size_t index)
 	r.size.y = static_cast<float>(t.h);
 
 	return r;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// LoadGLTexture - Upload the SFML texture to OpenGL as a GL texture object.
+bool TextureAtlas::LoadGLTexture() {
+	// Ensure SFML texture is loaded
+	if (!m_texture) {
+		std::cerr << "\x1b[91mTextureAtlas::LoadGLTexture: No SFML texture loaded.\x1b[0m\n";
+		return false;
+	}
+
+	// Convert SFML texture to raw pixel data
+	sf::Image img = m_texture->copyToImage();
+	const unsigned char* pixels = img.getPixelsPtr();
+	if (!pixels) {
+		std::cerr << "TextureAtlas::LoadGLTexture: No pixel data available.\n";
+		return false;
+	}
+
+	// Generate and bind GL texture
+	glGenTextures(1, &m_glHandle);
+	glBindTexture(GL_TEXTURE_2D, m_glHandle);
+
+	// Upload pixel data to OpenGL
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, img.getSize().x, img.getSize().y, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+
+	// Set texture parameters (nearest-neighbour for pixel-perfect tiles)
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+
+	return true;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// BuildGLUVRects - Build normalized UV coordinates for OpenGL sampling.
+// These UVs map each tile's pixel rect into 0..1 texture space.
+void TextureAtlas::BuildGLUVRects() {
+	m_glUVRects.clear();
+	m_glUVRects.reserve(m_rects.size());
+
+	if (!m_texture)
+		return;
+
+	float texW = static_cast<float>(m_texture->getSize().x);
+	float texH = static_cast<float>(m_texture->getSize().y);
+
+	const int pad = applyPadding ? 1 : 0;
+
+	for (const TileRect& t : m_rects) {
+		UVRect uv;
+
+		// Compute padded interior region (same logic as SFML quad builder)
+		float x0 = static_cast<float>(t.x + pad);
+		float y0 = static_cast<float>(t.y + pad);
+		float x1 = static_cast<float>(t.x + pad + m_tileW);
+		float y1 = static_cast<float>(t.y + pad + m_tileH);
+
+		// Normalize to 0..1
+		uv.u0 = x0 / texW;
+		uv.v0 = y0 / texH;
+		uv.u1 = x1 / texW;
+		uv.v1 = y1 / texH;
+
+		m_glUVRects.push_back(uv);
+	}
 }
 /////////////////////////////////

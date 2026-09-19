@@ -22,6 +22,8 @@ bool TextureManager::LoadAtlas(const std::string& key, const std::string& filePa
 		std::cerr << "TextureManager: failed to load atlas '" << filePath << "' for key='" << key << "'\n";
 		return false;
 	}
+
+	std::cout << "TextureManager: loaded atlas '" << filePath << "' for key='" << key << "'\n";
 	m_atlases[key] = atlas; // overwrite or insert
 	return true;
 }
@@ -50,5 +52,44 @@ std::vector<std::string> TextureManager::GetAtlasKeys() const {
 	std::vector<std::string> keys;
 	for (const auto &kv : m_atlases) keys.push_back(kv.first);
 	return keys;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// LoadAtlasGL (NEW - OpenGL path)
+bool TextureManager::LoadAtlasGL(const std::string& key) {
+	auto it = m_atlases.find(key);
+	if (it == m_atlases.end()) {
+		std::cerr << "TextureManager::LoadAtlasGL: No atlas found with key '" << key << "'\n";
+		return false;
+	}
+
+	auto atlas = it->second;
+
+	// Upload SFML texture → OpenGL
+	if (!atlas->LoadGLTexture()) {
+		std::cerr << "TextureManager::LoadAtlasGL: Failed to upload GL texture for atlas '" << key << "'\n";
+		return false;
+	}
+
+	// Build GL UV rects
+	atlas->BuildGLUVRects();
+
+	return true;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// GetAtlasGL (NEW - OpenGL path)
+std::optional<std::shared_ptr<TextureAtlas>> TextureManager::GetAtlasGL(const std::string& key) const {
+	auto it = m_atlases.find(key);
+	if (it == m_atlases.end())
+		return std::nullopt;
+
+	return it->second;
 }
 /////////////////////////////////

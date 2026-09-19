@@ -19,6 +19,7 @@
 class EntityManager;
 class CText;
 class CTransform;
+class TextureManager;
 /////////////////////////////////
 
 
@@ -88,7 +89,6 @@ struct GPUTextGlyphInstance {
 //								|
 //								|_______________________________________________________________________
 class RenderSystemGL {
-	/////////////////////////////////
 public:
 	/////////////////////////////////
 	RenderSystemGL();
@@ -102,12 +102,11 @@ public:
 	void OnResize(int width, int height);
 
 	void SetFontSystem(Fontsystem* fontSystem) { m_fontSystem = fontSystem; }
-	/////////////////////////////////
+	void SetTextureManager(TextureManager* texManager) { m_textureManager = texManager; }
+	void GetTextureManager(TextureManager*& texManager) { texManager = m_textureManager; }
 
-
-
-	/////////////////////////////////
-private:
+	////////////////////////////////
+private:	
 	/////////////////////////////////
 	// OpenGL resource handles
 	GLuint m_quadVAO = 0;
@@ -116,20 +115,14 @@ private:
 
 	// Shared quad vertex buffer object (VBO) for instanced rendering
 	GLuint m_quadVBO = 0;
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// Instance buffers for different types of renderable objects
 	GLuint m_spriteInstanceVBO = 0;
 	GLuint m_circleInstanceVBO = 0;
 	GLuint m_textInstanceVBO = 0;
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// Shader program handles for different types of renderable objects
 	GLuint m_spriteShaderProgram = 0;
 	GLuint m_circleShaderProgram = 0;
@@ -137,38 +130,25 @@ private:
 
 	// White texture for sprite rendering
 	GLuint m_whiteTexture = 0;
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// Uniform locations for shader programs
 	GLint m_spriteViewportUniformLocation = -1;
 	GLint m_circleViewportUniformLocation = -1;
 	GLint m_textViewportUniformLocation = -1;
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// Buffer capacities for instance buffers
 	std::size_t m_spriteBufferCapacity = 0;
 	std::size_t m_circleBufferCapacity = 0;
 	std::size_t m_textBufferCapacity = 0;
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// Cached viewport dimensions
 	int m_viewportWidth = 0;
 	int m_viewportHeight = 0;
 	bool m_initialised = false;
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Text glyph GPU data
 	GLuint m_textGlyphVAO = 0;
 	GLuint m_textGlyphVBO = 0;
@@ -176,9 +156,17 @@ private:
 
 	// Text shader
 	GLuint m_textShader = 0;
-	/////////////////////////////////
 
+	// --- Tile rendering resources ---
+	GLuint m_tileVAO = 0;
+	GLuint m_tileQuadVBO = 0;
+	GLuint m_tileInstanceVBO = 0;
 
+	GLuint m_tileShaderProgram = 0;
+	GLint m_tileViewportUniformLocation = -1;
+
+	std::size_t m_tileBufferCapacity = 0;
+	TextureManager* m_textureManager = nullptr; // Pointer to the TextureManager for accessing texture atlases
 
 	/////////////////////////////////
 private:
@@ -190,6 +178,9 @@ private:
 	void CreateCircleResources();
 	void CreateTextResources();
 
+	void CreateTileResources();
+	void EnsureTileBufferCapacity(std::size_t requiredInstances);
+
 
 	void EnsureSpriteBufferCapacity(std::size_t requiredInstances);
 	void EnsureCircleBufferCapacity(std::size_t requiredInstances);
@@ -200,14 +191,18 @@ private:
 	void RenderTextGlyphs();
 	void CreateTextGlyphResources();
 	void LoadTextShader();
+	void LoadTileShader();
 
 
 	void RenderSprites(const std::vector<GPUSpriteInstance>& instances);
 	void RenderCircles(const std::vector<GPUCircleInstance>& instances);
 	void RenderText(const std::vector<GPUTextInstance>& instances);
+	void RenderTiles(const EntityManager& entityManager);
 
 	GLuint CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc);
+	GLuint CreateShaderProgramFromFiles(const std::string& vertexPath, const std::string& fragmentPath);
 
 	Fontsystem* m_fontSystem = nullptr; // Pointer to the FontSystem for accessing font assets
+	/////////////////////////////////
 };
 /////////////////////////////////

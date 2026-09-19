@@ -164,6 +164,7 @@ GameEngine::GameEngine() {
 	// --- Bind FontSystem BEFORE Initialise() ---
 	entityManager->GetRenderSystemGL().SetFontSystem(&fontsystem);
 
+	entityManager->GetRenderSystemGL().SetTextureManager(&m_textureManager);
 	// --- NOW Initialise the OpenGL renderer ---
 	entityManager->GetRenderSystemGL().Initialise();
 

@@ -14,7 +14,52 @@
 #include "CCircle.h"
 #include "CText.h"
 #include <iostream>
+#include "GPUTileInstance.h"
+#include <fstream>
+#include <sstream>
+#include <cstdint>
+#include "CTileSprite.h"
+#include "TextureAtlas.h"
+#include "TextureManager.h"
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 /////////////////////////////////
+
+
+
+/////////////////////////////////
+// Bindless texture 64-bit type enum (ARB + NV share this value)
+#ifndef GL_UNSIGNED_INT64_ARB
+#define GL_UNSIGNED_INT64_ARB 0x140F
+#endif
+
+// Simple bindless texture function pointer types
+typedef uint64_t(*PFN_GET_TEXTURE_HANDLE)(GLuint texture);
+typedef void(*PFN_MAKE_TEXTURE_HANDLE_RESIDENT)(uint64_t handle);
+
+static PFN_GET_TEXTURE_HANDLE glGetTextureHandleARB_impl = nullptr;
+static PFN_MAKE_TEXTURE_HANDLE_RESIDENT glMakeTextureHandleResidentARB_impl = nullptr;
+
+// Helper functions
+inline uint64_t GetTextureBindlessHandle(GLuint tex) {
+	if (glGetTextureHandleARB_impl)
+		return glGetTextureHandleARB_impl(tex);
+	return 0;
+}
+
+inline bool IsBindlessTextureAvailable() {
+	return glGetTextureHandleARB_impl && glMakeTextureHandleResidentARB_impl;
+}
+
+inline bool MakeTextureHandleResident(uint64_t handle) {
+	if (!handle || !glMakeTextureHandleResidentARB_impl)
+		return false;
+	glMakeTextureHandleResidentARB_impl(handle);
+	return true;
+}
+///////////////////////////////
 
 
 
@@ -26,6 +71,16 @@ static const float quadVertices[] = {
      1.0f, -1.0f,
     -1.0f,  1.0f,
      1.0f,  1.0f
+};
+
+// Tile quad covering (0,0) to (1,1) — scaled in shader using w/h
+static const float tileLocalQuadVertices[] = {
+	0.f, 0.f, 
+	1.f, 0.f, 
+	1.f, 1.f, 
+	0.f, 0.f, 
+	1.f, 1.f, 
+	0.f, 1.f
 };
 /////////////////////////////////
 
@@ -282,6 +337,27 @@ void RenderSystemGL::Initialise() {
 		return;
 	}
 
+	// Check for bindless texture extension (ARB_bindless_texture)
+	const GLubyte* extensions = glGetString(GL_EXTENSIONS);
+	if (extensions) {
+		std::string extStr((const char*)extensions);
+		if (extStr.find("GL_ARB_bindless_texture") != std::string::npos) {
+			std::cout << "[RenderSystemGL] ARB_bindless_texture extension supported" << std::endl;
+			// Load bindless texture functions using wglGetProcAddress on Windows
+			#ifdef _WIN32
+			glGetTextureHandleARB_impl = (PFN_GET_TEXTURE_HANDLE)wglGetProcAddress("glGetTextureHandleARB");
+			glMakeTextureHandleResidentARB_impl = (PFN_MAKE_TEXTURE_HANDLE_RESIDENT)wglGetProcAddress("glMakeTextureHandleResidentARB");
+			#endif
+			if (glGetTextureHandleARB_impl && glMakeTextureHandleResidentARB_impl) {
+				std::cout << "[RenderSystemGL] Bindless texture functions loaded successfully" << std::endl;
+			} else {
+				std::cerr << "[RenderSystemGL] WARNING: Failed to load bindless texture functions" << std::endl;
+			}
+		} else {
+			std::cerr << "[RenderSystemGL] WARNING: ARB_bindless_texture not supported - tile textures may not render correctly" << std::endl;
+		}
+	}
+
 	// Set clear color to black
 	glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
 	glEnable(GL_BLEND);
@@ -303,6 +379,9 @@ void RenderSystemGL::Initialise() {
 
 	CreateTextGlyphResources(); // VAO/VBO for glyph instances
 	LoadTextShader();			// shader for glyph rendering
+
+	CreateTileResources();
+	LoadTileShader();
 
 	// Set initialised flag to true after successful setup
 	m_initialised = true;
@@ -386,9 +465,6 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 
 	// Clear the color buffer
 	glClear(GL_COLOR_BUFFER_BIT);
-	
-	// *** DEBUGGING: Print a message indicating that glClear has been called
-	//printf("[RenderSystemGL::Render] Called glClear\n");
 
 	// Prepare viewport dimensions for rendering
 	std::vector<GPUSpriteInstance> spriteInstances;
@@ -446,25 +522,25 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 				circleInstances.push_back(circleInstance);
 			}
 
-			// ---------------------------------
-			// TEXT (CText)
-			// ---------------------------------
-			// Check if the entity has a CText component, which is required for text rendering
+			// CHECK if the entity has a CText component, which is required for text rendering
 			if (auto text = entity->GetComponent<CText>()) {
 				// Retrieve the font asset from the Fontsystem using the font key specified in the CText component
 				const FontAsset* font = m_fontSystem->GetFont(text->fontKey);
-				
-				// Build glyph instances for the text using the CText component, CTransform component, and the retrieved font asset
-				auto glyphs = BuildGlyphInstances(*text, *transform, *font);
-				
-				// Append the generated glyph instances to the main text glyph instance vector for rendering
-				m_textGlyphInstances.insert(m_textGlyphInstances.end(), glyphs.begin(), glyphs.end());
+
+				// Only build glyph instances if font was successfully loaded
+				if (font) {
+					// Build glyph instances for the text using the CText component, CTransform component, and the retrieved font asset
+					auto glyphs = BuildGlyphInstances(*text, *transform, *font);
+
+					// Append the generated glyph instances to the main text glyph instance vector for rendering
+					m_textGlyphInstances.insert(m_textGlyphInstances.end(), glyphs.begin(), glyphs.end());
+				}
 			}
 		}
 	}
 
 	// ---------------------------------
-	// Render the collected instances for sprites, circles, and text
+	// Render the collected instances for sprites, circles, and tiles
 	// ---------------------------------
 	if (!spriteInstances.empty()) {
 		RenderSprites(spriteInstances);
@@ -474,8 +550,10 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 		RenderCircles(circleInstances);
 	}
 
+	RenderTiles(entityManager);
+
 	// ---------------------------------
-	// Render text glyphs if there are any glyph instances to render
+	// Render text glyphs LAST so they appear on top of all other elements
 	// ---------------------------------
 	if (!m_textGlyphInstances.empty()) {
 		//std::cout << "Glyph count: " << m_textGlyphInstances.size() << std::endl;
@@ -497,37 +575,27 @@ void RenderSystemGL::OnResize(int width, int height) {
 	// Update OpenGL viewport
 	glViewport(0, 0, width, height);
 
-	// ---------------------------------
-	// Update sprite shader program uniform for viewport dimensions if needed
-	// ---------------------------------
-	// Update uniform locations for viewport dimensions in shader programs if needed
 	if (m_spriteShaderProgram && m_spriteViewportUniformLocation >= 0) {
-		// Use the sprite shader program and set the viewport uniform
 		glUseProgram(m_spriteShaderProgram);
 		glUniform2f(m_spriteViewportUniformLocation, static_cast<float>(width), static_cast<float>(height));
 	}
 
-
-	// ---------------------------------
-	// Update circle shader program uniform for viewport dimensions if needed
-	// ---------------------------------
 	if (m_circleShaderProgram && m_circleViewportUniformLocation >= 0) {
-		// Use the circle shader program and set the viewport uniform
 		glUseProgram(m_circleShaderProgram);
 		glUniform2f(m_circleViewportUniformLocation, static_cast<float>(width), static_cast<float>(height));
 	}
 
-
-	// ---------------------------------
-	// Update text shader program uniform for viewport dimensions if needed
-	// ---------------------------------
 	if (m_textShaderProgram && m_textViewportUniformLocation >= 0) {
-		// Use the text shader program and set the viewport uniform
 		glUseProgram(m_textShaderProgram);
 		glUniform2f(m_textViewportUniformLocation, static_cast<float>(width), static_cast<float>(height));
 	}
 
-	glUseProgram(0); // Unbind any shader program after updating uniforms
+	if (m_tileShaderProgram && m_tileViewportUniformLocation >= 0) {
+		glUseProgram(m_tileShaderProgram);
+		glUniform2f(m_tileViewportUniformLocation, static_cast<float>(width), static_cast<float>(height));
+	}
+
+	glUseProgram(0);
 }
 /////////////////////////////////
 
@@ -804,6 +872,195 @@ void RenderSystemGL::CreateTextResources() {
 
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void RenderSystemGL::CreateTileResources() {
+	// --- Create shader ---
+	m_tileShaderProgram = CreateShaderProgramFromFiles("assets/tile.vert", "assets/tile.frag");
+	if (!m_tileShaderProgram) {
+		std::cerr << "[RenderSystemGL] Failed to create tile shader\n";
+		return;
+	}
+
+	m_tileViewportUniformLocation = glGetUniformLocation(m_tileShaderProgram, "uViewportSize");
+	if (m_tileViewportUniformLocation < 0) {
+		std::cerr << "[RenderSystemGL] WARNING: tile viewport uniform not found" << std::endl;
+	}
+
+	// --- Quad VBO ---
+	glGenBuffers(1, &m_tileQuadVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, m_tileQuadVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(tileLocalQuadVertices), tileLocalQuadVertices, GL_STATIC_DRAW);
+
+	// --- Instance VBO ---
+	glGenBuffers(1, &m_tileInstanceVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, m_tileInstanceVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(GPUTileInstance) * 1024, nullptr, GL_DYNAMIC_DRAW);
+	m_tileBufferCapacity = 1024;
+
+	// --- VAO ---
+	glGenVertexArrays(1, &m_tileVAO);
+	glBindVertexArray(m_tileVAO);
+
+	// Quad vertices → attrib 0
+	glBindBuffer(GL_ARRAY_BUFFER, m_tileQuadVBO);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, (void*)0);
+
+	// Instance buffer
+	glBindBuffer(GL_ARRAY_BUFFER, m_tileInstanceVBO);
+	std::size_t stride = sizeof(GPUTileInstance);
+
+	// UV rect
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTileInstance, u0));
+	glVertexAttribDivisor(1, 1);
+
+	// Color
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTileInstance, r));
+	glVertexAttribDivisor(2, 1);
+
+	// Position + size
+	glEnableVertexAttribArray(3);
+	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTileInstance, x));
+	glVertexAttribDivisor(3, 1);
+
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void RenderSystemGL::EnsureTileBufferCapacity(std::size_t requiredInstances) {
+	if (requiredInstances <= m_tileBufferCapacity)
+		return;
+
+	std::size_t newCapacity = (m_tileBufferCapacity > 0) ? m_tileBufferCapacity * 2 : requiredInstances;
+
+	while (newCapacity < requiredInstances)
+		newCapacity *= 2;
+
+	m_tileBufferCapacity = newCapacity;
+
+	glBindVertexArray(m_tileVAO);
+
+	glBindBuffer(GL_ARRAY_BUFFER, m_tileInstanceVBO);
+	glBufferData(GL_ARRAY_BUFFER, m_tileBufferCapacity * sizeof(GPUTileInstance), nullptr, GL_DYNAMIC_DRAW);
+
+	std::size_t stride = sizeof(GPUTileInstance);
+
+	// UV rect
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTileInstance, u0));
+	glVertexAttribDivisor(1, 1);
+
+	// Color
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTileInstance, r));
+	glVertexAttribDivisor(2, 1);
+
+	// Position + size
+	glEnableVertexAttribArray(3);
+	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTileInstance, x));
+	glVertexAttribDivisor(3, 1);
+
+	glBindVertexArray(0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void RenderSystemGL::RenderTiles(const EntityManager& entityManager) {
+	std::vector<GPUTileInstance> instances;
+
+	for (auto& entity : entityManager.GetEntities()) {
+		auto transform = entity->GetComponent<CTransform>();
+		auto tile = entity->GetComponent<CTileSprite>();
+
+		if (!transform || !tile || !tile->visible)
+			continue;
+
+		// Get atlas (optional unwrap)
+		auto atlasOpt = m_textureManager->GetAtlas(tile->atlasKey);
+		if (!atlasOpt.has_value())
+			continue;
+
+		std::shared_ptr<TextureAtlas> atlas = atlasOpt.value();
+
+		// Use precomputed GL UV rects
+		const TextureAtlas::UVRect& uv = atlas->GetGLUVRect(tile->tileIndex);
+
+		GPUTileInstance inst;
+		inst.u0 = uv.u0;
+		inst.v0 = uv.v0;
+		inst.u1 = uv.u1;
+		inst.v1 = uv.v1;
+
+		inst.r = tile->color.r / 255.f;
+		inst.g = tile->color.g / 255.f;
+		inst.b = tile->color.b / 255.f;
+		inst.a = tile->color.a / 255.f;
+
+		inst.x = transform->position.x;
+		inst.y = transform->position.y;
+		inst.w = tile->w;
+		inst.h = tile->h;
+
+		instances.push_back(inst);
+	}
+
+	if (instances.empty())
+		return;
+
+	// Upload instance buffer
+	EnsureTileBufferCapacity(instances.size());
+
+	glBindBuffer(GL_ARRAY_BUFFER, m_tileInstanceVBO);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, instances.size() * sizeof(GPUTileInstance), instances.data());
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+	// Bind shader
+	glUseProgram(m_tileShaderProgram);
+
+	// Bind atlas GL texture (not SFML native handle)
+	auto atlasOpt2 = m_textureManager->GetAtlas("terrain");
+	if (atlasOpt2.has_value()) {
+		auto atlas2 = atlasOpt2.value();
+		GLuint texID = atlas2->GetGLHandle(); // <- use GL handle
+
+
+		if (texID != 0) {
+			glActiveTexture(GL_TEXTURE0);
+			glBindTexture(GL_TEXTURE_2D, texID);
+
+			GLint loc = glGetUniformLocation(m_tileShaderProgram, "uTileAtlas");
+			if (loc >= 0)
+				glUniform1i(loc, 0);
+		}
+	}
+
+	glBindVertexArray(m_tileVAO);
+
+	//std::cout << "[RenderSystemGL] Rendering tiles..." << std::endl;
+	// OMG three days, code rewrites, three fucking days and its was the fucking file location of the vert and frag files, ffs
+	glDrawArraysInstanced(GL_TRIANGLES, 0, 6, instances.size());
+
+	std::cout << "Got here...." << std::endl;
+	glBindVertexArray(0);
+
+	//std::cout << "also got here....." << std::endl;
+	glUseProgram(0);
+
+	//std::cout << "I bet we dont get here" << std::endl;
 }
 /////////////////////////////////
 
@@ -1222,6 +1479,27 @@ void RenderSystemGL::LoadTextShader() {
 
 
 /////////////////////////////////
+void RenderSystemGL::LoadTileShader() {
+	m_tileShaderProgram = CreateShaderProgramFromFiles("assets/tile.vert", "assets/tile.frag");
+
+	if (!m_tileShaderProgram) {
+		std::cerr << "[RenderSystemGL] Failed to load tile shader\n";
+		return;
+	}
+
+	glUseProgram(m_tileShaderProgram);
+	m_tileViewportUniformLocation = glGetUniformLocation(m_tileShaderProgram, "uViewportSize");
+	GLint tileAtlasLoc = glGetUniformLocation(m_tileShaderProgram, "uTileAtlas");
+	if (tileAtlasLoc >= 0)
+		glUniform1i(tileAtlasLoc, 0);
+	glUseProgram(0);
+}
+
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // RenderSprites - Renders a batch of sprite instances using instanced rendering.
 void RenderSystemGL::RenderSprites(const std::vector<GPUSpriteInstance>& instances) {
 	// Ensure we have enough buffer capacity for the instances to be rendered
@@ -1418,5 +1696,34 @@ GLuint RenderSystemGL::CreateShaderProgram(const char* vertexSrc, const char* fr
 	glDeleteShader(fragShader);
 
 	return program;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+GLuint RenderSystemGL::CreateShaderProgramFromFiles(const std::string& vertexPath, const std::string& fragmentPath) {
+	// --- Load vertex shader file ---
+	std::ifstream vFile(vertexPath);
+	if (!vFile.is_open()) {
+		std::cerr << "[RenderSystemGL] Failed to open vertex shader file: " << vertexPath << std::endl;
+		return 0;
+	}
+	std::stringstream vBuffer;
+	vBuffer << vFile.rdbuf();
+	std::string vertexSrc = vBuffer.str();
+
+	// --- Load fragment shader file ---
+	std::ifstream fFile(fragmentPath);
+	if (!fFile.is_open()) {
+		std::cerr << "[RenderSystemGL] Failed to open fragment shader file: " << fragmentPath << std::endl;
+		return 0;
+	}
+	std::stringstream fBuffer;
+	fBuffer << fFile.rdbuf();
+	std::string fragmentSrc = fBuffer.str();
+
+	// --- Compile using your existing shader compiler ---
+	return CreateShaderProgram(vertexSrc.c_str(), fragmentSrc.c_str());
 }
 /////////////////////////////////

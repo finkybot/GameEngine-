@@ -39,6 +39,12 @@
         }
         "Entry"
         {
+        "MsmKey" = "8:_17D0A3AEFBF34206B08DCD0C0F5EABF5"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
         "MsmKey" = "8:_2068DB000BC341BA8A3289CCD954EDB7"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
@@ -123,6 +129,12 @@
         }
         "Entry"
         {
+        "MsmKey" = "8:_5B1B0A4958E848B495905C4A1E2E8540"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
         "MsmKey" = "8:_5CCCECF00C2F7FA8C6B82A64B962676A"
         "OwnerKey" = "8:_43EEC5571BFA4E07ABB627B1893BF420"
         "MsmSig" = "8:_UNDEFINED"
@@ -130,6 +142,12 @@
         "Entry"
         {
         "MsmKey" = "8:_69A48154CFAB446CAF8944D3C89E868B"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_6AF5819068AA485B8C27D057A671E23E"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -160,6 +178,12 @@
         "Entry"
         {
         "MsmKey" = "8:_775CBBCA4622475BAC4FB0DC44EAFF0E"
+        "OwnerKey" = "8:_UNDEFINED"
+        "MsmSig" = "8:_UNDEFINED"
+        }
+        "Entry"
+        {
+        "MsmKey" = "8:_78B80AD918B54A529ECE95E7A5FE6F43"
         "OwnerKey" = "8:_UNDEFINED"
         "MsmSig" = "8:_UNDEFINED"
         }
@@ -311,12 +335,6 @@
         {
         "MsmKey" = "8:_F617C2040FAC4D678CDA4F565C945BC8"
         "OwnerKey" = "8:_UNDEFINED"
-        "MsmSig" = "8:_UNDEFINED"
-        }
-        "Entry"
-        {
-        "MsmKey" = "8:_FC52684B893C1A908DD5765CBFA479AE"
-        "OwnerKey" = "8:_43EEC5571BFA4E07ABB627B1893BF420"
         "MsmSig" = "8:_UNDEFINED"
         }
         "Entry"
@@ -485,6 +503,26 @@
             "Hidden" = "11:FALSE"
             "System" = "11:FALSE"
             "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_17D0A3AEFBF34206B08DCD0C0F5EABF5"
+            {
+            "SourcePath" = "8:C:\\Windows\\System32\\msiexec.exe"
+            "TargetName" = "8:msiexec.exe"
+            "Tag" = "8:"
+            "Folder" = "8:_2B1427E4E734416CADF13140D2AF60C5"
+            "Condition" = "8:Not Installed"
+            "Transitive" = "11:TRUE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:TRUE"
+            "Permanent" = "11:TRUE"
             "SharedLegacy" = "11:FALSE"
             "PackageAs" = "3:1"
             "Register" = "3:1"
@@ -752,6 +790,26 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_5B1B0A4958E848B495905C4A1E2E8540"
+            {
+            "SourcePath" = "8:..\\GameEngine+\\assets\\World_tiles.png"
+            "TargetName" = "8:World_tiles.png"
+            "Tag" = "8:"
+            "Folder" = "8:_ED523247CB2848A7BF524F9DBC901335"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_5CCCECF00C2F7FA8C6B82A64B962676A"
             {
             "SourcePath" = "8:IMM32.dll"
@@ -778,6 +836,26 @@
             "TargetName" = "8:Roboto-Thin.ttf"
             "Tag" = "8:"
             "Folder" = "8:_137455C146F246B7955052D6C9536A94"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_6AF5819068AA485B8C27D057A671E23E"
+            {
+            "SourcePath" = "8:..\\GameEngine+\\assets\\tile.frag"
+            "TargetName" = "8:tile.frag"
+            "Tag" = "8:"
+            "Folder" = "8:_ED523247CB2848A7BF524F9DBC901335"
             "Condition" = "8:"
             "Transitive" = "11:FALSE"
             "Vital" = "11:TRUE"
@@ -876,6 +954,26 @@
             {
             "SourcePath" = "8:..\\GameEngine+\\assets\\editor_map.json"
             "TargetName" = "8:editor_map.json"
+            "Tag" = "8:"
+            "Folder" = "8:_ED523247CB2848A7BF524F9DBC901335"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Vital" = "11:TRUE"
+            "ReadOnly" = "11:FALSE"
+            "Hidden" = "11:FALSE"
+            "System" = "11:FALSE"
+            "Permanent" = "11:FALSE"
+            "SharedLegacy" = "11:FALSE"
+            "PackageAs" = "3:1"
+            "Register" = "3:1"
+            "Exclude" = "11:FALSE"
+            "IsDependency" = "11:FALSE"
+            "IsolateTo" = "8:"
+            }
+            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_78B80AD918B54A529ECE95E7A5FE6F43"
+            {
+            "SourcePath" = "8:..\\GameEngine+\\assets\\tile.vert"
+            "TargetName" = "8:tile.vert"
             "Tag" = "8:"
             "Folder" = "8:_ED523247CB2848A7BF524F9DBC901335"
             "Condition" = "8:"
@@ -1392,26 +1490,6 @@
             "IsDependency" = "11:FALSE"
             "IsolateTo" = "8:"
             }
-            "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_FC52684B893C1A908DD5765CBFA479AE"
-            {
-            "SourcePath" = "8:COMDLG32.dll"
-            "TargetName" = "8:COMDLG32.dll"
-            "Tag" = "8:"
-            "Folder" = "8:_2EA8653EB6ED45EE97F888D8866FAB13"
-            "Condition" = "8:"
-            "Transitive" = "11:FALSE"
-            "Vital" = "11:TRUE"
-            "ReadOnly" = "11:FALSE"
-            "Hidden" = "11:FALSE"
-            "System" = "11:FALSE"
-            "Permanent" = "11:FALSE"
-            "SharedLegacy" = "11:FALSE"
-            "PackageAs" = "3:1"
-            "Register" = "3:1"
-            "Exclude" = "11:FALSE"
-            "IsDependency" = "11:TRUE"
-            "IsolateTo" = "8:"
-            }
             "{1FB2D0AE-D3B9-43D4-B9DD-F88EC61E35DE}:_FCF09BF16C8C471782F9F31C849500A8"
             {
             "SourcePath" = "8:..\\GameEngine+\\assets\\fonts\\roboto\\Roboto-Regular.ttf"
@@ -1438,6 +1516,17 @@
         }
         "Folder"
         {
+            "{1525181F-901A-416C-8A58-119130FE478E}:_2B1427E4E734416CADF13140D2AF60C5"
+            {
+            "Name" = "8:#1914"
+            "AlwaysCreate" = "11:FALSE"
+            "Condition" = "8:"
+            "Transitive" = "11:FALSE"
+            "Property" = "8:SystemFolder"
+                "Folders"
+                {
+                }
+            }
             "{3C67513D-01DD-4637-8A68-80971EB9504F}:_2EA8653EB6ED45EE97F888D8866FAB13"
             {
             "DefaultLocation" = "8:[ProgramFilesFolder][Manufacturer]\\[ProductName]"
@@ -1664,6 +1753,20 @@
         }
         "Shortcut"
         {
+            "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_B8358794E8EB4D1DB0C4AD9845FBD5E5"
+            {
+            "Name" = "8:Uninstall GameEngine"
+            "Arguments" = "8:/x {BF4D6AFC-2CF0-40D4-90C7-4714C858A6F2}"
+            "Description" = "8:"
+            "ShowCmd" = "3:1"
+            "IconIndex" = "3:0"
+            "Transitive" = "11:FALSE"
+            "Target" = "8:_17D0A3AEFBF34206B08DCD0C0F5EABF5"
+            "Folder" = "8:_5E304FC1BE73412FBC2148F11CEA2F6B"
+            "WorkingFolder" = "8:_2B1427E4E734416CADF13140D2AF60C5"
+            "Icon" = "8:"
+            "Feature" = "8:"
+            }
             "{970C0BB2-C7D0-45D7-ABFA-7EC378858BC0}:_D0F74956C2CF44FB9BB1F38E069CFCED"
             {
             "Name" = "8:GameEngine"

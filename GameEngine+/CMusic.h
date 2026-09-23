@@ -15,7 +15,9 @@
 
 
 /////////////////////////////////
-// CMusic component - represents a music playback component with properties for file path, volume, looping, and playback state. This component can be added to an entity to enable music playback functionality in the game
+// |	CMusic component - represents a music playback component with properties for file path, volume, looping, and playback state. This component can be added to an entity to enable music playback functionality in the game
+// |_______________________________________________________________________
+
 class CMusic : public Component {
 public:
 	// Enumerator for music playback state, indicating whether the music is stopped, playing, or paused.

@@ -24,11 +24,13 @@
 #include "Utils.h"
 
 #include "ChunkManager.h"
+////////////////////////////////
+ 
+
 
 /////////////////////////////////
-// Namespace for raycast utilities and debug helpers. This namespace contains functions and data related to performing raycasts against tilemaps, as well as optional debug features for collecting visited cells during raycasting.
-//								|
-//								|_______________________________________________________________________
+//	|	Namespace for raycast utilities and debug helpers. This namespace contains functions and data related to performing raycasts against tilemaps, as well as optional debug features for collecting visited cells during raycasting.
+//	|_______________________________________________________________________
 namespace Raycast {
 
 	inline void CollectChunksAlongRay(const Vec2& origin, const Vec2& dir, float maxDistance, float tileSize,
@@ -72,12 +74,13 @@ namespace Raycast {
 		}
 	}
 } // namespace Raycast
+////////////////////////////////
+
 
 
 /////////////////////////////////
-// Namespace for raycast utilities and debug helpers. This namespace contains functions and data related to performing raycasts against tilemaps, as well as optional debug features for collecting visited cells during raycasting.
-//								|
-//								|_______________________________________________________________________
+//	|	Namespace for raycast utilities and debug helpers. This namespace contains functions and data related to performing raycasts against tilemaps, as well as optional debug features for collecting visited cells during raycasting.
+//	|_______________________________________________________________________
 namespace RaycastDebug {
 	inline bool collectVisited = false;
 	inline std::vector<std::pair<int, int>> lastVisited;
@@ -104,10 +107,9 @@ namespace RaycastDebug {
 
 
 /////////////////////////////////
-// RaycastHit struct - Represents the result of a raycast against a tilemap, including whether a hit occurred, the tile coordinates of the hit, the world space position and normal of the hit, the distance 
-// along the ray to the hit, and the value of the tile that was hit. This struct provides a convenient way to encapsulate all relevant information about a raycast hit for use in game logic and rendering.
-//								|
-//								|_______________________________________________________________________
+//	|	RaycastHit struct - Represents the result of a raycast against a tilemap, including whether a hit occurred, the tile coordinates of the hit, the world space position and normal of the hit, the distance along the ray to the hit, and the value of the tile that was hit. This struct provides a convenient way to 
+//	|	encapsulate all relevant information about a raycast hit for use in game logic and rendering.
+//	|_______________________________________________________________________
 struct RaycastHit {
 	bool hit = false;	   // did we hit a solid tile?
 	int tileX = -1;		   // tile coordinates of hit tile

@@ -22,7 +22,8 @@
 
 
 /////////////////////////////////
-// ComponentTypeId enumeration - Defines unique identifiers for different component types used in the game engine. Each component type corresponds to a specific aspect of an entity's behavior or properties, allowing for modular and flexible entity composition.
+//	|	ComponentTypeId enumeration - Defines unique identifiers for different component types used in the game engine. Each component type corresponds to a specific aspect of an entity's behavior or properties, allowing for modular and flexible entity composition.
+//	|_______________________________________________________________________
 enum class ComponentTypeId {
 	Transform,
 	CivilisationTech,

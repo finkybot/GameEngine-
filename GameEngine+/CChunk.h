@@ -27,9 +27,8 @@ enum class BlendMode : uint8_t { Normal, Additive, Multiply, Screen, Overlay, Su
 
 
 /////////////////////////////////
-// MeshHandle struct - Represents a handle to a GPU resource (mesh) used for rendering tile layers. It contains an ID for the GPU resource and a validity flag to quickly check if the handle is valid.
-//							|
-//							|___________________________________________________________________________________
+//	|	MeshHandle struct - Represents a handle to a GPU resource (mesh) used for rendering tile layers. It contains an ID for the GPU resource and a validity flag to quickly check if the handle is valid.
+//	|___________________________________________________________________________________
 struct MeshHandle {
 	uint32_t ID;  // GPU resource ID
 	bool IsValid; // quick check
@@ -39,9 +38,8 @@ struct MeshHandle {
 
 
 /////////////////////////////////
-// Color struct - Represents a color with red, green, blue, and alpha components. Each component is an 8-bit unsigned integer (0-255), allowing for a wide range of colors and transparency levels.
-//							|
-//							|___________________________________________________________________________________
+//	|	Color struct - Represents a color with red, green, blue, and alpha components. Each component is an 8-bit unsigned integer (0-255), allowing for a wide range of colors and transparency levels.
+//	|___________________________________________________________________________________
 struct Color {
 	float R;
 	float G;
@@ -53,10 +51,9 @@ struct Color {
 
 
 /////////////////////////////////
-// Tile struct - Represents a single tile in the tile map, containing information about its type, properties, and rendering details. Each tile can have various flags indicating its behavior
-// (e.g., solid, water), a collision type for physics interactions, a light level for lighting calculations, and indices for animation frames and metadata.
-//							|
-//							|___________________________________________________________________________________
+//	|	Tile struct - Represents a single tile in the tile map, containing information about its type, properties, and rendering details. Each tile can have various flags indicating its behavior
+//	|	(e.g., solid, water), a collision type for physics interactions, a light level for lighting calculations, and indices for animation frames and metadata.
+//	|___________________________________________________________________________________
 struct Tile {
 	uint16_t tileID;	   // Which tile type
 	uint16_t Flags;		   // Bitmask: solid, water, etc.
@@ -70,9 +67,8 @@ struct Tile {
 
 
 /////////////////////////////////
-// CollisionGrid struct - Represents a grid of collision data for a tile layer, containing information about its dimensions, cell storage, and precomputed flags for quick collision checks.
-// 							|
-//							|___________________________________________________________________________________
+//	|	CollisionGrid struct - Represents a grid of collision data for a tile layer, containing information about its dimensions, cell storage, and precomputed flags for quick collision checks.
+//	|___________________________________________________________________________________
 struct CollisionGrid {
 	// Dimensions
 	int Width;	// tiles
@@ -89,9 +85,8 @@ struct CollisionGrid {
 
 
 /////////////////////////////////
-// TileLayer struct - Represents a layer of tiles in the tile map, containing information about its identity, dimensions, tile storage, rendering properties, collision grid, animation state, and metadata.
-//							|
-//							|___________________________________________________________________________________
+//	|	TileLayer struct - Represents a layer of tiles in the tile map, containing information about its identity, dimensions, tile storage, rendering properties, collision grid, animation state, and metadata.
+//	|___________________________________________________________________________________
 struct TileLayer {
 	// Identity
 	int LayerID;
@@ -134,9 +129,8 @@ struct TileLayer {
 
 
 /////////////////////////////////
-// ChunkComponent struct - Represents a chunk of tiles in the game world, containing information about its identity, dimensions, and storage for the individual tiles. Each chunk is identified by its
-//							|
-//							|___________________________________________________________________________________
+//	|	CChunkComponent struct - Represents a chunk of tiles in the game world, containing information about its identity, dimensions, and storage for the individual tiles. Each chunk is identified by its
+//	|___________________________________________________________________________________
 class CChunk : public Component {
 public:
 	// Identity

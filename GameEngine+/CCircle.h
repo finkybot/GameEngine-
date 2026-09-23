@@ -20,9 +20,8 @@
 
 
 /////////////////////////////////
-// CCircle component - represents a circle shape with properties and methods for drawing, movement, and collision handling
-//						|
-//						|___________________________________________________________________________________
+//	|	CCircle component - represents a circle shape with properties and methods for drawing, movement, and collision handling
+//	|___________________________________________________________________________________
 class CCircle : public CShape {
 public:
 	sf::CircleShape m_circle; // SFML CircleShape object representing the visual circle shape
@@ -81,10 +80,8 @@ public:
 
 
 /////////////////////////////////
-// CCircleGPU component - represents a circle shape with properties and methods for drawing, movement, and collision handling for GPU Rendering,
-// there is no SFML shape object, but rather properties for radius, color, and z-order for rendering control.
-//						|
-//						|___________________________________________________________________________________
+//	|	CCircleGPU component - represents a circle shape with properties and methods for drawing, movement, and collision handling for GPU Rendering, there is no SFML shape object, but rather properties for radius, color, and z-order for rendering control.
+//	|___________________________________________________________________________________
 class CCircleGPU : public Component {
 public:
 	// Member variables

@@ -16,9 +16,8 @@
 
 
 /////////////////////////////////
-// SoundPriority enum - Define priority levels for audio culling when max sounds exceeded
-//								|
-// //							|__________________________________________________________________________________
+//	|	SoundPriority enum - Define priority levels for audio culling when max sounds exceeded
+//	|__________________________________________________________________________________
 enum class SoundPriority {
 	Background = 0,    // Ambient sounds (wind, rain)
 	UI = 1,            // Menu clicks
@@ -32,9 +31,8 @@ enum class SoundPriority {
 
 /////////////////////////////////
 // 
-// CSoundEffect Component -	Represents a sound effect in the game, with properties for sound file, looping, 3D audio, spatialization, play on awake, volume, and pitch.
-//								|
-// 								|___________________________________________________________________________________
+//	|	CSoundEffect Component -	Represents a sound effect in the game, with properties for sound file, looping, 3D audio, spatialization, play on awake, volume, and pitch.
+//	|___________________________________________________________________________________
 class CSoundEffect : public Component {
 public:
 	// Constructors - Default constructor

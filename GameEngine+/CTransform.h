@@ -15,10 +15,9 @@
 
 
 /////////////////////////////////
-// CTransform component - stores position and velocity data for an entity. This is a pure data component used by the PhysicsSystem to update entity positions based on their velocities. It allows for separation of concerns by keeping movement-related data in a 
-// dedicated component, making it easier to manage and update entity transformations in the game.
-//								|
-//								|_______________________________________________________________________
+//	|	CTransform component - stores position and velocity data for an entity. This is a pure data component used by the PhysicsSystem to update entity positions based on their velocities. It allows for separation of concerns by keeping movement-related data in a 
+//	|	dedicated component, making it easier to manage and update entity transformations in the game.
+//	|_______________________________________________________________________
 class CTransform : public Component {
 public:
 	// Member variables for position and velocity.

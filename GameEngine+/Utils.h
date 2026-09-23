@@ -24,9 +24,8 @@ const float TWO_PI = 2.0f * PI; // Precomputed value for 2 * PI, used for effici
 
 
 /////////////////////////////////
-// Size struct represents a simple width and height pair, commonly used for dimensions of objects, textures, or other 2D elements in the game engine.
-//								|
-//								|_______________________________________________________________________
+//	|	Size struct represents a simple width and height pair, commonly used for dimensions of objects, textures, or other 2D elements in the game engine.
+//	|_______________________________________________________________________
 struct Size {
 	unsigned int width = 0, height = 0;
 };
@@ -39,7 +38,7 @@ struct Size {
 // allowing for more reliable comparisons in situations where exact equality may not be possible due to rounding errors.
 bool IsEqual(float val1, float val2);
 /////////////////////////////////
-
+ 
 
 
 /////////////////////////////////
@@ -71,27 +70,28 @@ unsigned int GetIndex(unsigned int width, unsigned int row, unsigned int col);
 
 
 /////////////////////////////////
-bool StringCompare(const std::string& a, const std::string& b); // Compares two strings for equality in a case-insensitive manner. Returns true if the strings are of the same length and contain the same characters regardless of case, otherwise returns false.
+// StringCompare - Compares two strings for equality in a case-insensitive manner. Returns true if the strings are of the same length and contain the same characters regardless of case, otherwise returns false.
+bool StringCompare(const std::string& a, const std::string& b);
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-float Clamp(float val, float min, float	max); // Clamps a float value between a minimum and maximum range; if the value is less than the minimum, the minimum is returned; if the value is greater than the maximum, the maximum is returned; otherwise, the original value is returned.
+// Clamp - Clamps a float value between a minimum and maximum range; if the value is less than the minimum, the minimum is returned; if the value is greater than the maximum, the maximum is returned; otherwise, the original value is returned.
+float Clamp(float val, float min, float	max);
 /////////////////////////////////
- 
+
 
 
 /////////////////////////////////
 // Forward declaration for TileMap (defined in TileMap.h)
 struct TileMap;
 /////////////////////////////////
-
-
+ 
+ 
 
 /////////////////////////////////
-// ReadFile - Reads the contents of a file specified by the filePath and returns it as a C-style string (const char*). The caller is responsible for managing the memory of the returned string, which should be freed when no longer needed. 
-// This function is used to read text files, such as JSON files for tile maps, and return their contents for further processing.
-// (TileMap JSON helpers moved into TileMap.*) Use TileMap::SaveToJSON / TileMap::LoadFromJSON
+// ReadFile - Reads the contents of a file specified by the filePath and returns it as a C-style string (const char*). The caller is responsible for managing the memory of the returned string, which should be freed when no longer needed. This function is used to read text files, such as JSON files for tile maps, 
+// and return their contents for further processing. (TileMap JSON helpers moved into TileMap.*) Use TileMap::SaveToJSON / TileMap::LoadFromJSON
 const char* ReadFile(const char* filePath); // Can you guess what it does? Really hard to figure it out from the name, I know. Reads the contents of a file specified by the filePath and returns it as a C-style string (const char*). You better take responsiblity for managing the memory of the returned string.
 /////////////////////////////////

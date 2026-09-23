@@ -15,9 +15,8 @@
 
 
 /////////////////////////////////
-// struct CKnowledgeParticle - Represents a knowledge particle in the game world, carrying information about a specific technology. It contains the tech ID and the amount of knowledge it represents, allowing for interaction with civilizations and their tech trees.
-// 								|
-//								|_______________________________________________________________________
+//	|	CKnowledgeParticle - Represents a knowledge particle in the game world, carrying information about a specific technology. It contains the tech ID and the amount of knowledge it represents, allowing for interaction with civilizations and their tech trees.
+//	|_______________________________________________________________________
 struct CKnowledgeParticle : public Component {
 	std::string techId; // The tech this particle represents
 	float value = 1.0f; // Amount of knowledge carried

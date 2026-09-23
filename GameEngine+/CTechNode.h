@@ -16,9 +16,8 @@
 
 
 /////////////////////////////////
-// CTechNode - Represents a technology node in a civilization tech tree, with properties for ID, category, prerequisites, difficulty, progress, and compatibility.
-//								|
-//								|_______________________________________________________________________
+//	|	CTechNode - Represents a technology node in a civilization tech tree, with properties for ID, category, prerequisites, difficulty, progress, and compatibility.
+//	|_______________________________________________________________________
 class CTechNode : public Component {
 public:
 	std::string id;									// Unique identifier for the tech node

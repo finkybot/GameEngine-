@@ -18,9 +18,8 @@
 
 
 /////////////////////////////////
-// TextureManager class - manages loading, retrieval, and unloading of texture atlases used for rendering tiles and sprites in the game.
-//								|
-//								|_______________________________________________________________________
+//	|	TextureManager class - manages loading, retrieval, and unloading of texture atlases used for rendering tiles and sprites in the game.
+//	|_______________________________________________________________________
 class TextureManager {
 public:
 	// Constructor and destructor for the TextureManager class. The default constructor initializes an empty manager, and the destructor cleans up any loaded atlases.
@@ -45,6 +44,7 @@ public:
 
 	bool LoadAtlasGL(const std::string& key);												// Load GL texture and build GL rects for an already loaded atlas.
 	std::optional<std::shared_ptr<TextureAtlas>> GetAtlasGL(const std::string& key) const;	// Get atlas by key (GL)
+
 
 
 private:

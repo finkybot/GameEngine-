@@ -1,9 +1,23 @@
+////////////////////////////////
+// SpatialIndexUnified.h
+////////////////////////////////
+
+
+////////////////////////////////
+// Includes
 #pragma once
 #include "ISpatialIndex.h"
 #include "SpatialHashGrid.h"
 #include "BVHSystem.h"
 #include "ChunkManager.h"
+////////////////////////////////
 
+
+
+////////////////////////////////
+//	|	SpatialIndexUnified class - Implements a unified spatial index that combines a dynamic spatial hash grid for entities and a BVH system for efficient raycasting. It also maintains a world mask for collision detection with the game world. This class provides methods for rebuilding the spatial index,
+//	|	querying entities, performing raycasts, and checking world solidity.
+//	|_______________________________________________________________________
 class SpatialIndexUnified : public ISpatialIndex {
 public:
 	SpatialIndexUnified(float dynamicCellSize = 100.0f) : m_dynamicGrid(dynamicCellSize) {}
@@ -37,3 +51,4 @@ private:
 	void RebuildBVH(const std::vector<std::unique_ptr<Entity>>& entities);
 	void RebuildWorldMask(ChunkManager* chunks);
 };
+////////////////////////////////

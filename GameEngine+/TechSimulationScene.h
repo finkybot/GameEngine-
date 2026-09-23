@@ -25,22 +25,14 @@
 
 
 /////////////////////////////////
-// TechSimulationScene class - A scene for simulating technology-related entities and interactions in the game engine. It provides methods for updating, rendering, handling events, and managing the scene lifecycle, as well as private helper methods for creating a test world and rendering debug information.
-//								|
-//								|_______________________________________________________________________
+//	|	TechSimulationScene class - A scene for simulating technology-related entities and interactions in the game engine. It provides methods for updating, rendering, handling events, and managing the scene lifecycle, as well as private helper methods for creating a test world and rendering debug information.
+//	|_______________________________________________________________________
 class TechSimulationScene : public Scene {
-	/////////////////////////////////
-	// Public interface for the TechSimulationScene class
 public:
-	/////////////////////////////////
 	// Constructor and destructor for the TechSimulationScene class. The constructor initializes the scene with references to the game engine, render window, and entity manager, while the destructor can be used to clean up any resources if needed.
 	TechSimulationScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em);
 	~TechSimulationScene() override;
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Overridden virtual methods from the Scene base class. These methods handle updating the scene state, rendering the scene, processing input events, and managing the scene lifecycle (entering and exiting).
 	void Update(float dt) override;
 	void Render() override;
@@ -55,107 +47,56 @@ public:
 	void UnloadResources() override;
 
 	void InitialiseGame(sf::Vector2u windowSize) override;
-	/////////////////////////////////
-	
 
-	
-	/////////////////////////////////
 	// InitialiseSpatialLayers - Initializes the spatial layers for the scene. Currently does nothing, but can be used for setting up spatial layers if needed.
 	void InitialiseSpatialLayers();
-	/////////////////////////////////
-	
-	
 
-	/////////////////////////////////
-	// SpatialLayerRegistry member variable for managing spatial layers in the TechSimulationScene class. This registry allows for efficient management and retrieval of 
-	// spatial layers based on their names, enabling the organization of entities into different layers for spatial queries and interactions.
+	// SpatialLayerRegistry member variable for managing spatial layers in the TechSimulationScene class. This registry allows for efficient management and retrieval of spatial layers based on their names, enabling the organization of entities into different layers for spatial queries and interactions.
 	SpatialLayerRegistry m_spatialLayers;
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Optional: draw overlays after ImGui/UI has been rendered (engine calls this after ImGui::SFML::Render)
 private:
-	/////////////////////////////////
 	// Private helper methods for the TechSimulationScene class
 	void CreateTechTestWorld();
 	void RenderTechDebugWindow();
 	void RunFullTechTick();
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Job scheduling methods for the TechSimulationScene class	
 	void ScheduleTechEvolutionJobs(float dt);
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Job scheduling methods for the TechSimulationScene class
 	void ScheduleTechDiffusionJobs(float dt);
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Member variables for the TechSimulationScene class
 	sf::RenderWindow& m_window;
 	float m_fps = 0.0f;
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Systems for managing different aspects of the technology simulation in the TechSimulationScene class
 	KnowledgeParticleMovementSystem m_kpSystem;
 	TechDiffusionSystem m_diffusionSystem;
 	TechEvolutionSystem m_evolutionSystem;
 	TechUnlockSystem m_unlockSystem;
 	ChunkManager& m_chunkManager;
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Scene state variables for the TechSimulationScene class
 	std::atomic<bool> m_isActive	{ true };		// Flag to indicate whether the scene is currently active and should be updated/rendered
 	std::atomic<uint64_t> m_jobGeneration{ 0 }; // Monotonic token used to cancel stale scheduled jobs across scene transitions
 	size_t m_civBudget = 200;					// process only 200 civs per frame
 	size_t m_lastCivIndex = 0;					// index of the last civ processed in the previous frame
 	std::chrono::steady_clock::time_point m_sceneStartTime; // Time point marking the start of the scene, used for tracking elapsed time
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Timers for scheduling jobs in the TechSimulationScene class
 	float m_diffusionTimer = 0.0f; // Timer for scheduling diffusion jobs
 	float m_evolutionTimer = 0.0f; // Timer for scheduling evolution jobs
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Intervals for scheduling jobs in the TechSimulationScene class
 	//const float m_diffusionInterval = 0.25f; // Interval for scheduling diffusion jobs
 	//const float m_evolutionInterval = 0.5f; // Interval for scheduling evolution jobs
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	float m_techAccumulator = 0.0f;
 	const float m_techInterval = 1.0f;
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	ParticleBVHSystem m_particleBVH;
 	float m_civCellSize = 100.0f; // Default cell size, adjust as needed
-	/////////////////////////////////
 };
 /////////////////////////////////

@@ -20,9 +20,8 @@
 
 
 /////////////////////////////////
-// CRectangle component - Represents a rectangle shape in the game, with properties for size, color, and position. This class inherits from CShape and implements the necessary methods to manipulate and render a rectangle shape using SFML.
-//								| 
-//								|___________________________________________________________________________________
+//	|	CRectangle component - Represents a rectangle shape in the game, with properties for size, color, and position. This class inherits from CShape and implements the necessary methods to manipulate and render a rectangle shape using SFML.
+//	|___________________________________________________________________________________
 class CRectangle : public CShape {
 private:
 	sf::RectangleShape m_rectangle;

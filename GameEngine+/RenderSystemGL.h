@@ -25,9 +25,8 @@ class TextureManager;
 
 
 /////////////////////////////////
-// GPUSpriteInstance - Represents a sprite instance for GPU rendering, including position, size, rotation, texture index, and color. This struct is used for instanced rendering of sprites in OpenGL, allowing for efficient rendering of multiple sprites with varying properties.
-//								|
-//								|_______________________________________________________________________
+//	|	GPUSpriteInstance - Represents a sprite instance for GPU rendering, including position, size, rotation, texture index, and color. This struct is used for instanced rendering of sprites in OpenGL, allowing for efficient rendering of multiple sprites with varying properties.
+//	|_______________________________________________________________________
 struct GPUSpriteInstance {
 	float x, y;			// Position
 	float w, h;			// Size
@@ -40,9 +39,8 @@ struct GPUSpriteInstance {
 
 
 /////////////////////////////////
-// GPUCircleInstance - Represents a circle instance for GPU rendering, including position, radius, and color. This struct is used for instanced rendering of circles in OpenGL, allowing for efficient rendering of multiple circles with varying properties.
-//								|
-//								|_______________________________________________________________________
+//	|	GPUCircleInstance - Represents a circle instance for GPU rendering, including position, radius, and color. This struct is used for instanced rendering of circles in OpenGL, allowing for efficient rendering of multiple circles with varying properties.
+//	|_______________________________________________________________________
 struct GPUCircleInstance {
 	float x, y;		  // Position
 	float radius;	  // Radius
@@ -53,9 +51,8 @@ struct GPUCircleInstance {
 
 
 /////////////////////////////////
-// GPUTextInstance - Represents a text instance for GPU rendering, including position, scale, and color. This struct is used for instanced rendering of text in OpenGL, allowing for efficient rendering of multiple text instances with varying properties.
-//								|
-//								|_______________________________________________________________________
+//	|	GPUTextInstance - Represents a text instance for GPU rendering, including position, scale, and color. This struct is used for instanced rendering of text in OpenGL, allowing for efficient rendering of multiple text instances with varying properties.
+//	|_______________________________________________________________________
 struct GPUTextInstance {
 	float x, y;		  // Position
 	float scale;	  // Scale
@@ -66,9 +63,8 @@ struct GPUTextInstance {
 
 
 /////////////////////////////////
-// GPUTextGlyphInstance - Represents a single glyph instance for GPU text rendering, including position, size, UV coordinates, and color. This struct is used for instanced rendering of individual glyphs in OpenGL, allowing for efficient rendering of text with varying properties.
-//								|
-//								|_______________________________________________________________________
+//	|	GPUTextGlyphInstance - Represents a single glyph instance for GPU text rendering, including position, size, UV coordinates, and color. This struct is used for instanced rendering of individual glyphs in OpenGL, allowing for efficient rendering of text with varying properties.
+//	|_______________________________________________________________________
 struct GPUTextGlyphInstance {
 	float texID;		// texture ID for the font atlas
 	float x, y;			// glyph position in pixels
@@ -84,10 +80,9 @@ struct GPUTextGlyphInstance {
 
 
 /////////////////////////////////
-// RenderSystemGL - Dedicated OpenGL rendering subsystem for the game engine. This class manages the rendering of various graphical elements, including sprites, circles, and text, using GPU instancing for efficient rendering. It provides methods for 
-// initializing OpenGL resources, rendering instances, and handling viewport resizing.
-//								|
-//								|_______________________________________________________________________
+//	|	RenderSystemGL - Dedicated OpenGL rendering subsystem for the game engine. This class manages the rendering of various graphical elements, including sprites, circles, and text, using GPU instancing for efficient rendering. It provides methods for 
+//	|	initializing OpenGL resources, rendering instances, and handling viewport resizing.
+//	|_______________________________________________________________________
 class RenderSystemGL {
 public:
 	RenderSystemGL();

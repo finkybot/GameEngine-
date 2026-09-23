@@ -18,6 +18,11 @@
 // ------------------------------------------------------------
 // Per-instance data layout for GPU instancing
 // ------------------------------------------------------------
+
+
+////////////////////////////////
+//	|	GPUInstanceData struct - Represents the per-instance data for GPU instancing of explosion effects. Each instance contains information about its position, size, age, lifetime, and color. This data is used by the GPU to render multiple instances of explosions efficiently in a single draw call.
+//	|_______________________________________________________________________
 struct GPUInstanceData {
 	float x;		  // center X
 	float y;		  // center Y
@@ -26,7 +31,13 @@ struct GPUInstanceData {
 	float lifetime;	  // total lifetime
 	float r, g, b, a; // color (RGBA)
 };
+////////////////////////////////
 
+
+
+////////////////////////////////
+//	|	GPUBarInstanceData struct - Represents the per-instance data for GPU instancing of equalizer bars. Each instance contains information about its position, size, and color. This data is used by the GPU to render multiple instances of equalizer bars efficiently in a single draw call.
+//	|_______________________________________________________________________
 struct GPUBarInstanceData {
 	float x;
 	float y;
@@ -34,10 +45,18 @@ struct GPUBarInstanceData {
 	float halfHeight;
 	float r, g, b, a;
 };
+////////////////////////////////
+
+
 
 // ------------------------------------------------------------
 // GPURenderSystem - Dedicated OpenGL rendering subsystem
 // ------------------------------------------------------------
+
+
+////////////////////////////////
+//	|	GPURenderSystem class - A dedicated OpenGL rendering subsystem for rendering GPU-driven effects such as explosions and equalizer bars. This class manages OpenGL resources, shader programs, and buffers for efficient rendering of multiple instances of effects in a single draw call.
+//	|	It provides methods for initializing, rendering, and managing the viewport.
 class GPURenderSystem {
 public:
 	GPURenderSystem();
@@ -89,3 +108,4 @@ private:
 
 	bool m_initialized = false;
 };
+////////////////////////////////

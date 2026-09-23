@@ -23,28 +23,19 @@ namespace fs = std::filesystem;
 
 
 /////////////////////////////////
-/// AssetManager class responsible for loading and managing game assets such as textures, sounds, etc.
-//								|
-//								|_______________________________________________________________________
+//	|	AssetManager class responsible for loading and managing game assets such as textures, sounds, etc.
+//	|_______________________________________________________________________
 class AssetManager {
-	/////////////////////////////////
-	// Public interface for the AssetManager class
 public:
-	/////////////////////////////////
-	// Constructor for the AssetManager class. Initializes the asset manager with a specified root path where assets are stored. This root path will be 
-	// used as the base directory for loading assets, allowing for organized asset management and easy retrieval of assets based on their relative paths within the root directory.
-	// Enforced to be explicit to prevent accidental implicit conversions from string literals, which could lead to unintended behavior when creating an AssetManager instance.
-	explicit AssetManager(const std::string& rootPath) : root(rootPath) {}
-	/////////////////////////////////
+	explicit AssetManager(const std::string& rootPath) : root(rootPath) {} // Constructor that initializes the AssetManager with a specified root path for asset storage. The root path is used as the base directory for all asset loading operations.
 
-
-
-	/////////////////////////////////
-	// ListAssets - lists all assets in a specified subdirectory with a given file extension. This method recursively searches through the specified subdirectory within the root directory and 
-	// collects paths of all files that match the specified extension, allowing for easy retrieval of assets based on their type (e.g., ".png" for textures, ".wav" for sounds) and organization within the asset directory structure.
+	// List assets in a specified subdirectory with a given file extension. This method recursively searches the specified subdirectory and its subdirectories for files matching the provided extension, and returns a vector of paths to the found assets.
 	std::vector<fs::path> listAssets(const std::string& subDir, const std::string& ext) const {
-		std::vector<fs::path> assets; // Vector to hold the paths of the assets found
-		fs::path dir = root / subDir; // Construct the full path to the subdirectory containing the assets
+		// Create a vector to hold the paths of the found assets
+		std::vector<fs::path> assets;
+
+		// Construct the full path to the subdirectory containing the assets by combining the root path with the specified subdirectory
+		fs::path dir = root / subDir;
 
 		//Check if the directory exists (and is a directory) before attempting to iterate through it
 		if (fs::exists(dir) && fs::is_directory(dir)) {
@@ -60,16 +51,10 @@ public:
 		}
 		return assets;
 	}
-	/////////////////////////////////
 
 
 
-	/////////////////////////////////
-	// Private member variable/s for the AssetManager class
 private:
-	/////////////////////////////////
-	// Root path for asset storage. This is the base directory where all assets are stored, and it will be used as a prefix for all asset loading operations.
 	fs::path root;
-	/////////////////////////////////
 };
 /////////////////////////////////

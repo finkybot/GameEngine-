@@ -15,9 +15,8 @@
 
 
 /////////////////////////////////
-// CTileMap component - stores a TileMap inside an entity so systems can operate on tilemaps via ECS
-// 								|
-//								|_______________________________________________________________________
+//	|	CTileMap component - stores a TileMap inside an entity so systems can operate on tilemaps via ECS
+//	|_______________________________________________________________________
 class CTileMap : public Component {
 public:
 

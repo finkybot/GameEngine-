@@ -22,6 +22,8 @@
 
 
 /////////////////////////////////
+//	|	PathJob - Represents a pathfinding job, including the entity ID, start and goal tile coordinates, request ID, and whether partial paths are allowed.
+//	|_______________________________________________________________________
 struct PathJob {
 	size_t entityId;
 	int startTx, startTy;
@@ -34,9 +36,8 @@ struct PathJob {
 
 
 /////////////////////////////////
-// PathJobResult - Represents the result of a pathfinding job, including the entity ID, request ID, and the resulting path points.
-//								|
-//								|_______________________________________________________________________
+//	|	PathJobResult - Represents the result of a pathfinding job, including the entity ID, request ID, and the resulting path points.
+//	|_______________________________________________________________________
 struct PathJobResult {
 	size_t entityId;
 	std::optional<std::vector<Vec2>> path;
@@ -45,27 +46,21 @@ struct PathJobResult {
 };
 /////////////////////////////////
 
+
+
 /////////////////////////////////
-// PathFindingSystem - A system responsible for managing pathfinding requests and results in the game engine. It interacts with the Pathfinder
-//								|
-//								|_______________________________________________________________________
+//	|	PathFindingSystem - A system responsible for managing pathfinding requests and results in the game engine. It interacts with the Pathfinder
+//	|_______________________________________________________________________
 class PathFindingSystem {
-	/////////////////////////////////
-	// Public interface for the PathFindingSystem class, including methods for updating the system and finding paths synchronously.
 public:
-	/////////////////////////////////
 	PathFindingSystem(ChunkManager& cm, EntityManager& em);
 	~PathFindingSystem();
 	void Update(float deltaTime);
 	std::optional<std::vector<Vec2>> FindPathSync(int startTx, int startTy, int goalTx, int goalTy);
-	/////////////////////////////////
-	 
-	 
-	
-	/////////////////////////////////
-	// Private member variables and methods for the PathFindingSystem class, including references to the ChunkManager, EntityManager, and Pathfinder,
+
+
+
 private:
-	/////////////////////////////////
 	ChunkManager& m_chunks;
 	EntityManager& m_entities;
 	Pathfinder m_pathfinder;
@@ -93,7 +88,6 @@ private:
 
 	void PushFailureResult(size_t entityId, uint32_t requestId);
 	void PushSuccessResult(size_t entityId, uint32_t requestId, const std::vector<Vec2>& path);
-	/////////////////////////////////
 };
 /////////////////////////////////
 

@@ -545,14 +545,14 @@ void MusicVisualiserScene::SpawnConfiguredExplosion(const Spawn::SpawnerConfig& 
 
 /////////////////////////////////
 // DrawAudioReactiveWindow - renders the ImGui window for controlling the audio reactive spawn settings and visualizer options. This method allows the user to enable or disable the reactive spawn system, toggle the equalizer overlay, and adjust various parameters for how entities 
-// are spawned in response to the music spectrum. The window is positioned in the bottom-right corner of the screen and is designed to be an overlay that does not interfere with the main visualizer display.
+// are spawned in response to the music spectrum. The window is positioned in the bottom-left corner of the screen and is designed to be an overlay that does not interfere with the main visualizer display.
 void MusicVisualiserScene::DrawAudioReactiveWindow() {
 	if (!(GImGui && GImGui->WithinFrameScope))
 		return;
 
-	// Position the Audio Reactive window in the bottom-right corner with a fixed size (first time only)
+	// Position the Audio Reactive window in the bottom-left corner with a fixed size (first time only)
 	ImVec2 winSize(380, 520);
-	ImVec2 pos((float)m_window.getSize().x - winSize.x - 10.0f, (float)m_window.getSize().y - winSize.y - 10.0f);
+	ImVec2 pos(10.0f, (float)m_window.getSize().y - winSize.y - 520.0f);
 
 	// Set next window position and size only on first appearance (ImGuiCond_FirstUseEver), allowing user to move/resize after that
 	ImGui::SetNextWindowPos(pos, ImGuiCond_FirstUseEver);

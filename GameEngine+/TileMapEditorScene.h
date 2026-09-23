@@ -19,45 +19,28 @@
 
 
 /////////////////////////////////
-// TileMapEditorScene class - implements a simple interactive tilemap editor scene with mouse input for toggling tiles, keyboard shortcuts for saving/loading, and an optional ImGui interface for 
-// additional controls. The scene manages a tile map data structure and allows the user to edit it in real-time, with support for saving and loading tile maps from files.
-//								|
-//								|_______________________________________________________________________
+//	|	TileMapEditorScene class - implements a simple interactive tilemap editor scene with mouse input for toggling tiles, keyboard shortcuts for saving/loading, and an optional ImGui interface for additional controls. The scene manages a tile map data structure and allows the user to edit it in real-time, with support for saving and loading 
+//	|	tile maps from files.
+//	|_______________________________________________________________________
 class TileMapEditorScene : public Scene {
-	/////////////////////////////////
-	// Public Methods
 public:
-	/////////////////////////////////
-	// Constructor and destructor for the TileMapEditorScene class. The constructor initializes the tile map editor scene with references to the game engine, render window, and entity manager, 
-	// while the destructor is defaulted since we don't have any special cleanup logic, but we could add it if needed in the future.
+	// Constructor and destructor for the TileMapEditorScene class. The constructor initializes the tile map editor scene with references to the game engine, render window, and entity manager, while the destructor is defaulted since we don't have any special cleanup logic, but we could add it if needed in the future.
 	TileMapEditorScene(	GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager);
 	~TileMapEditorScene() override;
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Override virtual methods from Scene base class
 	void Update(float deltaTime) override;
 	void Render() override;
 	void DoAction() override;
 	void RenderDebugOverlay() override; // Optional method to render debug visuals on top of the main render, can be used for things like grid lines, tile highlights, etc.
 	bool IsImGuiEnabled() override { return m_enableImGui; } // Allow toggling ImGui on/off for debugging purposes
-	/////////////////////////////////
-	 
-	
 
-	/////////////////////////////////	
 	// Event handling methods
 	void HandleEvent(const std::optional<sf::Event>& event) override;
 	void OnEnter() override;
 	void OnExit() override;
 	void OnWindowResized(sf::Vector2u newSize) override;
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Resource management methods
 	void LoadResources() override;
 	void UnloadResources() override;
@@ -65,21 +48,13 @@ public:
 
 
 
-	/////////////////////////////////
-	// Private methods
 private:
-	/////////////////////////////////
-	// Helper methods for the TileMapEditorScene class. These methods include logic for drawing grid lines based on the tile map dimensions and tile size, processing user input for editing 
-	//the tile map, and toggling tiles at specific coordinates.
+	// Helper methods for the TileMapEditorScene class. These methods include logic for drawing grid lines based on the tile map dimensions and tile size, processing user input for editing the tile map, and toggling tiles at specific coordinates.
 	void DrawGrid();
 	void ProcessInput();
 	void ToggleTileAt(int tx, int ty, bool setSolid);
 	void LoadTileMapFromPath(const std::string& fullpath);	// Load tilemap using FileManager
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// private member variables
 	sf::RenderWindow& m_window;				// Reference to the SFML render window for rendering the scene
 	TileMap m_tileMap;						// The tile map data structure

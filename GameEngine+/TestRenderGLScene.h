@@ -11,6 +11,9 @@
 
 
 /////////////////////////////////
+//	|	TestRenderGLScene class declaration, derived from the Scene base class. This scene is responsible for rendering OpenGL content and managing entities within the scene. It includes methods for updating, rendering, handling events, and managing the scene lifecycle. 
+//	|	The scene also has a random number generator for generating random values used in the scene.
+//	|___________________________________________________________________________________
 class TestRenderGLScene : public Scene {
 public:
 	TestRenderGLScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em);

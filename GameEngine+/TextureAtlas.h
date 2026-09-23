@@ -26,9 +26,8 @@ typedef unsigned int GLuint;
 
 
 /////////////////////////////////
-// QuadTemplate struct - Represents a quad made of 6 vertices (2 triangles) for rendering a tile from the texture atlas. Each vertex contains position and texture coordinates.
-//								|
-//								|_______________________________________________________________________
+//	|	QuadTemplate struct - Represents a quad made of 6 vertices (2 triangles) for rendering a tile from the texture atlas. Each vertex contains position and texture coordinates.
+//	|_______________________________________________________________________
 struct QuadTemplate {
 	sf::Vertex v[6];
 };
@@ -37,9 +36,8 @@ struct QuadTemplate {
 
 
 /////////////////////////////////
-// TextureAtlas: simple atlas that slices a texture into fixed-size tiles and exposes their rects.
-//								|
-//								|_______________________________________________________________________
+//	|	TextureAtlas: simple atlas that slices a texture into fixed-size tiles and exposes their rects.
+//	|_______________________________________________________________________
 class TextureAtlas {
 public:
 	// Constructor and destructor for the TextureAtlas class. The default constructor initializes an empty texture atlas, while the destructor ensures that any loaded texture resources are properly cleaned up when the atlas is destroyed.
@@ -57,13 +55,19 @@ public:
 
 	uint64_t GetBindlessHandle() const {return m_bindlessHandle;}			// GetBindlessHandle - Returns the OpenGL bindless texture handle for the atlas, allowing for efficient binding of the texture in OpenGL shaders and rendering pipelines.
 
-	// TileRect struct - Simple rect type for tile coordinates
+
+
+	////////////////////////////////
+	//	|	TileRect struct - Simple rect type for tile coordinates
+	//	|_______________________________________________________________________
 	struct TileRect {
 		int x;
 		int y;
 		int w;
 		int h;
 	};
+	////////////////////////////////
+
 
 
 	std::shared_ptr<sf::Texture> GetTexture() const { return m_texture; }	// Get texture shared pointer (may be null if not loaded)

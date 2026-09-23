@@ -18,54 +18,27 @@
 
 
 /////////////////////////////////
-// TechEvolutionSystem class - Manages the evolution of technologies in a civilization. It processes entities with CCivilisationTech and CTechNode, handling the progression and unlocking of technologies based on defined rules and dependencies.
-//								|
-//								|_______________________________________________________________________
+//	|	TechEvolutionSystem class - Manages the evolution of technologies in a civilization. It processes entities with CCivilisationTech and CTechNode, handling the progression and unlocking of technologies based on defined rules and dependencies.	
+//	|_______________________________________________________________________
 class TechEvolutionSystem : public System {
-	/////////////////////////////////
-	// Public interface for the TechEvolutionSystem class
 public:
-	/////////////////////////////////
 	TechEvolutionSystem(TechRegistry& techRegistry) : techRegistry(techRegistry) {}
-	/////////////////////////////////
-	 
 
-	
-	/////////////////////////////////
 	void ProcessCivilisationTech(Entity* entity, CCivilisationTech* civTechComp, EntityManager& entityManager, float dt);
-	/////////////////////////////////
 
-
-	
-	/////////////////////////////////
 	float globalResearchRate = 0.66f; // Global research rate modifier affecting all civilizations
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Update - Overrides the base class Update method to implement the technology evolution logic. It processes all entities with CCivilisationTech and CTechNode, updating their research progress and unlocking technologies as appropriate.
 	void Update(float dt, EntityManager& entityManager) override;
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// GetTotalTechCompleted - Returns the total number of technologies completed across all civilizations. This can be used for tracking overall progress in the game or for analytics purposes.
 	size_t GetTotalTechCompleted() const { return m_totalTechCompleted;	}
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// SetDiffusionConfig - Sets the configuration for world diffusion
 	void SetDiffusionConfig(WorldDiffusionConfig* cfg) { m_diffusionConfig = cfg; }
-	/////////////////////////////////
 
 
 
-	/////////////////////////////////
-	// Private member variables for the TechEvolutionSystem class. These variables can be used to track internal state, configuration, or other relevant data needed for the system's operation.
 private:
 	TechRegistry& techRegistry; // Reference to the TechRegistry for accessing technology nodes and their properties	
 
@@ -76,6 +49,5 @@ private:
 
 	WorldDiffusionConfig* m_diffusionConfig = nullptr;
 	size_t m_totalTechCompleted = 0; // Total number of technologies completed across all civilizations
-
 };
 /////////////////////////////////

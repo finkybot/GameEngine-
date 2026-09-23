@@ -14,9 +14,8 @@
 
 
 /////////////////////////////////
-// CTexture component - represents a texture to be rendered for an entity, with properties for the texture atlas key, tile index, visibility, z-order for rendering control, and optional area dimensions for rendering larger textures that cover multiple tiles.
-// 								|
-//								|_______________________________________________________________________
+//	|	CTexture component - represents a texture to be rendered for an entity, with properties for the texture atlas key, tile index, visibility, z-order for rendering control, and optional area dimensions for rendering larger textures that cover multiple tiles.
+//	|_______________________________________________________________________
 class CTexture : public Component {
 public:
 	// Member variables

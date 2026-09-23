@@ -15,9 +15,8 @@
 
 
 /////////////////////////////////
-// CCivilisationTech - 
-//								|
-//								|_______________________________________________________________________
+//	|	CCivilisationTech - 
+//	|_______________________________________________________________________
 class CCivilisationTech : public Component {
 public:
 	// Technology progress tracking

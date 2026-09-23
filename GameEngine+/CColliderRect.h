@@ -12,9 +12,8 @@
 
 
 /////////////////////////////////
-// CColliderRect - A simple structure representing a rectangular collider with width and height properties.
-//								|
-//								|_______________________________________________________________________
+//	|	CColliderRect - A simple structure representing a rectangular collider with width and height properties.
+//	|_______________________________________________________________________
 struct CColliderRect: public Component {
 	float w;
 	float h;

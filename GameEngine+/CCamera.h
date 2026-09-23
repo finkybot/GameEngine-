@@ -14,9 +14,8 @@
 
 
 /////////////////////////////////
-// CCamera component -	Represents a camera in the game world, with properties for position, zoom, rotation, viewport size, and camera shake effects.
-//						|
-//						|___________________________________________________________________________________
+//	|	CCamera component -	Represents a camera in the game world, with properties for position, zoom, rotation, viewport size, and camera shake effects.
+//	|___________________________________________________________________________________
 class CCamera : public Component {
 public:
 	/////////////////////////////////

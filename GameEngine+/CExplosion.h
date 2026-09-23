@@ -20,13 +20,13 @@
 
 
 /////////////////////////////////
-// CExplosion component - represents an explosion shape with properties and methods for drawing, movement, and collision handling
+// |	CExplosion component - represents an explosion shape with properties and methods for drawing, movement, and collision handling
+// |___________________________________________________________________________________
 class CExplosion : public CShape {
 	// Public data members for CExplosion
 public:
 	sf::CircleShape m_circle; // SFML CircleShape object representing the visual circle shape
 	uint64_t age = 0; // Age of the explosion in frames or time units, used for managing the lifecycle of the explosion
-
 
 
 
@@ -36,9 +36,7 @@ protected:
 
 
 
-
 public:
-
 	// Constructorr for the CExplosion component. The default constructor initializes the circle with default properties
 	CExplosion() {
 		m_circle = sf::CircleShape(3.f);

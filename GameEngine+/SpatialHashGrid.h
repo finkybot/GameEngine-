@@ -17,57 +17,38 @@
 
 
 /////////////////////////////////
-// SpatialHashGrid is a spatial partitioning data structure that divides the 2D world into a grid of cells and hashes objects into those cells based on their positions.
-// It allows for efficient querying of nearby objects within a specified radius, which is useful for collision detection and other spatial queries in a game.
-// The grid is implemented using an unordered_map where the key is a hash representing the cell coordinates and the value is a vector of pointers to objects that occupy that cell.
-// The class provides methods for inserting objects into the grid, clearing the grid, and querying for nearby objects while optionally excluding a specific object from the results (e.g. to avoid self-collision checks).
-// It also includes instrumentation for tracking query performance metrics such as total queries and total objects queried.
-//								|
-//								|_______________________________________________________________________
+//	|	SpatialHashGrid is a spatial partitioning data structure that divides the 2D world into a grid of cells and hashes objects into those cells based on their positions. It allows for efficient querying of nearby objects within a specified radius, which is useful for collision detection and other spatial queries in a game.
+//	|	The grid is implemented using an unordered_map where the key is a hash representing the cell coordinates and the value is a vector of pointers to objects that occupy that cell.The class provides methods for inserting objects into the grid, clearing the grid, and querying for nearby objects while optionally excluding a 
+//	|	specific object from the results (e.g. to avoid self-collision checks). It also includes instrumentation for tracking query performance metrics such as total queries and total objects queried.
+//	|_______________________________________________________________________
 template <typename T>
 class SpatialHashGrid {
-	/////////////////////////////////
-	// Private member variables for the SpatialHashGrid class.
 private:
-	/////////////////////////////////
 	// The size of each cell in the grid, which determines how objects are hashed into cells based on their positions. A smaller cell size will result in more cells and potentially more precise queries, but may also increase memory usage 
 	// and reduce performance if there are many objects clustered in the same area.
 	float m_cellSize;
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// The grid itself, implemented as an unordered_map where the key is a hash representing the cell coordinates and the value is a vector of pointers to objects that occupy that cell. This allows for efficient storage and retrieval of objects based on their spatial location.
 	std::unordered_map<size_t, std::vector<T*>> m_grid;
-	/////////////////////////////////
 
-
-
-	/////////////////////////////////
 	// Static variables for tracking query performance metrics. These variables are incremented during query operations to allow developers to analyze the efficiency of the spatial hash grid and optimize it if necessary. They can be reset at the beginning of each 
 	// frame or query session to track metrics for specific time periods.
 	inline static size_t s_totalQueriesThisFrame = 0;
 	inline static size_t s_totalObjectsQueried = 0;
 	inline static size_t s_queryCount = 0;
-	/////////////////////////////////
-	 
-	 
 
-	/////////////////////////////////
-	// Private methods
+
+
 private:
-	/////////////////////////////////
-	// GetCellHash function to convert 2D coordinates to a unique hash for the corresponding cell. It calculates the cell coordinates by dividing the position by the cell size and then uses a pairing function (Cantor pairing) 
-	// to combine the cell coordinates into a single hash value. This ensures that objects in the same cell will have the same hash, allowing for efficient storage and retrieval in the grid.
+	// GetCellHash function to convert 2D coordinates to a unique hash for the corresponding cell. It calculates the cell coordinates by dividing the position by the cell size and then uses a pairing function (Cantor pairing) to combine the cell coordinates into a single hash value. This ensures that objects in the 
+	// same cell will have the same hash, allowing for efficient storage and retrieval in the grid.
 	static size_t GetCellHash(float x, float y, float cellSize) noexcept {
 		int cellX = static_cast<int>(x / cellSize);
 		int cellY = static_cast<int>(y / cellSize);
 		return GetCellHashFromCell(cellX, cellY);
 	}
 
-	// Signed-int-safe cell hash helper. Maps signed cell coordinates to unsigned space first,
-	// then applies Cantor pairing so negative cell coords do not alias unexpectedly.
+	// Signed-int-safe cell hash helper. Maps signed cell coordinates to unsigned space first, then applies Cantor pairing so negative cell coords do not alias unexpectedly.
 	static size_t GetCellHashFromCell(int cellX, int cellY) noexcept {
 		auto toUnsigned = [](int v) -> unsigned long long {
 			long long lv = static_cast<long long>(v);
@@ -81,47 +62,28 @@ private:
 		const unsigned long long hash = (sum * (sum + 1ULL)) / 2ULL + uy;
 		return static_cast<size_t>(hash);
 	}
-	/////////////////////////////////
 
 
 
-	/////////////////////////////////
-	// Public methods for the SpatialHashGrid class.
 public:
-	/////////////////////////////////
-	// Constructors ~ Destructors.
 	SpatialHashGrid(float cellSize = 100.0f) : m_cellSize(cellSize) {}
 	~SpatialHashGrid() { Clear(); }
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// Clear - Clears all objects from the spatial grid.
 	void Clear() noexcept { m_grid.clear(); }
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// Insert - Inserts an object into the spatial grid based on its center point position.
 	void Insert(T* object) noexcept {
 		const Vec2& pos = object->GetCentrePoint();
 		size_t hash = GetCellHash(pos.GetX(), pos.GetY(), m_cellSize);
 		m_grid[hash].push_back(object);
 	}
-	/////////////////////////////////
 
-
-
-
-
-
-	/////////////////////////////////
-	// Query - Overloaded version of the Query method. Performs a spatial query to find all objects within a specified radius of a position using a grid-based spatial hash. I'll store the results in the provided outFound vector, this version of the method
-	// will include any objects found within the query radius, excluding the object passed to the query (e.g. the object performing the query so theres no self collision). The query works by checking all cells within a radius
-	// of the given position. For each cell, we calculate the hash and look up any objects in that cell. We then check the distance from each object to the query position to determine if it falls within the query radius,
-	// and if so, we add it to the outFound vector. We also increment our query performance counters for monitoring.
+	// Query - Overloaded version of the Query method. Performs a spatial query to find all objects within a specified radius of a position using a grid-based spatial hash. I'll store the results in the provided outFound vector, this version of the method will include any objects found within the query radius, excluding the object 
+	// passed to the query (e.g. the object performing the query so theres no self collision). The query works by checking all cells within a radius of the given position. For each cell, we calculate the hash and look up any objects in that cell. We then check the distance from each object to the query position to determine if it 
+	// falls within the query radius, and if so, we add it to the outFound vector. We also increment our query performance counters for monitoring.
 	void Query(std::vector<T*>& outFound, const Vec2& position, float queryRadius, const T* excludeObject) const noexcept {
 		++s_queryCount; // Increment query count for performance monitoring.
 		outFound.clear();
@@ -164,52 +126,34 @@ public:
 
 		++s_totalQueriesThisFrame; // Increment total queries for performance monitoring.
 	}
-	/////////////////////////////////
 	 
 	 
-	
-	/////////////////////////////////
 	// ResetQueryStats - Static query statistics method for performance monitoring. Resets the query statistics counters (this should be called at the start of each frame to track per-frame query performance).
 	static void ResetQueryStats() noexcept {
 		s_totalQueriesThisFrame = 0;
 		s_totalObjectsQueried = 0;
 		s_queryCount = 0;
 	}
-	/////////////////////////////////
-	 
-	
 
-	/////////////////////////////////
+
 	// GetQueryCount - Static query statistics method for performance monitoring. Gets the total number of queries performed in the current frame.
 	static size_t GetQueryCount() noexcept { return s_queryCount; }
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// GetTotalObjectsQueried - Static query statistics method for performance monitoring. Gets the total number of objects queried across all queries.
 	static size_t GetTotalObjectsQueried() noexcept { return s_totalObjectsQueried; }
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// GetAverageObjectsPerQuery - Static query statistics method for performance monitoring. Gets the average number of objects returned per query, calculated as total objects queried divided by total queries, with a check to avoid division by zero.
 	static double GetAverageObjectsPerQuery() noexcept {
 		return s_queryCount > 0 ? static_cast<double>(s_totalObjectsQueried) / s_queryCount : 0.0;
 	}
-	/////////////////////////////////
-	
 
 
-	/////////////////////////////////
 	// GetCellCount - Gets the total number of cells currently stored in the grid (debugging/monitoring method).
 	size_t GetCellCount() const noexcept { return m_grid.size(); }
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// GetTotalObjectCount - Gets the total number of objects stored across all grid cells. (debugging/monitoring method).
 	size_t GetTotalObjectCount() const noexcept {
 		size_t total = 0;
@@ -218,6 +162,5 @@ public:
 		}
 		return total;
 	}
-	/////////////////////////////////
 };
 /////////////////////////////////

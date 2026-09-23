@@ -12,11 +12,9 @@
 
 
 /////////////////////////////////
-// WorldDiffusionConfig - Configuration parameters for world diffusion behavior
-//								|
-//								|_______________________________________________________________________
+//	|	WorldDiffusionConfig - Configuration parameters for world diffusion behavior
+//	|_______________________________________________________________________
 struct WorldDiffusionConfig {
-	/////////////////////////////////
 	float worldWidth;
 	float worldHeight;
 
@@ -26,6 +24,5 @@ struct WorldDiffusionConfig {
 	float diffusionInterval;	   // scales with world size
 	float densityFactor;		   // civCount / (worldWidth * worldHeight)
 	float proximityFalloffScale;   // optional tuning
-	/////////////////////////////////
 };
 /////////////////////////////////

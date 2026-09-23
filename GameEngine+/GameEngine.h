@@ -48,10 +48,8 @@ class Scene; // Forward declaration of Scene class to avoid circular dependency 
 
 
 /////////////////////////////////
-// GameEngine class definition. This class is responsible for managing the main game loop, handling scenes, and providing access to various 
-// managers for fonts, textures, entities, and input. It is implemented as a singleton
-//								|
-//								|_______________________________________________________________________
+//	|	GameEngine class definition. This class is responsible for managing the main game loop, handling scenes, and providing access to various managers for fonts, textures, entities, and input. It is implemented as a singleton
+//	|_______________________________________________________________________
 class GameEngine {
 
 private:

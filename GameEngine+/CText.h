@@ -16,9 +16,8 @@
 
 
 /////////////////////////////////
-// CText component - represents a text element with properties for the text content, font, character size, color, alignment, visibility, and optional z-order for rendering control.
-//								|
-//								|___________________________________________________________________________________
+//	|	CText component - represents a text element with properties for the text content, font, character size, color, alignment, visibility, and optional z-order for rendering control.
+//	|___________________________________________________________________________________
 class CText : public Component {
 public:
 	// Member variables

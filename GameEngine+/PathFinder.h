@@ -25,8 +25,8 @@ using Path = std::vector<Vec2>;
 
 
 /////////////////////////////////
-//								|
-//								|_______________________________________________________________________
+//	|	Portal struct - Represents a portal in the pathfinding algorithm, defined by its left and right Vec2 points. Portals are used in the funneling process to smooth paths and reduce unnecessary turns, allowing for more efficient navigation through the tile-based world.
+//	|_______________________________________________________________________
 struct Portal {
 	Vec2 left;
 	Vec2 right;
@@ -37,19 +37,14 @@ struct Portal {
 
 
 /////////////////////////////////
-// Pathfinder class - Implements a basic A* pathfinding algorithm for finding paths in a tile-based world managed by ChunkManager.
-//								|
-//								|_______________________________________________________________________
+//	|	Pathfinder class - Implements a basic A* pathfinding algorithm for finding paths in a tile-based world managed by ChunkManager.
+//	|_______________________________________________________________________
 class Pathfinder {
-	//////////////////////////////
-	// Public interface for the Pathfinder class, including methods for finding paths and checking tile properties.
 public:
 	explicit Pathfinder(ChunkManager& cm);
 
 	std::optional<Path> FindPath(int startTileX, int startTileY, int goalTileX, int goalTileY);
 
-	//////////////////////////////
-	// Private member variables and helper methods for the Pathfinder class, including a reference to the ChunkManager and methods for checking tile bounds,
 private:
 	ChunkManager& m_chunkManager;
 
@@ -63,6 +58,5 @@ private:
 	bool InBounds(int tx, int ty) const;
 	bool IsBlocked(int tx, int ty) const;
 	float Heuristic(int x, int y, int gx, int gy) const;
-	//////////////////////////////
 };
 ///////////////////////////////

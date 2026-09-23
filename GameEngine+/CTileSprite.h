@@ -16,9 +16,8 @@
 
 
 /////////////////////////////////
-// CTileSprite component -	Represents a tile sprite in the game world, with properties for the texture atlas key, tile index, size, color, and visibility.
-//								|
-//								|___________________________________________________________________________________
+//	|	CTileSprite component -	Represents a tile sprite in the game world, with properties for the texture atlas key, tile index, size, color, and visibility.
+//	|___________________________________________________________________________________
 class CTileSprite : public Component {
 public:
 	std::string atlasKey;					// key used with TextureManager

@@ -20,9 +20,8 @@
 
 
 /////////////////////////////////
-// FontType - Enum representing different font types supported by the font system.
-//								|
-//								|___________________________________________________________________________________
+//	|	FontType - Enum representing different font types supported by the font system.
+//	|___________________________________________________________________________________
 enum class FontType {
 	BMFont, // Bitmap font
 	SDF		// Signed Distance Field font (planned for future support)
@@ -33,9 +32,8 @@ enum class FontType {
 
 
 /////////////////////////////////
-//Glyph - Represents a single glyph (character) in a font, including its texture coordinates, size, offset, and advance for rendering text.
-//								|
-//								|___________________________________________________________________________________
+//	|	Glyph - Represents a single glyph (character) in a font, including its texture coordinates, size, offset, and advance for rendering text.
+//	|___________________________________________________________________________________
 struct Glyph {
 	int id;					// Character ID (Unicode code point)
 	
@@ -58,9 +56,8 @@ struct Glyph {
 
 
 /////////////////////////////////
-// KearningPair - Represents a kerning pair for adjusting the spacing between specific pairs of characters in a font.
-//								|
-//								|___________________________________________________________________________________
+//	|	KearningPair - Represents a kerning pair for adjusting the spacing between specific pairs of characters in a font.
+//	|___________________________________________________________________________________
 struct KerningPair {
 	int first;	  // First character ID in the kerning pair
 	int second;	  // Second character ID in the kerning pair
@@ -71,9 +68,8 @@ struct KerningPair {
 
 
 /////////////////////////////////
-// FontAsset - Represents a font asset, including its type, size, line height, and a mapping of glyphs for rendering text.
-//								|
-//								|___________________________________________________________________________________
+//	|	FontAsset - Represents a font asset, including its type, size, line height, and a mapping of glyphs for rendering text.
+//	|___________________________________________________________________________________
 struct FontAsset {
 	// Font type and name
 	FontType type;							// Type of the font (BMFont, SDF, etc.)
@@ -105,55 +101,34 @@ struct FontAsset {
 
 
 /////////////////////////////////
-// Fontsystem - Manages font assets, loading, and rendering of text using different font types (BMFont, SDF, etc.). This class is responsible for loading font data, managing glyphs, and providing access to font metrics for rendering text in the game engine.
-//								|
-//								|___________________________________________________________________________________
+//	|	Fontsystem - Manages font assets, loading, and rendering of text using different font types (BMFont, SDF, etc.). This class is responsible for loading font data, managing glyphs, and providing access to font metrics for rendering text in the game engine.
+//	|___________________________________________________________________________________
 class Fontsystem {
-	/////////////////////////////////
-	// Public methods for the Fontsystem class
 public:
-	/////////////////////////////////
 	// LoadBMFont - Loads a font asset
 	bool LoadBMFont(const std::string& fontName, const std::string& filePath, const std::string& pngPath);
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// GetFont - Retrieves a font asset by its name. Returns a pointer to the FontAsset if found, nullptr otherwise.
 	const FontAsset* GetFont(const std::string& fontName) const;
-	/////////////////////////////////
 
 
-	
-	/////////////////////////////////
 	// GetKerning - Retrieves the kerning amount for a specific pair of characters in a given font. Returns the kerning amount if found, 0.0f otherwise.
 	float GetKerning(const FontAsset& font, int firstCharID, int secondCharID) const;
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	const Glyph* GetGlyph(const FontAsset& font, int charID) const;
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// GetLoadedFonts - Retrieves a list of names of all loaded font assets.
 	std::vector<std::string> GetLoadedFonts() const;
-	/////////////////////////////////
 
 
-
-	/////////////////////////////////
 	// Private data members for the Fontsystem class
 private:
 	std::unordered_map<std::string, FontAsset> m_fonts;
 
-
-	/////////////////////////////////
 	bool ParseBMFontText(const std::string& filePath, FontAsset& fontAsset);
-	bool LoadBMFontTexture(const std::string& pngPath, FontAsset& fontAsset);
-	/////////////////////////////////	
+	bool LoadBMFontTexture(const std::string& pngPath, FontAsset& fontAsset);	
 };
+////////////////////////////////

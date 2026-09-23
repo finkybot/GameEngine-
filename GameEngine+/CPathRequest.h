@@ -19,9 +19,8 @@
 
 
 /////////////////////////////////
-// CPathRequest component - Represents a pathfinding request in the game world, with properties for the target position, partial path allowance, immediate search preference, and an optional request ID.
-//						|
-// 						|___________________________________________________________________________________
+//	|	CPathRequest component - Represents a pathfinding request in the game world, with properties for the target position, partial path allowance, immediate search preference, and an optional request ID.
+//	|___________________________________________________________________________________
 struct CPathRequest : public Component {
 	Vec2 targetWorld; // world-space target position (or tile center)
 	bool allowPartial = true;
@@ -35,9 +34,8 @@ struct CPathRequest : public Component {
 
 
 /////////////////////////////////
-// CPath component - Represents the result of a pathfinding request, with properties for the path points, echoed request ID, and completion status.
-// 						|
-//						|___________________________________________________________________________________
+//	|	CPath component - Represents the result of a pathfinding request, with properties for the path points, echoed request ID, and completion status.
+//	|___________________________________________________________________________________
 struct CPath : public Component {
 	std::vector<Vec2> points; // world-space path polyline
 	uint32_t requestId = 0;	  // echoed request id
@@ -50,10 +48,9 @@ struct CPath : public Component {
 
 
 /////////////////////////////////
-// CPathFollower component - Tracks movement state for entities following paths. Add this component to enable path following. Set isActive=true to start movement. The MovementSystem will advance the entity along CPath::points each frame.
-// When the last waypoint is reached, isActive is set to false automatically.
-// 						|
-//						|___________________________________________________________________________________
+//	|	CPathFollower component - Tracks movement state for entities following paths. Add this component to enable path following. Set isActive=true to start movement. The MovementSystem will advance the entity along CPath::points each frame.
+//	|	When the last waypoint is reached, isActive is set to false automatically.
+//	|___________________________________________________________________________________
 struct CPathFollower : public Component {
 	// Public member variables for the CPathFollower component
 	float speed = 50.0f;						// movement speed in pixels per second

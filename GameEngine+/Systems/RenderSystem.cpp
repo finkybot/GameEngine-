@@ -145,7 +145,6 @@ void RenderSystem::RenderShapes(const std::vector<std::unique_ptr<Entity>>& enti
 	static int frameCount = 0;
 	frameCount++;
 	if (frameCount == 60 || frameCount % 60 == 0) {  // First time and every 60 frames
-		//std::cout << "[RenderSystem::RenderShapes] Processing " << entities.size() << " entities (frame " << frameCount << ")\n";
 		int shapeCount = 0;
 		int aliveCount = 0;
 		for (const auto& entity : entities) {

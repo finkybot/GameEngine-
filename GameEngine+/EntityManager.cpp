@@ -49,7 +49,7 @@ EntityManager::EntityManager(sf::RenderWindow& window, float cellSize): m_window
 	// Store the ID of the thread that created this EntityManager instance for debugging purposes. This allows us to assert that certain methods are only called from the owning thread, which can help catch threading issues during development.
 	m_ownerThreadId = std::this_thread::get_id();
 
-	m_spatialIndex = std::make_unique<SpatialIndexUnified>(100.0f); // Initialize the spatial index with a reference to this EntityManager
+	m_spatialIndex = std::make_unique<SpatialIndexUnified>(32.0f); // Use a smaller dynamic cell size for tighter collision broadphase queries
 }
 /////////////////////////////////
 
@@ -257,6 +257,43 @@ void EntityManager::SetEntityLayer(Entity* e, Entity::Layer layer) {
 
 
 /////////////////////////////////
+// RenderGLShapes - prepares GPU instances for circles and explosions, then hands them to GPURenderSystem.
+void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem) {
+	std::vector<GPUShapeInstance> circleInstances;
+	std::vector<GPUInstanceData> explosionInstances;
+
+	auto now = std::chrono::high_resolution_clock::now();
+
+	for (auto& e : GetEntities()) {
+		Entity* entity = e.get();
+		auto* shape = entity->GetComponent<CShape>();
+		auto* tform = entity->GetComponent<CTransform>();
+		if (!shape || !tform)
+			continue;
+
+		sf::Color c = shape->GetColor();
+
+		if (entity->GetType() == EntityType::Explosion) {
+			float ageMs = std::chrono::duration<float, std::milli>(now - entity->m_creationTime).count();
+			float lifetimeMs = 4500.0f;
+
+			explosionInstances.push_back(GPUInstanceData{tform->position.x, tform->position.y, shape->GetRadius(),
+														 ageMs, lifetimeMs, c.r / 255.0f, c.g / 255.0f, c.b / 255.0f,
+														 c.a / 255.0f});
+		} else {
+			circleInstances.push_back(GPUShapeInstance{tform->position.x, tform->position.y, shape->GetRadius(),
+													   c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, c.a / 255.0f});
+		}
+	}
+
+	gpuRenderSystem.RenderCircles(circleInstances);
+	gpuRenderSystem.RenderExplosions(explosionInstances);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // AddTileMapAsEntities - processes a tile map and creates entities for solid tiles, using a greedy rectangle merging algorithm to combine contiguous solid tiles into larger rectangles for efficient collision handling. This method ensures that the spatial hash grid is updated 
 // to match the tile size for optimal performance when querying tile entities.
 void EntityManager::AddTileMapAsEntities(const TileMap& map, int tileValueToTreatAsSolid) {
@@ -326,35 +363,51 @@ void EntityManager::AddTileMapAsEntities(const TileMap& map, int tileValueToTrea
 // that entities are rendered in the correct order based on their layers.
 /////////////////////////////////
 void EntityManager::UpdateSpatialHashAndRender() {
-	if (!m_layerRegistry) {
-    // Skip spatial layers until scene wires them
-    m_renderSystem.RenderShapes(m_entities, m_window);
-    return;
-}
-	assert(m_layerRegistry != nullptr && "Layer registry not set");
-	// Clear all named layers
-	m_layerRegistry->ClearAllLayers();
 
-	// Rebuild each layer using filters
-	for (auto& entity : m_entities) {
-		Entity* e = entity.get();
+	// Spatial layer update stays the same
+	if (m_layerRegistry) {
+		m_layerRegistry->ClearAllLayers();
 
-		for (auto& [name, entry] : m_layerRegistry->GetAllLayers()) {
-			if (MatchesFilter(e, entry.filter))
-				entry.grid.Insert(e);
+		for (auto& entity : m_entities) {
+			Entity* e = entity.get();
+			for (auto& [name, entry] : m_layerRegistry->GetAllLayers()) {
+				if (MatchesFilter(e, entry.filter))
+					entry.grid.Insert(e);
+			}
 		}
 	}
 
-	// Rendering stays the same
-	m_renderSystem.RenderShapes(m_entities, m_window);
+	// Now respect rendering flags
+	if (m_sfmlRenderingEnabled) {
+		m_renderSystem.RenderShapes(m_entities, m_window);
+	}
+
+	if (m_GLRenderingEnabled) {
+		//RenderGLShapes(m_gpuRenderSystem); // or pass from GameEngine
+	}
 }
+
 
 
 /////////////////////////////////
 // RenderShapes - renders the shapes of all entities in the EntityManager using the RenderSystem. Direct rendering to window (not queued).
-/////////////////////////////////
 void EntityManager::RenderShapes() {
-	m_renderSystem.RenderShapes(m_entities, m_window);
+	//std::cout << "RenderShapes called for " << m_entities.size() << " entities" << std::endl;
+
+	if (m_sfmlRenderingEnabled) {
+		//std::cout << "Rendering " << m_entities.size() << " entities" << std::endl;
+		m_renderSystem.RenderShapes(m_entities, m_window);
+	}
+
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Calls GL Rendering cleanly
+void EntityManager::RenderGL(GPURenderSystem& gpuRenderSystem) {
+	RenderGLShapes(gpuRenderSystem);
 }
 /////////////////////////////////
 
@@ -373,9 +426,11 @@ void EntityManager::ValidateIntegrity() const {
 
 
 /////////////////////////////////
-// RenderText - renders the text components of all entities using the RenderSystem in screen space (UI coordinates).
-// We switch to the default view before rendering text so it appears in screen space, then restore the previous view.
+// RenderText - renders the text components of all entities using the RenderSystem in screen space (UI coordinates). We switch to the default view before rendering text so it appears in screen space, then restore the previous view.
 void EntityManager::RenderText() {
+	// disable rendering if SFML is not enabled (e.g., we using OpenGL directly for rendering)
+	if (!m_sfmlRenderingEnabled)
+		return;
 	sf::View prevView = m_window.getView();
 	m_window.setView(m_window.getDefaultView());
 	m_renderSystem.RenderText(m_entities, m_window);
@@ -387,15 +442,22 @@ void EntityManager::RenderText() {
 
 /////////////////////////////////
 // RenderAll - a convenience method that renders all entities in the EntityManager using the RenderSystem. The mode parameter allows the caller to specify whether to render only shapes or shapes followed by text.
-void EntityManager::RenderAll(RenderSystem::RenderMode mode) {
-	if (mode == RenderSystem::RenderMode::ShapesOnly) {
-		RenderShapes();
-	} else if (mode == RenderSystem::RenderMode::ShapesThenText) {
-		RenderShapes();
-		RenderText();
-	} else {
-		// ShapesThenTextAfterOverlays
-		RenderShapes();
+void EntityManager::RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::RenderMode mode) {
+	// 1. SFML shapes/text
+	if (m_sfmlRenderingEnabled) {
+		if (mode == RenderSystem::RenderMode::ShapesOnly) {
+			RenderShapes();
+		} else if (mode == RenderSystem::RenderMode::ShapesThenText) {
+			RenderShapes();
+			RenderText();
+		} else // ShapesThenTextAfterOverlays
+		{
+			RenderShapes();
+		}
+	}
+	// 2. GPU shapes (circles, explosions, bars)
+	if (m_GLRenderingEnabled) {
+		RenderGLShapes(gpuRenderSystem);
 	}
 }
 /////////////////////////////////

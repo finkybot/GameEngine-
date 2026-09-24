@@ -581,7 +581,7 @@
     <ClInclude Include="CTileSprite.h">
       <Filter>Header Files\Components</Filter>
     </ClInclude>
-    <ClInclude Include="GPUTileInstance.h">
+    <ClInclude Include="GPUInstanceStructs.h">
       <Filter>Header Files\Misc</Filter>
     </ClInclude>
     <ClInclude Include="BindlessGL.h">

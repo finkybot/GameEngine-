@@ -100,6 +100,7 @@ void GPURenderSystem::Initialize() {
 	CreateQuadGeometry();
 	CreateExplosionResources();
 	CreateEqualizerResources();
+	CreateCircleResources();
 
 	if (!m_quadVBO || !m_explosionVAO || !m_explosionInstanceVBO || !m_explosionShaderProgram || m_explosionViewportUniformLocation < 0 ||
 		!m_equalizerVAO || !m_equalizerInstanceVBO || !m_equalizerShaderProgram || m_equalizerViewportUniformLocation < 0) {
@@ -131,6 +132,7 @@ void GPURenderSystem::CreateQuadGeometry() {
 	// Quad vertices in Normalised Device Coordinates (NDC) space (x, y), we cover the full range (screen) of [-1, 1] in both axes. 
 	// The vertex shader will scale and translate these based on instance data.
 	const float quadVerts[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, 1.f};
+	//const float quadVerts[] = {-0.5f, -0.5f, 0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f};
 
 	// Upload quad vertices to the shared quad VBO
 	glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
@@ -348,8 +350,113 @@ void GPURenderSystem::CreateEqualizerResources() {
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
 }
-/////////////////////////////////
+//////////////////////////////////
 
+
+//////////////////////////////////
+void GPURenderSystem::CreateCircleResources() {
+	// --- Circle Vertex Shader ---
+	const char* vs = R"(
+        #version 330 core
+
+        layout(location = 0) in vec2 quadPos;      // shared quad [-1,1]
+        layout(location = 1) in vec4 posRad;       // x, y, radius, unused
+        layout(location = 2) in vec4 color;        // r, g, b, a
+
+        uniform vec2 uViewportSize;
+
+        out vec2 fragPos;
+        out float vRadius;
+        out vec4 vColor;
+
+        void main()
+        {
+            // quadPos scaled by radius → local pixel-space circle coords
+            fragPos = quadPos * posRad.z;
+            vRadius = posRad.z;
+            vColor = color;
+
+            // Convert center from pixel → NDC
+            vec2 centerNdc = vec2(
+                (posRad.x / uViewportSize.x) * 2.0 - 1.0,
+                1.0 - (posRad.y / uViewportSize.y) * 2.0
+            );
+
+            // Convert local offset from pixel → NDC
+            vec2 localNdc = vec2(
+                (fragPos.x / uViewportSize.x) * 2.0,
+                -(fragPos.y / uViewportSize.y) * 2.0
+            );
+
+            gl_Position = vec4(centerNdc + localNdc, 0.0, 1.0);
+        }
+    )";
+
+	// --- Circle Fragment Shader ---
+	const char* fs = R"(
+        #version 330 core
+
+        in vec2 fragPos;
+        in float vRadius;
+        in vec4 vColor;
+
+        out vec4 fragColor;
+
+        void main()
+        {
+            float dist = length(fragPos);
+            if (dist > vRadius)
+                discard;
+
+            float alpha = 1.0 - (dist / vRadius);
+            fragColor = vec4(vColor.rgb, vColor.a * alpha);
+        }
+    )";
+	// ... same shaders ...
+
+	m_circleShaderProgram = CreateShaderProgram(vs, fs);
+	if (!m_circleShaderProgram)
+		return;
+
+	m_circleViewportUniformLocation = glGetUniformLocation(m_circleShaderProgram, "uViewportSize");
+	if (m_circleViewportUniformLocation < 0) {
+		std::cerr << "[GPURenderSystem] Failed to locate circle viewport uniform\n";
+		return;
+	}
+
+	glGenVertexArrays(1, &m_circleVAO);
+	glGenBuffers(1, &m_circleInstanceVBO);
+	if (!m_circleVAO || !m_circleInstanceVBO) {
+		std::cerr << "[GPURenderSystem] Failed to create circle GL resources\n";
+		return;
+	}
+
+	glBindVertexArray(m_circleVAO);
+
+	// shared quad
+	glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, (void*)0);
+
+	// instance buffer uses GPUShapeInstance
+	glBindBuffer(GL_ARRAY_BUFFER, m_circleInstanceVBO);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(GPUShapeInstance), nullptr, GL_DYNAMIC_DRAW);
+	m_circleBufferCapacity = 1;
+
+	// posRad: x, y, radius, unused
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(GPUShapeInstance), (void*)0);
+	glVertexAttribDivisor(1, 1);
+	glEnableVertexAttribArray(1);
+
+	// color: r, g, b, a (offset 3 floats)
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(GPUShapeInstance), (void*)(sizeof(float) * 3));
+	glVertexAttribDivisor(2, 1);
+	glEnableVertexAttribArray(2);
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+}
+//////////////////////////////////
 
 
 /////////////////////////////////
@@ -418,11 +525,97 @@ void GPURenderSystem::EnsureEqualizerBufferCapacity(std::size_t requiredInstance
 
 
 /////////////////////////////////
+// EnsureCircleBufferCapacity checks if the current circle instance buffer has enough capacity for the required number of instances. If not, it reallocates the buffer with the new capacity.
+void GPURenderSystem::EnsureCircleBufferCapacity(std::size_t requiredInstances) {
+	// If the required number of instances is less than or equal to the current buffer capacity, no action is needed.
+	if (requiredInstances <= m_circleBufferCapacity) return;
+
+	// Update the buffer capacity to the required number of instances
+	m_circleBufferCapacity = requiredInstances;
+	glBindBuffer(GL_ARRAY_BUFFER, m_circleInstanceVBO);
+	glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(m_circleBufferCapacity * sizeof(GPUShapeInstance)), nullptr, GL_DYNAMIC_DRAW);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// RenderShapes renders the shape instances using instanced rendering. It takes a vector of GPUShapeInstance representing the shape instances to render.
+void GPURenderSystem::RenderShapes(const std::vector<GPUShapeInstance>& instances) {
+	if (!m_initialized || instances.empty())
+		return;
+
+	//std::cout << "[GPURenderSystem] Rendering " << instances.size() << " GPU shape instances" << std::endl;
+
+	// Convert GPUShapeInstance → GPUInstanceData
+	std::vector<GPUInstanceData> converted;
+	converted.reserve(instances.size());
+
+	for (const auto& s : instances) {
+		converted.push_back(GPUInstanceData{s.x, s.y, s.radius, s.r, s.g, s.b, s.a});
+	}
+
+	// Ensure buffer capacity for GPUInstanceData
+	EnsureExplosionBufferCapacity(converted.size());
+
+	glBindVertexArray(m_explosionVAO);
+	glUseProgram(m_explosionShaderProgram);
+
+	// Set viewport uniform so the shader can convert pixel coords → NDC
+	GLint viewport[4] = {0, 0, 0, 0};
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	glUniform2f(m_explosionViewportUniformLocation, static_cast<float>(viewport[2]), static_cast<float>(viewport[3]));
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_ONE, GL_ONE);
+
+	glBindBuffer(GL_ARRAY_BUFFER, m_explosionInstanceVBO);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(converted.size() * sizeof(GPUInstanceData)), converted.data());
+
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, static_cast<GLsizei>(converted.size()));
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void GPURenderSystem::RenderCircles(const std::vector<GPUShapeInstance>& instances) {
+	if (!m_initialized || instances.empty())
+		return;
+
+	EnsureCircleBufferCapacity(instances.size());
+
+	glBindVertexArray(m_circleVAO);
+	glUseProgram(m_circleShaderProgram);
+
+	GLint viewport[4];
+	glGetIntegerv(GL_VIEWPORT, viewport);
+	glUniform2f(m_circleViewportUniformLocation, static_cast<float>(viewport[2]), static_cast<float>(viewport[3]));
+
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	glBindBuffer(GL_ARRAY_BUFFER, m_circleInstanceVBO);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(instances.size() * sizeof(GPUShapeInstance)),
+					instances.data());
+
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, static_cast<GLsizei>(instances.size()));
+
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+	glUseProgram(0);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // RenderExplosions renders the explosion effects using instanced rendering. It takes a vector of GPUInstanceData representing the explosion instances to render.
 void GPURenderSystem::RenderExplosions(const std::vector<GPUInstanceData>& instances) {
 	// Check if the renderer is initialized and if there are valid resources and instances to render
 	if (!m_initialized || !m_explosionVAO || !m_explosionInstanceVBO || !m_explosionShaderProgram || m_explosionViewportUniformLocation < 0 || instances.empty())
 		return;
+
 
 	// Prepare the viewport dimensions for rendering
 	GLint viewport[4] = {0, 0, 0, 0};

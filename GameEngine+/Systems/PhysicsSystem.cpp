@@ -31,10 +31,7 @@ void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities,
 				  [this, deltaTime, windowWidth, windowHeight](const std::unique_ptr<Entity>& entity) {
 					  if (!entity->IsAlive())
 						  return;
-
-					  SlowEntity(
-						  entity.get(),
-						  0.998f); // Low friction - balls retain speed longer for natural collisions
+					  SlowEntity(entity.get(), std::pow(0.999f, deltaTime * 60.0f));
 					  MoveEntity(entity.get(), deltaTime, windowWidth, windowHeight);
 				  });
 }

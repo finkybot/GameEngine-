@@ -160,6 +160,7 @@ GameEngine::GameEngine() {
 		std::cout << "\x1b[36m[GameEngine]\x1b[0m OpenGL Fontsystem initialised with default font" << std::endl;
 	}
 
+	gpuRenderSystem.Initialize(); // Initialise the GPU render system for advanced OpenGL rendering features
 
 	// --- Bind FontSystem BEFORE Initialise() ---
 	entityManager->GetRenderSystemGL().SetFontSystem(&fontsystem);
@@ -190,6 +191,7 @@ GameEngine::GameEngine() {
 GameEngine::~GameEngine() {
 	// Mark that we're shutting down BEFORE member destruction begins
 	// This prevents destructors from attempting operations on already-destroyed objects
+	gpuRenderSystem.Shutdown();
 	ShutdownGuard::MarkShuttingDown();
 }
 /////////////////////////////////
@@ -421,6 +423,7 @@ void GameEngine::Update(float deltaTime) {
 			// Ensure the scene's EntityManager processes game logic (tile system, pending entities)
 			// and rebuilds spatial structures (including BVH).
 			currentScene->GetEntityManager().Update(deltaTime);
+			currentScene->GetEntityManager().RenderAll(gpuRenderSystem, RenderSystem::RenderMode::ShapesOnly /* or whatever */);
 
 			// Process sound effects using the SCENE's EntityManager (not global)
 			// This ensures we process sounds for entities in the current active scene
@@ -460,8 +463,15 @@ void GameEngine::Update(float deltaTime) {
 		// This ensures all scene and entity draws appear behind the UI
 		m_renderQueue.Flush(window);
 
-		// *** IMGUI RENDERING *** (Should be done last) Render ImGui on top of everything (ImGui::SFML::Render without args uses current target)
-		if (ImGui::GetCurrentContext() && (currentScene == nullptr || currentScene->IsImGuiEnabled())) ImGui::SFML::Render(window);
+// *** IMGUI RENDERING *** (Should be done last) Render ImGui on top of everything
+		if (ImGui::GetCurrentContext() && (currentScene == nullptr || currentScene->IsImGuiEnabled())) {
+			glBindVertexArray(0);
+			glUseProgram(0);
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+			ImGui::SFML::Render(window);
+		}
 
 		// *** DISPLAY FRAME *** Display the rendered frame to the window
 		window.display();

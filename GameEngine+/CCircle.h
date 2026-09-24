@@ -66,14 +66,18 @@ public:
 		return m_circle;
 	}
 
-	// GetCentrePoint - returns the center point of the circle shape as a Vec2 object. The center point is calculated as the position of the circle plus the radius in both x and y directions, since SFML circles are positioned at their top-left corner.
-	Vec2 GetCentrePoint() const	override { return Vec2(m_circle.getPosition().x + m_circle.getRadius(), m_circle.getPosition().y + m_circle.getRadius()); }
+	// GetCentrePoint - returns the center point of the circle shape as a Vec2 object.
+	// The circle origin is kept at its radius, so the SFML position is already the center.
+	Vec2 GetCentrePoint() const	override { return Vec2(m_circle.getPosition().x, m_circle.getPosition().y); }
 
 	// SetColor - sets the fill color of the circle shape using RGBA values. The r, g, and b parameters are floats representing the red, green, and blue components of the color (in the range [0.0f, 255.0f]), while the alpha parameter is an integer representing the opacity (in the range [0, 255]).
 	void SetColor(float r, float g, float b, int alpha) { m_circle.setFillColor(sf::Color(static_cast<int>(r), static_cast<int>(g), static_cast<int>(b), alpha)); }
 
-	// SetRadius - sets the radius of the circle shape. This method updates the radius of the underlying SFML CircleShape object, which in turn affects the size and position of the circle when drawn.
-	void SetRadius(float radius) override { m_circle.setRadius(radius); }
+	// SetRadius - sets the radius of the circle shape and keeps the origin centered on the new radius.
+	void SetRadius(float radius) override {
+		m_circle.setRadius(radius);
+		m_circle.setOrigin(sf::Vector2f(radius, radius));
+	}
 };
 /////////////////////////////////
 

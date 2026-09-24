@@ -60,12 +60,21 @@ void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>
 
 		// Query nearby entities using spatial hash
 		nearbyEntities.clear();
-		m_spatialIndex->QueryEntities(nearbyEntities, position, radius * 3.0f, currentEntity);
+		m_spatialIndex->QueryEntities(nearbyEntities, position, radius * 1.75f, currentEntity);
 
+		if (!nearbyEntities.empty()) {
+			std::cout << "[CollisionSystem] Query for entity " << currentEntity->GetId()
+				<< " (" << EntityTypeToString(currentEntity->GetType()) << ") at ("
+				<< position.x << ", " << position.y << ") radius " << radius
+				<< " found " << nearbyEntities.size() << " nearby candidates\n";
+		}
 
 		for (Entity* entityPtr : nearbyEntities) {
 			// Validate pointer is still alive (safety check)
 			if (!entityPtr->IsAlive())
+				continue;
+
+			if (currentEntity->GetId() >= entityPtr->GetId())
 				continue;
 
 			if (!IsColliding(currentEntity, entityPtr))
@@ -74,6 +83,10 @@ void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>
 			// Skip if other entity is an explosion
 			if (entityPtr->GetType() == EntityType::Explosion)
 				continue;
+
+			std::cout << "[CollisionSystem] COLLISION detected: "
+				<< currentEntity->GetId() << " (" << EntityTypeToString(currentEntity->GetType()) << ") <-> "
+				<< entityPtr->GetId() << " (" << EntityTypeToString(entityPtr->GetType()) << ")\n";
 
 			deathCount += ResolveCollision(currentEntity, entityPtr);
 		}
@@ -277,7 +290,6 @@ void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const {
 		Vec2 pos2 = entity2->GetComponent<CTransform>()->position;
 
 		entity1->GetComponent<CTransform>()->position =
-			Vec2(pos1.x - correction * unitNorm.x, pos1.y - correction * unitNorm.y);
 			Vec2(pos1.x - correction * unitNorm.x, pos1.y - correction * unitNorm.y);
 		entity2->GetComponent<CTransform>()->position =
 			Vec2(pos2.x + correction * unitNorm.x, pos2.y + correction * unitNorm.y);

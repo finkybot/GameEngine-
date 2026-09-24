@@ -95,43 +95,41 @@ void TestScene::Update(float deltaTime) {
 
 		for (int i = 0; i < entitiesToSpawn; ++i) {
 
-			// Determine spawn direction first, then select team based on side
-			int direction = m_direction(m_generator);
-			// direction==1 => spawned just off the left edge (will move rightward)
-			unsigned int type = (direction == 1) ? 0u : 1u;
+			// Alternate between two teams so mixed-team contacts still destroy as intended.
+			unsigned int type = static_cast<unsigned int>(std::uniform_int_distribution<int>(0, 1)(m_generator));
 
-			// Randomized leftward movement, no vertical component
-			float velocityX = std::uniform_real_distribution<float>(-1820.0f, -560.0f)(m_generator);
-			float velocityY = 0.0f;
-			float spawnX, spawnY;
+			// Give the test balls visible 2D motion so they actually intersect often enough to demonstrate collision.
+			float velocityX = std::uniform_real_distribution<float>(-900.0f, 900.0f)(m_generator);
+			float velocityY = std::uniform_real_distribution<float>(-650.0f, 650.0f)(m_generator);
+			if (std::abs(velocityX) < 250.0f)
+				velocityX = (velocityX < 0.0f ? -250.0f : 250.0f);
+			if (std::abs(velocityY) < 180.0f)
+				velocityY = (velocityY < 0.0f ? -180.0f : 180.0f);
+			float spawnX = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.x) - 50.0f)(m_generator);
+			float spawnY = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.y) - 50.0f)(m_generator);
 			int r = m_redVal(m_generator);
 			int g = m_greenVal(m_generator);
 			int b = m_blueVal(m_generator);
 			int a = m_alphaVal(m_generator);
 			float radius = m_radiusDistro(m_generator);
-			// direction already sampled above
-
-			if (direction == 1) {	// Move rightward
-				velocityX = velocityX * -1.0f; // Reverse velocity for rightward movement
-				spawnX = std::uniform_real_distribution<float>(-100.0f, 0.0f)(m_generator); // Just off left edge
-				spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.windowSize.y))(
-					m_generator);
-			} else {
-				// Spawn off the right edge of screen, move left across screen with randomized leftward velocity
-				spawnX = static_cast<float>(m_gameEngine.windowSize.x) +
-						 std::uniform_real_distribution<float>(0.0f, 100.0f)(m_generator); // Just off right edge
-				spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.windowSize.y))(
-					m_generator);
-			}
 
 			SpawnEntityByType(type, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velocityX, velocityY), a);
 		}
 	}
 
+	// Commit newly spawned entities before physics/collision so they participate immediately this frame.
+	m_entityManager.ProcessPending();
+
 	// Update game logic (entities, collisions, rendering)
 	UpdateExplosions();
 
 	m_entityManager.GetPhysicsSystem().Update(m_entityManager.GetEntities(), deltaTime, m_window.getSize().x, m_window.getSize().y); // Do physics and boundary collisions first for spatial hash accuracy.
+
+	// Rebuild the spatial index after movement so collision queries use current positions.
+	if (auto* spatialIndex = m_entityManager.GetSpatialIndex()) {
+		spatialIndex->Rebuild(m_entityManager.GetEntities(), nullptr);
+	}
+
 	m_entityManager.GetCollisionSystem().DetectAndResolve(m_entityManager.GetEntities(), deltaTime);
 	//m_entityManager.GetCollisionSystem().DetectAndResolve(m_entityManager.GetEntities(), m_entityManager.GetSpatialHash(), deltaTime); // Then do collision detection and resolution, which may mark entities as dead and spawn explosions.
 
@@ -154,7 +152,37 @@ void TestScene::Update(float deltaTime) {
 /////////////////////////////////
 // Render - responsible for rendering the scene, including all entities and any scene-specific visuals. The actual rendering of entities is handled by the EntityManager's RenderAll 
 // method, which is called by the GameEngine after this method. This method can be used to render any additional scene-specific visuals or effects that are not part of the standard entity rendering process.
-void TestScene::Render() { /* scene render logic */ }
+void TestScene::Render() {
+
+
+		//m_entityManager.RenderAll(m_gpuRenderer, RenderSystem::RenderMode::ShapesThenText);
+	//std::vector<GPUShapeInstance> instances;
+	//instances.reserve(m_entityManager.GetEntities().size());
+
+	//for (auto& e : m_entityManager.GetEntities()) {
+	//	Entity* entity = e.get();
+	//	auto* shape = entity->GetComponent<CShape>();
+	//	auto* tform = entity->GetComponent<CTransform>();
+	//	if (!shape || !tform)
+	//		continue;
+
+	//	sf::Color c = shape->GetColor();
+
+	//	GPUShapeInstance inst;
+	//	inst.x = tform->position.x;
+	//	inst.y = tform->position.y;
+	//	inst.radius = shape->GetRadius();
+	//	inst.r = c.r / 255.0f;
+	//	inst.g = c.g / 255.0f;
+	//	inst.b = c.b / 255.0f;
+	//	inst.a = c.a / 255.0f;
+
+	//	instances.push_back(inst);
+	//}
+	//
+	//m_gameEngine.gpuRenderSystem.RenderShapes(instances);
+
+}
 /////////////////////////////////
 
 
@@ -180,7 +208,10 @@ void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 
 /////////////////////////////////
 // OnEnter - called when the scene becomes active, allowing for any necessary setup or initialization that should occur each time the scene is entered. This can include resetting game state, starting timers, or preparing resources specific to this scene.
-void TestScene::OnEnter() { /* called when scene becomes active */ }
+void TestScene::OnEnter() {
+	m_entityManager.SetSFMLRenderingEnabled(false); // Disable SFML rendering for this scene
+	m_entityManager.SetGLRenderingEnabled(true);	// Enable OpenGL rendering for this scene
+}
 /////////////////////////////////
 
 
@@ -226,15 +257,13 @@ void TestScene::UnloadResources() { /* unload resources */ }
 void TestScene::InitialiseGame(sf::Vector2u windowSize) {
 	InitialiseSpatialLayers();
 
-
-
 	// Initialize random number generator ONCE (not per entity)
 	std::random_device randDevice;
 	std::default_random_engine generator(randDevice());
 
 	// Initialize random number generator once (not every frame)
 	m_generator		=		std::default_random_engine(randDevice());		// Random entity colours, in the brighter colour range
-	m_xVelocity		=		std::uniform_int_distribution<int>(-80, -40);	// Slow movement speed
+	m_xVelocity		=		std::uniform_int_distribution<int>(-8, -4);	// Slow movement speed
 	m_yVelocity		=		std::uniform_int_distribution<int>(-20, 20);	// Slow vertical speed
 
 	m_xDistro		=		std::uniform_int_distribution<int>(	20,	m_gameEngine.windowSize.x - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the left and a 5-pixel margin on the right to prevent immediate off-screen spawning
@@ -244,22 +273,26 @@ void TestScene::InitialiseGame(sf::Vector2u windowSize) {
 	m_greenVal		=		std::uniform_int_distribution<int>(100, 255);			// Brighter greens
 	m_blueVal		=		std::uniform_int_distribution<int>(100, 255);			// Brighter blues
 	m_alphaVal		=		std::uniform_int_distribution<int>(150, 255);			// More opaque
-	m_radiusDistro	=		std::uniform_real_distribution<float>(3.5f, 6.0f);		// Slightly larger radius for better visibility
-	m_entityType	=		std::uniform_int_distribution<int>(0, 4);				// 5 team types
-	m_spawnZone		=		std::uniform_int_distribution<int>(0, 3);				// 4 quadrants
+	m_radiusDistro	=		std::uniform_real_distribution<float>(12.0f, 20.0f);		// Smaller radius to reduce crowding and improve collision readability
+	m_entityType	=		std::uniform_int_distribution<int>(0, 1);				// 2 team types
+	m_spawnZone		=		std::uniform_int_distribution<int>(0, 1);				// 2 quadrants
 	m_direction		=		std::uniform_int_distribution<int>(0, 1);				// 2 movement directions: leftward or rightward
 
 	// Spawn initial entities using targetEntityCount
 	for (int i = 0; i < m_targetEntityCount; ++i) {
-		// For bulk initialization, sample direction first then make left/right spawns use consistent teams
-		int direction = m_direction(generator);
-		unsigned int type = (direction == 1) ? 0u : 1u;
+		// Alternate between two teams so mixed-team contacts still destroy as intended.
+		unsigned int type = static_cast<unsigned int>(std::uniform_int_distribution<int>(0, 1)(generator));
 
-		float spawnX, spawnY;
+		float spawnX = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.x) - 50.0f)(generator);
+		float spawnY = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.y) - 50.0f)(generator);
 
-		// Randomized leftward movement, no vertical component
-		float velocityX = m_xVelocity(generator);
-		float velocityY = 0.0f;
+		// Give the initial population visible 2D motion so collisions happen frequently.
+		float velocityX = std::uniform_real_distribution<float>(-900.0f, 900.0f)(generator);
+		float velocityY = std::uniform_real_distribution<float>(-650.0f, 650.0f)(generator);
+		if (std::abs(velocityX) < 250.0f)
+			velocityX = (velocityX < 0.0f ? -250.0f : 250.0f);
+		if (std::abs(velocityY) < 180.0f)
+			velocityY = (velocityY < 0.0f ? -180.0f : 180.0f);
 
 		int r = m_redVal(generator);
 		int g = m_greenVal(generator);
@@ -267,19 +300,6 @@ void TestScene::InitialiseGame(sf::Vector2u windowSize) {
 		int a = m_alphaVal(generator);
 
 		float radius = m_radiusDistro(generator);
-
-		if (direction == 1) {			   // Move rightward
-			velocityX = velocityX * -1.0f; // Reverse velocity for rightward movement
-			spawnX = std::uniform_real_distribution<float>(-100.0f, 0.0f)(m_generator); // Just off left edge
-			spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.windowSize.y))(
-				m_generator);
-		} else {
-			// Spawn off the right edge of screen, move left across screen with randomized leftward velocity
-			spawnX = static_cast<float>(m_gameEngine.windowSize.x) +
-					 std::uniform_real_distribution<float>(0.0f, 100.0f)(m_generator); // Just off right edge
-			spawnY = std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.windowSize.y))(
-				m_generator);
-		}
 
 		SpawnEntityByType(type, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velocityX, velocityY), a);
 	}

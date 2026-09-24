@@ -92,7 +92,7 @@ void SpawnSystem::LoadDefault() {
 	spawnerConfig.type = Type::Continuous;
 	spawnerConfig.threshold = 0.005f; // Low threshold to trigger easily
 	spawnerConfig.rate = 8.0f;		  // 8 spawns per second for continuous
-	spawnerConfig.burstCount = 6;
+	spawnerConfig.burstCount = 12;
 	spawnerConfig.sizeMin = 8.0f;
 	spawnerConfig.sizeMax = 32.0f;
 	spawnerConfig.spawnRadius = 200.0f;

@@ -53,6 +53,10 @@ void MainMenuScene::UnloadResources() {}
 /////////////////////////////////
 // OnEnter and OnExit - These methods manage the lifecycle of the main menu scene when it is entered and exited. In this implementation, both methods are empty, as there are no specific actions needed when entering or exiting the main menu.
 void MainMenuScene::OnEnter() {
+
+	// Disable GL rendering and enable SFML rendering for the main menu scene, ensuring that the menu is rendered using SFML's graphics capabilities rather than OpenGL. This allows for a more straightforward and consistent rendering of the menu items and text.
+	m_entityManager.SetGLRenderingEnabled(false); 
+	m_entityManager.SetSFMLRenderingEnabled(true);
 	// Disarm Escape-to-close until the key has been physically released after entering
 	m_enterCooldown = 0.3f;
 	m_escapeArmed = false;

@@ -254,7 +254,7 @@
     <ClInclude Include="GameEngine+\MovementSystem.h" />
     <ClInclude Include="GameEngine.h" />
     <ClInclude Include="GPURenderSystem.h" />
-    <ClInclude Include="GPUTileInstance.h" />
+    <ClInclude Include="GPUInstanceStructs.h" />
     <ClInclude Include="ImageManagementSystem.h" />
     <ClInclude Include="imgui\backends\imgui_impl_dx9.h" />
     <ClInclude Include="imgui\backends\imgui_impl_win32.h" />

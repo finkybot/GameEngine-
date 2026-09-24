@@ -81,57 +81,90 @@ public:
 	size_t GetId() const { return m_id; }
 
 
+	
+	
+	
 	// ---------------------------------
 	// Template Methods for Component Management
 	// ---------------------------------
 
 	// Template method to add a component of type T to the entity, forwarding any constructor arguments. Returns a pointer to the added component for convenience.
-	template <typename T, typename... Args>
-	T* AddComponent(Args&&... args) {
+	template <typename T, typename... Args>	T* AddComponent(Args&&... args) {
+		// Ensure that T is derived from Component to maintain type safety in the ECS architecture. This static assertion will cause a compile-time error if T does not inherit from Component.
 		static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+
+		// Create a unique_ptr for the new component, forwarding the constructor arguments to T's constructor. This allows for flexible component construction with varying parameters.
 		auto comp = std::make_unique<T>(std::forward<Args>(args)...);
+
+		// Store the unique_ptr in the m_components map, using the type_index of T as the key. This allows for efficient retrieval of components by type.
 		T* ptr = comp.get();
+
+		// Move the unique_ptr into the map to transfer ownership of the component to the entity. This ensures that the component's lifetime is managed by the entity and will be automatically cleaned up when the entity is destroyed.
 		m_components[std::type_index(typeid(T))] = std::move(comp);
 		return ptr;
 	}
+
+
 
 	// Template method to add a component of type T to the entity using a unique_ptr. This allows for more complex component construction outside of the entity. Returns a pointer to the added component for convenience.
-	template <typename T>
-	T* AddComponentPtr(std::unique_ptr<T> comp) {
+	template <typename T> T* AddComponentPtr(std::unique_ptr<T> comp) {
+		// Ensure that T is derived from Component to maintain type safety in the ECS architecture. This static assertion will cause a compile-time error if T does not inherit from Component.
 		static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+
+		// Store the unique_ptr in the m_components map, using the type_index of T as the key. This allows for efficient retrieval of components by type.
 		T* ptr = comp.get();
+
+		//	Move the unique_ptr into the map to transfer ownership of the component to the entity. This ensures that the component's lifetime is managed by the entity and will be automatically cleaned up when the entity is destroyed.
 		m_components[std::type_index(typeid(T))] = std::move(comp);
 		return ptr;
 	}
 
+
+
 	// Template method to get a pointer to a component of type T. Returns nullptr if the component does not exist on the entity.
-	template <typename T>
-	T* GetComponent() {
+	template <typename T> T* GetComponent() {
+		// Ensure that T is derived from Component to maintain type safety in the ECS architecture. This static assertion will cause a compile-time error if T does not inherit from Component.
 		static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+
+		// Find the component in the m_components map using the type_index of T as the key. If found, return a pointer to the component; otherwise, return nullptr.
 		auto it = m_components.find(std::type_index(typeid(T)));
+
+		// If the component is found, return a pointer to it; otherwise, return nullptr.
 		if (it != m_components.end()) {
 			return static_cast<T*>(it->second.get());
 		}
 		return nullptr;
 	}
 
+
+
 	// Const version of GetComponent to allow access to components on const entities. Returns nullptr if the component does not exist on the entity.
-	template <typename T>
-	const T* GetComponent() const {
+	template <typename T> const T* GetComponent() const {
+		// Ensure that T is derived from Component to maintain type safety in the ECS architecture. This static assertion will cause a compile-time error if T does not inherit from Component.
 		static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+
+		// Find the component in the m_components map using the type_index of T as the key. If found, return a pointer to the component; otherwise, return nullptr.
 		auto it = m_components.find(std::type_index(typeid(T)));
+
+		// If the component is found, return a pointer to it; otherwise, return nullptr.
 		if (it != m_components.end()) {
 			return static_cast<const T*>(it->second.get());
 		}
 		return nullptr;
 	}
 
+
+
 	// Template method to check if the entity has a component of type T. Returns true if the component exists, false otherwise.
-	template <typename T>
-	bool HasComponent() const {
+	template <typename T> bool HasComponent() const {
+		//	Ensure that T is derived from Component to maintain type safety in the ECS architecture. This static assertion will cause a compile-time error if T does not inherit from Component.
 		static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+
+		// Check if the component exists in the m_components map using the type_index of T as the key. Returns true if found, false otherwise.
 		return m_components.find(std::type_index(typeid(T))) != m_components.end();
 	}
+
+
 
 	// Method to check if the entity has a component of a specific type based on the ComponentTypeId enum. This allows for checking components without needing to know the exact C++ type.
 	bool HasComponent(ComponentTypeId id) const {
@@ -162,9 +195,11 @@ public:
 	}
 
 	// Template method to remove a component of type T from the entity. If the component does not exist, this method does nothing.
-	template <typename T>
-	void RemoveComponent() {
+	template <typename T> void RemoveComponent() {
+		//	Ensure that T is derived from Component to maintain type safety in the ECS architecture. This static assertion will cause a compile-time error if T does not inherit from Component.
 		static_assert(std::is_base_of_v<Component, T>, "T must inherit from Component");
+
+		// Remove the component from the m_components map using the type_index of T as the key. If the component does not exist, this operation has no effect.
 		m_components.erase(std::type_index(typeid(T)));
 	}
 
@@ -173,17 +208,20 @@ public:
 	CTransform* GetTransform() { return GetComponent<CTransform>(); }	// Get the CTransform component of the entity
 	CName* GetName() { return GetComponent<CName>(); }					// Get the CName component of the entity
 
+
 	EntityType GetType() const;											// Get the type of the entity
 	void SetType(EntityType type) { m_type = type; }					// Set the type of the entity
 	bool IsAlive() const;												// Check if the entity is alive (not marked for destruction)
 	void Destroy();														// Mark the entity for destruction
 
-	// Convenience methods to get properties from the CShape component if it exists; otherwise fallback to transform position.
+
+	// Convenience methods to get properties from the CTransform component first, since transform is the source of truth for motion and collision.
+	// If no transform exists, fall back to the shape center, then zero.
 	inline Vec2 GetCentrePoint() const {
-		auto shape = GetComponent<CShape>();
-		if (shape) return shape->GetCentrePoint();
 		auto transform = GetComponent<CTransform>();
-		return transform ? transform->position : Vec2::Zero;
+		if (transform) return transform->position;
+		auto shape = GetComponent<CShape>();
+		return shape ? shape->GetCentrePoint() : Vec2::Zero;
 	}
 
 	// Get the mid-length property from the CShape component, which is used for collision detection and quadtree inclusion (I dont use the quadtree anymore).

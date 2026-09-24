@@ -613,8 +613,8 @@ void MusicVisualiserScene::DrawAudioReactiveWindow() {
 				// Burst uses cooldown (0.05-2.0s range), set to minimum
 				spawnConfigs[0].rate = 0.05f;
 			} else {
-				// Continuous/Periodic use rate (0.5-30 spawns/s), set to maximum for more visible effect
-				spawnConfigs[0].rate = 30.0f;
+				// Continuous/Periodic use rate (0.5-80 spawns/s), set to maximum for more visible effect
+				spawnConfigs[0].rate = 80.0f;
 			}
 			spawnConfigs[0].type = newType;
 		}
@@ -641,9 +641,9 @@ void MusicVisualiserScene::DrawAudioReactiveWindow() {
 		// Rate / Cooldown
 		if (spawnConfigs[0].type == Spawn::Type::Burst) {
 			ImGui::SliderFloat("Cooldown (s)", &spawnConfigs[0].rate, 0.05f, 2.0f, "%.2f");
-			ImGui::SliderInt("Burst Count", &spawnConfigs[0].burstCount, 1, 40);
+			ImGui::SliderInt("Burst Count", &spawnConfigs[0].burstCount, 1, 80);
 		} else {
-			ImGui::SliderFloat("Rate (spawns/s)", &spawnConfigs[0].rate, 0.5f, 30.0f, "%.1f");
+			ImGui::SliderFloat("Rate (spawns/s)", &spawnConfigs[0].rate, 0.5f, 80.0f, "%.1f");
 		}
 
 		// Size controls
@@ -1866,7 +1866,7 @@ void MusicVisualiserScene::Update(float deltaTime) {
 // Render - this function is responsible for rendering the equalizer bars to the window. It checks if the equalizer is active and if there are any bars to render, then sets the view
 void MusicVisualiserScene::Render() {
 	// 1. Draw world (ECS)
-	m_entityManager.RenderAll();
+	m_entityManager.RenderAll(m_gpuRenderer, RenderSystem::RenderMode::ShapesThenText);
 
 	// 2. Draw GPU overlays in screen-space
 	if (m_gpuRenderer.IsInitialized()) {

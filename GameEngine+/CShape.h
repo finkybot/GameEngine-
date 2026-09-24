@@ -43,13 +43,15 @@ public:
 
 
 	// Pure virtual methods to be implemented by derived shape classes. These methods provide a common interface for getting shape properties such as height, mid-length, radius, and width, as well as accessing the underlying SFML shape and the center point of the shape for spatial partitioning and collision detection.
-	virtual float GetHeight() const = 0;		// Get the height of the bounding box
-	virtual float GetMidLength() const = 0;		// Get the mid-length property (used for collision detection and quadtree inclusion)
-	virtual float GetRadius() const = 0;		// Get the radius (for circular shapes, returns 0 for non-circular shapes)
-	virtual float GetWidth() const = 0;			// Get the width of the bounding box
-	virtual sf::Shape& GetShape() = 0;			// Get a reference to the underlying SFML shape (implemented by derived classes, used for drawing and collision detection)
-	virtual Vec2 GetCentrePoint() const = 0;	// Get the center point of the shape (used for spatial partitioning and collision detection)
-	virtual void SetRadius(float radius) = 0;	// Set the radius (for circular shapes, does nothing for non-circular shapes)
+	virtual float GetHeight() const = 0;							// Get the height of the bounding box
+	virtual float GetMidLength() const = 0;							// Get the mid-length property (used for collision detection and quadtree inclusion)
+	virtual float GetRadius() const = 0;							// Get the radius (for circular shapes, returns 0 for non-circular shapes)
+	virtual float GetWidth() const = 0;								// Get the width of the bounding box
+	virtual sf::Color GetColor() const = 0;							// Get the color of the shape (used for rendering and debugging)
+	virtual void SetColor(float r, float g, float b, int a) = 0;	// Set the color of the shape (used for rendering and debugging)
+	virtual sf::Shape& GetShape() = 0;								// Get a reference to the underlying SFML shape (implemented by derived classes, used for drawing and collision detection)
+	virtual Vec2 GetCentrePoint() const = 0;						// Get the center point of the shape (used for spatial partitioning and collision detection)
+	virtual void SetRadius(float radius) = 0;						// Set the radius (for circular shapes, does nothing for non-circular shapes)
 
 	// SetMidLength - sets the mid-length property of the shape, which is used for collision detection and quadtree inclusion. This method allows derived shape classes to update the mid-length value based on their specific geometry (e.g., half-width for rectangles, radius for circles).
 	void SetMidLength(float midLength) { m_midLength = midLength; }

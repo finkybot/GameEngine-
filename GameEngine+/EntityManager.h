@@ -49,6 +49,7 @@ class Entity;
 #include "Systems/CollisionSystem.h"
 #include "Systems/RenderSystem.h"
 #include "RenderSystemGL.h"
+#include "GPURenderSystem.h"
 #include "CTileMap.h"
 #include "SpatialLayerRegistry.h"
 #include "SpatialIndexUnified.h"
@@ -77,8 +78,9 @@ public:
 	// Public methods for updating and rendering entities, as well as adding and removing entities from the manager. The Update method will handle updating all systems and processing pending entities, while the Render methods will handle drawing entities.
 	void Update(float deltaTime = 1.0f / 60.0f);
 	void RenderShapes(); // Direct rendering (not queued)
+	void RenderGL(GPURenderSystem& gpuRenderSystem);
 	void RenderText(); // Direct render (no queue)
-	void RenderAll(RenderSystem::RenderMode mode = RenderSystem::RenderMode::ShapesThenText);
+	void RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::RenderMode mode);
 
 	// Methods for adding and removing entities, as well as accessing the list of entities and the spatial hash grid. The AddEntity method creates a new entity of the specified type and adds it to the manager, while the KillEntity method marks an entity for removal.
 	Entity* AddEntity(EntityType type);
@@ -109,8 +111,12 @@ public:
 	// Accessor methods for the main systems managed by the EntityManager, including the PhysicsSystem, CollisionSystem, RenderSystem, MusicSystem, and SoundSystem. These methods provide access to the systems for updating and rendering entities, as well as managing music and sound playback.
 	PhysicsSystem& GetPhysicsSystem() { return m_physicsSystem; }
 	CollisionSystem& GetCollisionSystem() { return m_collisionSystem; }
+
 	RenderSystem& GetRenderSystem() { return m_renderSystem; }	
 	RenderSystemGL& GetRenderSystemGL() { return m_renderSystemGL; } // Optional: OpenGL-based render system for advanced rendering (may be nullptr)
+
+	void RenderGLShapes(GPURenderSystem& gpuRenderSystem);
+
 	MusicSystem* GetMusicSystem() { return m_musicSystem.get(); } // Accessor for MusicSystem (may be nullptr)
 	SoundSystem* GetSoundSystem() { return m_soundSystem.get(); } // Accessor for SoundSystem (may be nullptr)
 
@@ -145,6 +151,8 @@ public:
 
 	bool MatchesFilter(Entity* e, const SpatialLayerFilter& filter);
 
+	void SetSFMLRenderingEnabled(bool v) { m_sfmlRenderingEnabled = v; }
+	void SetGLRenderingEnabled(bool v) { m_GLRenderingEnabled = v; }
 
 private:
 	// AddPendingEntities - move entities from the pending add queue into the main entity list and spatial hash, and update the entity map by type. This method is called during the Update process to integrate newly added entities into the main systems.
@@ -186,5 +194,9 @@ private:
 
 	// Thread id that owns this EntityManager (captured at construction). Used to detect cross-thread access in debug builds.
 	std::thread::id m_ownerThreadId;
+
+	// Flag to enable or disable SFML rendering. This can be used to toggle rendering on or off for performance testing or headless operation.
+	bool m_sfmlRenderingEnabled =		true;	// Flag to enable or disable SFML rendering. This can be used to toggle SFML rendering on or off for performance testing or headless operation.
+	bool m_GLRenderingEnabled	=		false;	// Flag to enable or disable OpenGL rendering. This can be used to toggle OpenGL rendering on or off for performance testing or headless operation
 };
 /////////////////////////////////

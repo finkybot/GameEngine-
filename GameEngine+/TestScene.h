@@ -10,6 +10,9 @@
 #include "Scene.h"
 #include <SFML/Window/Event.hpp>
 #include <random>
+#include "GPUInstanceStructs.h"
+#include "RenderSystemGL.h"
+#include "GPURenderSystem.h"
 #include <SFML/Graphics.hpp>
 
 #include "Systems/PhysicsSystem.h"
@@ -78,7 +81,7 @@ private:
 
 
 	// Private member variables for the TestScene class. These include references to the GameEngine, EntityManager, and SFML window, as well as random distributions for entity properties and tracking variables for explosions and FPS.
-	const int m_targetEntityCount = 500;
+	const int m_targetEntityCount = 16;
 	sf::RenderWindow& m_window;				// Reference to the SFML render window for rendering the scene
 	int m_explosionCount = 0;				// Number of active explosions currently playing, used for tracking and displaying explosion count in the game info window.
 	float m_fps = 0.0f;						// Current frames per second (FPS).

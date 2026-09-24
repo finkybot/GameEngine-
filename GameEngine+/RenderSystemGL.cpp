@@ -14,7 +14,7 @@
 #include "CCircle.h"
 #include "CText.h"
 #include <iostream>
-#include "GPUTileInstance.h"
+#include "GPUInstanceStructs.h"
 #include <fstream>
 #include <sstream>
 #include <cstdint>

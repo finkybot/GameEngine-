@@ -19,6 +19,7 @@ These dependencies are already included in the repo:
 
 - **ImGui** in `GameEngine+/imgui/`
 - **nlohmann/json** in `GameEngine+/json.hpp`
+- **glad** in `GameEngine+/glad.c`
 
 ## External Dependency Required
 

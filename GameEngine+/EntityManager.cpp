@@ -21,12 +21,14 @@
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/Color.hpp>
+#include "CRenderInstance.h"
 #include "CRectangle.h"
 #include "CStatic.h"
 #include "Systems/TileSystem.h"
 #include "MusicSystem.h"
 #include "SoundSystem.h"
 #include "ChunkManager.h"
+
 /////////////////////////////////
 
 
@@ -121,29 +123,42 @@ bool EntityManager::MatchesFilter(Entity* e, const SpatialLayerFilter& filter) {
 /////////////////////////////////
 // AddPendingEntities - processes all entities that were queued for addition to the EntityManager. This method is called during the update cycle to add new entities to the main entity list and update relevant data structures such as the entity map and layer buckets.
 void EntityManager::AddPendingEntities() {
-    // Debug: assert caller thread is owner
 #ifdef _DEBUG
 	if (std::this_thread::get_id() != m_ownerThreadId) {
-		std::cerr << "EntityManager::AddPendingEntities called from non-owner thread" << std::endl;
-		// fall through in release builds but help debugging in dev
+		std::cerr << "EntityManager::AddPendingEntities called from non-owner thread\n";
 	}
 #endif
-	
-	// Move pending entities into the main entity list and update the entity map and layer buckets. We iterate over the m_toAdd vector, which contains 
-	// unique pointers to new entities that were created during the current frame. For each entity, we move it into the m_entities vector,
-    for (auto& entity : m_toAdd) {
-		Entity* entityPtr = entity.get();
-		m_entities.push_back(std::move(entity));
-		m_entityMap[entityPtr->GetType()].push_back(entityPtr);
-		// Insert into layer bucket for incremental rendering
-		int layerIdx = static_cast<int>(entityPtr->GetLayer());
-		if (layerIdx < 0) layerIdx = 0;
-		if (layerIdx > 3) layerIdx = 3;
-        m_layerBuckets[layerIdx].push_back(entityPtr);
-		entityPtr->SetBucketInfo(layerIdx, static_cast<int>(m_layerBuckets[layerIdx].size()) - 1); // Store bucket index and position for O(1) removal later
+
+	if (m_toAdd.empty())
+		return;
+
+	for (auto& up : m_toAdd) {
+		Entity* e = up.get();
+
+		// Move into main list
+		m_entities.push_back(std::move(up));
+
+		// Register by type
+		m_entityMap[e->GetType()].push_back(e);
+
+		// Register by render layer
+		int layerIdx = static_cast<int>(e->GetLayer());
+		layerIdx = std::clamp(layerIdx, 0, 3);
+
+		auto& bucket = m_layerBuckets[layerIdx];
+		bucket.push_back(e);
+
+		// Store bucket metadata for O(1) removal
+		e->SetBucketInfo(layerIdx, static_cast<int>(bucket.size()) - 1);
+
+		// ⭐ Phase‑4: Insert into spatial index
+		if (m_spatialIndex)
+			m_spatialIndex->Insert(e);
 	}
+
 	m_toAdd.clear();
 }
+
 /////////////////////////////////
 
 
@@ -266,24 +281,39 @@ void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem) {
 
 	for (auto& e : GetEntities()) {
 		Entity* entity = e.get();
-		auto* shape = entity->GetComponent<CShape>();
 		auto* tform = entity->GetComponent<CTransform>();
-		if (!shape || !tform)
+		if (!tform)
 			continue;
 
-		sf::Color c = shape->GetColor();
-
+		// -------------------------
+		// Explosion path (CExplosion → CShape)
+		// -------------------------
 		if (entity->GetType() == EntityType::Explosion) {
+			auto* shape = entity->GetComponent<CShape>();
+			if (!shape)
+				continue;
+
+			sf::Color c = shape->GetColor();
+
 			float ageMs = std::chrono::duration<float, std::milli>(now - entity->m_creationTime).count();
 			float lifetimeMs = 4500.0f;
 
 			explosionInstances.push_back(GPUInstanceData{tform->position.x, tform->position.y, shape->GetRadius(),
 														 ageMs, lifetimeMs, c.r / 255.0f, c.g / 255.0f, c.b / 255.0f,
 														 c.a / 255.0f});
-		} else {
-			circleInstances.push_back(GPUShapeInstance{tform->position.x, tform->position.y, shape->GetRadius(),
-													   c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, c.a / 255.0f});
+
+			continue;
 		}
+
+		// -------------------------
+		// Circle path (CRenderInstance)
+		// -------------------------
+		auto* inst = entity->GetComponent<CRenderInstance>();
+		if (!inst)
+			continue;
+
+		circleInstances.push_back(GPUShapeInstance{tform->position.x, tform->position.y, inst->radius, inst->r / 255.0f,
+												   inst->g / 255.0f, inst->b / 255.0f, inst->a / 255.0f});
 	}
 
 	gpuRenderSystem.RenderCircles(circleInstances);

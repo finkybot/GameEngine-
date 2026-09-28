@@ -9,6 +9,8 @@
 #pragma once
 #include <vector>
 #include "Entity.h"
+#include "Vec2.h"
+#include "AABB.h"
 // Forward declaration to break circular include: BVHSystem.h -> Raycast.h -> ChunkManager.h -> BVHSystem.h
 struct RaycastHit;
 /////////////////////////////////
@@ -26,6 +28,7 @@ struct BVHNode {
 	bool IsLeaf() const { return left == nullptr && right == nullptr; }
 };
 /////////////////////////////////
+
 
 
 
@@ -55,8 +58,14 @@ public:
 
 	bool Raycast(const Vec2& origin, const Vec2& dirN, float maxDist, RaycastHit& outHit, Entity*& outEntity, BVHDebugTraversal* debug = nullptr) const;
 
+	void Insert(Entity* e);
+	void Remove(Entity* e);
+	void Update(Entity* e);
+
 private:
 	BVHNode* m_root = nullptr; 
+	std::vector<Entity*> m_dynamicEntities;
+	bool m_dirty = false;
 
 	// Internal helper methods for building the BVH tree and performing raycasting. These methods are used to recursively build the tree, perform ray-AABB intersection tests, and traverse the tree during raycasting.
 	BVHNode* BuildRecursive(std::vector<Entity*>& entities, int leafSize);
@@ -70,5 +79,10 @@ private:
 	// RaycastLeaf - performs a raycast against the entities contained in a leaf node of the BVH tree. This method checks for intersections between the ray and the bounding boxes of the entities in the leaf node. It iterates through each entity, checks if it is alive and has a valid shape, and then performs a ray-AABB intersection test. 
 	// If an intersection is found, it updates the output hit information and returns true.
 	bool RaycastLeaf(const std::vector<Entity*>& leaf, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity, BVHDebugTraversal* debug) const;
+	AABB ComputeBounds(Entity* e) const;
+	bool RIntersectsAABB(const Vec2& origin, const Vec2& dirN, const AABB& box, float& outDist) const;
+
+
+	bool RaycastDynamic(const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity) const;
 };
 /////////////////////////////////

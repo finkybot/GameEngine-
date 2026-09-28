@@ -290,6 +290,7 @@
     <ClInclude Include="RenderSystemGL.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Scene.h" />
+    <ClInclude Include="ShapeTemplateRegistry.h" />
     <ClInclude Include="ShutdownGuard.h" />
     <ClInclude Include="SoundSystem.h" />
     <ClInclude Include="SpatialHashGrid.h" />
@@ -319,6 +320,7 @@
     <ClInclude Include="Utils.h" />
     <ClInclude Include="Utils\FPSCounter.h" />
     <ClInclude Include="Vec2.h" />
+    <ClInclude Include="CRenderInstance.h" />
     <ClInclude Include="WorldDiffusionConfig.h" />
   </ItemGroup>
   <ItemGroup>

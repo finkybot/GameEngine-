@@ -12,8 +12,6 @@
 #include "GameEngine.h"
 #include "EntityManager.h"
 
-#include "CCircle.h"
-#include "CShape.h"
 #include "CExplosion.h"
 #include "CSoundEffect.h"
 
@@ -26,6 +24,7 @@
 #include "Vec2.h"
 #include "SpatialLayerRegistry.h"
 #include "SpatialHashGrid.h"
+#include "CRenderInstance.h"
 
 
 #include <SFML/Window/Event.hpp>
@@ -59,91 +58,34 @@ TestScene::~TestScene() = default;
 
 
 /////////////////////////////////
-// Update - updates the game logic for the TestScene, including handling events, managing entity population, updating explosions, and performing physics and collision detection. 
-// It also calculates and reports FPS using an exponential moving average for smoothing, and renders the ImGui game information window with current entity count, death count, and explosion count.
-void TestScene::Update(float deltaTime) {
-	// ImGui and event polling are handled centrally by GameEngine; use the deltaTime parameter supplied by the engine.
-	static auto fpsLast = std::chrono::steady_clock::now();
-	static int fpsFrames = 0;
-	static double fpsSmooth = 0.0;
-	static constexpr double alpha = 0.15;
+// Update - updates the game logic for the TestScene, including handling events, managing entity population, updating explosions, and performing physics and collision detection. It also calculates and reports FPS using an exponential moving average for smoothing, and renders the ImGui game information 
+// window with current entity count, death count, and explosion count.
+void TestScene::Update(float dt) {
+	// Phase 1: FPS + input
+	UpdateFPS(dt);
+	ProcessEvents();
 
-	ReportFPS(fpsFrames, fpsLast, fpsSmooth, alpha);
-
-	// Handle events (SFML 3.0: pollEvent returns std::optional<sf::Event>)
-	while (auto eventOpt = m_gameEngine.window.pollEvent()) {
-		ImGui::SFML::ProcessEvent(m_gameEngine.window, *eventOpt);
-
-		if (eventOpt->is<sf::Event::Closed>()) {
-			m_gameEngine.window.close(); // window X button - always close
-		}
-		// Escape is handled globally by GameEngine before scenes run, so do NOT forward it here
-		if (!eventOpt->is<sf::Event::KeyPressed>() || [&]{
-				auto kp = eventOpt->getIf<sf::Event::KeyPressed>();
-				return !kp || static_cast<sf::Keyboard::Key>(kp->code) != sf::Keyboard::Key::Escape;
-			}())
-			HandleEvent(eventOpt);
-	}
-
-	// scene update logic
-	// Dynamic population control: maintain entities by spawning to replace dead ones
-	size_t currentEntityCount = m_entityManager.GetEntities().size();
-	if (currentEntityCount < m_targetEntityCount) {
-		// Spawn entities to maintain target population
-		// Spawn up to 4 entities per frame to replace those killed in collisions
-		int entitiesToSpawn = std::min(4, m_targetEntityCount - static_cast<int>(currentEntityCount));
-
-		for (int i = 0; i < entitiesToSpawn; ++i) {
-
-			// Alternate between two teams so mixed-team contacts still destroy as intended.
-			unsigned int type = static_cast<unsigned int>(std::uniform_int_distribution<int>(0, 1)(m_generator));
-
-			// Give the test balls visible 2D motion so they actually intersect often enough to demonstrate collision.
-			float velocityX = std::uniform_real_distribution<float>(-900.0f, 900.0f)(m_generator);
-			float velocityY = std::uniform_real_distribution<float>(-650.0f, 650.0f)(m_generator);
-			if (std::abs(velocityX) < 250.0f)
-				velocityX = (velocityX < 0.0f ? -250.0f : 250.0f);
-			if (std::abs(velocityY) < 180.0f)
-				velocityY = (velocityY < 0.0f ? -180.0f : 180.0f);
-			float spawnX = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.x) - 50.0f)(m_generator);
-			float spawnY = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.y) - 50.0f)(m_generator);
-			int r = m_redVal(m_generator);
-			int g = m_greenVal(m_generator);
-			int b = m_blueVal(m_generator);
-			int a = m_alphaVal(m_generator);
-			float radius = m_radiusDistro(m_generator);
-
-			SpawnEntityByType(type, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velocityX, velocityY), a);
-		}
-	}
-
-	// Commit newly spawned entities before physics/collision so they participate immediately this frame.
-	m_entityManager.ProcessPending();
-
-	// Update game logic (entities, collisions, rendering)
+	// Phase 2–3: scene logic (spawning + explosions)
+	UpdateSceneLogic(dt);
 	UpdateExplosions();
 
-	m_entityManager.GetPhysicsSystem().Update(m_entityManager.GetEntities(), deltaTime, m_window.getSize().x, m_window.getSize().y); // Do physics and boundary collisions first for spatial hash accuracy.
+	// Phase 4: physics (now performs incremental spatial updates internally)
+	m_entityManager.GetPhysicsSystem().Update(m_entityManager.GetEntities(), dt, m_window.getSize().x, m_window.getSize().y);
 
-	// Rebuild the spatial index after movement so collision queries use current positions.
-	if (auto* spatialIndex = m_entityManager.GetSpatialIndex()) {
-		spatialIndex->Rebuild(m_entityManager.GetEntities(), nullptr);
-	}
+	// Phase 5: collision (now uses spatial index instead of full list)
+	m_entityManager.GetCollisionSystem().DetectAndResolveSpatial(m_entityManager.GetEntities(), m_entityManager.GetSpatialIndex(), dt);
 
-	m_entityManager.GetCollisionSystem().DetectAndResolve(m_entityManager.GetEntities(), deltaTime);
-	//m_entityManager.GetCollisionSystem().DetectAndResolve(m_entityManager.GetEntities(), m_entityManager.GetSpatialHash(), deltaTime); // Then do collision detection and resolution, which may mark entities as dead and spawn explosions.
-
-	// Set listener position for 3D spatial audio (at center of screen)
-	Vec2 listenerPos(m_window.getSize().x / 2.0f, m_window.getSize().y / 2.0f);
-	
-	// Update the sound system's listener position if the sound system is available
+	// Phase 6: audio listener update
 	if (m_entityManager.GetSoundSystem()) {
+		Vec2 listenerPos(m_window.getSize().x * 0.5f, m_window.getSize().y * 0.5f);
 		m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
 	}
 
-	// Render ImGui UI (actual ImGui::Render called by GameEngine)
-	RenderGameInfoWindow(m_entityManager.GetEntities().size(), m_entityManager.GetDeathCountThisFrame(),
-						 m_explosionCount);
+	// Phase 7: commit newly spawned entities
+	m_entityManager.ProcessPending();
+
+	// Phase 8: UI
+	RenderUI();
 }
 /////////////////////////////////
 
@@ -152,37 +94,7 @@ void TestScene::Update(float deltaTime) {
 /////////////////////////////////
 // Render - responsible for rendering the scene, including all entities and any scene-specific visuals. The actual rendering of entities is handled by the EntityManager's RenderAll 
 // method, which is called by the GameEngine after this method. This method can be used to render any additional scene-specific visuals or effects that are not part of the standard entity rendering process.
-void TestScene::Render() {
-
-
-		//m_entityManager.RenderAll(m_gpuRenderer, RenderSystem::RenderMode::ShapesThenText);
-	//std::vector<GPUShapeInstance> instances;
-	//instances.reserve(m_entityManager.GetEntities().size());
-
-	//for (auto& e : m_entityManager.GetEntities()) {
-	//	Entity* entity = e.get();
-	//	auto* shape = entity->GetComponent<CShape>();
-	//	auto* tform = entity->GetComponent<CTransform>();
-	//	if (!shape || !tform)
-	//		continue;
-
-	//	sf::Color c = shape->GetColor();
-
-	//	GPUShapeInstance inst;
-	//	inst.x = tform->position.x;
-	//	inst.y = tform->position.y;
-	//	inst.radius = shape->GetRadius();
-	//	inst.r = c.r / 255.0f;
-	//	inst.g = c.g / 255.0f;
-	//	inst.b = c.b / 255.0f;
-	//	inst.a = c.a / 255.0f;
-
-	//	instances.push_back(inst);
-	//}
-	//
-	//m_gameEngine.gpuRenderSystem.RenderShapes(instances);
-
-}
+void TestScene::Render() {}
 /////////////////////////////////
 
 
@@ -211,6 +123,8 @@ void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 void TestScene::OnEnter() {
 	m_entityManager.SetSFMLRenderingEnabled(false); // Disable SFML rendering for this scene
 	m_entityManager.SetGLRenderingEnabled(true);	// Enable OpenGL rendering for this scene
+
+	SpawnInitialPopulation();
 }
 /////////////////////////////////
 
@@ -257,52 +171,34 @@ void TestScene::UnloadResources() { /* unload resources */ }
 void TestScene::InitialiseGame(sf::Vector2u windowSize) {
 	InitialiseSpatialLayers();
 
-	// Initialize random number generator ONCE (not per entity)
-	std::random_device randDevice;
-	std::default_random_engine generator(randDevice());
+	// Initialize RNG once
+	m_rng.seed(std::random_device{}());
 
-	// Initialize random number generator once (not every frame)
-	m_generator		=		std::default_random_engine(randDevice());		// Random entity colours, in the brighter colour range
-	m_xVelocity		=		std::uniform_int_distribution<int>(-8, -4);	// Slow movement speed
-	m_yVelocity		=		std::uniform_int_distribution<int>(-20, 20);	// Slow vertical speed
+	// Initialize distributions (created once, reused forever)
+	m_xVelocity = std::uniform_int_distribution<int>(-8, -4);
+	m_yVelocity = std::uniform_int_distribution<int>(-20, 20);
 
-	m_xDistro		=		std::uniform_int_distribution<int>(	20,	m_gameEngine.windowSize.x - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the left and a 5-pixel margin on the right to prevent immediate off-screen spawning
-	m_yDistro		=		std::uniform_int_distribution<int>(	20,	m_gameEngine.windowSize.y - 20); // Spawn within screen bounds, leaving a 20-pixel margin on the top and a 5-pixel margin on the bottom to prevent immediate off-screen spawning
+	//m_xDistro = std::uniform_int_distribution<int>(20, m_gameEngine.windowSize.x - 20); // m_xDistro is no longer used, so this line is commented out (for removal later)
+	//m_yDistro = std::uniform_int_distribution<int>(20, m_gameEngine.windowSize.y - 20); // m_yDistro is no longer used, so this line is commented out (for removal later)
 
-	m_redVal		=		std::uniform_int_distribution<int>(100, 255);			// Brighter reds
-	m_greenVal		=		std::uniform_int_distribution<int>(100, 255);			// Brighter greens
-	m_blueVal		=		std::uniform_int_distribution<int>(100, 255);			// Brighter blues
-	m_alphaVal		=		std::uniform_int_distribution<int>(150, 255);			// More opaque
-	m_radiusDistro	=		std::uniform_real_distribution<float>(12.0f, 20.0f);		// Smaller radius to reduce crowding and improve collision readability
-	m_entityType	=		std::uniform_int_distribution<int>(0, 1);				// 2 team types
-	m_spawnZone		=		std::uniform_int_distribution<int>(0, 1);				// 2 quadrants
-	m_direction		=		std::uniform_int_distribution<int>(0, 1);				// 2 movement directions: leftward or rightward
+	m_redVal = std::uniform_int_distribution<int>(100, 255);
+	m_greenVal = std::uniform_int_distribution<int>(100, 255);
+	m_blueVal = std::uniform_int_distribution<int>(100, 255);
+	m_alphaVal = std::uniform_int_distribution<int>(150, 255);
 
-	// Spawn initial entities using targetEntityCount
-	for (int i = 0; i < m_targetEntityCount; ++i) {
-		// Alternate between two teams so mixed-team contacts still destroy as intended.
-		unsigned int type = static_cast<unsigned int>(std::uniform_int_distribution<int>(0, 1)(generator));
+	m_radiusDistro = std::uniform_real_distribution<float>(2.0f, 4.0f);
 
-		float spawnX = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.x) - 50.0f)(generator);
-		float spawnY = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.y) - 50.0f)(generator);
+	m_entityType = std::uniform_int_distribution<int>(0, 1);
+	m_direction = std::uniform_int_distribution<int>(0, 1);
 
-		// Give the initial population visible 2D motion so collisions happen frequently.
-		float velocityX = std::uniform_real_distribution<float>(-900.0f, 900.0f)(generator);
-		float velocityY = std::uniform_real_distribution<float>(-650.0f, 650.0f)(generator);
-		if (std::abs(velocityX) < 250.0f)
-			velocityX = (velocityX < 0.0f ? -250.0f : 250.0f);
-		if (std::abs(velocityY) < 180.0f)
-			velocityY = (velocityY < 0.0f ? -180.0f : 180.0f);
+	//m_spawnZone = std::uniform_int_distribution<int>(0, 1); // m_spawnZone is no longer used, so this line is commented out (for removal later)
 
-		int r = m_redVal(generator);
-		int g = m_greenVal(generator);
-		int b = m_blueVal(generator);
-		int a = m_alphaVal(generator);
-
-		float radius = m_radiusDistro(generator);
-
-		SpawnEntityByType(type, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velocityX, velocityY), a);
-	}
+	// Register shape templates here
+	m_shapeRegistry.RegisterShapeTemplate(EntityType::TeamEagle, 3.0f, Vec3(255, 200, 200));
+	m_shapeRegistry.RegisterShapeTemplate(EntityType::TeamHawk, 3.0f, Vec3(200, 255, 200));
+	m_shapeRegistry.RegisterShapeTemplate(EntityType::TeamBoogaloo, 3.0f, Vec3(200, 200, 255));
+	m_shapeRegistry.RegisterShapeTemplate(EntityType::TeamRocket, 3.0f, Vec3(255, 255, 200));
+	m_shapeRegistry.RegisterShapeTemplate(EntityType::TeamMonkey, 3.0f, Vec3(255, 200, 255));
 }
 /////////////////////////////////
 
@@ -338,9 +234,19 @@ void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 colo
 		explosion->SetColor(color.x, color.y, color.z, alpha);
 		en->AddComponentPtr<CShape>(std::move(explosion));
 	} else {
+		const ShapeTemplate& tmpl = m_shapeRegistry.GetShapeTemplate(type);
+
+		auto* inst = en->AddComponent<CRenderInstance>();
+		inst->radius = radius; // per‑entity variation
+		inst->r = tmpl.color.x;
+		inst->g = tmpl.color.y;
+		inst->b = tmpl.color.z;
+		inst->a = alpha;
+
+		// putting CCircle in the entity's component list allows the collision system to detect collisions with this entity
 		auto circle = std::make_unique<CCircle>();
 		circle->SetRadius(radius);
-		circle->SetColor(color.x, color.y, color.z, alpha);
+		circle->SetColor(inst->r, inst->g, inst->b, inst->a);
 		en->AddComponentPtr<CShape>(std::move(circle));
 	}
 
@@ -362,7 +268,7 @@ void TestScene::RenderGameInfoWindow(size_t entityCount, int deathCount, int exp
 
 	// Entity Statistics
 	ImGui::Text("Entity Count: %zu", entityCount);
-	ImGui::Text("Deaths This Frame: %d", deathCount);
+	ImGui::Text("Deaths: %d", deathCount);
 	ImGui::Text("Active Explosions: %d", explosionCount);
 	ImGui::Text("FPS: %.1f", m_fps);
 	ImGui::Separator();
@@ -382,25 +288,202 @@ void TestScene::RenderGameInfoWindow(size_t entityCount, int deathCount, int exp
 
 
 /////////////////////////////////
-// ReportFPS - Report FPS by calculating the number of frames rendered in the last second and applying an exponential moving average to smooth out fluctuations. 
-// It takes references to the frame count, last time point, smoothed FPS value, and a smoothing factor alpha as parameters.
-void TestScene::ReportFPS(int& fpsFrames, std::chrono::steady_clock::time_point& fpsLast, double& fpsSmooth,
-						  const double alpha) {
-	++fpsFrames;
-	auto fpsNow = std::chrono::steady_clock::now();
-	auto fpsElapsed = std::chrono::duration_cast<std::chrono::duration<double>>(fpsNow - fpsLast);
-	if (fpsElapsed.count() >= 1.0) {
-		double currentFps = static_cast<double>(fpsFrames) / fpsElapsed.count();
-		if (fpsSmooth <= 0.0) {
-			fpsSmooth = currentFps;
-		} else {
-			fpsSmooth = (alpha * currentFps) + ((1.0 - alpha) * fpsSmooth);
+// UpdateFPS - Updates the FPS value by calculating the number of frames rendered in the last second and applying an exponential moving average to smooth out fluctuations.
+void TestScene::UpdateFPS(float deltaTime) {
+	m_frameCount++;
+	m_fpsAccumulator += deltaTime;
+
+	// Update once per second
+	if (m_fpsAccumulator >= 1.0f) {
+		float rawFps = static_cast<float>(m_frameCount) / m_fpsAccumulator;
+
+		// exponential moving average for smoothing
+		if (m_fpsSmooth <= 0.0f) {
+			m_fpsSmooth = rawFps;
+		} else { // Apply exponential moving average for smoothing
+			m_fpsSmooth = (m_alpha * rawFps) + ((1.0 - m_alpha) * m_fpsSmooth);
 		}
 
-		fpsFrames = 0;
-		fpsLast = fpsNow;
-		m_fps = static_cast<float>(fpsSmooth);
+		// Update the public FPS value for display
+		m_fps = m_fpsSmooth;
+
+		// Reset counters for the next second
+		m_frameCount = 0;
+		m_fpsAccumulator = 0.0f;
 	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void TestScene::ProcessEvents() {
+	// Poll and process events from the SFML window. This
+	while (auto evt = m_gameEngine.window.pollEvent()) {
+		// Always forward event to ImGui first
+		ImGui::SFML::ProcessEvent(m_gameEngine.window, *evt);
+
+		// Window closed
+		if (evt->is<sf::Event::Closed>()) {
+			m_gameEngine.window.close();
+			continue;
+		}
+
+		// Key Pressed (Note: Escape key is handled globally by GameEngine, so we don't handle it here)
+		if (evt->is<sf::Event::KeyPressed>()) {
+			auto* kp = evt->getIf<sf::Event::KeyPressed>();
+			if (!kp) continue;
+		}
+	}
+}
+/////////////////////////////////
+
+
+
+
+/////////////////////////////////
+void TestScene::UpdateSceneLogic(float dt) {
+	m_growthTimer += dt;
+
+	if (m_growthTimer >= 5.0f) {   // every 5 seconds
+		m_targetEntityCount += 20; // increase population target
+		m_growthTimer = 0.0f;
+	}
+
+	UpdateSpawning(dt);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// RenderUI - Renders the ImGui game information window with current entity count, death count, and explosion count. It calls the RenderGameInfoWindow method to display the relevant information in the UI.
+void TestScene::RenderUI() {
+	m_deathCount += m_entityManager.GetDeathCountThisFrame();
+	RenderGameInfoWindow(m_entityManager.GetEntities().size(), m_deathCount, m_explosionCount);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// UpdateSpawning - Updates the spawning of entities in the scene based on the current entity count and the target entity count. If the current entity count is less than the target, it calculates how many entities need to be spawned and calls the SpawnReplacementEntities method to spawn them.
+void TestScene::UpdateSpawning(float deltaTime) {
+	// Check if the current entity count is less than the target entity count
+	size_t current = m_entityManager.GetEntities().size();
+
+	// If the current entity count is less than the target, spawn replacement entities to maintain the target population
+	if (current < m_targetEntityCount) {
+		int toSpawn = std::min(16, m_targetEntityCount - static_cast<int>(current));
+		SpawnReplacementEntities(toSpawn);
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void TestScene::SpawnInitialPopulation() {
+	for (int i = 0; i < m_targetEntityCount; ++i) {
+		// 1. Choose team type (0 or 1)
+		unsigned int teamType = static_cast<unsigned int>(m_entityType(m_rng));
+
+		// 2. Spawn inside screen bounds
+		float spawnX = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.x) - 50.0f)(m_rng);
+
+		float spawnY = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.y) - 50.0f)(m_rng);
+
+		// 3. Initial velocity (full 2D motion)
+		float velX = std::uniform_real_distribution<float>(-90.0f, 90.0f)(m_rng);
+		float velY = std::uniform_real_distribution<float>(-6.0f, 6.0f)(m_rng);
+
+		//// Clamp minimum speeds to avoid slow movers
+		//if (std::abs(velX) < 250.0f)
+		//	velX = (velX < 0.0f ? -250.0f : 250.0f);
+
+		//if (std::abs(velY) < 180.0f)
+		//	velY = (velY < 0.0f ? -180.0f : 180.0f);
+
+		// 4. Visual properties
+		int r = m_redVal(m_rng);
+		int g = m_greenVal(m_rng);
+		int b = m_blueVal(m_rng);
+		int a = m_alphaVal(m_rng);
+		float radius = m_radiusDistro(m_rng);
+
+		// 5. Spawn entity
+		SpawnEntityByType(teamType, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velX, velY), a);
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void TestScene::SpawnReplacementEntities(int count) {
+	for (int i = 0; i < count; ++i) {
+		// 1. Choose movement direction (0 = leftward, 1 = rightward)
+		int direction = m_direction(m_rng);
+
+		// 2. Map direction to team type
+		unsigned int teamType = (direction == 1) ? 0u : 1u;
+
+		// 3. Sample velocity (horizontal only)
+		float velX = m_xVelocity(m_rng);
+		float velY = 0.0f;
+
+		// Reverse velocity if moving rightward
+		if (direction == 1)
+			velX = -velX;
+
+		// 4. Sample spawn position
+		float spawnX;
+		float spawnY =
+			std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.windowSize.y))(m_rng);
+
+		if (direction == 1) {
+			// Spawn just off the left edge
+			spawnX = std::uniform_real_distribution<float>(-100.0f, 0.0f)(m_rng);
+		} else {
+			// Spawn just off the right edge
+			spawnX = static_cast<float>(m_gameEngine.windowSize.x) +
+					 std::uniform_real_distribution<float>(0.0f, 100.0f)(m_rng);
+		}
+
+		// 5. Sample visual properties
+		int r = m_redVal(m_rng);
+		int g = m_greenVal(m_rng);
+		int b = m_blueVal(m_rng);
+		int a = m_alphaVal(m_rng);
+		float radius = m_radiusDistro(m_rng);
+
+		// 6. Spawn the entity
+		SpawnEntityByType(teamType, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velX, velY), a);
+	}
+}
+/////////////////////////////////
+
+
+
+
+/////////////////////////////////
+// SpawnExplosion - Spawns an explosion entity at the specified position with the given radius. It creates a new entity of type Explosion, sets up its transform and explosion components, and adds it to the scene's registry of active explosions for tracking and updating.
+void TestScene::SpawnExplosion(const Vec2& pos, float radius) {
+	// Create explosion entity through ECS
+	Entity* e = m_entityManager.AddEntity(EntityType::Explosion);
+
+	// Transform setup
+	auto* transform = e->GetComponent<CTransform>();
+	transform->position = pos;
+
+
+	// Explosion component setup
+	auto* explosion = e->GetComponent<CExplosion>();
+	explosion->age = 0;
+	explosion->SetRadius(radius);
+
+	// Add to scene registry
+	m_explosions.push_back(e);
 }
 /////////////////////////////////
 
@@ -457,6 +540,6 @@ void TestScene::InitialiseSpatialLayers() {
 
 	// Create a dedicated layer for TestScene entities
 	// Balls are small, so use a small cell size for accurate collisions
-	m_spatialLayers.CreateLayer("TestScene", 16.0f);
+	m_spatialLayers.CreateLayer("TestScene", 32.0f);
 }
 /////////////////////////////////

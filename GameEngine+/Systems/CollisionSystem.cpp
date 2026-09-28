@@ -62,12 +62,12 @@ void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>
 		nearbyEntities.clear();
 		m_spatialIndex->QueryEntities(nearbyEntities, position, radius * 1.75f, currentEntity);
 
-		if (!nearbyEntities.empty()) {
-			std::cout << "[CollisionSystem] Query for entity " << currentEntity->GetId()
-				<< " (" << EntityTypeToString(currentEntity->GetType()) << ") at ("
-				<< position.x << ", " << position.y << ") radius " << radius
-				<< " found " << nearbyEntities.size() << " nearby candidates\n";
-		}
+		//if (!nearbyEntities.empty()) {
+		//	std::cout << "[CollisionSystem] Query for entity " << currentEntity->GetId()
+		//		<< " (" << EntityTypeToString(currentEntity->GetType()) << ") at ("
+		//		<< position.x << ", " << position.y << ") radius " << radius
+		//		<< " found " << nearbyEntities.size() << " nearby candidates\n";
+		//}
 
 		for (Entity* entityPtr : nearbyEntities) {
 			// Validate pointer is still alive (safety check)
@@ -84,13 +84,29 @@ void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>
 			if (entityPtr->GetType() == EntityType::Explosion)
 				continue;
 
-			std::cout << "[CollisionSystem] COLLISION detected: "
-				<< currentEntity->GetId() << " (" << EntityTypeToString(currentEntity->GetType()) << ") <-> "
-				<< entityPtr->GetId() << " (" << EntityTypeToString(entityPtr->GetType()) << ")\n";
+			//std::cout << "[CollisionSystem] COLLISION detected: "
+			//	<< currentEntity->GetId() << " (" << EntityTypeToString(currentEntity->GetType()) << ") <-> "
+			//	<< entityPtr->GetId() << " (" << EntityTypeToString(entityPtr->GetType()) << ")\n";
 
 			deathCount += ResolveCollision(currentEntity, entityPtr);
 		}
 	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// DetectAndResolveSpatial - detects and resolves collisions between entities using a spatial index for efficient broad-phase collision detection. It queries the spatial index for nearby entities, checks for actual collisions, and applies the appropriate collision response based on entity types.
+void CollisionSystem::DetectAndResolveSpatial(const std::vector<std::unique_ptr<Entity>>& entities, ISpatialIndex* spatialIndex, float deltaTime) {
+	// Phase‑4: spatial-aware collision entry point
+	m_spatialIndex = spatialIndex;
+
+	if (!m_spatialIndex)
+		return;
+
+	// Reuse your existing spatial collision loop
+	DetectAndResolve(entities, deltaTime);
 }
 /////////////////////////////////
 

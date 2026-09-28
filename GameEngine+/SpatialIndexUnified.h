@@ -34,6 +34,12 @@ public:
 
 	bool IsWorldSolid(int tileX, int tileY) const override;
 
+	
+	void Insert(Entity* e) override;
+	void Remove(Entity* e) override;
+	void Update(Entity* e) override;
+
+
 private:
 	SpatialHashGrid<Entity> m_dynamicGrid;
 	BVHSystem m_bvh;

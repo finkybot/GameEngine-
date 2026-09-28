@@ -70,8 +70,51 @@ public:
 	~SpatialHashGrid() { Clear(); }
 
 
+
+	// Remove - Removes an object from the spatial grid based on its center point position. It calculates the cell hash for the object's position, looks up the corresponding cell in the grid, and removes the object from that cell's vector. If the cell becomes empty after removal, it is also removed from the grid to save memory.
+	void Remove(T* object) noexcept {
+		const Vec2& pos = object->GetCentrePoint();
+		size_t hash = GetCellHash(pos.GetX(), pos.GetY(), m_cellSize);
+
+		auto it = m_grid.find(hash);
+		if (it == m_grid.end())
+			return;
+
+		auto& vec = it->second;
+		vec.erase(std::remove(vec.begin(), vec.end(), object), vec.end());
+
+		// Optional: remove empty cell
+		if (vec.empty())
+			m_grid.erase(it);
+	}
+
+
+
+	void Update(T* object) noexcept {
+		const Vec2& pos = object->GetCentrePoint();
+		size_t newHash = GetCellHash(pos.GetX(), pos.GetY(), m_cellSize);
+
+		// Remove from all cells (safe fallback)
+		for (auto it = m_grid.begin(); it != m_grid.end();) {
+			auto& vec = it->second;
+			vec.erase(std::remove(vec.begin(), vec.end(), object), vec.end());
+
+			if (vec.empty())
+				it = m_grid.erase(it);
+			else
+				++it;
+		}
+
+		// Insert into new cell
+		m_grid[newHash].push_back(object);
+	}
+
+
+
+
 	// Clear - Clears all objects from the spatial grid.
 	void Clear() noexcept { m_grid.clear(); }
+
 
 
 	// Insert - Inserts an object into the spatial grid based on its center point position.
@@ -80,6 +123,8 @@ public:
 		size_t hash = GetCellHash(pos.GetX(), pos.GetY(), m_cellSize);
 		m_grid[hash].push_back(object);
 	}
+
+
 
 	// Query - Overloaded version of the Query method. Performs a spatial query to find all objects within a specified radius of a position using a grid-based spatial hash. I'll store the results in the provided outFound vector, this version of the method will include any objects found within the query radius, excluding the object 
 	// passed to the query (e.g. the object performing the query so theres no self collision). The query works by checking all cells within a radius of the given position. For each cell, we calculate the hash and look up any objects in that cell. We then check the distance from each object to the query position to determine if it 
@@ -128,6 +173,7 @@ public:
 	}
 	 
 	 
+
 	// ResetQueryStats - Static query statistics method for performance monitoring. Resets the query statistics counters (this should be called at the start of each frame to track per-frame query performance).
 	static void ResetQueryStats() noexcept {
 		s_totalQueriesThisFrame = 0;
@@ -136,12 +182,15 @@ public:
 	}
 
 
+
 	// GetQueryCount - Static query statistics method for performance monitoring. Gets the total number of queries performed in the current frame.
 	static size_t GetQueryCount() noexcept { return s_queryCount; }
 
 
+
 	// GetTotalObjectsQueried - Static query statistics method for performance monitoring. Gets the total number of objects queried across all queries.
 	static size_t GetTotalObjectsQueried() noexcept { return s_totalObjectsQueried; }
+
 
 
 	// GetAverageObjectsPerQuery - Static query statistics method for performance monitoring. Gets the average number of objects returned per query, calculated as total objects queried divided by total queries, with a check to avoid division by zero.
@@ -150,8 +199,10 @@ public:
 	}
 
 
+
 	// GetCellCount - Gets the total number of cells currently stored in the grid (debugging/monitoring method).
 	size_t GetCellCount() const noexcept { return m_grid.size(); }
+
 
 
 	// GetTotalObjectCount - Gets the total number of objects stored across all grid cells. (debugging/monitoring method).

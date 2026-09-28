@@ -92,8 +92,6 @@ GameEngine::GameEngine() {
 	}
 
 
-
-
 	// *** AUDIO *** Create and initialize the SoundSystem
 	soundSystem = std::make_unique<SoundSystem>();
 	soundSystem->Initialize();  // Check audio device and log diagnostics

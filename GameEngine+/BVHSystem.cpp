@@ -11,6 +11,7 @@
 #include "CShape.h"
 #include "Raycast.h"
 #include <algorithm>
+#include "AABB.h"
 /////////////////////////////////
 
 
@@ -245,5 +246,122 @@ bool BVHSystem::RaycastLeaf(const std::vector<Entity*>& leaf, const Vec2& origin
 		if (hitAny && debug) debug->hitLeaf = debug->visited.back(); // last visited node is the leaf
 
 	return hitAny;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+AABB BVHSystem::ComputeBounds(Entity* e) const {
+	auto* t = e->GetComponent<CTransform>();
+	auto* s = e->GetComponent<CShape>();
+
+	if (!t || !s)
+		return AABB(Vec2(0, 0), Vec2(0, 0));
+
+	float r = s->GetRadius();
+	Vec2 pos = t->position;
+
+	return AABB(Vec2(pos.x - r, pos.y - r), Vec2(pos.x + r, pos.y + r));
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+bool BVHSystem::RIntersectsAABB(const Vec2& origin, const Vec2& dirN, const AABB& box, float& outDist) const {
+	float tmin = (box.min.x - origin.x) / dirN.x;
+	float tmax = (box.max.x - origin.x) / dirN.x;
+
+	if (tmin > tmax)
+		std::swap(tmin, tmax);
+
+	float tymin = (box.min.y - origin.y) / dirN.y;
+	float tymax = (box.max.y - origin.y) / dirN.y;
+
+	if (tymin > tymax)
+		std::swap(tymin, tymax);
+
+	if ((tmin > tymax) || (tymin > tmax))
+		return false;
+
+	float t = std::max(tmin, tymin);
+
+	if (t < 0.0f || t > outDist)
+		return false;
+
+	outDist = t;
+	return true;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void BVHSystem::Insert(Entity* e) {
+	if (!e || !e->IsAlive())
+		return;
+
+	m_dynamicEntities.push_back(e);
+	m_dirty = true;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void BVHSystem::Remove(Entity* e) {
+	auto it = std::find(m_dynamicEntities.begin(), m_dynamicEntities.end(), e);
+	if (it != m_dynamicEntities.end())
+		m_dynamicEntities.erase(it);
+
+	m_dirty = true;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void BVHSystem::Update(Entity* e) {
+	if (!e || !e->IsAlive())
+		return;
+
+	// No per‑node update needed with this design; just mark dirty
+	m_dirty = true;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+bool BVHSystem::RaycastDynamic(const Vec2& origin, const Vec2& dirN, float maxDist, RaycastHit& outHit,
+							   Entity*& outEntity) const {
+	float closest = maxDist;
+	bool hit = false;
+	outEntity = nullptr;
+
+	for (Entity* e : m_dynamicEntities) {
+		if (!e || !e->IsAlive())
+			continue;
+
+		AABB box = ComputeBounds(e);
+
+		float dist = closest;
+		if (RIntersectsAABB(origin, dirN, box, dist)) {
+			closest = dist;
+			hit = true;
+			outEntity = e;
+
+			outHit.hit = true;
+			outHit.distance = dist;
+			outHit.position = origin + dirN * dist;
+			outHit.normal = Vec2(0, 0); // optional
+			outHit.tileX = -1;
+			outHit.tileY = -1;
+			outHit.tileValue = 0;
+		}
+	}
+
+	return hit;
 }
 /////////////////////////////////

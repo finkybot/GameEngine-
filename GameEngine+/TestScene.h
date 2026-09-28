@@ -14,6 +14,7 @@
 #include "RenderSystemGL.h"
 #include "GPURenderSystem.h"
 #include <SFML/Graphics.hpp>
+#include "ShapeTemplateRegistry.h"
 
 #include "Systems/PhysicsSystem.h"
 /////////////////////////////////
@@ -47,7 +48,7 @@ public:
 
 
 	// GetExplosionCount - returns the number of active explosions currently playing in the scene.
-	int GetExplosionCount() const { return 0; } 
+	int GetExplosionCount() const { return m_explosionCount; } 
 
 
 	// InitializeGame - responsible for initializing the game state for the scene, including spawning entities with random properties and setting up any necessary game logic or mechanics. This method will be called when the scene is entered to set up the initial state of the game.
@@ -80,36 +81,65 @@ private:
 	void RenderGameInfoWindow(size_t entityCount, int deathCount, int explosionCount);
 
 
-	// Private member variables for the TestScene class. These include references to the GameEngine, EntityManager, and SFML window, as well as random distributions for entity properties and tracking variables for explosions and FPS.
-	const int m_targetEntityCount = 16;
+	void UpdateFPS(float deltaTime);
+	void ProcessEvents();
+	void UpdateSceneLogic(float deltaTime);
+	void RenderUI();
+
+	void UpdateSpawning(float deltaTime);
+	void SpawnInitialPopulation();
+	void SpawnReplacementEntities(int count);
+
+	void SpawnExplosion(const Vec2& position, float radius);
+
+
+	// Private member variables for the TestScene class. These include references to the GameEngine, EntityManager, and SFML window, as well as random distributions for entity properties and tracking variables for explosions and FPS
+
+	int m_targetEntityCount = 500;
 	sf::RenderWindow& m_window;				// Reference to the SFML render window for rendering the scene
 	int m_explosionCount = 0;				// Number of active explosions currently playing, used for tracking and displaying explosion count in the game info window.
+	int m_deathCount =	0;					// Number of entities that have died, used for tracking and displaying death count in the game info window.
+	
+
+	std::vector<Entity*> m_explosions; // scene‑local explosion registry (currently unused, but will be used for tracking active explosions in the scene at a later date)
+
 	float m_fps = 0.0f;						// Current frames per second (FPS).
+	float m_fpsAccumulator = 0.0f;			// Accumulator for calculating FPS over time.
+	float m_fpsSmooth =	0.0f;				// Smoothed FPS value using an exponential moving average to reduce fluctuations in the reported FPS.
+	const double m_alpha = 0.15;			// smoothing factor
 
 
-	// ReportFPS - Reports the current frames per second (FPS) by calculating the number of frames rendered in the last second and applying an exponential moving average to smooth out fluctuations. This method takes references to the frame count, last time point, and smoothed FPS value, as well as a smoothing factor alpha
-	// for the moving average calculation.
-	void ReportFPS(int& fpsFrames, std::chrono::steady_clock::time_point& fpsLast, double& fpsSmooth, const double	alpha);
+	float m_growthTimer = 0.0f;				// Timer for controlling the growth of the entity population over time.
+
 
 
 	// SpatialLayerRegistry member variable for managing spatial layers in the TechSimulationScene class. This registry allows for efficient management and retrieval of spatial layers based on their names, enabling the organization of entities into different layers for spatial queries and interactions.
 	SpatialLayerRegistry m_spatialLayers;
 
+	// ShapeTemplateRegistry member variable for managing shape templates associated with different entity types in the TechSimulationScene class. This registry allows for the registration and retrieval of shape templates based on entity types, enabling the creation of entities with specific shapes and visual representations.
+	ShapeTemplateRegistry m_shapeRegistry;
+
 
 	// Random distributions for entity properties
-	std::random_device m_randDevice;						// Random distributions for entity properties
-	std::default_random_engine m_generator;					// Random number generator for entity properties
+	std::default_random_engine m_rng;
+
+	//std::random_device m_randDevice;						// Random distributions for entity properties (commented out for now, as it may not be necessary with the current random number generation logic)
+	//std::default_random_engine m_generator;				// Random number generator for entity properties (commented out for now, as it may not be necessary with the current random number generation logic)
+
 	std::uniform_int_distribution<int> m_xVelocity;			// x movement speed
 	std::uniform_int_distribution<int> m_yVelocity;			// y movement speed
-	std::uniform_int_distribution<int> m_xDistro;			// Spawn x axis distribution across the entire screen width for more even distribution of entities, preventing clustering at the left or right edges
-	std::uniform_int_distribution<int> m_yDistro;			// Spawn y axis distribution across the entire screen height for more even distribution of entities, preventing clustering at the top or bottom edges
+
+	//std::uniform_int_distribution<int> m_xDistro;			// Spawn x axis distribution across the entire screen width for more even distribution of entities, preventing clustering at the left or right edges (commented out for now, as it may not be necessary with the current spawn logic)
+	//std::uniform_int_distribution<int> m_yDistro;			// Spawn y axis distribution across the entire screen height for more even distribution of entities, preventing clustering at the top or bottom edges (commented out for now, as it may not be necessary with the current spawn logic)
+
 	std::uniform_int_distribution<int> m_redVal;			// reds
 	std::uniform_int_distribution<int> m_greenVal;			// greens
 	std::uniform_int_distribution<int> m_blueVal;			// blues
 	std::uniform_int_distribution<int> m_alphaVal;			// alpha values for more visible entities
 	std::uniform_real_distribution<float> m_radiusDistro;	// random radius between 1.5 and 2.0 for more visible entities
 	std::uniform_int_distribution<int> m_entityType;		// entity type (0-4) for team assignment
-	std::uniform_int_distribution<int> m_spawnZone;			// spawn zone (0-3) for more even distribution of entities across the screen, preventing clustering in one area
-	std::uniform_int_distribution<int> m_direction;			// direction (0-1) for left or right movement
+	std::uniform_int_distribution<int> m_direction;			// direction (0-1) for left or right movement	
+	
+	//std::uniform_int_distribution<int> m_spawnZone;			// spawn zone (0-3) for more even distribution of entities across the screen, preventing clustering in one area (commented out for now, as it may not be necessary with the current spawn logic)
 };
 /////////////////////////////////

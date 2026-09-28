@@ -36,6 +36,11 @@ public:
 	// Rebuild - Rebuilds the spatial index based on the provided list of entities and the chunk manager. This method is responsible for updating the spatial index to reflect any changes in the positions or states of entities, ensuring that subsequent queries return accurate results.
 	virtual void Rebuild(const std::vector<std::unique_ptr<Entity>>& entities, ChunkManager* chunks) = 0;
 
+	// Updated methods for inserting, removing, and updating entities in the spatial index. These methods allow for dynamic management of entities within the spatial index, enabling efficient updates as entities move or change state.
+	virtual void Insert(Entity* e) = 0;
+	virtual void Remove(Entity* e) = 0;
+	virtual void Update(Entity* e) = 0;
+
 	// QueryEntities - Queries the spatial index for entities within a specified radius of a given position, excluding a specific entity if provided. The results are stored in the outFound vector, allowing for efficient retrieval of nearby entities for collision detection or other spatial queries.
 	virtual void QueryEntities(std::vector<Entity*>& outFound, const Vec2& position, float radius, const Entity* exclude) const = 0;
 

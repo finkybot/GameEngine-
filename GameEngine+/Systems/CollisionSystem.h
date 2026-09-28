@@ -55,6 +55,10 @@ public:
 	// (e.g. 2 for enemy collisions, 0 for ally bounces).
 	void DetectAndResolve(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime);
 
+	// DetectAndResolveSpatial method - Detects and resolves collisions between entities using a spatial index for efficient broad-phase collision detection. It queries the spatial index for nearby entities, checks for actual collisions, and applies the appropriate collision response based on entity types. 
+	// It returns the number of entities destroyed as a result of collisions (e.g. 2 for enemy collisions, 0 for ally bounces).
+	void DetectAndResolveSpatial(const std::vector<std::unique_ptr<Entity>>& entities, ISpatialIndex* spatialIndex, float deltaTime);
+
 	// SetSpatialIndex - Set the ISpatialIndex reference for spatial queries
 	void SetSpatialIndex(ISpatialIndex* idx) { m_spatialIndex = idx; }
 

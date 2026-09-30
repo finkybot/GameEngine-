@@ -158,7 +158,7 @@ GameEngine::GameEngine() {
 		std::cout << "\x1b[36m[GameEngine]\x1b[0m OpenGL Fontsystem initialised with default font" << std::endl;
 	}
 
-	gpuRenderSystem.Initialize(); // Initialise the GPU render system for advanced OpenGL rendering features
+	gpuRenderSystem.Initialise(); // Initialise the GPU render system for advanced OpenGL rendering features
 
 	// --- Bind FontSystem BEFORE Initialise() ---
 	entityManager->GetRenderSystemGL().SetFontSystem(&fontsystem);
@@ -218,10 +218,8 @@ std::vector<std::string> GameEngine::GetSceneNames() const {
 
 
 /////////////////////////////////
-// ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions. The method checks if the specified scene exists // in the scenes map and sets it as 
-// the current active scene, enabling the game loop to update and render the new scene. If the scene name is not found, a warning is logged.
+// ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions
 void GameEngine::ChangeScene(const std::string& sceneName) {
-	// Wait for all jobs to finish before changing scenes to avoid dangling references
 	JobSystem::WaitIdle();
 
 	// Clear any pending main thread tasks to avoid executing tasks from the previous scene after switching
@@ -261,8 +259,7 @@ void GameEngine::ChangeScene(const std::string& sceneName) {
 
 
 /////////////////////////////////
-// RemoveScene - Removes a scene from the game engine by its name, allowing for dynamic scene management. The method checks if the specified scene exists in the scenes map and erases it, freeing up 
-// resources associated with that scene. If the scene name is not found, no action is taken.
+// RemoveScene - Removes a scene from the game engine by its name, allowing for dynamic scene management.
 void GameEngine::RemoveScene(const std::string& sceneName) {
 	auto it = scenes.find(sceneName);
 	if (it != scenes.end()) {
@@ -274,10 +271,8 @@ void GameEngine::RemoveScene(const std::string& sceneName) {
 
 
 /////////////////////////////////
-// Run - Main game loop that handles scene management, input processing, and rendering. The method initializes the chosen scene, sets up the input controller, and enters a loop that updates the current 
-// scene, processes events, and renders the scene to the window. The loop continues until the window is closed or the running state is set to false.
+// Run - Main game loop that handles scene management, input processing, and rendering.
 void GameEngine::Run() {
-	// Initialise job system before any scenes start scheduling jobs
 	JobSystem::Init(4); // Initialize the job system with 4 worker threads (or use std::thread::hardware_concurrency() for dynamic thread count)
 
 	// Setup Event Handler.
@@ -332,17 +327,8 @@ void GameEngine::Run() {
 
 
 /////////////////////////////////
-// Update - Updates the current scene, processes input, and handles rendering. The method is called once per frame and performs the following actions:
-//			1) Clears the window and render queue, 
-//			2) Updates ImGui and FPS counter, 
-//			3) Polls events and forwards them to the current scene, 
-//			4) Updates the input controller, 
-//			5) Updates the current scene and its entity manager,
+// Update - Updates the current scene, processes input, and handles rendering.
 void GameEngine::Update(float deltaTime) {
-	// *** MAIN LOOP *** Main loop, game logic is handled in here once per frame, runs while the window is open and handles events, updates, and rendering for the current scene.
-	//while (window.isOpen()) {
-		// *** CLEAR WINDOW *** Clear the window at the start of each frame. Use an explicit clear color so fully transparent tiles in the editor reveal the intended background instead of an unintended 
-		// grey fallback.
 		window.clear(sf::Color::Transparent);
 
 		// *** RENDER QUEUE *** Clear the engine-wide render queue from the previous frame
@@ -371,8 +357,7 @@ void GameEngine::Update(float deltaTime) {
 				}
 			}
 
-			// *** GLOBAL ESCAPE HANDLING *** Intercept Escape before forwarding to the scene so scene-level handlers that close the window won't run. If Escape is pressed and we're not already on 
-			// MainMenu, switch to it.
+			// *** GLOBAL ESCAPE HANDLING *** Intercept Escape before forwarding to the scene so scene-level handlers that close the window won't run. If Escape is pressed and we're not already on  MainMenu, switch to it.
 			if (eventOpt->is<sf::Event::KeyPressed>()) {
 				if (auto kp = eventOpt->getIf<sf::Event::KeyPressed>()) {
 					if (static_cast<sf::Keyboard::Key>(kp->code) == sf::Keyboard::Key::Escape) {
@@ -396,8 +381,7 @@ void GameEngine::Update(float deltaTime) {
 		// *** INPUT CONTROLLER UPDATE *** Update method will run  (carry out) these actions.
 		m_InputController.Update(deltaTime);
 
-		// *** GLOBAL ESCAPE HANDLING *** Global keyboard poll: if Escape is held, switch back to MainMenu before any scene Update runs... This prevents scenes that poll sf::Keyboard::isKeyPressed(Escape) 
-		// from closing the window directly.
+
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
 			auto it = scenes.find("MainMenu");
 			if (it != scenes.end() && currentScene && currentScene != it->second) {
@@ -409,30 +393,20 @@ void GameEngine::Update(float deltaTime) {
 			}
 		}
 
-		// *** SCENE UPDATE *** Update the current scene and its entity manager, movement system, and sound system. The scene's Update method handles ImGui updates and input, while the movement system 
-		// updates entity positions based on their paths. The entity manager processes game logic, and the sound system handles sound effects for entities in the current scene.
+		// Scene update and rendering
 		if (currentScene) {
-			// Let the scene update (handles ImGui update and input)... Use the actual frame time measured above so scenes get accurate timing for FPS and logic.
 			currentScene->Update(frameTime.asSeconds());
 
-			// Update movement BEFORE entity manager so new paths can be used immediately
 			movementSystem->Update(currentScene->GetEntityManager().GetEntities(), deltaTime);
 
-			// Ensure the scene's EntityManager processes game logic (tile system, pending entities)
-			// and rebuilds spatial structures (including BVH).
 			currentScene->GetEntityManager().Update(deltaTime);
-			currentScene->GetEntityManager().RenderAll(gpuRenderSystem, RenderSystem::RenderMode::ShapesOnly /* or whatever */);
+			currentScene->GetEntityManager().RenderAll(gpuRenderSystem, RenderSystem::RenderMode::ShapesOnly /* or whatever */, currentScene->GetActiveCamera());
 
-			// Process sound effects using the SCENE's EntityManager (not global)
-			// This ensures we process sounds for entities in the current active scene
 			soundSystem->Process(currentScene->GetEntityManager(), deltaTime);
 			soundSystem->Update(deltaTime);
 
-			// Update the global cursor system
 			m_cursorSystem->Update(deltaTime);
-
-			// *** MAIN-THREAD GL/UPLOAD TASKS *** Execute any main-thread GL/upload tasks queued by worker threads. These must run while the main thread's OpenGL context is current to avoid context 
-			// activation errors.
+			
 			std::vector<std::function<void()>> _mainThreadTasks;
 			MainThreadTaskQueue::Instance().Drain(_mainThreadTasks); // Drain queued tasks into a local vector to avoid holding the mutex while executing tasks
 			
@@ -442,23 +416,13 @@ void GameEngine::Update(float deltaTime) {
 			}
 
 			// *** ENGINE RENDER PASS ORDERING *** 
-			// 1) Scene overlays (render chunks and world elements first)
 			currentScene->Render();
-			// 2) Entity shapes (on top of scene overlays)
 			currentScene->GetEntityManager().RenderShapes();
-			// 3) Flush queued overlays and shapes
 			m_renderQueue.Flush(window);
-			// 4) Entity text (direct render after queue flush so text appears on top)
 			currentScene->GetEntityManager().RenderText();
-			// 5) Custom cursor (on top of scene, below ImGui)
 			m_cursorSystem->Render();
 		}
 
-		// Draw any debug overlays from the current scene before ImGui so they are visible
-		//if (m_currentScene) m_currentScene->RenderDebugOverlay();
-
-		// *** ENGINE RENDER QUEUE FLUSH *** Flush the engine-wide render queue to the window before ImGui rendering
-		// This ensures all scene and entity draws appear behind the UI
 		m_renderQueue.Flush(window);
 
 // *** IMGUI RENDERING *** (Should be done last) Render ImGui on top of everything
@@ -482,7 +446,6 @@ void GameEngine::Update(float deltaTime) {
 /////////////////////////////////
 // *** MOVEMENT SYSTEM UPDATE ***
 void MovementSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime) {
-	// Iterate through all entities in the scene
 	for (const auto& ent : entities) {
 		if (!ent || !ent->IsAlive()) continue;
 

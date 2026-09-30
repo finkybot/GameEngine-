@@ -3,6 +3,7 @@
 #include "Raycast.h"
 #include "Entity.h"
 #include "CStatic.h"
+#include <unordered_set>
 //////////////////////////////////
 
 
@@ -10,9 +11,51 @@
 //////////////////////////////////
 void SpatialIndexUnified::Rebuild(const std::vector<std::unique_ptr<Entity>>& entities, ChunkManager* chunks) {
 	m_chunks = chunks;
-	RebuildDynamic(entities);
-	RebuildBVH(entities);
-	RebuildWorldMask(chunks);
+
+	std::unordered_set<Entity*> activeDynamic;
+	activeDynamic.reserve(entities.size());
+
+	for (const auto& up : entities) {
+		Entity* e = up.get();
+		if (!e || !e->IsAlive())
+			continue;
+		if (!e->GetShape())
+			continue;
+		if (e->HasComponent<CStatic>())
+			continue;
+		activeDynamic.insert(e);
+	}
+
+	if (!m_dynamicInitialized) {
+		m_dynamicGrid.Clear();
+		for (Entity* e : activeDynamic) {
+			m_dynamicGrid.Insert(e);
+		}
+		m_dynamicInitialized = true;
+	} else {
+		// Remove stale pointers without dereferencing potential freed entities.
+		m_dynamicGrid.PruneToActiveSet(activeDynamic);
+
+		// Ensure each active dynamic entity is present in the grid.
+		for (Entity* e : activeDynamic) {
+			if (!m_dynamicGrid.ContainsPointer(e)) {
+				m_dynamicGrid.Insert(e);
+			}
+		}
+	}
+
+	// Keep dynamic cell membership current even when callers do not issue explicit Update() calls.
+	for (Entity* e : activeDynamic) {
+		m_dynamicGrid.Update(e);
+	}
+
+	if (chunks) {
+		const uint64_t revision = chunks->GetWorldRevision();
+		if (m_worldMaskDirty || revision != m_lastWorldRevision) {
+			RebuildWorldMask(chunks);
+			m_worldMaskDirty = false;
+		}
+	}
 }
 //////////////////////////////////
 
@@ -70,6 +113,42 @@ void SpatialIndexUnified::Update(Entity* e) {
 
 
 //////////////////////////////////
+void SpatialIndexUnified::Reset() {
+	m_dynamicGrid.Clear();
+	m_bvh = BVHSystem{};
+	m_dynamicInitialized = false;
+	m_worldMask.clear();
+	m_worldWidth = 0;
+	m_worldHeight = 0;
+	m_worldOffsetX = 0;
+	m_worldOffsetY = 0;
+	m_worldMaskDirty = false;
+	m_lastWorldRevision = 0;
+}
+//////////////////////////////////
+
+
+
+//////////////////////////////////
+void SpatialIndexUnified::InitialBuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities) {
+	m_dynamicGrid.Clear();
+	for (auto& u : entities) {
+		Entity* e = u.get();
+		if (!e->IsAlive())
+			continue;
+		if (!e->GetShape())
+			continue;
+		if (e->HasComponent<CStatic>())
+			continue;
+		m_dynamicGrid.Insert(e);
+	}
+	m_dynamicInitialized = true;
+}
+//////////////////////////////////
+
+
+
+//////////////////////////////////
 void SpatialIndexUnified::RebuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities) {
 	m_dynamicGrid.Clear();
 	for (auto& u : entities) {
@@ -82,6 +161,7 @@ void SpatialIndexUnified::RebuildDynamic(const std::vector<std::unique_ptr<Entit
 			continue;
 		m_dynamicGrid.Insert(e);
 	}
+	m_dynamicInitialized = true;
 }
 //////////////////////////////////
 
@@ -89,6 +169,7 @@ void SpatialIndexUnified::RebuildDynamic(const std::vector<std::unique_ptr<Entit
 
 //////////////////////////////////
 void SpatialIndexUnified::RebuildBVH(const std::vector<std::unique_ptr<Entity>>& entities) {
+	// Build BVH once at scene load or when world is reset
 	std::vector<Entity*> dynamic;
 	dynamic.reserve(entities.size());
 
@@ -106,6 +187,7 @@ void SpatialIndexUnified::RebuildBVH(const std::vector<std::unique_ptr<Entity>>&
 		dynamic.push_back(e);
 	}
 
+	// Build initial BVH tree
 	m_bvh.Rebuild(dynamic);
 }
 //////////////////////////////////
@@ -118,10 +200,7 @@ void SpatialIndexUnified::RebuildWorldMask(ChunkManager* chunks) {
 		return;
 
 	m_tileSize = chunks->GetTileSize();
-	m_worldOffsetX = chunks->worldOffsetX;
-	m_worldOffsetY = chunks->worldOffsetY;
-
-	chunks->BuildWorldMask(m_worldMask, m_worldWidth, m_worldHeight);
+	chunks->GetWorldMaskSnapshot(m_worldMask, m_worldWidth, m_worldHeight, m_worldOffsetX, m_worldOffsetY, m_lastWorldRevision);
 }
 //////////////////////////////////
 

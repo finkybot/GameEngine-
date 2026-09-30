@@ -14,6 +14,7 @@
 #include <SFML/System/Clock.hpp>
 #include "GameEngine.h"
 #include "RenderQueue.h"
+#include "CCamera.h"
 
 class GameEngine;
 class EntityManager;
@@ -47,6 +48,8 @@ public:
 
 	// Allow scene to control whether ImGui should be updated/rendered for this scene
 	virtual bool IsImGuiEnabled() { return true; }
+
+	virtual CCamera& GetActiveCamera() = 0;
 
 	// Accessors for injected references (scenes do not own these)
 	GameController* GetGameController() { return &m_GameController; }

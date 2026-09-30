@@ -56,6 +56,7 @@ public:
 	void OnEnter() override;
 	void OnExit() override;
 	void OnWindowResized(sf::Vector2u newSize) override;
+	CCamera& GetActiveCamera() override { return m_screenCamera; } // No camera used in this scene
 
 
 	// Resource management and initialization (overrides from Scene). LoadResources and UnloadResources will handle loading and freeing any resources needed by the scene, while InitializeGame can be used to set up the initial state of the scene when the game starts.
@@ -291,6 +292,8 @@ private:
 	std::vector<std::shared_ptr<sf::RectangleShape>> m_tempGridShapes; // Temporary grid rectangles
 	int m_nextTempShapeId = 0;
 
+
+	CCamera m_screenCamera;
 
 	GPURenderSystem m_gpuRenderer;
 	std::vector<GPUInstanceData> m_explosionInstances;

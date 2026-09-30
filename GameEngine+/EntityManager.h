@@ -78,9 +78,9 @@ public:
 	// Public methods for updating and rendering entities, as well as adding and removing entities from the manager. The Update method will handle updating all systems and processing pending entities, while the Render methods will handle drawing entities.
 	void Update(float deltaTime = 1.0f / 60.0f);
 	void RenderShapes(); // Direct rendering (not queued)
-	void RenderGL(GPURenderSystem& gpuRenderSystem);
+	void RenderGL(GPURenderSystem& gpuRenderSystem, const CCamera& camera);
 	void RenderText(); // Direct render (no queue)
-	void RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::RenderMode mode);
+	void RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::RenderMode mode, const CCamera& camera);
 
 	// Methods for adding and removing entities, as well as accessing the list of entities and the spatial hash grid. The AddEntity method creates a new entity of the specified type and adds it to the manager, while the KillEntity method marks an entity for removal.
 	Entity* AddEntity(EntityType type);
@@ -115,7 +115,7 @@ public:
 	RenderSystem& GetRenderSystem() { return m_renderSystem; }	
 	RenderSystemGL& GetRenderSystemGL() { return m_renderSystemGL; } // Optional: OpenGL-based render system for advanced rendering (may be nullptr)
 
-	void RenderGLShapes(GPURenderSystem& gpuRenderSystem);
+	void RenderGLShapes(GPURenderSystem& gpuRenderSystem, const CCamera& camera);
 
 	MusicSystem* GetMusicSystem() { return m_musicSystem.get(); } // Accessor for MusicSystem (may be nullptr)
 	SoundSystem* GetSoundSystem() { return m_soundSystem.get(); } // Accessor for SoundSystem (may be nullptr)

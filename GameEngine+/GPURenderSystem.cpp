@@ -77,15 +77,15 @@ void GPURenderSystem::Shutdown() {
 
 
 /////////////////////////////////
-// Initialize sets up OpenGL resources. It should be called once after GLAD is initialized and a valid OpenGL context is active.
-void GPURenderSystem::Initialize() {
+// Initialise sets up OpenGL resources. It should be called once after GLAD is initialized and a valid OpenGL context is active.
+void GPURenderSystem::Initialise() {
 	// Check if already initialized, get out if so
 	if (m_initialized) return;
 
 	// Check for OpenGL context and required functions
 	const GLubyte* version = glGetString(GL_VERSION);
 	if (!version) {
-		std::cerr << "[GPURenderSystem] No active OpenGL context during Initialize()" << std::endl;
+		std::cerr << "[GPURenderSystem] No active OpenGL context during Initialise()" << std::endl;
 		return;
 	}
 
@@ -102,11 +102,11 @@ void GPURenderSystem::Initialize() {
 	CreateEqualizerResources();
 	CreateCircleResources();
 
-	if (!m_quadVBO || !m_explosionVAO || !m_explosionInstanceVBO || !m_explosionShaderProgram || m_explosionViewportUniformLocation < 0 ||
-		!m_equalizerVAO || !m_equalizerInstanceVBO || !m_equalizerShaderProgram || m_equalizerViewportUniformLocation < 0) {
+	if (!m_quadVBO || !m_explosionVAO || !m_explosionInstanceVBO || !m_explosionShaderProgram || !m_equalizerVAO ||	!m_equalizerInstanceVBO || !m_equalizerShaderProgram || m_equalizerViewportUniformLocation < 0) /* equalizer still needs viewport */ {
 		Shutdown();
 		return;
 	}
+
 
 	m_initialized = true;
 }
@@ -148,14 +148,19 @@ void GPURenderSystem::CreateQuadGeometry() {
 void GPURenderSystem::CreateExplosionResources() {
 	// Vertex shader vs
 	const char* vs = R"(
+
 		#version 330 core
 
 		layout(location = 0) in vec2 quadPos;
-		layout(location = 1) in vec4 posRad;
-		layout(location = 2) in vec4 lifeCol;
-		layout(location = 3) in float alpha;
+		layout(location = 1) in vec4 posRad;   // x, y, radius, age
+		layout(location = 2) in vec4 lifeCol;  // lifetime, r, g, b
+		layout(location = 3) in float alpha;   // alpha
 
-		uniform vec2 uViewportSize;
+		uniform vec2  uViewportSize;
+		uniform vec2  uCameraPos;
+		uniform float uCameraZoom;
+		//uniform float uWorldWidth;
+		//uniform float uWorldHeight;
 
 		out vec2 fragPos;
 		out float vRadius;
@@ -165,25 +170,34 @@ void GPURenderSystem::CreateExplosionResources() {
 
 		void main()
 		{
-			fragPos = quadPos * posRad.z;
-			vRadius = posRad.z;
-			vAge = posRad.w;
+			fragPos   = quadPos * posRad.z;
+			vRadius   = posRad.z;
+			vAge      = posRad.w;
 			vLifetime = lifeCol.x;
-			vColor = vec4(lifeCol.yzw, alpha);
+			vColor    = vec4(lifeCol.yzw, alpha);
+
+			// world-space position relative to camera
+			vec2 worldPos = posRad.xy - uCameraPos;
+
+			// world scaled by zoom
+			float scaledW = uViewportSize.x / uCameraZoom;
+			float scaledH = uViewportSize.y / uCameraZoom;
+
 
 			vec2 centerNdc = vec2(
-				(posRad.x / uViewportSize.x) * 2.0 - 1.0,
-				1.0 - (posRad.y / uViewportSize.y) * 2.0
+				(worldPos.x / scaledW) * 2.0,
+				-(worldPos.y / scaledH) * 2.0
 			);
 
 			vec2 localNdc = vec2(
-				(fragPos.x / uViewportSize.x) * 2.0,
-				-(fragPos.y / uViewportSize.y) * 2.0
+				(fragPos.x / scaledW) * 2.0,
+				-(fragPos.y / scaledH) * 2.0
 			);
 
 			gl_Position = vec4(centerNdc + localNdc, 0.0, 1.0);
 		}
 	)";
+
 
 	// Fragment shader fs
 	const char* fs = R"(
@@ -215,10 +229,10 @@ void GPURenderSystem::CreateExplosionResources() {
 
 	// Get uniform location for viewport size and check for errors
 	m_explosionViewportUniformLocation = glGetUniformLocation(m_explosionShaderProgram, "uViewportSize");
-	if (m_explosionViewportUniformLocation < 0) {
-		std::cerr << "[GPURenderSystem] Failed to locate explosion viewport uniform" << std::endl;
-		return;
-	}
+	//if (m_explosionViewportUniformLocation < 0) {
+	//	std::cerr << "[GPURenderSystem] Failed to locate explosion viewport uniform" << std::endl;
+	//	return;
+	//}
 
 	// Create VAO and instance VBO for explosions and check for errors
 	glGenVertexArrays(1, &m_explosionVAO);
@@ -357,39 +371,48 @@ void GPURenderSystem::CreateEqualizerResources() {
 void GPURenderSystem::CreateCircleResources() {
 	// --- Circle Vertex Shader ---
 	const char* vs = R"(
-        #version 330 core
+		#version 330 core
 
-        layout(location = 0) in vec2 quadPos;      // shared quad [-1,1]
-        layout(location = 1) in vec4 posRad;       // x, y, radius, unused
-        layout(location = 2) in vec4 color;        // r, g, b, a
+		layout(location = 0) in vec2 quadPos;      // shared quad [-1,1]
+		layout(location = 1) in vec4 posRad;       // x, y, radius, unused
+		layout(location = 2) in vec4 color;        // r, g, b, a
 
-        uniform vec2 uViewportSize;
+		uniform vec2  uViewportSize;
+		uniform vec2  uCameraPos;
+		uniform float uCameraZoom;
+		//uniform float uWorldWidth;
+		//uniform float uWorldHeight;
 
-        out vec2 fragPos;
-        out float vRadius;
-        out vec4 vColor;
+		out vec2 fragPos;
+		out float vRadius;
+		out vec4 vColor;
 
-        void main()
-        {
-            // quadPos scaled by radius → local pixel-space circle coords
-            fragPos = quadPos * posRad.z;
-            vRadius = posRad.z;
-            vColor = color;
+		void main()
+		{
+			fragPos = quadPos * posRad.z;
+			vRadius = posRad.z;
+			vColor  = color;
 
-            // Convert center from pixel → NDC
-            vec2 centerNdc = vec2(
-                (posRad.x / uViewportSize.x) * 2.0 - 1.0,
-                1.0 - (posRad.y / uViewportSize.y) * 2.0
-            );
+			// world-space position relative to camera
+			vec2 worldPos = posRad.xy - uCameraPos;
 
-            // Convert local offset from pixel → NDC
-            vec2 localNdc = vec2(
-                (fragPos.x / uViewportSize.x) * 2.0,
-                -(fragPos.y / uViewportSize.y) * 2.0
-            );
+			// scale world by zoom
+			float scaledW = uViewportSize.x / uCameraZoom;
+			float scaledH = uViewportSize.y / uCameraZoom;
 
-            gl_Position = vec4(centerNdc + localNdc, 0.0, 1.0);
-        }
+
+			vec2 centerNdc = vec2(
+				(worldPos.x / scaledW) * 2.0,
+				-(worldPos.y / scaledH) * 2.0
+			);
+
+			vec2 localNdc = vec2(
+				(fragPos.x / scaledW) * 2.0,
+				-(fragPos.y / scaledH) * 2.0
+			);
+
+			gl_Position = vec4(centerNdc + localNdc, 0.0, 1.0);
+		}
     )";
 
 	// --- Circle Fragment Shader ---
@@ -419,10 +442,10 @@ void GPURenderSystem::CreateCircleResources() {
 		return;
 
 	m_circleViewportUniformLocation = glGetUniformLocation(m_circleShaderProgram, "uViewportSize");
-	if (m_circleViewportUniformLocation < 0) {
-		std::cerr << "[GPURenderSystem] Failed to locate circle viewport uniform\n";
-		return;
-	}
+	//if (m_circleViewportUniformLocation < 0) {
+	//	std::cerr << "[GPURenderSystem] Failed to locate circle viewport uniform\n";
+	//	return;
+	//}
 
 	glGenVertexArrays(1, &m_circleVAO);
 	glGenBuffers(1, &m_circleInstanceVBO);
@@ -541,7 +564,8 @@ void GPURenderSystem::EnsureCircleBufferCapacity(std::size_t requiredInstances) 
 
 /////////////////////////////////
 // RenderShapes renders the shape instances using instanced rendering. It takes a vector of GPUShapeInstance representing the shape instances to render.
-void GPURenderSystem::RenderShapes(const std::vector<GPUShapeInstance>& instances) {
+void GPURenderSystem::RenderShapes(const std::vector<GPUShapeInstance>& instances, const CCamera& cam) {
+	// Check if the renderer is initialized and if there are valid instances to render
 	if (!m_initialized || instances.empty())
 		return;
 
@@ -564,7 +588,15 @@ void GPURenderSystem::RenderShapes(const std::vector<GPUShapeInstance>& instance
 	// Set viewport uniform so the shader can convert pixel coords → NDC
 	GLint viewport[4] = {0, 0, 0, 0};
 	glGetIntegerv(GL_VIEWPORT, viewport);
-	glUniform2f(m_explosionViewportUniformLocation, static_cast<float>(viewport[2]), static_cast<float>(viewport[3]));
+	//glUniform2f(m_explosionViewportUniformLocation, static_cast<float>(viewport[2]), static_cast<float>(viewport[3]));
+
+	
+    // NEW: camera uniforms
+	GLint camPosLoc = glGetUniformLocation(m_explosionShaderProgram, "uCameraPos");
+	GLint camZoomLoc = glGetUniformLocation(m_explosionShaderProgram, "uCameraZoom");
+
+	glUniform2f(camPosLoc, cam.position.x, cam.position.y);
+	glUniform1f(camZoomLoc, cam.zoom);
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_ONE, GL_ONE);
@@ -579,7 +611,7 @@ void GPURenderSystem::RenderShapes(const std::vector<GPUShapeInstance>& instance
 
 
 /////////////////////////////////
-void GPURenderSystem::RenderCircles(const std::vector<GPUShapeInstance>& instances) {
+void GPURenderSystem::RenderCircles(const std::vector<GPUShapeInstance>& instances, const CCamera& cam) {
 	if (!m_initialized || instances.empty())
 		return;
 
@@ -590,7 +622,19 @@ void GPURenderSystem::RenderCircles(const std::vector<GPUShapeInstance>& instanc
 
 	GLint viewport[4];
 	glGetIntegerv(GL_VIEWPORT, viewport);
-	glUniform2f(m_circleViewportUniformLocation, static_cast<float>(viewport[2]), static_cast<float>(viewport[3]));
+	//glUniform2f(m_circleViewportUniformLocation, static_cast<float>(viewport[2]), static_cast<float>(viewport[3]));
+
+	// NEW: camera uniforms
+	// NEW: camera uniforms
+	GLint camPosLoc = glGetUniformLocation(m_circleShaderProgram, "uCameraPos");
+	GLint camZoomLoc = glGetUniformLocation(m_circleShaderProgram, "uCameraZoom");
+	GLint viewWLoc = glGetUniformLocation(m_circleShaderProgram, "uViewportSize");
+
+
+
+	glUniform2f(camPosLoc, cam.position.x, cam.position.y);
+	glUniform1f(camZoomLoc, cam.zoom);
+	glUniform2f(viewWLoc, cam.viewportWidth, cam.viewportHeight);
 
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -611,32 +655,45 @@ void GPURenderSystem::RenderCircles(const std::vector<GPUShapeInstance>& instanc
 
 /////////////////////////////////
 // RenderExplosions renders the explosion effects using instanced rendering. It takes a vector of GPUInstanceData representing the explosion instances to render.
-void GPURenderSystem::RenderExplosions(const std::vector<GPUInstanceData>& instances) {
+void GPURenderSystem::RenderExplosions(const std::vector<GPUInstanceData>& instances, const CCamera& cam) {
 	// Check if the renderer is initialized and if there are valid resources and instances to render
-	if (!m_initialized || !m_explosionVAO || !m_explosionInstanceVBO || !m_explosionShaderProgram || m_explosionViewportUniformLocation < 0 || instances.empty())
+	if (!m_initialized || !m_explosionVAO || !m_explosionInstanceVBO || !m_explosionShaderProgram || instances.empty())
 		return;
 
 
 	// Prepare the viewport dimensions for rendering
 	GLint viewport[4] = {0, 0, 0, 0};
+	if (!PrepareViewport(viewport))
+		return;
 
-	// If the viewport preparation fails, exit early
-	if (!PrepareViewport(viewport))	return;
-
-	// Enable blending for transparency and set the blend function
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	// Use the explosion shader program and set the viewport uniform
 	glUseProgram(m_explosionShaderProgram);
-	glUniform2f(m_explosionViewportUniformLocation, static_cast<float>(viewport[2]), static_cast<float>(viewport[3]));
 	glBindVertexArray(m_explosionVAO);
 	glBindBuffer(GL_ARRAY_BUFFER, m_explosionInstanceVBO);
+
+	// viewport uniform
+	//glUniform2f(m_explosionViewportUniformLocation, static_cast<float>(viewport[2]), static_cast<float>(viewport[3]));
+
+	// camera uniforms (must match shader names)
+	GLint camPosLoc = glGetUniformLocation(m_explosionShaderProgram, "uCameraPos");
+	GLint camZoomLoc = glGetUniformLocation(m_explosionShaderProgram, "uCameraZoom");
+	GLint viewWLoc = glGetUniformLocation(m_explosionShaderProgram, "uViewportSize");
+
+
+	glUniform2f(camPosLoc, cam.position.x, cam.position.y);
+	glUniform1f(camZoomLoc, cam.zoom);
+	glUniform2f(viewWLoc, cam.viewportWidth, cam.viewportHeight);
+	//glUniform1f(worldWLoc, cam.worldWidth);
+	//glUniform1f(worldHLoc, cam.worldHeight);
+
 	EnsureExplosionBufferCapacity(instances.size());
-	glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(instances.size() * sizeof(GPUInstanceData)), instances.data());
+	glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(instances.size() * sizeof(GPUInstanceData)),
+					instances.data());
+
 	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, static_cast<GLsizei>(instances.size()));
 
-	// Unbind buffers and VAO to avoid accidental modification
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
 	glUseProgram(0);

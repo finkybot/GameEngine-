@@ -45,6 +45,13 @@ TechSimulationScene::TechSimulationScene(GameEngine& engine, sf::RenderWindow& w
 						m_kpSystem(), m_diffusionSystem(engine.techRegistry, engine.worldDiffusionConfig), m_evolutionSystem(engine.techRegistry), m_unlockSystem(engine.techRegistry) {
 	// Set the diffusion configuration for the evolution system based on the engine's world diffusion configuration
 	m_evolutionSystem.SetDiffusionConfig(&engine.worldDiffusionConfig);
+
+	m_screenCamera.position = Vec2(0, 0);
+	m_screenCamera.zoom = 1.0f;
+	m_screenCamera.viewportWidth = m_window.getSize().x;
+	m_screenCamera.viewportHeight = m_window.getSize().y;
+
+
 	ImGui::SFML::Init(engine.window);
 }
 /////////////////////////////////
@@ -341,6 +348,9 @@ void TechSimulationScene::OnWindowResized(sf::Vector2u newSize) {
 	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
 	view.setSize(sf::Vector2f(newSize.x, newSize.y));
 	m_window.setView(view);
+
+	m_screenCamera.viewportWidth = newSize.x;
+	m_screenCamera.viewportHeight = newSize.y;
 }
 /////////////////////////////////
 

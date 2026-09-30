@@ -21,7 +21,12 @@ static const std::string kMenuFontName = "default";
 /////////////////////////////////
 // Constructor and destructor for the MainMenuScene class. The constructor initializes the scene with references to the game engine, render window, and entity manager, while the destructor handles any necessary cleanup when the scene is destroyed.
 MainMenuScene::MainMenuScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
-	: Scene(engine, entityManager), m_window(win) {}
+	: Scene(engine, entityManager), m_window(win) {
+	m_screenCamera.position = Vec2(0, 0);
+	m_screenCamera.zoom = 1.0f;
+	m_screenCamera.viewportWidth = m_window.getSize().x;
+	m_screenCamera.viewportHeight = m_window.getSize().y;
+}
 
 MainMenuScene::~MainMenuScene() = default;
 /////////////////////////////////
@@ -74,6 +79,9 @@ void MainMenuScene::OnWindowResized(sf::Vector2u newSize) {
 	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
 	view.setSize(sf::Vector2f(newSize.x, newSize.y));
 	m_window.setView(view);
+
+    m_screenCamera.viewportWidth = newSize.x;
+	m_screenCamera.viewportHeight = newSize.y;
 }
 /////////////////////////////////
 

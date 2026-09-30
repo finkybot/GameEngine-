@@ -37,6 +37,7 @@ public:
 	void LoadResources() override;
 	void UnloadResources() override;
 	void InitialiseGame(sf::Vector2u windowSize) override;
+	CCamera& GetActiveCamera() override { return m_screenCamera; }
 
 private:
 	// Reference to the SFML RenderWindow for drawing the menu and handling events, as well as a list of available scene names for selection and an index to track the currently selected scene in the menu.
@@ -49,5 +50,6 @@ private:
 	float m_enterCooldown = 0.0f;
 	// Only allow Escape-to-close once the key has been physically released after entering
 	bool m_escapeArmed = false;
+	CCamera m_screenCamera;
 };
 /////////////////////////////////

@@ -1023,6 +1023,20 @@ void ChunkManager::BuildWorldMask(std::vector<uint8_t>& outMask, int& outW, int&
 
 
 /////////////////////////////////
+void ChunkManager::GetWorldMaskSnapshot(std::vector<uint8_t>& outMask, int& outW, int& outH, int& outOffsetX, int& outOffsetY, uint64_t& outRevision) {
+	std::lock_guard<std::mutex> lk(m_mutex);
+	outW = worldWidth;
+	outH = worldHeight;
+	outOffsetX = worldOffsetX;
+	outOffsetY = worldOffsetY;
+	outMask = worldMask;
+	outRevision = m_worldRevision.load(std::memory_order_relaxed);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // GetChunkForPosition - Retrieves the chunk that contains the specified world position (pos). Returns nullptr if the chunk is not loaded.
 Chunk* ChunkManager::GetChunkForPosition(const Vec2& pos) const {
 	int tileX = static_cast<int>(pos.x / m_tileSize);

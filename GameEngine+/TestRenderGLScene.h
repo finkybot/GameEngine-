@@ -28,6 +28,7 @@ public:
 	void LoadResources() override;
 	void UnloadResources() override;
 	void InitialiseGame(sf::Vector2u windowSize) override;
+	CCamera& GetActiveCamera() override { return m_screenCamera; }
 
 private:
 	sf::RenderWindow& m_window;
@@ -37,5 +38,7 @@ private:
 	std::uniform_real_distribution<float> randomValue{0.05f, 0.15f};
 
 	float GetRandomFloat() { return randomValue(rng); }
+
+	CCamera m_screenCamera;
 };
 /////////////////////////////////

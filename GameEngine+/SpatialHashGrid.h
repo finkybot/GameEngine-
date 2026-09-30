@@ -69,66 +69,178 @@ public:
 	SpatialHashGrid(float cellSize = 100.0f) : m_cellSize(cellSize) {}
 	~SpatialHashGrid() { Clear(); }
 
-
-
-	// Remove - Removes an object from the spatial grid based on its center point position. It calculates the cell hash for the object's position, looks up the corresponding cell in the grid, and removes the object from that cell's vector. If the cell becomes empty after removal, it is also removed from the grid to save memory.
+	// Remove - Removes an object from the spatial grid based on pointer identity.
 	void Remove(T* object) noexcept {
-		const Vec2& pos = object->GetCentrePoint();
-		size_t hash = GetCellHash(pos.GetX(), pos.GetY(), m_cellSize);
-
-		auto it = m_grid.find(hash);
-		if (it == m_grid.end())
+		if (!object)
 			return;
 
-		auto& vec = it->second;
-		vec.erase(std::remove(vec.begin(), vec.end(), object), vec.end());
+		bool removed = false;
 
-		// Optional: remove empty cell
-		if (vec.empty())
-			m_grid.erase(it);
+		// Fast path: remove from tracked cell if available.
+		if (object->currentCellX != INT_MIN && object->currentCellY != INT_MIN) {
+			size_t hash = GetCellHashFromCell(object->currentCellX, object->currentCellY);
+			auto it = m_grid.find(hash);
+			if (it != m_grid.end()) {
+				auto& vec = it->second;
+				auto before = vec.size();
+				vec.erase(std::remove(vec.begin(), vec.end(), object), vec.end());
+				removed = (vec.size() != before);
+				if (vec.empty())
+					m_grid.erase(it);
+			}
+		}
+
+		// Fallback: if cell tracking drifted, scan all buckets and remove by pointer identity.
+		if (!removed) {
+			for (auto it = m_grid.begin(); it != m_grid.end();) {
+				auto& vec = it->second;
+				vec.erase(std::remove(vec.begin(), vec.end(), object), vec.end());
+				if (vec.empty()) {
+					it = m_grid.erase(it);
+				} else {
+					++it;
+				}
+			}
+		}
+
+		// Mark as no longer in any tracked cell regardless of where we found it.
+		object->currentCellX = INT_MIN;
+		object->currentCellY = INT_MIN;
 	}
 
-
-
+	// Update - Updates the spatial grid with the new position of an object. If the object has moved to a different cell, it is removed from its old cell and inserted into the new cell. If the object has skipped cells (moved more than one cell away), it is also removed from 
+	// any intermediate cells to ensure accurate spatial partitioning.
 	void Update(T* object) noexcept {
 		const Vec2& pos = object->GetCentrePoint();
-		size_t newHash = GetCellHash(pos.GetX(), pos.GetY(), m_cellSize);
 
-		// Remove from all cells (safe fallback)
-		for (auto it = m_grid.begin(); it != m_grid.end();) {
+		int newX = static_cast<int>(pos.x / m_cellSize);
+		int newY = static_cast<int>(pos.y / m_cellSize);
+
+		int oldX = object->currentCellX;
+		int oldY = object->currentCellY;
+
+		// First-time insert
+		if (oldX == INT_MIN || oldY == INT_MIN) {
+			size_t hash = GetCellHashFromCell(newX, newY);
+			m_grid[hash].push_back(object);
+			object->currentCellX = newX;
+			object->currentCellY = newY;
+			return;
+		}
+
+		// Same cell → nothing to do
+		if (newX == oldX && newY == oldY)
+			return;
+
+		// Remove from old cell
+		size_t oldHash = GetCellHashFromCell(oldX, oldY);
+		auto it = m_grid.find(oldHash);
+		if (it != m_grid.end()) {
 			auto& vec = it->second;
 			vec.erase(std::remove(vec.begin(), vec.end(), object), vec.end());
-
 			if (vec.empty())
-				it = m_grid.erase(it);
-			else
-				++it;
+				m_grid.erase(it);
+		}
+
+		// If movement skipped cells, remove from all intermediate cells
+		int dx = newX - oldX;
+		int dy = newY - oldY;
+
+		if (std::abs(dx) > 1 || std::abs(dy) > 1) {
+			int stepX = (dx > 0 ? 1 : -1);
+			int stepY = (dy > 0 ? 1 : -1);
+
+			int cx = oldX;
+			int cy = oldY;
+
+			while (cx != newX || cy != newY) {
+				cx += (cx != newX ? stepX : 0);
+				cy += (cy != newY ? stepY : 0);
+
+				size_t skipHash = GetCellHashFromCell(cx, cy);
+				auto it2 = m_grid.find(skipHash);
+				if (it2 != m_grid.end()) {
+					auto& vec2 = it2->second;
+					vec2.erase(std::remove(vec2.begin(), vec2.end(), object), vec2.end());
+					if (vec2.empty())
+						m_grid.erase(it2);
+				}
+			}
 		}
 
 		// Insert into new cell
+		size_t newHash = GetCellHashFromCell(newX, newY);
 		m_grid[newHash].push_back(object);
+
+		object->currentCellX = newX;
+		object->currentCellY = newY;
 	}
-
-
 
 
 	// Clear - Clears all objects from the spatial grid.
 	void Clear() noexcept { m_grid.clear(); }
 
 
+	// ContainsPointer - checks if a pointer is currently present in any grid bucket using pointer identity only.
+	bool ContainsPointer(const T* object) const noexcept {
+		if (!object)
+			return false;
 
-	// Insert - Inserts an object into the spatial grid based on its center point position.
-	void Insert(T* object) noexcept {
-		const Vec2& pos = object->GetCentrePoint();
-		size_t hash = GetCellHash(pos.GetX(), pos.GetY(), m_cellSize);
-		m_grid[hash].push_back(object);
+		for (const auto& [hash, vec] : m_grid) {
+			(void)hash;
+			if (std::find(vec.begin(), vec.end(), object) != vec.end())
+				return true;
+		}
+		return false;
 	}
 
 
+	// PruneToActiveSet - removes any pointer not present in the provided active set. Uses pointer identity only (never dereferences pointed objects).
+	void PruneToActiveSet(const std::unordered_set<T*>& activeSet) noexcept {
+		for (auto it = m_grid.begin(); it != m_grid.end();) {
+			auto& vec = it->second;
+			vec.erase(std::remove_if(vec.begin(), vec.end(), [&activeSet](T* ptr) {
+				return ptr == nullptr || activeSet.find(ptr) == activeSet.end();
+			}), vec.end());
 
-	// Query - Overloaded version of the Query method. Performs a spatial query to find all objects within a specified radius of a position using a grid-based spatial hash. I'll store the results in the provided outFound vector, this version of the method will include any objects found within the query radius, excluding the object 
-	// passed to the query (e.g. the object performing the query so theres no self collision). The query works by checking all cells within a radius of the given position. For each cell, we calculate the hash and look up any objects in that cell. We then check the distance from each object to the query position to determine if it 
-	// falls within the query radius, and if so, we add it to the outFound vector. We also increment our query performance counters for monitoring.
+			if (vec.empty()) {
+				it = m_grid.erase(it);
+			} else {
+				++it;
+			}
+		}
+	}
+
+
+	// Insert - Inserts an object into the spatial grid based on its center point position.
+	void Insert(T* object) noexcept {
+		if (!object)
+			return;
+
+		const Vec2& pos = object->GetCentrePoint();
+
+		int cellX = static_cast<int>(pos.x / m_cellSize);
+		int cellY = static_cast<int>(pos.y / m_cellSize);
+
+		// If already tracked in a different cell, remove stale membership first.
+		if (object->currentCellX != INT_MIN && object->currentCellY != INT_MIN &&
+			(object->currentCellX != cellX || object->currentCellY != cellY)) {
+			Remove(object);
+		}
+
+		size_t hash = GetCellHashFromCell(cellX, cellY);
+		auto& vec = m_grid[hash];
+		if (std::find(vec.begin(), vec.end(), object) == vec.end()) {
+			vec.push_back(object);
+		}
+
+		object->currentCellX = cellX;
+		object->currentCellY = cellY;
+	}
+
+
+	// Query - Queries the spatial grid for objects within a specified radius of a given position, excluding a specific object if provided. The results are stored in the outFound vector, which is cleared at the start of the query. The method uses a set to track seen objects to avoid duplicates 
+	// and calculates the squared distance to determine if an object is within the query radius.
 	void Query(std::vector<T*>& outFound, const Vec2& position, float queryRadius, const T* excludeObject) const noexcept {
 		++s_queryCount; // Increment query count for performance monitoring.
 		outFound.clear();
@@ -173,7 +285,6 @@ public:
 	}
 	 
 	 
-
 	// ResetQueryStats - Static query statistics method for performance monitoring. Resets the query statistics counters (this should be called at the start of each frame to track per-frame query performance).
 	static void ResetQueryStats() noexcept {
 		s_totalQueriesThisFrame = 0;
@@ -182,15 +293,12 @@ public:
 	}
 
 
-
 	// GetQueryCount - Static query statistics method for performance monitoring. Gets the total number of queries performed in the current frame.
 	static size_t GetQueryCount() noexcept { return s_queryCount; }
 
 
-
 	// GetTotalObjectsQueried - Static query statistics method for performance monitoring. Gets the total number of objects queried across all queries.
 	static size_t GetTotalObjectsQueried() noexcept { return s_totalObjectsQueried; }
-
 
 
 	// GetAverageObjectsPerQuery - Static query statistics method for performance monitoring. Gets the average number of objects returned per query, calculated as total objects queried divided by total queries, with a check to avoid division by zero.
@@ -199,10 +307,8 @@ public:
 	}
 
 
-
 	// GetCellCount - Gets the total number of cells currently stored in the grid (debugging/monitoring method).
 	size_t GetCellCount() const noexcept { return m_grid.size(); }
-
 
 
 	// GetTotalObjectCount - Gets the total number of objects stored across all grid cells. (debugging/monitoring method).

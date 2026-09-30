@@ -80,6 +80,9 @@ public:
 	std::chrono::high_resolution_clock::time_point m_creationTime;
 	size_t GetId() const { return m_id; }
 
+	int currentCellX; // Current cell X coordinate in the spatial hash grid, used for efficient spatial partitioning and collision detection.
+	int currentCellY; // Current cell Y coordinate in the spatial hash grid, used for efficient spatial partitioning and collision detection.
+
 
 	
 	

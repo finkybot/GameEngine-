@@ -15,6 +15,8 @@
 #include "GPURenderSystem.h"
 #include <SFML/Graphics.hpp>
 #include "ShapeTemplateRegistry.h"
+#include "CCamera.h"
+#include "CameraSystem.h"
 
 #include "Systems/PhysicsSystem.h"
 /////////////////////////////////
@@ -45,6 +47,7 @@ public:
 	void OnWindowResized(sf::Vector2u newSize) override;
 	void LoadResources() override;
 	void UnloadResources() override;
+	CCamera& GetActiveCamera() override { return *m_cameraEntity->GetComponent<CCamera>(); }
 
 
 	// GetExplosionCount - returns the number of active explosions currently playing in the scene.
@@ -80,7 +83,7 @@ private:
 	// on first use, and it includes sections for entity statistics and spatial hash collision detection performance metrics.
 	void RenderGameInfoWindow(size_t entityCount, int deathCount, int explosionCount);
 
-
+	void UpdateEntity(Entity* entity, float deltaTime, float worldWidth, float worldHeight);
 	void UpdateFPS(float deltaTime);
 	void ProcessEvents();
 	void UpdateSceneLogic(float deltaTime);
@@ -91,18 +94,27 @@ private:
 	void SpawnReplacementEntities(int count);
 
 	void SpawnExplosion(const Vec2& position, float radius);
-
+	void ApplyMainCameraView(float deltaTime);
+	void ApplyCameraMovement(float deltaTime);
 
 	// Private member variables for the TestScene class. These include references to the GameEngine, EntityManager, and SFML window, as well as random distributions for entity properties and tracking variables for explosions and FPS
 
-	int m_targetEntityCount = 500;
+	int m_targetEntityCount = 15000;
 	sf::RenderWindow& m_window;				// Reference to the SFML render window for rendering the scene
 	int m_explosionCount = 0;				// Number of active explosions currently playing, used for tracking and displaying explosion count in the game info window.
 	int m_deathCount =	0;					// Number of entities that have died, used for tracking and displaying death count in the game info window.
 	
 
-	std::vector<Entity*> m_explosions; // scene‑local explosion registry (currently unused, but will be used for tracking active explosions in the scene at a later date)
+	std::vector<Entity*> m_explosions;		// scene‑local explosion registry (currently unused, but will be used for tracking active explosions in the scene at a later date)
 
+	Entity* m_cameraEntity =	nullptr;	// Pointer to the camera entity in the scene, used for managing camera movement and view transformations.
+	CameraSystem m_cameraSystem;			// Camera system for updating and managing camera entities.
+
+	Vec2 m_mapMin = Vec2::Zero;				// Minimum bounds of the map for clamping camera movement and ensuring the camera stays within the defined area.
+	Vec2 m_mapMax = Vec2::Zero;				// Maximum bounds of the map for clamping camera movement and ensuring the camera stays within the defined area.
+	bool m_hasMapBounds = false;			// Flag indicating whether the map has defined bounds for camera clamping.
+
+	float m_dt = 0.0f;						// Delta time for the current frame, used for time-based calculations and updates in the scene.
 	float m_fps = 0.0f;						// Current frames per second (FPS).
 	float m_fpsAccumulator = 0.0f;			// Accumulator for calculating FPS over time.
 	float m_fpsSmooth =	0.0f;				// Smoothed FPS value using an exponential moving average to reduce fluctuations in the reported FPS.
@@ -110,6 +122,8 @@ private:
 
 
 	float m_growthTimer = 0.0f;				// Timer for controlling the growth of the entity population over time.
+	bool m_spatialCollisionEnabled = true;	// Flag indicating whether spatial collision detection is enabled.
+
 
 
 

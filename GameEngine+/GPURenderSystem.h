@@ -12,6 +12,7 @@
 #include <SFML/OpenGL.hpp>
 #include <vector>
 #include "GPUInstanceStructs.h"
+#include "CCamera.h"
 /////////////////////////////////
 
 
@@ -29,7 +30,7 @@ public:
 	~GPURenderSystem();
 
 	// Must be called once after GLAD is initialized
-	void Initialize();
+	void Initialise();
 
 	// Release GL resources while a valid context is active
 	void Shutdown();
@@ -37,9 +38,9 @@ public:
 	bool IsInitialized() const { return m_initialized; }
 
 	// Called every frame to render GPU-driven effects
-	void RenderShapes(const std::vector<GPUShapeInstance>& instances);
-	void RenderCircles(const std::vector<GPUShapeInstance>& instances);
-	void RenderExplosions(const std::vector<GPUInstanceData>& instances);
+	void RenderShapes(const std::vector<GPUShapeInstance>& instances, const CCamera& cam);
+	void RenderCircles(const std::vector<GPUShapeInstance>& instances, const CCamera& cam);
+	void RenderExplosions(const std::vector<GPUInstanceData>& instances, const CCamera& cam);
 	void RenderEqualizerBars(const std::vector<GPUBarInstanceData>& instances);
 
 	// Optional: resize viewport if window size changes

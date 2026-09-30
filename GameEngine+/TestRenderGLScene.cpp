@@ -13,6 +13,11 @@ TestRenderGLScene::TestRenderGLScene(GameEngine& engine, sf::RenderWindow& win, 
 	// Initialise GL renderer AFTER SFML window exists
 	//m_renderGL.Initialise();
 
+	m_screenCamera.position = Vec2(0, 0);
+	m_screenCamera.zoom = 1.0f;
+	m_screenCamera.viewportWidth = m_window.getSize().x;
+	m_screenCamera.viewportHeight = m_window.getSize().y;
+
 	m_entityManager.GetRenderSystemGL().OnResize(engine.windowSize.x, engine.windowSize.y);
 }
 /////////////////////////////////
@@ -161,6 +166,9 @@ void TestRenderGLScene::OnWindowResized(sf::Vector2u newSize) {
 	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
 	view.setSize(sf::Vector2f(newSize.x, newSize.y));
 	m_window.setView(view);
+
+	m_screenCamera.viewportWidth = newSize.x;
+	m_screenCamera.viewportHeight = newSize.y;
 
 	// Update GL viewport
 	//m_renderGL.OnResize(newSize.x, newSize.y);

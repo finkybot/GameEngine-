@@ -46,6 +46,7 @@ public:
 	void LoadResources() override;
 	void UnloadResources() override;
 	void InitialiseGame(sf::Vector2u windowSize) override;
+	CCamera& GetActiveCamera() override { return *m_cameraEntity->GetComponent<CCamera>(); }
 
 
 

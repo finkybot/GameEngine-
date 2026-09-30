@@ -24,16 +24,34 @@
 /////////////////////////////////
 // Update - Handles updating the positions of entities based on their velocities and the elapsed time (deltaTime), as well as handling boundary collisions with the window edges. This method should be called every frame to ensure that entities are moved according to their velocities 
 // and that they bounce off the window boundaries when they collide with them.
-void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float windowWidth,
-					   float windowHeight) {
-	// Parallel execution: process each entity's physics independently
-	std::for_each(std::execution::par, entities.begin(), entities.end(),
-				  [this, deltaTime, windowWidth, windowHeight](const std::unique_ptr<Entity>& entity) {
-					  if (!entity->IsAlive())
-						  return;
-					  SlowEntity(entity.get(), std::pow(0.999f, deltaTime * 60.0f));
-					  MoveEntity(entity.get(), deltaTime, windowWidth, windowHeight);
-				  });
+void PhysicsSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float worldW,
+						   float worldH) {
+	float slowFactor = std::pow(0.999f, deltaTime * 60.0f);
+
+	for (auto& entity : entities) {
+		if (!entity->IsAlive())
+			continue;
+
+		SlowEntity(entity.get(), slowFactor);
+		MoveEntity(entity.get(), deltaTime, worldW, worldH);
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void PhysicsSystem::UpdateSingle(Entity* entity, float dt, float worldW, float worldH) {
+	if (!entity->IsAlive())
+		return;
+
+	float slowFactor = std::pow(0.999f, dt * 60.0f);
+
+	// Slow
+	SlowEntity(entity, slowFactor);
+
+	// Move + boundary
+	MoveEntity(entity, dt, worldW, worldH);
 }
 /////////////////////////////////
 
@@ -106,68 +124,3 @@ void PhysicsSystem::HandleBoundaryCollision(Entity* entity, float windowWidth, f
 }
 /////////////////////////////////
 
-
-
-/////////////////////////////////
-// UpdateExplosions - iterates through all explosion entities and updates their size and alpha based on their age. Explosions grow in size and fade out over a lifespan of 600 milliseconds, creating a visually appealing effect that reacts to the music. 
-// Once an explosion exceeds its lifespan, it is destroyed to remove it from the scene. - Deprecated: this method is now handled within the MusicVisualizerScene to allow for more dynamic explosion effects that react to the music spectrum. 
-// The explosion lifespan and visual properties can be adjusted based on the music level for a more immersive experience.
-//void PhysicsSystem::UpdateExplosions()
-//{
-//	auto now = std::chrono::high_resolution_clock::now();
-//	std::vector<size_t> expiredExplosions;
-//
-//	for (auto& [explosionId, creationTime] : m_explosionTimes)
-//	{
-//		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - creationTime);
-//
-//		if (elapsed.count() > 600)
-//		{
-//			for (auto& entity : m_entities)
-//			{
-//				if (entity->m_id == explosionId)
-//				{
-//					entity->Destroy();
-//					break;
-//				}
-//			}
-//			expiredExplosions.push_back(explosionId);
-//		}
-//		else
-//		{
-//			float fadeProgress = static_cast<float>(elapsed.count()) / 600.0f;
-//			int newAlpha = static_cast<int>(200 * (1.0f - fadeProgress));
-//
-//			for (auto& entity : m_entities)
-//			{
-//				if (entity->m_id == explosionId)
-//				{
-//					auto shape = entity->GetComponent<CShape>();
-//					if (shape)
-//					{
-//						if (auto* circle = dynamic_cast<CCircle*>(shape))
-//						{
-//							circle->SetRadius(circle->GetRadius() + 0.5f); // Expand the explosion radius over time
-//							Vec2 explosionPosition = circle->GetPosition();
-//							circle->SetPosition(explosionPosition.x + 0.4f, explosionPosition.y - 0.5f); // Keep the explosion centered as it expands, adding a little drift for visual interest
-//							sf::Color currentColor = circle->GetColor();
-//							circle->SetColor(
-//								static_cast<float>(currentColor.r),
-//								static_cast<float>(currentColor.g),
-//								static_cast<float>(currentColor.b),
-//								newAlpha
-//							);
-//						}
-//					}
-//				}
-//			}
-//		}
-//	}
-//
-//	for (size_t explosionId : expiredExplosions)
-//	{
-//		m_explosionTimes.erase(explosionId);
-//		m_explosionColors.erase(explosionId);
-//	}
-//}
-/////////////////////////////////

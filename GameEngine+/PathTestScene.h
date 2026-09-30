@@ -41,7 +41,7 @@ public:
 	void LoadResources() override {}
 	void UnloadResources() override;
 	void InitialiseGame(sf::Vector2u windowSize) override;
-
+	CCamera& GetActiveCamera() override { return *m_cameraEntity->GetComponent<CCamera>(); }
 
 private:
 	// Member variables for managing the render window, chunk manager, pathfinding system, camera system, render queue, tile size, and nodes processed per frame

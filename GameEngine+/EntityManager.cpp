@@ -73,6 +73,11 @@ EntityManager::~EntityManager() {
 // ClearAll - immediately removes every entity from the EntityManager without going through the normal kill/process cycle.
 // Call this when switching scenes so the previous scene's entities do not bleed into the next one.
 void EntityManager::ClearAll() {
+	// Hard-reset spatial structures before destroying entity storage.
+	if (m_spatialIndex) {
+		m_spatialIndex->Reset();
+	}
+
 	m_toAdd.clear();
 	m_entityMap.clear();
 	for (auto& bucket : m_layerBuckets) bucket.clear();
@@ -167,63 +172,64 @@ void EntityManager::AddPendingEntities() {
 // RemoveDeadEntities - removes entities that have been marked as dead from the EntityManager. This method is called during the update cycle to clean up entities that are no longer alive, 
 // ensuring that they are properly removed from all relevant data structures and deleted from memory.
 void EntityManager::RemoveDeadEntities() {
-    // Debug: assert caller thread is owner
 #ifdef _DEBUG
 	if (std::this_thread::get_id() != m_ownerThreadId) {
 		std::cerr << "EntityManager::RemoveDeadEntities called from non-owner thread" << std::endl;
 	}
 #endif
 
-	// First, we build a list of raw pointers to the entities that are marked as dead. This allows us to identify which entities need to be removed without modifying the main entity list while iterating over it.
+	// Collect raw pointers to dead entities
 	std::vector<Entity*> deadEntities;
 	deadEntities.reserve(m_entities.size() / 10);
 
-	// Iterate over the main entity list and collect pointers to entities that are not alive. We use the IsAlive() method of each entity to check its status, and if it returns false, we add the raw pointer to the deadEntities vector for later processing.
 	for (const auto& up : m_entities) {
 		if (!up->IsAlive())
 			deadEntities.push_back(up.get());
 	}
 
-	// If there are no dead entities, we can return early without modifying any data structures.
+
 	if (deadEntities.empty())
 		return;
 
-	// Build a fast lookup set of dead pointers so we can remove references without dereferencing them.
+	// Build lookup set
 	std::unordered_set<Entity*> deadSet(deadEntities.begin(), deadEntities.end());
 
-    // Remove references to dead entities from the entity map by pointer identity only
-	for (auto& deadEnt : m_entityMap) {
-		auto& vec = deadEnt.second;
-		vec.erase(std::remove_if(vec.begin(), vec.end(), [&deadSet](Entity* e) { return deadSet.find(e) != deadSet.end(); }), vec.end());
+	// NEW: Remove dead entities from spatial index BEFORE deleting them
+	if (m_spatialIndex) {
+		for (Entity* d : deadEntities) {
+			m_spatialIndex->Remove(d);
+		}
+	}
+	
+	// Remove from entity map
+	for (auto& kv : m_entityMap) {
+		auto& vec = kv.second;
+		vec.erase(std::remove_if(vec.begin(), vec.end(), [&deadSet](Entity* e) { return deadSet.count(e) != 0; }),
+				  vec.end());
 	}
 
-	// Remove references to dead entities from the layer buckets by pointer identity only, then rebuild bucket position metadata for remaining entries. We iterate over each layer bucket and use std::remove_if to remove any pointers that are found in the deadSet, 
-	// which allows us to clean up the buckets without needing to dereference the pointers. After removing the dead entities, we rebuild the bucket position metadata for the remaining entries to ensure that any entities that were moved during removal have their 
-	// bucket info updated correctly.
+
+	// Remove from layer buckets
 	for (size_t bucketIdx = 0; bucketIdx < m_layerBuckets.size(); ++bucketIdx) {
 		auto& bucket = m_layerBuckets[bucketIdx];
-		bucket.erase(std::remove_if(bucket.begin(), bucket.end(), [&deadSet](Entity* e) {
-			return e == nullptr || deadSet.find(e) != deadSet.end();
-		}), bucket.end());
 
-		// Rebuild bucket position metadata for remaining entries
+		bucket.erase(std::remove_if(bucket.begin(), bucket.end(),
+									[&deadSet](Entity* e) { return e == nullptr || deadSet.count(e) != 0; }),
+					 bucket.end());
+
+		// Rebuild bucket metadata
 		for (size_t pos = 0; pos < bucket.size(); ++pos) {
 			Entity* ent = bucket[pos];
-			if (ent) {
+			if (ent)
 				ent->SetBucketInfo(static_cast<int>(bucketIdx), static_cast<int>(pos));
-			}
 		}
 	}
 
-	// If we had a spatial tree that stored raw pointers,then we would need remove the dead ones now....but..... I'm using a SpatialHashGrid which is rebuilt each frame so explicit removal is not required (Yeeeeaaa Me!!!).
-	// AAAANNNYYWAY!!!!! I have included the cleanup for a tree; cleanup iterate over the deadEntities and remove each pointer from it:
-	// for (Entity* d : deadEntities) m_quadTree.RemoveEntityFromTree(d);
-
-	// It's is now safe to erase the owning unique_ptrs from m_entities and thus delete the objects.
+	// Finally erase unique_ptrs (delete objects)
 	auto end = std::remove_if(m_entities.begin(), m_entities.end(),
 							  [](const std::unique_ptr<Entity>& e) { return !e->IsAlive(); });
-    m_entities.erase(end, m_entities.end());
-// ValidateIntegrity calls disabled by user request.
+
+	m_entities.erase(end, m_entities.end());
 }
 /////////////////////////////////
 
@@ -273,7 +279,7 @@ void EntityManager::SetEntityLayer(Entity* e, Entity::Layer layer) {
 
 /////////////////////////////////
 // RenderGLShapes - prepares GPU instances for circles and explosions, then hands them to GPURenderSystem.
-void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem) {
+void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem, const CCamera& camera) {
 	std::vector<GPUShapeInstance> circleInstances;
 	std::vector<GPUInstanceData> explosionInstances;
 
@@ -316,8 +322,8 @@ void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem) {
 												   inst->g / 255.0f, inst->b / 255.0f, inst->a / 255.0f});
 	}
 
-	gpuRenderSystem.RenderCircles(circleInstances);
-	gpuRenderSystem.RenderExplosions(explosionInstances);
+	gpuRenderSystem.RenderCircles(circleInstances, camera);
+	gpuRenderSystem.RenderExplosions(explosionInstances, camera);
 }
 /////////////////////////////////
 
@@ -436,8 +442,8 @@ void EntityManager::RenderShapes() {
 
 /////////////////////////////////
 // Calls GL Rendering cleanly
-void EntityManager::RenderGL(GPURenderSystem& gpuRenderSystem) {
-	RenderGLShapes(gpuRenderSystem);
+void EntityManager::RenderGL(GPURenderSystem& gpuRenderSystem, const CCamera& camera) {
+	RenderGLShapes(gpuRenderSystem, camera);
 }
 /////////////////////////////////
 
@@ -472,7 +478,7 @@ void EntityManager::RenderText() {
 
 /////////////////////////////////
 // RenderAll - a convenience method that renders all entities in the EntityManager using the RenderSystem. The mode parameter allows the caller to specify whether to render only shapes or shapes followed by text.
-void EntityManager::RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::RenderMode mode) {
+void EntityManager::RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::RenderMode mode, const CCamera& camera) {
 	// 1. SFML shapes/text
 	if (m_sfmlRenderingEnabled) {
 		if (mode == RenderSystem::RenderMode::ShapesOnly) {
@@ -487,7 +493,7 @@ void EntityManager::RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::Re
 	}
 	// 2. GPU shapes (circles, explosions, bars)
 	if (m_GLRenderingEnabled) {
-		RenderGLShapes(gpuRenderSystem);
+		RenderGLShapes(gpuRenderSystem, camera);
 	}
 }
 /////////////////////////////////
@@ -498,7 +504,7 @@ void EntityManager::RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::Re
 // Update - the main update method for the EntityManager, called once per frame to update all systems, process pending entities, and manage the lifecycle of entities. This method handles adding new entities, removing dead entities, updating the spatial hash grid, 
 // and allowing systems like the MusicSystem and TileSystem to process their logic.
 void EntityManager::Update(float deltaTime) {
-	if (m_spatialIndex)	m_spatialIndex->Rebuild(m_entities, m_chunks);
+	//if (m_spatialIndex)	m_spatialIndex->Rebuild(m_entities, m_chunks);
 
 	//SpatialHashGrid<Entity>::ResetQueryStats();
 
@@ -532,7 +538,7 @@ void EntityManager::Update(float deltaTime) {
 			m_musicSystem->Process();
 	}
 
-	UpdateSpatialHashAndRender();
+	//UpdateSpatialHashAndRender();
 	//UpdateBVH();
 }
 /////////////////////////////////

@@ -7,6 +7,10 @@
 /////////////////////////////////
 // Include necessary headers for the TestScene implementation
 #include <random>
+#include <chrono>
+#include <cmath>
+#include <iostream>
+#include <cstdlib>
 
 #include "TestScene.h"
 #include "GameEngine.h"
@@ -26,12 +30,18 @@
 #include "SpatialHashGrid.h"
 #include "CRenderInstance.h"
 
+#include "CCamera.h"
+#include "CTransform.h"
+#include "CameraSystem.h"
+
 
 #include <SFML/Window/Event.hpp>
 #include <SFML/System/Vector2.hpp>
 
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
+using Clock = std::chrono::high_resolution_clock;
+
 /////////////////////////////////
 
 
@@ -61,30 +71,71 @@ TestScene::~TestScene() = default;
 // Update - updates the game logic for the TestScene, including handling events, managing entity population, updating explosions, and performing physics and collision detection. It also calculates and reports FPS using an exponential moving average for smoothing, and renders the ImGui game information 
 // window with current entity count, death count, and explosion count.
 void TestScene::Update(float dt) {
-	// Phase 1: FPS + input
+	m_dt = dt;
 	UpdateFPS(dt);
-	ProcessEvents();
 
-	// Phase 2–3: scene logic (spawning + explosions)
-	UpdateSceneLogic(dt);
-	UpdateExplosions();
+	// --- Scene growth + spawning (bounded) ---
+	m_growthTimer += dt;
+	if (m_growthTimer >= 5.0f) {
+		m_targetEntityCount += 20;
+		m_growthTimer = 0.0f;
+	}
 
-	// Phase 4: physics (now performs incremental spatial updates internally)
-	m_entityManager.GetPhysicsSystem().Update(m_entityManager.GetEntities(), dt, m_window.getSize().x, m_window.getSize().y);
+	UpdateSpawning(dt); // capped at 16 per frame
 
-	// Phase 5: collision (now uses spatial index instead of full list)
-	m_entityManager.GetCollisionSystem().DetectAndResolveSpatial(m_entityManager.GetEntities(), m_entityManager.GetSpatialIndex(), dt);
+	auto& entities = m_entityManager.GetEntities();
 
-	// Phase 6: audio listener update
-	if (m_entityManager.GetSoundSystem()) {
-		Vec2 listenerPos(m_window.getSize().x * 0.5f, m_window.getSize().y * 0.5f);
+
+	// --- Main unified per‑entity pass ---
+	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	CCamera* cam = camOpt ? *camOpt : nullptr;
+
+	float worldW = cam ? cam->worldWidth : static_cast<float>(m_window.getSize().x);
+	float worldH = cam ? cam->worldHeight : static_cast<float>(m_window.getSize().y);
+
+	for (auto& uptr : entities) {
+		Entity* e = uptr.get();
+		if (!e->IsAlive())
+			continue;
+		
+		UpdateEntity(e, dt, worldW, worldH);
+	}
+
+
+	// --- Incremental spatial index update (main thread only) ---
+	if (auto* spatialIndex = m_entityManager.GetSpatialIndex()) {
+		for (auto& uptr : entities) {
+			Entity* e = uptr.get();
+			if (!e->IsAlive())
+				continue;
+			spatialIndex->Update(e);
+		}
+	}
+
+
+	// --- Broad‑phase collision (optional / throttled) ---
+	if (m_spatialCollisionEnabled && m_entityManager.GetSpatialIndex()) {
+		m_entityManager.GetCollisionSystem().DetectAndResolveSpatial(entities, m_entityManager.GetSpatialIndex(), dt);
+	}
+
+
+	// --- Audio listener (camera only) ---
+	if (cam && m_entityManager.GetSoundSystem()) {
+		Vec2 listenerPos(cam->position.x, cam->position.y);
 		m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
 	}
 
-	// Phase 7: commit newly spawned entities
-	m_entityManager.ProcessPending();
 
-	// Phase 8: UI
+	// --- Commit pending entities ---
+	m_entityManager.ProcessPending();
+	// --- Camera movement + view ---
+	if (m_cameraEntity) {
+		m_cameraSystem.Update(dt, GetEntityManager());
+		ApplyCameraMovement(dt);
+		ApplyMainCameraView(dt);
+	}
+
+	// --- UI (ImGui) ---
 	RenderUI();
 }
 /////////////////////////////////
@@ -123,8 +174,41 @@ void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 void TestScene::OnEnter() {
 	m_entityManager.SetSFMLRenderingEnabled(false); // Disable SFML rendering for this scene
 	m_entityManager.SetGLRenderingEnabled(true);	// Enable OpenGL rendering for this scene
+	m_entityManager.ClearAll();
+
+	// Expand world bounds (example: double window size)
+	m_mapMin = Vec2(0, 0);
+	m_mapMax = Vec2((float)m_window.getSize().x * 2.0f, (float)m_window.getSize().y * 2.0f);
+	m_hasMapBounds = true;
+
+
+	// Create  and setup a camera entity, similar to the LevelEditorScene
+	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Camera);
+	//m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
+
+	Vec2 initialCamPos((m_mapMin.x + m_mapMax.x) * 0.5f, (m_mapMin.y + m_mapMax.y) * 0.5f);
+	auto camera = m_cameraEntity->AddComponent<CCamera>(initialCamPos, 1.0f);
+	camera->isMainCamera = true;
+	camera->isActive = true;
+	camera->viewportWidth = (float)m_window.getSize().x;
+	camera->viewportHeight = (float)m_window.getSize().y;
+	camera->smoothness = 0.0f; // Disable smoothing - camera is controlled directly via panning and bounds clamping
+	camera->worldWidth = m_mapMax.x - m_mapMin.x;  // your actual world width
+	camera->worldHeight = m_mapMax.y - m_mapMin.y;	   // your actual world height
 
 	SpawnInitialPopulation();
+	m_entityManager.ProcessPending();
+	auto& entities = m_entityManager.GetEntities();
+
+	for (auto& u : entities) {
+		Entity* e = u.get();
+		e->currentCellX = INT_MIN;
+		e->currentCellY = INT_MIN;
+	}
+	std::cout << "Initial build of spatial index with " << entities.size() << " entities.\n";
+	m_entityManager.GetSpatialIndex()->InitialBuildDynamic(entities);
+
+	std::cout << "Task completed for " << entities.size() << " entities.\n";
 }
 /////////////////////////////////
 
@@ -288,6 +372,53 @@ void TestScene::RenderGameInfoWindow(size_t entityCount, int deathCount, int exp
 
 
 /////////////////////////////////
+void TestScene::UpdateEntity(Entity* e, float dt, float worldW, float worldH) {
+	// 1. Physics (position + velocity + spatial grid)
+	m_entityManager.GetPhysicsSystem().UpdateSingle(e, dt, worldW, worldH);
+	// You’d implement UpdateSingle(...) as the per‑entity version of your PhysicsSystem::Update.
+
+	// 2. Explosion logic (only if explosion)
+	if (e->GetType() == EntityType::Explosion) {
+		auto now = std::chrono::high_resolution_clock::now();
+		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - e->m_creationTime);
+
+		CSoundEffect* soundEffect = e->GetComponent<CSoundEffect>();
+		bool soundStillPlaying =
+			soundEffect && soundEffect->m_sound && soundEffect->m_state == CSoundEffect::State::Playing;
+
+		if (elapsed.count() > 4500 && !soundStillPlaying) {
+			e->Destroy();
+		} else {
+			float fadeProgress = static_cast<float>(elapsed.count()) / 4500.0f;
+			const int maxAlpha = 220;
+			int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));
+
+			auto shape = e->GetComponent<CShape>();
+			if (shape) {
+				if (auto* explosion = dynamic_cast<CExplosion*>(shape)) {
+					explosion->SetRadius(explosion->GetRadius() * 1.004f);
+					sf::Color currentColor = explosion->GetColor();
+					explosion->SetColor(static_cast<float>(currentColor.r), static_cast<float>(currentColor.g),
+										static_cast<float>(currentColor.b), newAlpha);
+				}
+			}
+		}
+	}
+
+	// 3. Render instance prep (if you want per‑entity GPU data here)
+	if (auto* inst = e->GetComponent<CRenderInstance>()) {
+		// e.g. update inst->x, inst->y from CTransform
+		if (auto* t = e->GetComponent<CTransform>()) {
+			inst->x = t->position.x;
+			inst->y = t->position.y;
+		}
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // UpdateFPS - Updates the FPS value by calculating the number of frames rendered in the last second and applying an exponential moving average to smooth out fluctuations.
 void TestScene::UpdateFPS(float deltaTime) {
 	m_frameCount++;
@@ -318,9 +449,14 @@ void TestScene::UpdateFPS(float deltaTime) {
 
 /////////////////////////////////
 void TestScene::ProcessEvents() {
-	// Poll and process events from the SFML window. This
+	// Retrieve main camera (if any)
+	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	CCamera* cam = camOpt ? *camOpt : nullptr;
+
+	// Poll SFML events
 	while (auto evt = m_gameEngine.window.pollEvent()) {
-		// Always forward event to ImGui first
+
+		// Always forward events to ImGui first
 		ImGui::SFML::ProcessEvent(m_gameEngine.window, *evt);
 
 		// Window closed
@@ -329,10 +465,40 @@ void TestScene::ProcessEvents() {
 			continue;
 		}
 
-		// Key Pressed (Note: Escape key is handled globally by GameEngine, so we don't handle it here)
-		if (evt->is<sf::Event::KeyPressed>()) {
-			auto* kp = evt->getIf<sf::Event::KeyPressed>();
-			if (!kp) continue;
+		// -----------------------------
+		// CAMERA INPUT (event-driven)
+		// -----------------------------
+		if (cam) {
+
+			// --- Mouse wheel zoom ---
+			if (evt->is<sf::Event::MouseWheelScrolled>()) {
+				auto* mw = evt->getIf<sf::Event::MouseWheelScrolled>();
+				cam->zoom -= mw->delta * 0.1f;
+				cam->zoom = std::clamp(cam->zoom, 0.25f, 4.0f);
+			}
+
+			// --- Begin panning (right mouse button) ---
+			if (evt->is<sf::Event::MouseButtonPressed>()) {
+				auto* mb = evt->getIf<sf::Event::MouseButtonPressed>();
+				if (mb->button == sf::Mouse::Button::Right) {
+					m_cameraSystem.BeginPan(*cam, sf::Mouse::getPosition(m_window));
+				}
+			}
+
+			// --- Update panning ---
+			if (evt->is<sf::Event::MouseMoved>()) {
+				if (m_cameraSystem.IsPanning(*cam)) {
+					m_cameraSystem.UpdatePan(*cam, sf::Mouse::getPosition(m_window));
+				}
+			}
+
+			// --- End panning ---
+			if (evt->is<sf::Event::MouseButtonReleased>()) {
+				auto* mb = evt->getIf<sf::Event::MouseButtonReleased>();
+				if (mb->button == sf::Mouse::Button::Right) {
+					m_cameraSystem.EndPan(*cam);
+				}
+			}
 		}
 	}
 }
@@ -384,18 +550,23 @@ void TestScene::UpdateSpawning(float deltaTime) {
 
 /////////////////////////////////
 void TestScene::SpawnInitialPopulation() {
+	const auto windowSize = m_window.getSize();
 	for (int i = 0; i < m_targetEntityCount; ++i) {
 		// 1. Choose team type (0 or 1)
 		unsigned int teamType = static_cast<unsigned int>(m_entityType(m_rng));
 
-		// 2. Spawn inside screen bounds
-		float spawnX = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.x) - 50.0f)(m_rng);
+		// 2. Sample spawn position within map bounds (with a margin of 50 units)
+		float spawnX = std::uniform_real_distribution<float>(m_mapMin.x + 50.0f, m_mapMax.x - 50.0f)(m_rng);
 
-		float spawnY = std::uniform_real_distribution<float>(50.0f, static_cast<float>(m_gameEngine.windowSize.y) - 50.0f)(m_rng);
+		float spawnY = std::uniform_real_distribution<float>(m_mapMin.y + 50.0f, m_mapMax.y - 50.0f)(m_rng);
+
 
 		// 3. Initial velocity (full 2D motion)
-		float velX = std::uniform_real_distribution<float>(-90.0f, 90.0f)(m_rng);
-		float velY = std::uniform_real_distribution<float>(-6.0f, 6.0f)(m_rng);
+		//float velX = std::uniform_real_distribution<float>(-90.0f, 90.0f)(m_rng);
+		//float velY = std::uniform_real_distribution<float>(-6.0f, 6.0f)(m_rng);
+
+		float velX = Vec2::Zero.x;
+		float velY = Vec2::Zero.y;
 
 		//// Clamp minimum speeds to avoid slow movers
 		//if (std::abs(velX) < 250.0f)
@@ -438,16 +609,15 @@ void TestScene::SpawnReplacementEntities(int count) {
 
 		// 4. Sample spawn position
 		float spawnX;
-		float spawnY =
-			std::uniform_real_distribution<float>(0.0f, static_cast<float>(m_gameEngine.windowSize.y))(m_rng);
+		const auto windowSize = m_window.getSize();
+		float spawnY = std::uniform_real_distribution<float>(m_mapMin.y + 50.0f, m_mapMax.y - 50.0f)(m_rng);
 
 		if (direction == 1) {
 			// Spawn just off the left edge
-			spawnX = std::uniform_real_distribution<float>(-100.0f, 0.0f)(m_rng);
+			spawnX = std::uniform_real_distribution<float>(m_mapMin.x - 100.0f, m_mapMin.x)(m_rng);
 		} else {
 			// Spawn just off the right edge
-			spawnX = static_cast<float>(m_gameEngine.windowSize.x) +
-					 std::uniform_real_distribution<float>(0.0f, 100.0f)(m_rng);
+			spawnX = m_mapMax.x + std::uniform_real_distribution<float>(0.0f, 100.0f)(m_rng);
 		}
 
 		// 5. Sample visual properties
@@ -484,6 +654,91 @@ void TestScene::SpawnExplosion(const Vec2& pos, float radius) {
 
 	// Add to scene registry
 	m_explosions.push_back(e);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void TestScene::ApplyMainCameraView(float deltaTime) {
+	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	if (!camOpt)
+		return;
+	CCamera* cam = *camOpt;
+
+	//std::cout << "CAMERA BEFORE CLAMP: " << cam->position.x << ", " << cam->position.y << std::endl;
+
+
+	sf::View v;
+	v.setSize(sf::Vector2f(cam->viewportWidth / cam->zoom, cam->viewportHeight / cam->zoom));
+
+	// Clamp camera to bounds
+	float halfW = (cam->viewportWidth / cam->zoom) * 0.5f;
+	float halfH = (cam->viewportHeight / cam->zoom) * 0.5f;
+	Vec2 newPos = cam->position;
+
+	if (m_hasMapBounds) {
+		float minCx = m_mapMin.x + halfW;
+		float maxCx = m_mapMax.x - halfW;
+		float minCy = m_mapMin.y + halfH;
+		float maxCy = m_mapMax.y - halfH;
+
+		if (minCx <= maxCx) {
+			newPos.x = std::clamp(newPos.x, minCx, maxCx);
+		} else {
+			newPos.x = (m_mapMin.x + m_mapMax.x) * 0.5f;
+		}
+
+		if (minCy <= maxCy) {
+			newPos.y = std::clamp(newPos.y, minCy, maxCy);
+		} else {
+			newPos.y = (m_mapMin.y + m_mapMax.y) * 0.5f;
+		}
+	}
+
+	cam->position = newPos;
+
+	//std::cout << "CAMERA AFTER CLAMP: " << newPos.x << ", " << newPos.y << std::endl;
+
+	// Snap camera to sub-pixel grid based on zoom level to reduce shimmer/jitter when rendering
+	// At zoom levels 2.0x or higher, snap to tile alignment (32 pixels). Otherwise snap to half-pixel.
+	float snapGrid = (cam->zoom >= 2.0f) ? 32.0f : 0.5f; // Snap to tile grid at 2x+ zoom, else half-pixel
+	float snapX = std::round(newPos.x / snapGrid) * snapGrid;
+	float snapY = std::round(newPos.y / snapGrid) * snapGrid;
+
+	v.setCenter(sf::Vector2f(snapX, snapY));
+	m_window.setView(v);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void TestScene::ApplyCameraMovement(float deltaTime) {
+	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	if (!camOpt)
+		return;
+
+	CCamera* cam = *camOpt;
+
+	Vec2 move(0, 0);
+
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W))
+		move.y -= 1;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S))
+		move.y += 1;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A))
+		move.x -= 1;
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D))
+		move.x += 1;
+
+	if (move.Mag2() > 0.0f) {
+		move.Normalize();
+		move *= 600.0f * deltaTime;
+		cam->position += move;
+
+		//std::cout << "Camera pos (after WASD): " << cam->position.x << ", " << cam->position.y << std::endl;
+	}
 }
 /////////////////////////////////
 
@@ -540,6 +795,6 @@ void TestScene::InitialiseSpatialLayers() {
 
 	// Create a dedicated layer for TestScene entities
 	// Balls are small, so use a small cell size for accurate collisions
-	m_spatialLayers.CreateLayer("TestScene", 32.0f);
+	m_spatialLayers.CreateLayer("TestScene", 96.0f);
 }
 /////////////////////////////////

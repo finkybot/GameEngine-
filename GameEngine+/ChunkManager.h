@@ -126,6 +126,7 @@ public:
 	int SetTileAt(int tileX, int tileY, int tileValue, int layerIndex = 0); // Sets the tile value at the specified tile coordinates (tileX, tileY) and layer index. Returns 0 on success, or -1 if the tile is not found or if the layer index is invalid.
 
 	std::vector<uint8_t> GetWorldMask() const { return worldMask; }
+	void GetWorldMaskSnapshot(std::vector<uint8_t>& outMask, int& outW, int& outH, int& outOffsetX, int& outOffsetY, uint64_t& outRevision);
 
 	// Least Recently Used (LRU) eviction policy for managing loaded chunks in memory. The ChunkManager maintains a list of loaded chunks and their usage order, allowing it to unload the least recently used chunks when memory limits are exceeded.
 	void TouchChunkLRU(uint64_t key);		// Mark a chunk as recently used in the LRU list. This is called whenever a chunk is accessed to update its usage order.

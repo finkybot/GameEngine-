@@ -35,6 +35,8 @@ public:
 	// Update - Handles updating the positions of entities based on their velocities and the elapsed time (deltaTime), as well as handling boundary collisions with the window edges. This method should be called every frame to ensure that entities are moved according to their velocities and that they bounce off the window 
 	// boundaries when they collide with them.
 	void Update(const std::vector<std::unique_ptr<Entity>>& entities, float deltaTime, float windowWidth, float windowHeight);
+	
+	void UpdateSingle(Entity* entity, float dt, float worldW, float worldH);
 
 
 	// SlowEntity - Applies a slowing effect to the entity by multiplying its velocity by the specified slow factor (a value between 0 and 1). This method reduces the entity's speed, simulating effects like friction or slowing zones in the game. It should be called whenever you want to apply a slowing effect to an entity, 

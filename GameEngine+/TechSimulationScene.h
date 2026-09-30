@@ -45,6 +45,7 @@ public:
 
 	void LoadResources() override;
 	void UnloadResources() override;
+	CCamera& GetActiveCamera() override { return m_screenCamera; }
 
 	void InitialiseGame(sf::Vector2u windowSize) override;
 
@@ -98,5 +99,6 @@ private:
 
 	ParticleBVHSystem m_particleBVH;
 	float m_civCellSize = 100.0f; // Default cell size, adjust as needed
+	CCamera m_screenCamera;		  // Dummy camera
 };
 /////////////////////////////////

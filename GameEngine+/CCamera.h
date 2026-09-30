@@ -29,6 +29,10 @@ public:
 	float rotation = 0.0f;			// Default rotation angle in degrees (0.0 = no rotation)
 	float viewportWidth = 800.0f;	// Default viewport width in world units
 	float viewportHeight = 600.0f;	// Default viewport height in world units
+
+	float worldWidth = 0.0f;		// Width of the world in world units (0.0 = no limit)
+	float worldHeight = 0.0f;		// Height of the world in world units (0.0 = no limit)
+
 	
 	bool isMainCamera = false;		// Flag to indicate if this camera is the main camera for rendering
 	bool isActive = false;			// Flag to indicate if this camera is active and should be used for rendering

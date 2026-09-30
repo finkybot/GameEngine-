@@ -38,7 +38,15 @@ public:
 	void Insert(Entity* e) override;
 	void Remove(Entity* e) override;
 	void Update(Entity* e) override;
+	void Reset() override;
 
+		// Call this when chunks/tilemaps change
+	void MarkWorldMaskDirty() { m_worldMaskDirty = true; }
+
+
+	void InitialBuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities);
+	void RebuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities);
+	void RebuildBVH(const std::vector<std::unique_ptr<Entity>>& entities);
 
 private:
 	SpatialHashGrid<Entity> m_dynamicGrid;
@@ -53,8 +61,10 @@ private:
 	int m_worldOffsetY = 0;
 	float m_tileSize = 32.0f;
 
-	void RebuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities);
-	void RebuildBVH(const std::vector<std::unique_ptr<Entity>>& entities);
+	bool m_worldMaskDirty = false;
+	bool m_dynamicInitialized = false;
+	uint64_t m_lastWorldRevision = 0;
+
 	void RebuildWorldMask(ChunkManager* chunks);
 };
 ////////////////////////////////

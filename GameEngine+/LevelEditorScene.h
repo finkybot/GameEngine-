@@ -42,6 +42,7 @@ public:
 	void LoadResources() override {};
 	void UnloadResources() override;
 	void InitialiseGame(sf::Vector2u windowSize) override;
+	CCamera& GetActiveCamera() override { return *m_cameraEntity->GetComponent<CCamera>(); }
 
 	// Private helper methods for the LevelEditorScene class. These methods include logic for ensuring that visible chunks are loaded based on the camera view, applying the main camera's view to the render window, and processing user input for camera controls and tile editing.
 private:

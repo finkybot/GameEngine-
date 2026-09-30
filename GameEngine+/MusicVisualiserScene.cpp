@@ -1163,7 +1163,7 @@ void MusicVisualiserScene::RenderExplosionsVA() {
 
 	m_window.pushGLStates();
 	m_window.setActive(true);
-	m_gpuRenderer.RenderExplosions(m_explosionInstances);
+	m_gpuRenderer.RenderExplosions(m_explosionInstances, m_screenCamera);
 	m_window.popGLStates();
 	m_window.resetGLStates();
 }
@@ -1603,7 +1603,12 @@ bool MusicVisualiserScene::RefreshDirectoryListing(const std::filesystem::path& 
 /////////////////////////////////
 // MusicVisualizerScene class implementation. This scene allows users to load music files, control playback, and visualize audio-reactive spawns based on the music's spectrum analysis. It includes an ImGui interface for file browsing, playback controls, and spawn system configuration. The scene 
 // manages a music entity with a CMusic component for audio playback and analysis, and a SpawnSystem for handling music-reactive spawns. The Update function processes music levels to trigger spawns and renders the ImGui UI for user interaction.
-MusicVisualiserScene::MusicVisualiserScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager): Scene(engine, entityManager), m_window(win) {}
+MusicVisualiserScene::MusicVisualiserScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager): Scene(engine, entityManager), m_window(win) {
+	m_screenCamera.viewportWidth = m_window.getSize().x;
+	m_screenCamera.viewportHeight = m_window.getSize().y;
+	m_screenCamera.position = Vec2(m_screenCamera.viewportWidth * 0.5f, m_screenCamera.viewportHeight * 0.5f);
+	m_screenCamera.zoom = 1.0f;
+}
 /////////////////////////////////
 
 
@@ -1866,7 +1871,7 @@ void MusicVisualiserScene::Update(float deltaTime) {
 // Render - this function is responsible for rendering the equalizer bars to the window. It checks if the equalizer is active and if there are any bars to render, then sets the view
 void MusicVisualiserScene::Render() {
 	// 1. Draw world (ECS)
-	m_entityManager.RenderAll(m_gpuRenderer, RenderSystem::RenderMode::ShapesThenText);
+	m_entityManager.RenderAll(m_gpuRenderer, RenderSystem::RenderMode::ShapesThenText, GetActiveCamera());
 
 	// 2. Draw GPU overlays in screen-space
 	if (m_gpuRenderer.IsInitialized()) {
@@ -1921,6 +1926,12 @@ void MusicVisualiserScene::HandleEvent(const std::optional<sf::Event>& event) {}
 
 // OnEnter and OnExit - these functions are called when the scene is entered or exited, respectively. For the MusicVisualiserScene, we now keep spatial audio enabled so users can experiment with 3D positioning of the music through the GUI controls.
 void MusicVisualiserScene::OnEnter() {
+	// Keep dummy screen camera centered so visualizer spawns align with the visible center.
+	m_screenCamera.viewportWidth = static_cast<float>(m_window.getSize().x);
+	m_screenCamera.viewportHeight = static_cast<float>(m_window.getSize().y);
+	m_screenCamera.position = Vec2(m_screenCamera.viewportWidth * 0.5f, m_screenCamera.viewportHeight * 0.5f);
+	m_screenCamera.zoom = 1.0f;
+
 	// Initialize the listener position to the screen center so 3D sounds are positioned correctly from the start
 	Vec2 listenerPos(m_window.getSize().x / 2.0f, m_window.getSize().y / 2.0f);
 	if (m_entityManager.GetSoundSystem()) {
@@ -1928,7 +1939,7 @@ void MusicVisualiserScene::OnEnter() {
 	}
 
 	m_window.setActive(true);
-	m_gpuRenderer.Initialize();
+	m_gpuRenderer.Initialise();
 	m_gpuRenderer.OnResize(static_cast<int>(m_window.getSize().x), static_cast<int>(m_window.getSize().y));
 }
 /////////////////////////////////
@@ -1964,6 +1975,9 @@ void MusicVisualiserScene::OnWindowResized(sf::Vector2u newSize) {
 	if (m_eqBarCount > 0) {
 		InitialiseEqualiserBars(m_eqBarCount);
 	}
+	m_screenCamera.viewportWidth = static_cast<float>(newSize.x);
+	m_screenCamera.viewportHeight = static_cast<float>(newSize.y);
+	m_screenCamera.position = Vec2(m_screenCamera.viewportWidth * 0.5f, m_screenCamera.viewportHeight * 0.5f);
 }
 /////////////////////////////////
 

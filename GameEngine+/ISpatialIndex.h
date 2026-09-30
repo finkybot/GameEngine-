@@ -40,6 +40,7 @@ public:
 	virtual void Insert(Entity* e) = 0;
 	virtual void Remove(Entity* e) = 0;
 	virtual void Update(Entity* e) = 0;
+	virtual void Reset() = 0;
 
 	// QueryEntities - Queries the spatial index for entities within a specified radius of a given position, excluding a specific entity if provided. The results are stored in the outFound vector, allowing for efficient retrieval of nearby entities for collision detection or other spatial queries.
 	virtual void QueryEntities(std::vector<Entity*>& outFound, const Vec2& position, float radius, const Entity* exclude) const = 0;
@@ -54,5 +55,9 @@ public:
 
 	// IsWorldSolid - Checks if a specific tile in the world is solid (i.e., impassable or collidable) based on its tile coordinates. This method allows for efficient collision detection and pathfinding by determining whether an entity can move through a given tile.
 	virtual bool IsWorldSolid(int tileX, int tileY) const = 0;
+
+	virtual void InitialBuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities) = 0;
+	virtual void RebuildBVH(const std::vector<std::unique_ptr<Entity>>& entities) = 0;
+	virtual void MarkWorldMaskDirty() = 0;
 };
 /////////////////////////////////

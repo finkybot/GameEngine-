@@ -886,6 +886,10 @@ Entity* SpawnSystem::SpawnExplosion(float x, float y, float vx, float vy, unsign
 		return nullptr;
 	}
 
+	//std::cout << "[SpawnSystem] Spawning explosion at (" << x << ", " << y << ") with velocity (" << vx << ", " << vy
+	//		  << ") and color RGBA(" << (int)r << ", " << (int)g << ", " << (int)b << ", " << (int)a << ")"
+	//		  << std::endl;
+
 	// Create explosion entity
 	Entity* entity = m_entityManager->AddEntity(EntityType::Explosion);
 	if (!entity) {

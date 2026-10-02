@@ -8,10 +8,10 @@
 // Includes and forward declarations
 #pragma once
 #include "System.h"
-#include "EntityManager.h"
-#include "CChunkKnowledge.h"
-#include "CCivilisationTech.h"
-#include "CTransform.h"
+
+class Entity;
+class EntityManager;
+struct CChunkKnowledge;
 /////////////////////////////////
 
 

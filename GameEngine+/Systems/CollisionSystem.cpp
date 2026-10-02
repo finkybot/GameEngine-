@@ -36,59 +36,49 @@ void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>
 		lastEntityCount = entities.size();
 	}
 
-	int deathCount = 0;
+	std::unordered_set<uint64_t> visitedPairs;
+	visitedPairs.reserve(entities.size() * 2);
 
-	for (auto iterator = entities.begin(); iterator != entities.end(); ++iterator) {
-		Entity* currentEntity = iterator->get();
-
+	for (auto& up : entities) {
+		Entity* currentEntity = up.get();
 		if (!currentEntity->IsAlive())
 			continue;
 
-		// Skip collision detection for explosions - they're visual effects only
 		if (currentEntity->GetType() == EntityType::Explosion)
 			continue;
 
-		// Skip static tiles as they are handled separately and do not move
 		if (currentEntity->HasComponent<CStatic>())
 			continue;
-		
+
 		if (!m_spatialIndex)
 			continue;
 
 		const Vec2& position = currentEntity->GetPosition();
 		float radius = currentEntity->GetRadius();
 
-		// Query nearby entities using spatial hash
 		nearbyEntities.clear();
 		m_spatialIndex->QueryEntities(nearbyEntities, position, radius * 1.75f, currentEntity);
 
-		//if (!nearbyEntities.empty()) {
-		//	std::cout << "[CollisionSystem] Query for entity " << currentEntity->GetId()
-		//		<< " (" << EntityTypeToString(currentEntity->GetType()) << ") at ("
-		//		<< position.x << ", " << position.y << ") radius " << radius
-		//		<< " found " << nearbyEntities.size() << " nearby candidates\n";
-		//}
-
 		for (Entity* entityPtr : nearbyEntities) {
-			// Validate pointer is still alive (safety check)
-			if (!entityPtr->IsAlive())
+			if (!entityPtr || !entityPtr->IsAlive())
 				continue;
 
 			if (currentEntity->GetId() >= entityPtr->GetId())
 				continue;
 
+			uint64_t key = (uint64_t(currentEntity->GetId()) << 32) | uint64_t(entityPtr->GetId());
+
+			if (visitedPairs.count(key))
+				continue;
+			visitedPairs.insert(key);
+
 			if (!IsColliding(currentEntity, entityPtr))
 				continue;
 
-			// Skip if other entity is an explosion
 			if (entityPtr->GetType() == EntityType::Explosion)
 				continue;
 
-			//std::cout << "[CollisionSystem] COLLISION detected: "
-			//	<< currentEntity->GetId() << " (" << EntityTypeToString(currentEntity->GetType()) << ") <-> "
-			//	<< entityPtr->GetId() << " (" << EntityTypeToString(entityPtr->GetType()) << ")\n";
-
-			deathCount += ResolveCollision(currentEntity, entityPtr);
+			ResolveCollision(currentEntity, entityPtr);
 		}
 	}
 }
@@ -105,7 +95,7 @@ void CollisionSystem::DetectAndResolveSpatial(const std::vector<std::unique_ptr<
 	if (!m_spatialIndex)
 		return;
 
-	// Reuse your existing spatial collision loop
+	// Reuse existing spatial collision loop
 	DetectAndResolve(entities, deltaTime);
 }
 /////////////////////////////////
@@ -115,18 +105,31 @@ void CollisionSystem::DetectAndResolveSpatial(const std::vector<std::unique_ptr<
 /////////////////////////////////
 // IsColliding - checks if two entities are colliding based on their positions and radii. It calculates the distance between the centers of the two entities and compares it to the sum of their radii to determine if a collision is occurring.
 bool CollisionSystem::IsColliding(const Entity* entity1, const Entity* entity2) const {
-	// Calculate the distance between the two circles' centres
-	Vec2 distanceVec = entity2->GetCentrePoint() - entity1->GetCentrePoint();
+	if (!m_entityManager)
+		return false;
 
-	// Calculate the square of the distance of the two centres
-	float distanceSquared = distanceVec.Mag2();
+	auto& T = m_entityManager->GetTransformSoA();
 
-	// Calculate the sum of the two circles' radii
-	float radiusSum = entity1->GetRadius() + entity2->GetRadius();
-	float radiusSumSquared = radiusSum * radiusSum;
+	size_t i1 = entity1->transformIndex;
+	size_t i2 = entity2->transformIndex;
+	if (i1 == SIZE_MAX || i2 == SIZE_MAX)
+		return false;
 
-	// If the distance squared is less than or equal to the sum of the radii squared, a collision has occurred
-	return distanceSquared <= radiusSumSquared;
+	float x1 = T.posX[i1];
+	float y1 = T.posY[i1];
+	float x2 = T.posX[i2];
+	float y2 = T.posY[i2];
+
+	float dx = x2 - x1;
+	float dy = y2 - y1;
+	float distSq = dx * dx + dy * dy;
+
+	float r1 = entity1->GetRadius();
+	float r2 = entity2->GetRadius();
+	float radiusSum = r1 + r2;
+	float radiusSumSq = radiusSum * radiusSum;
+
+	return distSq <= radiusSumSq;
 }
 /////////////////////////////////
 
@@ -135,112 +138,143 @@ bool CollisionSystem::IsColliding(const Entity* entity1, const Entity* entity2) 
 /////////////////////////////////
 // ResolveCollision - resolves a collision between two entities based on their types (enemies vs allies). If the entities are enemies (different tags), it spawns an explosion at the collision point, blends their colors for the explosion effect, and destroys both entities.
 int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
-	// Check if entities are enemies (different tags) or allies (same tag)
+	if (!m_entityManager)
+		return 0;
+
+	auto& T = m_entityManager->GetTransformSoA();
+
+	size_t i1 = entity1->transformIndex;
+	size_t i2 = entity2->transformIndex;
+	if (i1 == SIZE_MAX || i2 == SIZE_MAX)
+		return 0;
+
+	// Enemies → explosion, allies → bounce
 	if (AreEnemies(entity1, entity2)) {
 		auto shape1 = entity1->GetComponent<CShape>();
 		auto shape2 = entity2->GetComponent<CShape>();
 		if (!shape1 || !shape2)
 			return 0;
 
-		// Spawn explosion at collision point
-		// Prefer velocities from CTransform when available
-		Vec2 currentVel = Vec2::Zero;
-		Vec2 otherVel = Vec2::Zero;
-		if (auto t1 = entity1->GetComponent<CTransform>())
-			currentVel = t1->velocity;
-		//else currentVel = shape1->m_velocity;
-		if (auto t2 = entity2->GetComponent<CTransform>())
-			otherVel = t2->velocity;
-		//else otherVel = shape2->m_velocity;
+		// Explosion velocity from SoA
+		Vec2 currentVel(T.velX[i1], T.velY[i1]);
+		Vec2 otherVel(T.velX[i2], T.velY[i2]);
 
 		float currentSpeed = std::sqrt(currentVel.x * currentVel.x + currentVel.y * currentVel.y);
 		float otherSpeed = std::sqrt(otherVel.x * otherVel.x + otherVel.y * otherVel.y);
 
 		Vec2 explosionVelocity = (currentSpeed >= otherSpeed) ? currentVel : otherVel;
+		Vec2 explosionVelocity2 = (currentSpeed < otherSpeed) ? currentVel : otherVel;
 
-		// Blend the colors of the two colliding entities
-		Vec3 blendedColor(255, 255, 255); // default to white
-		CCircle* currentCircle = dynamic_cast<CCircle*>(shape1);
-		CCircle* otherCircle = dynamic_cast<CCircle*>(shape2);
+		explosionVelocity *= 0.5f;
+		explosionVelocity2 *= 0.5f;
 
-		// Only blend colors if both shapes are circles (have color)
-		if (currentCircle && otherCircle) {
-			sf::Color currentColor = currentCircle->GetColor();
-			sf::Color otherColor = otherCircle->GetColor();
+		// Blinding yellow blend
+		sf::Color col1 = shape1->GetColor();
+		sf::Color col2 = shape2->GetColor();
 
-			// Average the colors for a blend effect
-			blendedColor.x = (currentColor.r + otherColor.r) / 2.0f;
-			blendedColor.y = (currentColor.g + otherColor.g) / 2.0f;
-			blendedColor.z = (currentColor.b + otherColor.b) / 2.0f;
-		}
+		// Convert to floats
+		float r1 = col1.r / 255.0f;
+		float g1 = col1.g / 255.0f;
+		float b1 = col1.b / 255.0f;
 
-		// Calculate collision point as the point on the edge of entity1 in the direction of entity2
-		Vec2 distanceVec = entity2->GetCentrePoint() - entity1->GetCentrePoint();
-		float distance = entity1->GetCentrePoint().Distance(entity2->GetCentrePoint());
+		float r2 = col2.r / 255.0f;
+		float g2 = col2.g / 255.0f;
+		float b2 = col2.b / 255.0f;
 
-		// If distance is zero (perfect overlap), default to the midpoint between the two entities
+		// Compute brightness of each color
+		float brightness1 = (r1 + g1 + b1) / 3.0f;
+		float brightness2 = (r2 + g2 + b2) / 3.0f;
+
+		// Pick the brighter one
+		float brightness = std::max(brightness1, brightness2);
+
+		// Push toward yellow (R+G high, B low)
+		float yellowR = 1.0f;
+		float yellowG = 1.0f;
+		float yellowB = 0.0f;
+
+		// Mix original brightness with yellow
+		float mix = 0.85f; // 0 = original color, 1 = pure yellow
+		float finalR = (1.0f - mix) * brightness + mix * yellowR;
+		float finalG = (1.0f - mix) * brightness + mix * yellowG;
+		float finalB = (1.0f - mix) * brightness + mix * yellowB;
+
+		// Convert back to 0–255
+		Vec3 blendedColor(finalR * 255.0f, finalG * 255.0f, finalB * 255.0f);
+
+		// Collision point
+		float x1 = T.posX[i1];
+		float y1 = T.posY[i1];
+		float x2 = T.posX[i2];
+		float y2 = T.posY[i2];
+
+		Vec2 p1(x1, y1);
+		Vec2 p2(x2, y2);
+
+		Vec2 distanceVec = p2 - p1;
+		float distance = p1.Distance(p2);
+
 		Vec2 collisionPoint;
 		if (distance > 0.0f) {
 			Vec2 direction = distanceVec / distance;
-			collisionPoint = entity1->GetCentrePoint() + direction * entity1->GetRadius();
+			collisionPoint = p1 + direction * entity1->GetRadius();
 		} else {
-			collisionPoint = (entity1->GetPosition() + entity2->GetPosition()) * 0.5f;
+			collisionPoint = (p1 + p2) * 0.5f;
 		}
 
-		// Adjust collision point to account for SFML's top-left positioning
-		// The explosion radius is 5.0f, so subtract it to get the correct top-left position
 		const float explosionRadius = 5.0f;
 		Vec2 explosionPosition = collisionPoint - Vec2(explosionRadius, explosionRadius);
 
-		// Check if we can play a new sound before creating explosion with sound
-		bool canPlaySound = m_soundSystem ? m_soundSystem->CanPlayNewSound(*m_entityManager) : true;
+		//bool canPlaySound = m_soundSystem ? m_soundSystem->CanPlayNewSound(*m_entityManager) : true;
 
-		// Use SpawnSystem if available, otherwise fall back to direct creation
-		if (m_spawnSystem) {
-			// Use default flags which include sound, or without sound if limit is reached
-			Spawn::ComponentFlags flags = canPlaySound ? Spawn::ComponentFlags::Default : (Spawn::ComponentFlags::HasVisual | Spawn::ComponentFlags::HasPhysics | Spawn::ComponentFlags::HasTransform | Spawn::ComponentFlags::HasCollision);
-			m_spawnSystem->SpawnExplosion(
-				explosionPosition.x, explosionPosition.y,
-				explosionVelocity.x, explosionVelocity.y,
-				static_cast<unsigned char>(blendedColor.x),
-				static_cast<unsigned char>(blendedColor.y),
-				static_cast<unsigned char>(blendedColor.z),
-				200,  // alpha
-				flags
-			);
-		} else {
-			// Fallback: create explosion directly
-			Entity* en = m_entityManager->AddEntity(EntityType::Explosion);
-			en->AddComponent<CTransform>(explosionPosition, explosionVelocity);
+		// Spawn explosion 1 using AddEntity's correct setup
+		Entity* en = m_entityManager->AddEntity(EntityType::Explosion);
+		Entity* en2 = m_entityManager->AddEntity(EntityType::Explosion);
 
-			auto explosion = std::make_unique<CExplosion>();
-			explosion->SetRadius(explosionRadius);
-			explosion->SetColor(blendedColor.x, blendedColor.y, blendedColor.z, 200);
-			en->AddComponentPtr<CShape>(std::move(explosion));
+		auto* t = en->GetComponent<CTransform>();
+		t->position = explosionPosition;
+		t->velocity = explosionVelocity;
 
-			// Only add sound if we're below the limit
-			if (canPlaySound) {
-				auto soundEffect = en->AddComponent<CSoundEffect>();
-				soundEffect->m_Path = "assets/sounds/medium-explosion.ogg";
-				soundEffect->m_volume = 75.0f;
-				soundEffect->m_loop = false;
-				soundEffect->m_priority = SoundPriority::Critical;
-				soundEffect->m_is3D = true;
-				soundEffect->m_3DMinDistance = 200.0f;
-				soundEffect->m_3DMaxDistance = 2000.0f;
-				soundEffect->m_shouldPlay = true;
-			}
+
+		auto* t2 = en2->GetComponent<CTransform>();
+		t2->position = explosionPosition;
+		t2->velocity = explosionVelocity2;
+
+
+		auto* s1 = en->GetComponent<CShape>();
+		if (s1) {
+			s1->SetColor(blendedColor.x, blendedColor.y, blendedColor.z, 200);
 		}
+		
+		auto* s2 = en2->GetComponent<CShape>();
+		if (s2) {
+			s2->SetColor(blendedColor.x, blendedColor.y, blendedColor.z, 200);
+		}
+
+
+		////std::cout << "Explosion creation time: " << en->m_creationTime.time_since_epoch().count() << std::endl;
+
+
+		//if (canPlaySound) {
+		//	auto soundEffect = en->AddComponent<CSoundEffect>();
+		//	soundEffect->m_Path = "assets/sounds/medium-explosion.ogg";
+		//	soundEffect->m_volume = 75.0f;
+		//	soundEffect->m_loop = false;
+		//	soundEffect->m_priority = SoundPriority::Critical;
+		//	soundEffect->m_is3D = true;
+		//	soundEffect->m_3DMinDistance = 200.0f;
+		//	soundEffect->m_3DMaxDistance = 2000.0f;
+		//	soundEffect->m_shouldPlay = true;
+		//}
 
 		m_entityManager->KillEntity(entity1);
 		m_entityManager->KillEntity(entity2);
-
-		return 2; // Two entities destroyed
-	} else		  // Allies - bounce them apart
-	{
-		BounceEntities(entity1, entity2);
-		return 0; // No entities destroyed
+		return 2;
 	}
+
+	// Allies → bounce
+	BounceEntities(entity1, entity2);
+	return 0;
 }
 /////////////////////////////////
 
@@ -249,66 +283,66 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 /////////////////////////////////
 // BounceEntities - applies an elastic collision response to bounce allied entities apart. It calculates the collision normal, relative velocity, and applies an impulse to update the velocities of both entities based
 void CollisionSystem::BounceEntities(Entity* entity1, Entity* entity2) const {
-	// Get the shape components to access velocity and position
-	auto shape1 = entity1->GetComponent<CShape>();
-	auto shape2 = entity2->GetComponent<CShape>();
-
-	// Guard clause to ensure both entities have shape components
-	if (!shape1 || !shape2)
+	if (!m_entityManager)
 		return;
 
-	// Distance between the two entity centres
-	Vec2 distanceVec = entity2->GetCentrePoint() - entity1->GetCentrePoint();
-	float scalerDist = entity1->GetCentrePoint().Distance(entity2->GetCentrePoint());
+	auto& T = m_entityManager->GetTransformSoA();
 
-	// Guard clause
-	if (scalerDist == 0.0f)
-		return; // Prevent division by zero
+	size_t i1 = entity1->transformIndex;
+	size_t i2 = entity2->transformIndex;
+	if (i1 == SIZE_MAX || i2 == SIZE_MAX)
+		return;
 
-	// Collision normal, Scaler division to get unit normal vector
-	Vec2 unitNorm = distanceVec / scalerDist;
+	float x1 = T.posX[i1];
+	float y1 = T.posY[i1];
+	float x2 = T.posX[i2];
+	float y2 = T.posY[i2];
 
-	// Relative velocity
-	Vec2 relVel = entity1->GetComponent<CTransform>()->velocity - entity2->GetComponent<CTransform>()->velocity;
+	float dx = x2 - x1;
+	float dy = y2 - y1;
+	float dist = std::sqrt(dx * dx + dy * dy);
+	if (dist <= 0.0001f)
+		return;
 
-	// Velocity along the normal
+	Vec2 unitNorm(dx / dist, dy / dist);
+
+	Vec2 v1(T.velX[i1], T.velY[i1]);
+	Vec2 v2(T.velX[i2], T.velY[i2]);
+	Vec2 relVel = v1 - v2;
+
 	float velAlongNormal = relVel.x * unitNorm.x + relVel.y * unitNorm.y;
 
-	// Do not resolve if velocities are separating
-	if (velAlongNormal > 0)
+	// Only bounce if they are actually moving toward each other
+	if (velAlongNormal > 0.0f)
 		return;
 
-	// Coefficient of restitution (elasticity)
-	float restitution = 0.9f; // 1.0 for perfectly elastic collision
+	// MUCH LOWER restitution — stable
+	float restitution = 0.05f;
 
-	// Impulse scalar
-	float impulse = -(1 + restitution) * velAlongNormal;
-	impulse /= 2; // Assuming equal mass for both circles
+	float impulse = -(1.0f + restitution) * velAlongNormal * 0.5f;
 
-	// Apply impulse to the circles' velocities
-	Vec2 vel1 = entity1->GetComponent<CTransform>()->velocity;
-	Vec2 vel2 = entity2->GetComponent<CTransform>()->velocity;
+	// Apply impulse
+	T.velX[i1] = v1.x - impulse * unitNorm.x;
+	T.velY[i1] = v1.y - impulse * unitNorm.y;
 
-	// Update velocities based on impulse and collision normal
-	entity1->GetComponent<CTransform>()->velocity =
-		Vec2(vel1.x - impulse * unitNorm.x, vel1.y - impulse * unitNorm.y);
-	entity2->GetComponent<CTransform>()->velocity =
-		Vec2(vel2.x + impulse * unitNorm.x, vel2.y + impulse * unitNorm.y);
+	T.velX[i2] = v2.x + impulse * unitNorm.x;
+	T.velY[i2] = v2.y + impulse * unitNorm.y;
 
-	// Positional correction to avoid sinking
-	float overlap = (entity1->GetRadius() + entity2->GetRadius()) - scalerDist;
-	if (overlap > 0) {
-		const float percent = 0.2f; // usually 20% to 80%
-		const float slop = 0.01f;	// usually 0.01 to 0.1
-		float correction = std::max(overlap - slop, 0.0f) / 2 * percent;
+	// --- FIXED: FULL SEPARATION (no continuous bounce) ---
+	float overlap = (entity1->GetRadius() + entity2->GetRadius()) - dist;
+	if (overlap > 0.0f) {
 
-		Vec2 pos1 = entity1->GetComponent<CTransform>()->position;
-		Vec2 pos2 = entity2->GetComponent<CTransform>()->position;
+		// FULL correction — stops repeated bounce
+		const float percent = 1.0f; // instead of 0.2
+		const float slop = 0.01f;
 
-		entity1->GetComponent<CTransform>()->position =
-			Vec2(pos1.x - correction * unitNorm.x, pos1.y - correction * unitNorm.y);
-		entity2->GetComponent<CTransform>()->position =
-			Vec2(pos2.x + correction * unitNorm.x, pos2.y + correction * unitNorm.y);
+		float correction = std::max(overlap - slop, 0.0f) * 0.5f * percent;
+
+		T.posX[i1] = x1 - correction * unitNorm.x;
+		T.posY[i1] = y1 - correction * unitNorm.y;
+
+		T.posX[i2] = x2 + correction * unitNorm.x;
+		T.posY[i2] = y2 + correction * unitNorm.y;
 	}
 }
 /////////////////////////////////

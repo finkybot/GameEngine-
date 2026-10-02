@@ -29,6 +29,7 @@
 #include "TestRenderGLScene.h"
 #include "MainMenuScene.h"
 #include "PathTestScene.h"
+#include "CPathRequest.h"
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 #include "MainThreadTasks.h"

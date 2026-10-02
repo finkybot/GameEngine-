@@ -118,6 +118,8 @@ void TestRenderGLScene::OnEnter() {
 	tileSprite->color = sf::Color::White;
 	tileSprite->visible = true;
 
+	// Commit all added entities to EntityManager so they're visible to rendering
+	m_entityManager.ProcessPending();
 
 	//m_renderGL.OnResize(size.x, size.y);
 	m_entityManager.GetRenderSystemGL().OnResize(size.x, size.y);

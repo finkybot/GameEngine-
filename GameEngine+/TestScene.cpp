@@ -81,7 +81,7 @@ void TestScene::Update(float dt) {
 		m_growthTimer = 0.0f;
 	}
 
-	UpdateSpawning(dt); // capped at 16 per frame
+	UpdateSpawning(dt);
 
 	auto& entities = m_entityManager.GetEntities();
 
@@ -101,6 +101,7 @@ void TestScene::Update(float dt) {
 		UpdateEntity(e, dt, worldW, worldH);
 	}
 
+	UpdateExplosions();
 
 	// --- Incremental spatial index update (main thread only) ---
 	if (auto* spatialIndex = m_entityManager.GetSpatialIndex()) {
@@ -164,6 +165,45 @@ void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 	bool escapeKeyDown = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape);
 	// handle input events
 	ProcessEscapeKey(escapeKeyDown);
+
+	if (!event) return;
+
+	// Retrieve main camera (if any)
+	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	CCamera* cam = camOpt ? *camOpt : nullptr;
+	if (!cam) return;
+
+	const sf::Event& evt = *event;
+
+	// --- Mouse wheel zoom ---
+	if (evt.is<sf::Event::MouseWheelScrolled>()) {
+		auto* mw = evt.getIf<sf::Event::MouseWheelScrolled>();
+		cam->zoom -= mw->delta * 0.1f;
+		cam->zoom = std::clamp(cam->zoom, 0.25f, 4.0f);
+	}
+
+	// --- Begin panning (right mouse button) ---
+	if (evt.is<sf::Event::MouseButtonPressed>()) {
+		auto* mb = evt.getIf<sf::Event::MouseButtonPressed>();
+		if (mb->button == sf::Mouse::Button::Right) {
+			m_cameraSystem.BeginPan(*cam, sf::Mouse::getPosition(m_window));
+		}
+	}
+
+	// --- Update panning ---
+	if (evt.is<sf::Event::MouseMoved>()) {
+		if (m_cameraSystem.IsPanning(*cam)) {
+			m_cameraSystem.UpdatePan(*cam, sf::Mouse::getPosition(m_window));
+		}
+	}
+
+	// --- End panning ---
+	if (evt.is<sf::Event::MouseButtonReleased>()) {
+		auto* mb = evt.getIf<sf::Event::MouseButtonReleased>();
+		if (mb->button == sf::Mouse::Button::Right) {
+			m_cameraSystem.EndPan(*cam);
+		}
+	}
 }
 /////////////////////////////////
 
@@ -178,7 +218,7 @@ void TestScene::OnEnter() {
 
 	// Expand world bounds (example: double window size)
 	m_mapMin = Vec2(0, 0);
-	m_mapMax = Vec2((float)m_window.getSize().x * 2.0f, (float)m_window.getSize().y * 2.0f);
+	m_mapMax = Vec2((float)m_window.getSize().x * 2.0f, (float)m_window.getSize().y * 3.0f);
 	m_hasMapBounds = true;
 
 
@@ -373,41 +413,23 @@ void TestScene::RenderGameInfoWindow(size_t entityCount, int deathCount, int exp
 
 /////////////////////////////////
 void TestScene::UpdateEntity(Entity* e, float dt, float worldW, float worldH) {
-	// 1. Physics (position + velocity + spatial grid)
+	// 1. Physics (position + velocity)
 	m_entityManager.GetPhysicsSystem().UpdateSingle(e, dt, worldW, worldH);
-	// You’d implement UpdateSingle(...) as the per‑entity version of your PhysicsSystem::Update.
 
-	// 2. Explosion logic (only if explosion)
-	if (e->GetType() == EntityType::Explosion) {
-		auto now = std::chrono::high_resolution_clock::now();
-		auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - e->m_creationTime);
-
-		CSoundEffect* soundEffect = e->GetComponent<CSoundEffect>();
-		bool soundStillPlaying =
-			soundEffect && soundEffect->m_sound && soundEffect->m_state == CSoundEffect::State::Playing;
-
-		if (elapsed.count() > 4500 && !soundStillPlaying) {
-			e->Destroy();
-		} else {
-			float fadeProgress = static_cast<float>(elapsed.count()) / 4500.0f;
-			const int maxAlpha = 220;
-			int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));
-
-			auto shape = e->GetComponent<CShape>();
-			if (shape) {
-				if (auto* explosion = dynamic_cast<CExplosion*>(shape)) {
-					explosion->SetRadius(explosion->GetRadius() * 1.004f);
-					sf::Color currentColor = explosion->GetColor();
-					explosion->SetColor(static_cast<float>(currentColor.r), static_cast<float>(currentColor.g),
-										static_cast<float>(currentColor.b), newAlpha);
-				}
-			}
+// --- CORRECT: Sync SoA → AoS for rendering ---
+	if (auto* t = e->GetComponent<CTransform>()) {
+		auto& T = m_entityManager.GetTransformSoA();
+		size_t idx = e->transformIndex;
+		if (idx != SIZE_MAX) {
+			t->position.x = T.posX[idx];
+			t->position.y = T.posY[idx];
+			//t->velocity.x = T.velX[idx];
+			//t->velocity.y = T.velY[idx];
 		}
 	}
 
-	// 3. Render instance prep (if you want per‑entity GPU data here)
+	// 3. Render instance prep (GPU batching)
 	if (auto* inst = e->GetComponent<CRenderInstance>()) {
-		// e.g. update inst->x, inst->y from CTransform
 		if (auto* t = e->GetComponent<CTransform>()) {
 			inst->x = t->position.x;
 			inst->y = t->position.y;
@@ -540,7 +562,7 @@ void TestScene::UpdateSpawning(float deltaTime) {
 
 	// If the current entity count is less than the target, spawn replacement entities to maintain the target population
 	if (current < m_targetEntityCount) {
-		int toSpawn = std::min(16, m_targetEntityCount - static_cast<int>(current));
+		int toSpawn = std::min(8, m_targetEntityCount - static_cast<int>(current));
 		SpawnReplacementEntities(toSpawn);
 	}
 }
@@ -562,11 +584,8 @@ void TestScene::SpawnInitialPopulation() {
 
 
 		// 3. Initial velocity (full 2D motion)
-		//float velX = std::uniform_real_distribution<float>(-90.0f, 90.0f)(m_rng);
-		//float velY = std::uniform_real_distribution<float>(-6.0f, 6.0f)(m_rng);
-
-		float velX = Vec2::Zero.x;
-		float velY = Vec2::Zero.y;
+		float velX = std::uniform_real_distribution<float>(-180.0f, 180.0f)(m_rng);
+		float velY = std::uniform_real_distribution<float>(-180.0f, 180.0f)(m_rng);
 
 		//// Clamp minimum speeds to avoid slow movers
 		//if (std::abs(velX) < 250.0f)
@@ -580,7 +599,7 @@ void TestScene::SpawnInitialPopulation() {
 		int g = m_greenVal(m_rng);
 		int b = m_blueVal(m_rng);
 		int a = m_alphaVal(m_rng);
-		float radius = m_radiusDistro(m_rng);
+		float radius = m_radiusDistro(m_rng)*3.0f;
 
 		// 5. Spawn entity
 		SpawnEntityByType(teamType, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velX, velY), a);
@@ -600,7 +619,9 @@ void TestScene::SpawnReplacementEntities(int count) {
 		unsigned int teamType = (direction == 1) ? 0u : 1u;
 
 		// 3. Sample velocity (horizontal only)
-		float velX = m_xVelocity(m_rng);
+		//float velX = m_xVelocity(m_rng);
+		float velX = 30.0f;
+		//std::cout << "SpawnReplacementEntities: direction=" << direction << ", velX=" << velX << "\n";
 		float velY = 0.0f;
 
 		// Reverse velocity if moving rightward
@@ -610,14 +631,14 @@ void TestScene::SpawnReplacementEntities(int count) {
 		// 4. Sample spawn position
 		float spawnX;
 		const auto windowSize = m_window.getSize();
-		float spawnY = std::uniform_real_distribution<float>(m_mapMin.y + 50.0f, m_mapMax.y - 50.0f)(m_rng);
+		float spawnY = std::uniform_real_distribution<float>(m_mapMin.y + 150.0f, m_mapMax.y - 150.0f)(m_rng);
 
 		if (direction == 1) {
 			// Spawn just off the left edge
-			spawnX = std::uniform_real_distribution<float>(m_mapMin.x - 100.0f, m_mapMin.x)(m_rng);
+			spawnX = std::uniform_real_distribution<float>(m_mapMin.x - 150.0f, m_mapMin.x)(m_rng);
 		} else {
 			// Spawn just off the right edge
-			spawnX = m_mapMax.x + std::uniform_real_distribution<float>(0.0f, 100.0f)(m_rng);
+			spawnX = m_mapMax.x + std::uniform_real_distribution<float>(0.0f, 150.0f)(m_rng);
 		}
 
 		// 5. Sample visual properties
@@ -625,7 +646,7 @@ void TestScene::SpawnReplacementEntities(int count) {
 		int g = m_greenVal(m_rng);
 		int b = m_blueVal(m_rng);
 		int a = m_alphaVal(m_rng);
-		float radius = m_radiusDistro(m_rng);
+		float radius = m_radiusDistro(m_rng)*3.0f;
 
 		// 6. Spawn the entity
 		SpawnEntityByType(teamType, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velX, velY), a);
@@ -752,33 +773,45 @@ void TestScene::UpdateExplosions() {
 	auto now = std::chrono::high_resolution_clock::now();
 	std::vector<size_t> expiredExplosions;
 
-	for (auto& entity :	m_entityManager.GetEntities()) { // Iterate over all entities to find explosions and update their state based on elapsed time since creation
+	// Remove dead explosions from our tracking vector
+	m_explosions.erase(
+		std::remove_if(m_explosions.begin(), m_explosions.end(),
+			[](Entity* e) { return !e || !e->IsAlive(); }),
+		m_explosions.end()
+	);
+
+	for (auto& entity : m_entityManager.GetEntities()) { // Iterate over all entities to find explosions and update their state based on elapsed time since creation
 		if (entity->GetType() == EntityType::Explosion) {
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->m_creationTime);
 
 			// Check if the sound effect is still playing
-			CSoundEffect* soundEffect = entity->GetComponent<CSoundEffect>();
-			bool soundStillPlaying = soundEffect && soundEffect->m_sound && soundEffect->m_state == CSoundEffect::State::Playing;
+	/*		CSoundEffect* soundEffect = entity->GetComponent<CSoundEffect>();
+			bool soundStillPlaying = soundEffect && soundEffect->m_sound && soundEffect->m_state == CSoundEffect::State::Playing;*/
 
 			// Only destroy the entity if both the visual lifespan is over AND the sound has finished
-			if (elapsed.count() > 4500 && !soundStillPlaying) {
+			if (elapsed.count() > 9000) {
+				//std::cout << "Destroying explosion entity after 9000ms" << std::endl;
 				entity->Destroy();
 			} else {
 				m_explosionCount++; // Increment explosion count for active explosions that have not yet expired
-				float fadeProgress = static_cast<float>(elapsed.count()) / 4500.0f;
+				float fadeProgress = static_cast<float>(elapsed.count()) / 9000.0f;
 				// Use a higher base alpha so explosions remain more visible as they expand.
 				const int maxAlpha = 220; // match CExplosion default alpha
 				int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));
 
-				auto shape = entity->GetComponent<CShape>();
-				if (shape) {
-					if (auto* explosion = dynamic_cast<CExplosion*>(shape)) {
-						explosion->SetRadius(explosion->GetRadius() * 1.004f); // Expand the explosion radius over time
-						// Origin is set in SetRadius to center the circle, so no position adjustment needed
-						sf::Color currentColor = explosion->GetColor();
-						explosion->SetColor(static_cast<float>(currentColor.r), static_cast<float>(currentColor.g),
-											static_cast<float>(currentColor.b), newAlpha);
-					}
+				auto* explosion = entity->GetComponent<CExplosion>();
+				auto* shape = entity->GetComponent<CShape>();
+
+				if (explosion && shape) {
+					// Grow radius
+					//std::cout << "Grow you little bastard, grow! Explosion radius before: " << explosion->GetRadius() << std::endl;
+					float r = shape->GetRadius(); // renderer uses CShape radius
+					r *= 1.004f;
+					shape->SetRadius(r);
+
+					// Fade alpha on the SHAPE (renderer uses CShape)
+					sf::Color currentColor = shape->GetColor();
+					shape->SetColor(currentColor.r, currentColor.g, currentColor.b, newAlpha);
 				}
 			}
 		}

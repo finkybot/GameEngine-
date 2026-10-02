@@ -48,6 +48,12 @@ private:
 		return GetCellHashFromCell(cellX, cellY);
 	}
 
+
+
+public:
+	const std::unordered_map<size_t, std::vector<T*>>& GetGrid() const noexcept { return m_grid; }
+
+
 	// Signed-int-safe cell hash helper. Maps signed cell coordinates to unsigned space first, then applies Cantor pairing so negative cell coords do not alias unexpectedly.
 	static size_t GetCellHashFromCell(int cellX, int cellY) noexcept {
 		auto toUnsigned = [](int v) -> unsigned long long {
@@ -65,9 +71,105 @@ private:
 
 
 
-public:
 	SpatialHashGrid(float cellSize = 100.0f) : m_cellSize(cellSize) {}
 	~SpatialHashGrid() { Clear(); }
+
+
+
+	// InsertFromSoA - Inserts an object into the spatial grid based on its position (x, y). If the object is already tracked in a different cell, it removes the stale membership first. The method calculates the cell coordinates based on the position and cell size, computes the corresponding hash, and adds the 
+	// object to the appropriate cell in the grid. It also updates the object's current cell coordinates for tracking.
+	void InsertFromSoA(T* object, float x, float y) noexcept {
+		if (!object)
+			return;
+
+		int cellX = static_cast<int>(x / m_cellSize);
+		int cellY = static_cast<int>(y / m_cellSize);
+
+		// If already tracked in a different cell, remove stale membership first.
+		if (object->currentCellX != INT_MIN && object->currentCellY != INT_MIN &&
+			(object->currentCellX != cellX || object->currentCellY != cellY)) {
+			Remove(object);
+		}
+
+		size_t hash = GetCellHashFromCell(cellX, cellY);
+		auto& vec = m_grid[hash];
+
+		if (std::find(vec.begin(), vec.end(), object) == vec.end())
+			vec.push_back(object);
+
+		object->currentCellX = cellX;
+		object->currentCellY = cellY;
+	}
+
+
+
+	// UpdateFromSoA - Updates the spatial grid with the new position of an object based on its (x, y) coordinates. If the object has moved to a different cell, it is removed from its old cell and inserted into the new cell. If the object has skipped cells (moved more than one cell away), it is also removed from 
+	// any intermediate cells to ensure accurate spatial partitioning.
+	void UpdateFromSoA(T* object, float x, float y) noexcept {
+		int newX = static_cast<int>(x / m_cellSize);
+		int newY = static_cast<int>(y / m_cellSize);
+
+		int oldX = object->currentCellX;
+		int oldY = object->currentCellY;
+
+		// First-time insert
+		if (oldX == INT_MIN || oldY == INT_MIN) {
+			size_t hash = GetCellHashFromCell(newX, newY);
+			m_grid[hash].push_back(object);
+			object->currentCellX = newX;
+			object->currentCellY = newY;
+			return;
+		}
+
+		// Same cell → nothing to do
+		if (newX == oldX && newY == oldY)
+			return;
+
+		// Remove from old cell
+		size_t oldHash = GetCellHashFromCell(oldX, oldY);
+		auto it = m_grid.find(oldHash);
+		if (it != m_grid.end()) {
+			auto& vec = it->second;
+			vec.erase(std::remove(vec.begin(), vec.end(), object), vec.end());
+			if (vec.empty())
+				m_grid.erase(it);
+		}
+
+		// Remove skipped cells (same logic as your existing Update)
+		int dx = newX - oldX;
+		int dy = newY - oldY;
+
+		if (std::abs(dx) > 1 || std::abs(dy) > 1) {
+			int stepX = (dx > 0 ? 1 : -1);
+			int stepY = (dy > 0 ? 1 : -1);
+
+			int cx = oldX;
+			int cy = oldY;
+
+			while (cx != newX || cy != newY) {
+				cx += (cx != newX ? stepX : 0);
+				cy += (cy != newY ? stepY : 0);
+
+				size_t skipHash = GetCellHashFromCell(cx, cy);
+				auto it2 = m_grid.find(skipHash);
+				if (it2 != m_grid.end()) {
+					auto& vec2 = it2->second;
+					vec2.erase(std::remove(vec2.begin(), vec2.end(), object), vec2.end());
+					if (vec2.empty())
+						m_grid.erase(it2);
+				}
+			}
+		}
+
+		// Insert into new cell
+		size_t newHash = GetCellHashFromCell(newX, newY);
+		m_grid[newHash].push_back(object);
+
+		object->currentCellX = newX;
+		object->currentCellY = newY;
+	}
+
+
 
 	// Remove - Removes an object from the spatial grid based on pointer identity.
 	void Remove(T* object) noexcept {
@@ -107,6 +209,8 @@ public:
 		object->currentCellX = INT_MIN;
 		object->currentCellY = INT_MIN;
 	}
+
+
 
 	// Update - Updates the spatial grid with the new position of an object. If the object has moved to a different cell, it is removed from its old cell and inserted into the new cell. If the object has skipped cells (moved more than one cell away), it is also removed from 
 	// any intermediate cells to ensure accurate spatial partitioning.

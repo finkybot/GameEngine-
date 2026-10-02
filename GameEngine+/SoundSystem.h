@@ -10,11 +10,17 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
-#include "CSoundEffect.h"
-#include "Entity.h"
-#include "EntityManager.h"
-#include "SFML/Audio.hpp"
+#include <string>
+#include "Vec2.h"
 #include <cmath>
+
+class Entity;
+class EntityManager;
+class CSoundEffect;
+namespace sf {
+	class Sound;
+	class SoundBuffer;
+}
 /////////////////////////////////
 
 

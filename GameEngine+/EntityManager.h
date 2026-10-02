@@ -52,7 +52,9 @@ class Entity;
 #include "GPURenderSystem.h"
 #include "CTileMap.h"
 #include "SpatialLayerRegistry.h"
-#include "SpatialIndexUnified.h"
+#include "ISpatialIndex.h"
+
+#include "TransformSoA.h"
 /////////////////////////////////
 
 
@@ -109,7 +111,7 @@ public:
 
 
 	// Accessor methods for the main systems managed by the EntityManager, including the PhysicsSystem, CollisionSystem, RenderSystem, MusicSystem, and SoundSystem. These methods provide access to the systems for updating and rendering entities, as well as managing music and sound playback.
-	PhysicsSystem& GetPhysicsSystem() { return m_physicsSystem; }
+	PhysicsSystem& GetPhysicsSystem() { return *m_physicsSystem; }
 	CollisionSystem& GetCollisionSystem() { return m_collisionSystem; }
 
 	RenderSystem& GetRenderSystem() { return m_renderSystem; }	
@@ -130,6 +132,7 @@ public:
 	bool HasPendingTileMaps() const { return m_hasPendingTileMaps; }
 
 	ISpatialIndex* GetSpatialIndex() const { return m_spatialIndex.get(); }
+	TransformSoA& GetTransformSoA() { return m_transformSoA; }
 
 	// Commit pending entities without running full Update(). This moves entities from the add-queue into the active list so systems can see them.
 	void ProcessPending();
@@ -145,7 +148,7 @@ public:
 
 	//BVHSystem& GetBVH() { return m_bvh; } // BVH system for efficient raycasting and spatial queries, - deprecated in favor of ISpatialIndex interface for more flexible spatial indexing.
 
-	//void UpdateBVH(); // Rebuild the BVH tree based on current entities - deprecated in favor of ISpatialIndex interface for more flexible spatial indexing.
+	void UpdateBVH(); // Rebuild the BVH tree based on current entities - deprecated in favor of ISpatialIndex interface for more flexible spatial indexing.
 
 	//void SetSpatialHashCellSize(float cellSize) { m_spatialHash = SpatialHashGrid<Entity>(cellSize); } - deprecated in favor of ISpatialIndex interface for more flexible spatial indexing.
 
@@ -177,17 +180,17 @@ private:
 	sf::RenderWindow& m_window;
 	int m_deathCountThisFrame = 0;
 
-	PhysicsSystem m_physicsSystem;
 	CollisionSystem m_collisionSystem;
 	RenderSystem m_renderSystem;
 	RenderSystemGL m_renderSystemGL; // Optional: OpenGL-based render system for advanced rendering (may be nullptr)
 	
+	std::unique_ptr<PhysicsSystem> m_physicsSystem;
 	std::unique_ptr<TileSystem> m_tileSystem;
 	std::unique_ptr<MusicSystem> m_musicSystem; // system owning runtime sf::Music objects
 	std::unique_ptr<SoundSystem> m_soundSystem; // system managing sound effects with 3D spatial audio
 	
 	bool m_hasPendingTileMaps = true;
-	//BVHSystem m_bvh;
+	BVHSystem m_bvh;
 
 	// Incremental layer buckets for fast rendering
 	std::array<std::vector<Entity*>, 4> m_layerBuckets;
@@ -198,5 +201,9 @@ private:
 	// Flag to enable or disable SFML rendering. This can be used to toggle rendering on or off for performance testing or headless operation.
 	bool m_sfmlRenderingEnabled =		true;	// Flag to enable or disable SFML rendering. This can be used to toggle SFML rendering on or off for performance testing or headless operation.
 	bool m_GLRenderingEnabled	=		false;	// Flag to enable or disable OpenGL rendering. This can be used to toggle OpenGL rendering on or off for performance testing or headless operation
+
+	TransformSoA m_transformSoA;				// Structure of Arrays (SoA) for efficient storage and access of CTransform components. This allows for better cache locality and performance when updating and rendering entities with transform data.
+	std::vector<size_t> m_freeTransformSlots;
+	std::vector<Entity*> m_pendingKill;
 };
 /////////////////////////////////

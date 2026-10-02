@@ -8,15 +8,16 @@
 // Includes
 #pragma once
 #include "ChunkManager.h"
-#include "EntityManager.h"
 #include "Pathfinder.h"
-#include "CPathRequest.h"
 #include <queue>
+#include <optional>
 #include <mutex>
 #include <thread>
 #include <atomic>
 #include <unordered_map>
 #include <memory>
+
+class EntityManager;
 /////////////////////////////////
 
 

@@ -7,6 +7,9 @@
 /////////////////////////////////
 // Includes
 #include "TileSystem.h"
+#include "../EntityManager.h"
+#include "../Entity.h"
+#include "../CTileMap.h"
 #include "../CRectangle.h"
 #include "../CStatic.h"
 #include "../CTexture.h"

@@ -17,6 +17,7 @@
 /////////////////////////////////
 // Forward declaration of the Entity class, which is used by the PhysicsSystem to access entities and their components for updating positions and handling collisions. This allows us to avoid circular dependencies between the PhysicsSystem and Entity classes, since we only need a pointer to Entity in the PhysicsSystem header.
 class Entity;
+class EntityManager;
 /////////////////////////////////
 
 
@@ -28,7 +29,7 @@ class Entity;
 class PhysicsSystem {
 public:
 	// Constructor and destructor for the PhysicsSystem class. The default constructor is sufficient since we have no member variables to initialize, and the default destructor is also sufficient since we have no resources to clean up.
-	PhysicsSystem() = default;
+	explicit PhysicsSystem(EntityManager* entityManager) : m_entityManager(entityManager) {}
 	~PhysicsSystem() = default; 
 
 
@@ -41,15 +42,22 @@ public:
 
 	// SlowEntity - Applies a slowing effect to the entity by multiplying its velocity by the specified slow factor (a value between 0 and 1). This method reduces the entity's speed, simulating effects like friction or slowing zones in the game. It should be called whenever you want to apply a slowing effect to an entity, 
 	// such as when it enters a slowing zone or is affected by a debuff.
-	void SlowEntity(Entity* entity, float slowFactor) const; 
+	//void SlowEntity(Entity* entity, float slowFactor) const; 
 
 
 
 private:
 	// MoveEntity - Updates the position of the entity based on its velocity and the elapsed time (deltaTime). This method calculates the new position by adding the product of velocity and deltaTime to the current position, allowing entities to move smoothly across the screen according to their velocities.
-	void MoveEntity(Entity* entity, float deltaTime, float windowWidth, float windowHeight) const;
+	//void MoveEntity(Entity* entity, float deltaTime, float windowWidth, float windowHeight) const;
 
 	// HandleBoundaryCollision - Checks for collisions between the entity and the window boundaries. If a collision is detected, it inverts the corresponding velocity component (x or y) to create a rebounding effect and ensures the entity stays within the window bounds.
-	void HandleBoundaryCollision(Entity* entity, float windowWidth, float windowHeight) const;
+	//void HandleBoundaryCollision(Entity* entity, float windowWidth, float windowHeight) const;
+
+	// HandleBoundaryCollisionSoA - Similar to HandleBoundaryCollision, but designed for use with Structure of Arrays (SoA) data layout. It checks for collisions between the entity and the window boundaries, inverts the corresponding velocity component if a collision is detected, and ensures the entity stays within the window bounds.
+	void HandleBoundaryCollisionSoA(Entity* entity, size_t idx, float windowWidth, float windowHeight) const;
+
+
+
+	EntityManager* m_entityManager = nullptr; // Pointer to the EntityManager, which is used to access entities and their components for updating positions and handling collisions. This allows the PhysicsSystem to interact with the overall entity management system of the game engine.
 };
 /////////////////////////////////

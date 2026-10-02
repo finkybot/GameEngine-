@@ -12,6 +12,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <condition_variable>
 #include <deque>
 #include <chrono>
 /////////////////////////////////
@@ -63,6 +64,7 @@ private:
 	struct WorkerQueue {
 		std::deque<Job> jobs;
 		std::mutex mutex;
+		std::condition_variable cv;
 
 		size_t jobsExecuted = 0;
 		size_t jobsStolen = 0;
@@ -112,13 +114,13 @@ private:
 	
 	// Stop - Stops the job system and joins all worker threads. It sets the running flag to false, notifies all waiting threads, and then joins each worker thread to ensure they have completed before clearing the workers vector.	
 	void stop() {
-		//{
-		//	std::lock_guard<std::mutex> lock(queueMutex);
-		//	running = false;
-		//}
-		//cv.notify_all();
-	
 		running = false;
+
+		// Notify all worker threads to wake up and exit
+		for (auto& queue : workerQueues) {
+			queue->cv.notify_all();
+		}
+
 		// Join all worker threads to ensure they have completed before clearing the workers vector
 		for (auto& t : workers) {
 			if (t.joinable())
@@ -138,6 +140,7 @@ private:
 			workerQueues[index]->jobs.push_back(std::move(job));
 		}
 
+		workerQueues[index]->cv.notify_one();
 		++pendingJobs;
 	}
 
@@ -154,7 +157,18 @@ private:
 
 			// Own queue
 			{
-				std::lock_guard<std::mutex> lock(myQueue.mutex);
+				std::unique_lock<std::mutex> lock(myQueue.mutex);
+
+				if (myQueue.jobs.empty()) {
+					// Wait for a job or shutdown signal
+					myQueue.cv.wait(lock, [this, &myQueue]() {
+						return !running || !myQueue.jobs.empty();
+					});
+				}
+
+				if (!running && myQueue.jobs.empty())
+					break;
+
 				if (!myQueue.jobs.empty()) {
 					job = std::move(myQueue.jobs.front());
 					myQueue.jobs.pop_front();
@@ -168,7 +182,7 @@ private:
 				continue;
 			}
 
-			// Steal
+			// Steal from other queues
 			for (size_t i = 0; i < workerQueues.size(); ++i) {
 				if (i == workerIndex)
 					continue;
@@ -191,7 +205,7 @@ private:
 			}
 
 			myQueue.idleCycles++;
-			std::this_thread::yield();
+			// No jobs available, loop will wait on next iteration
 		}
 	}
 

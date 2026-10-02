@@ -238,6 +238,9 @@ void TechSimulationScene::CreateTechTestWorld() {
 		inf->influenceRadius = cfg.particleInfluenceRadius;
 		inf->influenceFalloff = 1.0f;
 	}
+
+	// Commit all created entities to EntityManager
+	m_entityManager.ProcessPending();
 }
 /////////////////////////////////
 

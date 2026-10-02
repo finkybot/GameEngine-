@@ -12,7 +12,7 @@
 #include <memory>
 #include "../Vec2.h"
 #include "../SpatialHashGrid.h"
-#include "SpatialIndexUnified.h"
+#include "../SpatialIndexUnified.h"
 /////////////////////////////////
 
 

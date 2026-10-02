@@ -67,6 +67,9 @@
     <Filter Include="Source Files\Frag">
       <UniqueIdentifier>{01f2959a-0dd2-458c-804c-ab0beb152fbb}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Header Files\SoA">
+      <UniqueIdentifier>{21f93a81-c056-4f02-91e1-a7404d181bb7}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="imgui\backends\imgui_impl_dx9.cpp">
@@ -587,11 +590,14 @@
     <ClInclude Include="BindlessGL.h">
       <Filter>Header Files\Misc</Filter>
     </ClInclude>
-    <ClInclude Include="ShapeTemplateRegistry.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="CRenderInstance.h">
       <Filter>Header Files\Components</Filter>
+    </ClInclude>
+    <ClInclude Include="ShapeTemplateRegistry.h">
+      <Filter>Header Files\Misc</Filter>
+    </ClInclude>
+    <ClInclude Include="TransformSoA.h">
+      <Filter>Header Files\SoA</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

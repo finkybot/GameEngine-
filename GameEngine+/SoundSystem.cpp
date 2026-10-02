@@ -7,6 +7,9 @@
 /////////////////////////////////
 // Includes
 #include "SoundSystem.h"
+#include "EntityManager.h"
+#include "Entity.h"
+#include "CSoundEffect.h"
 #include "CTransform.h"
 #include <algorithm>
 #include <iostream>
@@ -93,22 +96,28 @@ void SoundSystem::InitializePool(EntityManager& em, size_t poolSize) {
 /////////////////////////////////
 // AcquirePooledSoundEntity - Get an available sound entity from the pool
 Entity* SoundSystem::AcquirePooledSoundEntity() {
-	if (m_soundEffectPool.empty()) {
-		return nullptr; // Pool exhausted
+	// Skip dead entities in the pool to avoid dangling pointers
+	while (!m_soundEffectPool.empty()) {
+		Entity* entity = m_soundEffectPool.back();
+		m_soundEffectPool.pop_back();
+
+		// Skip if entity is no longer alive (was destroyed)
+		if (!entity || !entity->IsAlive()) {
+			continue;
+		}
+
+		// Reset component state for reuse
+		if (auto* sound = entity->GetComponent<CSoundEffect>()) {
+			sound->m_shouldPlay = false;
+			sound->m_state = CSoundEffect::State::Stopped;
+			sound->m_fadeOutDuration = 0.0f;
+			sound->m_fadeOutElapsed = 0.0f;
+		}
+
+		return entity;
 	}
 
-	Entity* entity = m_soundEffectPool.back();
-	m_soundEffectPool.pop_back();
-
-	// Reset component state for reuse
-	if (auto* sound = entity->GetComponent<CSoundEffect>()) {
-		sound->m_shouldPlay = false;
-		sound->m_state = CSoundEffect::State::Stopped;
-		sound->m_fadeOutDuration = 0.0f;
-		sound->m_fadeOutElapsed = 0.0f;
-	}
-
-	return entity;
+	return nullptr; // Pool exhausted
 }
 /////////////////////////////////
 

@@ -8,6 +8,7 @@
 // Include
 #pragma once
 #include <vector>
+#include <memory>
 #include "Vec2.h"
 /////////////////////////////////
 
@@ -16,6 +17,7 @@
 /////////////////////////////////
 // Forward declarations for classes used in the ISpatialIndex interface. These declarations allow the interface to reference these classes without 
 // needing to include their full definitions, which can help reduce compilation dependencies and improve build times.
+class EntityManager;
 class Entity;
 struct RaycastHit;
 class ChunkManager;
@@ -59,5 +61,6 @@ public:
 	virtual void InitialBuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities) = 0;
 	virtual void RebuildBVH(const std::vector<std::unique_ptr<Entity>>& entities) = 0;
 	virtual void MarkWorldMaskDirty() = 0;
+	virtual void SetEntityManager(EntityManager* entityManager) = 0;
 };
 /////////////////////////////////

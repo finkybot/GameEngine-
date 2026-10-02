@@ -54,16 +54,6 @@ PathTestScene::~PathTestScene() = default;
 // InitializeGame - Initializes the game scene, setting up the camera entity, map bounds, and scanning for available levels.
 void PathTestScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	SwitchToLevel(m_currentLevelName);
-	// Create  and setup a camera entity, similar to the LevelEditorScene
-	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Default);
-	m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
-	
-	auto camera = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
-	camera->isMainCamera = true;
-	camera->isActive = true;
-	camera->viewportWidth = (float)m_window.getSize().x;
-	camera->viewportHeight = (float)m_window.getSize().y;
-	camera->smoothness = 0.0f; // Disable smoothing - camera is controlled directly via panning and bounds clamping
 
 	// Initialize map bounds
 	m_mapMin = Vec2(-512, -512);
@@ -362,7 +352,7 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 // EnsureVisibleChunks - Ensures that all chunks within the camera's view, plus a margin, are loaded. This method calculates the tile coordinates of 
 // the visible area based on the camera's position and zoom level, and requests the ChunkManager to load any chunks that fall within this area.
 void PathTestScene::EnsureVisibleChunks() {
-	std::cout << "BasePath = " << m_chunkManager.GetBasePath() << "\n";
+	//std::cout << "BasePath = " << m_chunkManager.GetBasePath() << "\n";
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (!camOpt) return;
 	CCamera* cam = *camOpt;
@@ -447,9 +437,6 @@ void PathTestScene::Update(float deltaTime) {
 		m_cameraSystem.Update(deltaTime, GetEntityManager());
 	}
 
-
-	// Apply camera view
-	ApplyMainCameraView();
 
 	// Ensure visible chunks are loaded
 	EnsureVisibleChunks();
@@ -542,7 +529,11 @@ void PathTestScene::Update(float deltaTime) {
 			}
 		}
 	}
+
+	// Apply camera view AFTER all panning/input processing
+	ApplyMainCameraView();
 }
+
 /////////////////////////////////
 
 
@@ -799,7 +790,21 @@ void PathTestScene::OnEnter()
 {
     // Reset camera system
     m_cameraSystem.ClearMainCamera(GetEntityManager());
-    
+
+    // Create and setup camera entity
+    m_cameraEntity = GetEntityManager().AddEntity(EntityType::Default);
+    m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
+
+    auto camera = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
+    camera->isMainCamera = true;
+    camera->isActive = true;
+    camera->viewportWidth = (float)m_window.getSize().x;
+    camera->viewportHeight = (float)m_window.getSize().y;
+    camera->smoothness = 0.0f;
+
+    // Commit the camera entity
+    GetEntityManager().ProcessPending();
+
     // Reset SFML view
     m_window.setView(m_window.getDefaultView());
 

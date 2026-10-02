@@ -28,6 +28,7 @@
 #include "MusicSystem.h"
 #include "SoundSystem.h"
 #include "ChunkManager.h"
+#include "SpatialIndexUnified.h"
 
 /////////////////////////////////
 
@@ -48,10 +49,13 @@ EntityManager::EntityManager(sf::RenderWindow& window, float cellSize): m_window
 	m_soundSystem->Initialize();
 	m_soundSystem->InitializePool(*this, 64);  // Initialize sound effect pool with 64 entities
 
+	m_physicsSystem = std::make_unique<PhysicsSystem>(this);
+
 	// Store the ID of the thread that created this EntityManager instance for debugging purposes. This allows us to assert that certain methods are only called from the owning thread, which can help catch threading issues during development.
 	m_ownerThreadId = std::this_thread::get_id();
 
 	m_spatialIndex = std::make_unique<SpatialIndexUnified>(32.0f); // Use a smaller dynamic cell size for tighter collision broadphase queries
+	m_spatialIndex->SetEntityManager(this); // Provide a pointer to this EntityManager for spatial queries and entity management
 }
 /////////////////////////////////
 
@@ -156,14 +160,18 @@ void EntityManager::AddPendingEntities() {
 		// Store bucket metadata for O(1) removal
 		e->SetBucketInfo(layerIdx, static_cast<int>(bucket.size()) - 1);
 
-		// ⭐ Phase‑4: Insert into spatial index
+		// Insert into spatial index
 		if (m_spatialIndex)
 			m_spatialIndex->Insert(e);
+
+		// NEW: Allocate SoA transform slot
+		if (auto* t = e->GetComponent<CTransform>()) {
+			e->transformIndex = m_transformSoA.Add(e, *t);
+		}
 	}
 
 	m_toAdd.clear();
 }
-
 /////////////////////////////////
 
 
@@ -187,27 +195,33 @@ void EntityManager::RemoveDeadEntities() {
 			deadEntities.push_back(up.get());
 	}
 
-
 	if (deadEntities.empty())
 		return;
 
 	// Build lookup set
 	std::unordered_set<Entity*> deadSet(deadEntities.begin(), deadEntities.end());
 
-	// NEW: Remove dead entities from spatial index BEFORE deleting them
+	// Remove dead entities from spatial index BEFORE deleting them
 	if (m_spatialIndex) {
 		for (Entity* d : deadEntities) {
 			m_spatialIndex->Remove(d);
 		}
 	}
-	
+
+	// NEW: Remove from TransformSoA
+	for (Entity* d : deadEntities) {
+		if (d->transformIndex != SIZE_MAX) {
+			m_transformSoA.Remove(d->transformIndex);
+			d->transformIndex = SIZE_MAX;
+		}
+	}
+
 	// Remove from entity map
 	for (auto& kv : m_entityMap) {
 		auto& vec = kv.second;
 		vec.erase(std::remove_if(vec.begin(), vec.end(), [&deadSet](Entity* e) { return deadSet.count(e) != 0; }),
 				  vec.end());
 	}
-
 
 	// Remove from layer buckets
 	for (size_t bucketIdx = 0; bucketIdx < m_layerBuckets.size(); ++bucketIdx) {
@@ -510,8 +524,8 @@ void EntityManager::Update(float deltaTime) {
 
 	m_deathCountThisFrame = 0;
 
-	AddPendingEntities();
-	RemoveDeadEntities();
+	//AddPendingEntities();
+	//RemoveDeadEntities();
 
 	// Let MusicSystem reconcile component data with runtime sf::Music instances.
 	if (m_musicSystem)
@@ -549,25 +563,53 @@ void EntityManager::Update(float deltaTime) {
 // ProcessPending - a method that can be called to process pending entities without performing a full update cycle. This allows the caller to add new entities and have them integrated into the EntityManager's data structures without immediately running all 
 // systems or rebuilding the spatial hash,
 void EntityManager::ProcessPending() {
+	// 1. Remove dead entities
+	RemoveDeadEntities();
+
+	// 2. Add new entities
 	AddPendingEntities();
-	// Do not run systems or rebuild spatial hash - caller may request full Update later in the frame.
 }
-/////////////////////////////////
-
-
 
 /////////////////////////////////
-// AddEntity - creates a new entity of the specified type and adds it to the EntityManager. This method initializes the entity with a unique ID, sets its creation time for potential time-based logic, and ensures that it has a CTransform component for systems 
-// that rely on it. The new entity is added to the m_toAdd vector for processing during the next update cycle.
+
+
+
+/////////////////////////////////
+// AddEntity - creates a new entity of the specified type, assigns it a unique ID, and adds it to the list of entities to be processed. The method also adds a default CTransform component to the entity and registers it in the Structure of Arrays (SoA) for efficient access to transform data.
 Entity* EntityManager::AddEntity(EntityType type) {
 	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++));
-	entity->m_creationTime = std::chrono::high_resolution_clock::
-		now(); // Track creation time for entity (currently used for explosions but could be useful for other time-based logic in the future)
-			   // Ensure new entities have a transform so systems can rely on it
-	entity->AddComponent<CTransform>(Vec2::Zero, Vec2::Zero);
-	Entity* entityPtr = entity.get(); // Capture pointer BEFORE moving
-	m_toAdd.push_back(std::move(entity));
+	entity->m_creationTime = std::chrono::high_resolution_clock::now();
 
+	// Always add a transform
+	entity->AddComponent<CTransform>(Vec2::Zero, Vec2::Zero);
+
+	Entity* entityPtr = entity.get(); // Capture pointer BEFORE moving
+
+	// Register in SoA
+	auto* tform = entityPtr->GetComponent<CTransform>();
+	entityPtr->transformIndex = m_transformSoA.Add(entityPtr, *tform);
+
+	// Explosion setup
+	if (type == EntityType::Explosion) {
+		// Explosion logic component
+		entityPtr->AddComponent<CExplosion>();
+
+		// Render instance (GPU batching)
+		auto* inst = entityPtr->AddComponent<CRenderInstance>();
+		inst->radius = 8.0f;
+		inst->r = 255;
+		inst->g = 200;
+		inst->b = 200;
+		inst->a = 220;
+
+		// Shape (collision + rendering)
+		auto circle = std::make_unique<CCircle>();
+		circle->SetRadius(inst->radius);
+		circle->SetColor(inst->r, inst->g, inst->b, inst->a);
+		entityPtr->AddComponentPtr<CShape>(std::move(circle));
+	}
+
+	m_toAdd.push_back(std::move(entity));
 	return entityPtr;
 }
 /////////////////////////////////
@@ -578,8 +620,26 @@ Entity* EntityManager::AddEntity(EntityType type) {
 // KillEntity - marks an entity for removal by calling its Destroy method and increments the death count for the current frame. This method allows systems and gameplay logic to track how many entities have been marked as dead during the frame, which can be useful 
 // for debugging, performance monitoring, or gameplay mechanics that depend on entity deaths.
 void EntityManager::KillEntity(Entity* entity) {
+	if (!entity || !entity->IsAlive())
+		return;
+
+	//std::cout << "KillEntity: id=" << entity->GetId() << "\n";
+
 	entity->Destroy();
-	SetDeathCountThisFrame(GetDeathCountThisFrame() + 1);
+	m_deathCountThisFrame++;
+
+	// Remove from SoA
+	if (entity->transformIndex != SIZE_MAX) {
+		m_transformSoA.Remove(entity->transformIndex);
+		entity->transformIndex = SIZE_MAX;
+	}
+
+	// Remove from spatial index
+	if (m_spatialIndex)
+		m_spatialIndex->Remove(entity);
+
+	// Queue for removal in ProcessPending
+	m_pendingKill.push_back(entity);
 }
 /////////////////////////////////
 
@@ -614,29 +674,29 @@ EntityVector& EntityManager::GetEntities() {
 
 
 /////////////////////////////////
-// UpdateBVH - updates the bounding volume hierarchy (BVH) used for spatial queries. This method collects all dynamic entities (those that are alive and have a shape) and rebuilds the BVH tree to 
-// optimize spatial queries such as raycasting.
-//void EntityManager::UpdateBVH() {
-//	// BVH update logic would go here if we were using a BVH for spatial queries.
-//	// Currently, we are using a SpatialHashGrid, so this function is a placeholder.
-//	std::vector<Entity*> dynamicEntities;
-//
-//	for (auto& e : m_entities) {
-//		if (!e->IsAlive())
-//			continue;
-//		if (!e->GetShape())
-//			continue;
-//
-//		// Skip static geometry
-//		if (e->GetType() == EntityType::Tile || e->GetType() == EntityType::TileMap ||
-//			e->GetType() == EntityType::Chunk)
-//			continue;
-//
-//		dynamicEntities.push_back(e.get());
-//	}
-//
-//	m_bvh.Rebuild(dynamicEntities);
-//}
+ // UpdateBVH - updates the bounding volume hierarchy (BVH) used for spatial queries. This method collects all dynamic entities (those that are alive and have a shape) and rebuilds the BVH tree to 
+ // optimize spatial queries such as raycasting.
+void EntityManager::UpdateBVH() {
+	// BVH update logic would go here if we were using a BVH for spatial queries.
+	// Currently, we are using a SpatialHashGrid, so this function is a placeholder.
+	std::vector<Entity*> dynamicEntities;
+
+	for (auto& e : m_entities) {
+		if (!e->IsAlive())
+			continue;
+		if (!e->GetShape())
+			continue;
+
+		// Skip static geometry
+		if (e->GetType() == EntityType::Tile || e->GetType() == EntityType::TileMap ||
+			e->GetType() == EntityType::Chunk)
+			continue;
+
+		dynamicEntities.push_back(e.get());
+	}
+
+	m_bvh.Rebuild(dynamicEntities);
+}
 /////////////////////////////////
 
 

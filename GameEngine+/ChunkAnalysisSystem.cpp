@@ -7,6 +7,9 @@
 /////////////////////////////////
 // Includes
 #include "ChunkAnalysisSystem.h"
+#include "EntityManager.h"
+#include "Entity.h"
+#include "CChunkKnowledge.h"
 /////////////////////////////////
 
 

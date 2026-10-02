@@ -8,9 +8,8 @@
 /////////////////////////////////
 // Includes
 #pragma once
-#include "../Entity.h"
-#include "../CTileMap.h"
-#include "../EntityManager.h"
+
+class EntityManager;
 /////////////////////////////////
  
  

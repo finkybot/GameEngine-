@@ -6,7 +6,9 @@
 
 /////////////////////////////////
 #include "PathFindingSystem.h"
+#include "EntityManager.h"
 #include "Entity.h"
+#include "CPathRequest.h"
 #include <cmath>
 #include <algorithm>
 /////////////////////////////////

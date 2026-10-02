@@ -7,6 +7,7 @@
 /////////////////////////////////
 // Includes and namespace aliases for the CameraSystem implementation. We include necessary headers for the camera system, entity management, and random number generation for camera shake effects.
 #include "CameraSystem.h"
+#include "EntityManager.h"
 #include "Entity.h"
 #include <unordered_map>
 #include <random>

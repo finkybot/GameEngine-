@@ -2,6 +2,7 @@
 #include "SpatialIndexUnified.h"
 #include "Raycast.h"
 #include "Entity.h"
+#include "EntityManager.h"
 #include "CStatic.h"
 #include <unordered_set>
 //////////////////////////////////
@@ -26,27 +27,36 @@ void SpatialIndexUnified::Rebuild(const std::vector<std::unique_ptr<Entity>>& en
 		activeDynamic.insert(e);
 	}
 
+	auto& T = m_entityManager->GetTransformSoA();
+
 	if (!m_dynamicInitialized) {
 		m_dynamicGrid.Clear();
 		for (Entity* e : activeDynamic) {
-			m_dynamicGrid.Insert(e);
+			size_t idx = e->transformIndex;
+			float x = T.posX[idx];
+			float y = T.posY[idx];
+			m_dynamicGrid.InsertFromSoA(e, x, y);
 		}
 		m_dynamicInitialized = true;
 	} else {
-		// Remove stale pointers without dereferencing potential freed entities.
 		m_dynamicGrid.PruneToActiveSet(activeDynamic);
 
-		// Ensure each active dynamic entity is present in the grid.
 		for (Entity* e : activeDynamic) {
 			if (!m_dynamicGrid.ContainsPointer(e)) {
-				m_dynamicGrid.Insert(e);
+				size_t idx = e->transformIndex;
+				float x = T.posX[idx];
+				float y = T.posY[idx];
+				m_dynamicGrid.InsertFromSoA(e, x, y);
 			}
 		}
 	}
 
-	// Keep dynamic cell membership current even when callers do not issue explicit Update() calls.
+	// Keep dynamic cell membership current
 	for (Entity* e : activeDynamic) {
-		m_dynamicGrid.Update(e);
+		size_t idx = e->transformIndex;
+		float x = T.posX[idx];
+		float y = T.posY[idx];
+		m_dynamicGrid.UpdateFromSoA(e, x, y);
 	}
 
 	if (chunks) {
@@ -63,18 +73,19 @@ void SpatialIndexUnified::Rebuild(const std::vector<std::unique_ptr<Entity>>& en
 
 //////////////////////////////////
 void SpatialIndexUnified::Insert(Entity* e) {
-	if (!e || !e->IsAlive())
+	if (!m_entityManager || !e || !e->IsAlive())
 		return;
 
-	// Only dynamic, non-static entities go into the dynamic grid
-	if (e->GetShape() && !e->HasComponent<CStatic>())
-		m_dynamicGrid.Insert(e);
+	size_t idx = e->transformIndex;
+	if (idx == SIZE_MAX)
+		return;
 
-	// BVH only stores dynamic non-tile entities
-	if (e->GetShape() && e->GetType() != EntityType::Tile && e->GetType() != EntityType::TileMap &&
-		e->GetType() != EntityType::Chunk) {
-		m_bvh.Insert(e);
-	}
+	auto& T = m_entityManager->GetTransformSoA();
+	float x = T.posX[idx];
+	float y = T.posY[idx];
+
+	m_dynamicGrid.InsertFromSoA(e, x, y);
+	m_bvh.Insert(e);
 }
 //////////////////////////////////
 
@@ -101,11 +112,27 @@ void SpatialIndexUnified::Update(Entity* e) {
 	if (!e || !e->IsAlive())
 		return;
 
-	// Update dynamic grid position
-	if (e->GetShape() && !e->HasComponent<CStatic>())
-		m_dynamicGrid.Update(e);
+	// Only dynamic, non-static entities go into the dynamic grid
+	if (!e->GetShape() || e->HasComponent<CStatic>()) {
+		m_bvh.Update(e);
+		return;
+	}
 
-	// Update BVH node
+	if (!m_entityManager)
+		return;
+
+	size_t idx = e->transformIndex;
+	if (idx == SIZE_MAX)
+		return;
+
+	auto& T = m_entityManager->GetTransformSoA();
+	float x = T.posX[idx];
+	float y = T.posY[idx];
+
+	// SoA-powered dynamic grid update
+	m_dynamicGrid.UpdateFromSoA(e, x, y);
+
+	// BVH update
 	m_bvh.Update(e);
 }
 //////////////////////////////////
@@ -132,6 +159,9 @@ void SpatialIndexUnified::Reset() {
 //////////////////////////////////
 void SpatialIndexUnified::InitialBuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities) {
 	m_dynamicGrid.Clear();
+
+	auto& T = m_entityManager->GetTransformSoA();
+
 	for (auto& u : entities) {
 		Entity* e = u.get();
 		if (!e->IsAlive())
@@ -140,8 +170,13 @@ void SpatialIndexUnified::InitialBuildDynamic(const std::vector<std::unique_ptr<
 			continue;
 		if (e->HasComponent<CStatic>())
 			continue;
-		m_dynamicGrid.Insert(e);
+
+		size_t idx = e->transformIndex;
+		float x = T.posX[idx];
+		float y = T.posY[idx];
+		m_dynamicGrid.InsertFromSoA(e, x, y);
 	}
+
 	m_dynamicInitialized = true;
 }
 //////////////////////////////////
@@ -151,6 +186,9 @@ void SpatialIndexUnified::InitialBuildDynamic(const std::vector<std::unique_ptr<
 //////////////////////////////////
 void SpatialIndexUnified::RebuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities) {
 	m_dynamicGrid.Clear();
+
+	auto& T = m_entityManager->GetTransformSoA();
+
 	for (auto& u : entities) {
 		Entity* e = u.get();
 		if (!e->IsAlive())
@@ -159,8 +197,13 @@ void SpatialIndexUnified::RebuildDynamic(const std::vector<std::unique_ptr<Entit
 			continue;
 		if (e->HasComponent<CStatic>())
 			continue;
-		m_dynamicGrid.Insert(e);
+
+		size_t idx = e->transformIndex;
+		float x = T.posX[idx];
+		float y = T.posY[idx];
+		m_dynamicGrid.InsertFromSoA(e, x, y);
 	}
+
 	m_dynamicInitialized = true;
 }
 //////////////////////////////////

@@ -471,6 +471,8 @@ void RayCastScene::ProcessMiddleMousePan() {
 /////////////////////////////////
 // Update - handles events, updates the entity manager, and prepares debug visualization data for rendering
 void RayCastScene::Update(float deltaTime) {
+	GetEntityManager().ProcessPending();
+
 	GetEntityManager().Update(deltaTime);
 	// Update camera system and apply main camera view
 	if (m_cameraEntity)

@@ -83,6 +83,13 @@ public:
 	int currentCellX; // Current cell X coordinate in the spatial hash grid, used for efficient spatial partitioning and collision detection.
 	int currentCellY; // Current cell Y coordinate in the spatial hash grid, used for efficient spatial partitioning and collision detection.
 
+	// SoA convenience indices for fast access to components in the EntityManager's SoA storage. These indices are initialized to SIZE_MAX to indicate that the component is not present in the SoA storage.
+	size_t transformIndex	=	SIZE_MAX;
+	size_t renderIndex		=	SIZE_MAX;
+	size_t collisionIndex	=	SIZE_MAX;
+	size_t explosionIndex	=	SIZE_MAX;
+
+
 
 	
 	

@@ -12,6 +12,8 @@
 #include "ChunkManager.h"
 ////////////////////////////////
 
+class EntityManager;
+
 
 
 ////////////////////////////////
@@ -47,12 +49,14 @@ public:
 	void InitialBuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities);
 	void RebuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities);
 	void RebuildBVH(const std::vector<std::unique_ptr<Entity>>& entities);
+	void SetEntityManager(EntityManager* entityManager) { m_entityManager = entityManager; }
 
 private:
 	SpatialHashGrid<Entity> m_dynamicGrid;
 	BVHSystem m_bvh;
 
 	ChunkManager* m_chunks = nullptr;
+
 
 	std::vector<uint8_t> m_worldMask;
 	int m_worldWidth = 0;
@@ -64,6 +68,7 @@ private:
 	bool m_worldMaskDirty = false;
 	bool m_dynamicInitialized = false;
 	uint64_t m_lastWorldRevision = 0;
+	EntityManager* m_entityManager = nullptr;
 
 	void RebuildWorldMask(ChunkManager* chunks);
 };

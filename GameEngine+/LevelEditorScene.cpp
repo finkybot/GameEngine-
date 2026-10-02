@@ -264,6 +264,9 @@ void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	cam->viewportHeight = (float)m_window.getSize().y;
 	cam->smoothness = 0.0f; // Disable smoothing - editor controls camera directly via panning and clamping
 
+	// CRITICAL: Commit the camera entity to the EntityManager so it's available immediately
+	GetEntityManager().ProcessPending();
+
 	// Reset shared chunk state when entering editor so previous scenes cannot leak loaded maps.
 	m_chunkManager.ClearAllLoadedChunks();
 	m_chunkManager.SetNumLayers((int)m_layerNames.size());
@@ -477,9 +480,6 @@ void LevelEditorScene::Update(float deltaTime) {
 	// Skip CameraSystem::Update here to avoid generic clamping forcing the camera back.
 	(void)deltaTime;
 
-	// apply active camera view to window before rendering world
-	ApplyMainCameraView();
-
 	// ensure chunks for current view
 	EnsureVisibleChunks();
 
@@ -532,7 +532,7 @@ void LevelEditorScene::Update(float deltaTime) {
 	bool isMiddleDown = m_gameEngine.GetInputController().IsMouseButtonDown(sf::Mouse::Button::Middle);
 	m_prevMiddleDown = isMiddleDown;
 	bool wasPanning = m_panning;
-	
+
 	// allow panning even if ImGui reports capture so middle-click drag still moves camera
 	if (isMiddleDown) {
 		if (!m_panning) {
@@ -542,8 +542,6 @@ void LevelEditorScene::Update(float deltaTime) {
 			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 			if (camOpt) {
 				m_camPanStart = (*camOpt)->position;
-			} else {
-				// no main camera found
 			}
 		}
 	} else {
@@ -711,6 +709,9 @@ void LevelEditorScene::Update(float deltaTime) {
 	m_prevDKey = dKey;
 
 	ProcessInput();
+
+	// Apply camera view AFTER all panning input has been processed
+	ApplyMainCameraView();
 }
 /////////////////////////////////
 

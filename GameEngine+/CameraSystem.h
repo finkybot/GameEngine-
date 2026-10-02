@@ -10,9 +10,10 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include "CCamera.h"
-#include "EntityManager.h"
-#include "CTransform.h"
 #include <optional>
+
+class EntityManager;
+class Entity;
 /////////////////////////////////
 
 

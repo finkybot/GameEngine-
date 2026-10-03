@@ -1,0 +1,54 @@
+[35m[SoundSystem][0m Initializing audio system...
+[35m[SoundSystem][0m Available playback devices [32m(8):[0m
+[33m  - Speakers (BlackShark V3 Pro - Chat)[0m
+[33m  - Headphones (Oculus Virtual Audio Device)[0m
+[33m  - Speakers (BlackShark V3 Pro - Game)[0m
+[33m  - Speakers (Steam Streaming Speakers)[0m
+[33m  - Speakers (Steam Streaming Microphone)[0m
+[33m  - Line (2- DDJ-FLX4)[0m
+[33m  - GS34WQC (NVIDIA High Definition Audio)[0m
+[33m  - 27E1QA (NVIDIA High Definition Audio)[0m
+[35m[SoundSystem][0m Default device: [32mSpeakers (BlackShark V3 Pro - Chat)[0m
+[35m[SoundSystem][0m Playback device set to: [32mSpeakers (BlackShark V3 Pro - Chat)[0m
+[35m[SoundSystem][0m Currently active device: [32m(none)[0m
+[35m[SoundSystem][0m Initializing sound effect pool with [32m64[0m entities
+[35m[SoundSystem][0m Sound pool initialized successfully
+[36m[GameEngine][0m Current working directory: [32mF:\Git_Repo\GameEngine+[0m
+[35m[SoundSystem][0m Initializing audio system...
+[35m[SoundSystem][0m Available playback devices [32m(8):[0m
+[33m  - Speakers (BlackShark V3 Pro - Chat)[0m
+[33m  - Headphones (Oculus Virtual Audio Device)[0m
+[33m  - Speakers (BlackShark V3 Pro - Game)[0m
+[33m  - Speakers (Steam Streaming Speakers)[0m
+[33m  - Speakers (Steam Streaming Microphone)[0m
+[33m  - Line (2- DDJ-FLX4)[0m
+[33m  - GS34WQC (NVIDIA High Definition Audio)[0m
+[33m  - 27E1QA (NVIDIA High Definition Audio)[0m
+[35m[SoundSystem][0m Default device: [32mSpeakers (BlackShark V3 Pro - Chat)[0m
+[35m[SoundSystem][0m Playback device set to: [32mSpeakers (BlackShark V3 Pro - Chat)[0m
+[35m[SoundSystem][0m Currently active device: [32m(none)[0m
+[35m[SoundSystem][0m Initializing sound effect pool with [32m64[0m entities
+[35m[SoundSystem][0m Sound pool initialized successfully
+[35m[SoundSystem][0m Master volume set to: 70 (0-100)
+[36m[GameEngine][0m Audio system initialized (using SFML defaults)
+Font file not found: assets/fonts/tech.ttf
+Warning: failed to load default font at assets/fonts/tech.ttf
+[32m[CursorSystem] Successfully loaded cursors[0m
+[Fontsystem] Failed to open BMFont text file: assets/fonts/tech_32.fnt
+[Fontsystem] Failed to parse BMFont text file: assets/fonts/tech_32.fnt
+Warning: failed to load default font for OpenGL rendering at assets/fonts/tech_32.fnt and assets/fonts/tech_32_0.png
+[RenderSystemGL] ARB_bindless_texture extension supported
+[RenderSystemGL] Bindless texture functions loaded successfully
+[RenderSystemGL]  Failed to open vertex shader file: assets/tile.vert
+[RenderSystemGL]  Failed to create tile shader
+[93m[CreateSpriteResources][0m Sprite stride: 40 bytes
+[93m[CreateSpriteResources][0m Set up location 1 (position)
+[93m[CreateSpriteResources][0m Set up location 2 (size)
+[93m[CreateSpriteResources][0m Sprite VAO setup complete
+[36m[RenderSystemGL::Initialise][0m Initialization complete
+[36m[GameEngine][0m OpenGL context initialised with glad: OpenGL version: [32m4.6.0 NVIDIA 617.14[0m
+[36m[GameEngine][0m OpenGL renderer: [32mNVIDIA GeForce RTX 5080/PCIe/SSE2[0m
+[36m[GameEngine][0m OpenGL vendor: [32mNVIDIA Corporation[0m
+[36m[GameEngine][0m Context settings: [32m4.6, depth=24, stencil=8, aa=0, flags=0
+[RenderSystemGL]  Failed to open vertex shader file: assets/tile.vert
+[RenderSystemGL]  Failed to load tile shader

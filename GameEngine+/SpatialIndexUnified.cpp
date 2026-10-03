@@ -10,68 +10,6 @@
 
 
 //////////////////////////////////
-void SpatialIndexUnified::Rebuild(const std::vector<std::unique_ptr<Entity>>& entities, ChunkManager* chunks) {
-	m_chunks = chunks;
-
-	std::unordered_set<Entity*> activeDynamic;
-	activeDynamic.reserve(entities.size());
-
-	for (const auto& up : entities) {
-		Entity* e = up.get();
-		if (!e || !e->IsAlive())
-			continue;
-		if (!e->GetShape())
-			continue;
-		if (e->HasComponent<CStatic>())
-			continue;
-		activeDynamic.insert(e);
-	}
-
-	auto& T = m_entityManager->GetTransformSoA();
-
-	if (!m_dynamicInitialized) {
-		m_dynamicGrid.Clear();
-		for (Entity* e : activeDynamic) {
-			size_t idx = e->transformIndex;
-			float x = T.posX[idx];
-			float y = T.posY[idx];
-			m_dynamicGrid.InsertFromSoA(e, x, y);
-		}
-		m_dynamicInitialized = true;
-	} else {
-		m_dynamicGrid.PruneToActiveSet(activeDynamic);
-
-		for (Entity* e : activeDynamic) {
-			if (!m_dynamicGrid.ContainsPointer(e)) {
-				size_t idx = e->transformIndex;
-				float x = T.posX[idx];
-				float y = T.posY[idx];
-				m_dynamicGrid.InsertFromSoA(e, x, y);
-			}
-		}
-	}
-
-	// Keep dynamic cell membership current
-	for (Entity* e : activeDynamic) {
-		size_t idx = e->transformIndex;
-		float x = T.posX[idx];
-		float y = T.posY[idx];
-		m_dynamicGrid.UpdateFromSoA(e, x, y);
-	}
-
-	if (chunks) {
-		const uint64_t revision = chunks->GetWorldRevision();
-		if (m_worldMaskDirty || revision != m_lastWorldRevision) {
-			RebuildWorldMask(chunks);
-			m_worldMaskDirty = false;
-		}
-	}
-}
-//////////////////////////////////
-
-
-
-//////////////////////////////////
 void SpatialIndexUnified::Insert(Entity* e) {
 	if (!m_entityManager || !e || !e->IsAlive())
 		return;
@@ -102,17 +40,119 @@ void SpatialIndexUnified::Remove(Entity* e) {
 	// Remove from BVH
 	m_bvh.Remove(e);
 }
-
 //////////////////////////////////
 
 
 
 //////////////////////////////////
-void SpatialIndexUnified::Update(Entity* e) {
+void SpatialIndexUnified::Reset() {
+	m_dynamicEntities.clear(); // <-- important: drop all entity pointers
+
+	m_dynamicGrid.Clear();
+	m_bvh = BVHSystem{};
+	m_worldMask.clear();
+	m_worldWidth = 0;
+	m_worldHeight = 0;
+	m_worldOffsetX = 0;
+	m_worldOffsetY = 0;
+	m_worldMaskDirty = false;
+	m_lastWorldRevision = 0;
+	m_topologyDirty = false;
+}
+//////////////////////////////////
+
+
+
+//////////////////////////////////
+// Incremental build of the dynamic spatial index from a list of dynamic entities. This method clears the existing dynamic grid and inserts all alive dynamic entities into it based on their current positions. It uses the TransformSoA structure to efficiently access the position data of each entity.
+// This method is intended to be called when the dynamic entities in the scene have changed significantly (topology), such as when loading a new level or resetting the scene. NOT EVERY FRAME. For per-frame updates, use Refit() or UpdateEntity() instead.
+void SpatialIndexUnified::Build(const std::vector<Entity*>& dynamicEntities) {
+	// Store the dynamic entities list internally
+	m_dynamicEntities = dynamicEntities;
+
+	// Clear the grid entirely
+	m_dynamicGrid.Clear();
+
+	// Get a reference to the TransformSoA for efficient access to entity positions
+	auto& T = m_entityManager->GetTransformSoA();
+
+	// Insert all dynamic entities into the grid
+	for (Entity* e : m_dynamicEntities) {
+		// Skip dead entities
+		if (!e || !e->IsAlive())
+			continue;
+
+		// Get the index of the entity's transform in the SoA structure
+		size_t idx = e->transformIndex;
+		if (idx == SIZE_MAX)
+			continue; // no valid SoA slot, skip
+
+		// Bounds check: ensure idx is within the TransformSoA arrays
+		if (idx >= T.posX.size() || idx >= T.posY.size())
+			continue;
+
+		// Collect the position of the entity from the SoA structure
+		float x = T.posX[idx];
+		float y = T.posY[idx];
+
+		// Insert the entity into the dynamic grid based on its position
+		m_dynamicGrid.InsertFromSoA(e, x, y);
+	}
+
+	m_bvh.Rebuild(dynamicEntities); // Rebuild the BVH tree based on the current dynamic entities
+}
+//////////////////////////////////
+
+
+
+//////////////////////////////////
+// Incremental refit of the dynamic spatial index for entities that have moved. This method iterates over all dynamic entities and checks if their transform is marked as dirty (indicating that they have moved). If an entity is dirty, it updates its position in the dynamic grid and BVH based on its current 
+// position from the TransformSoA structure. After updating, it clears the dirty flag for that entity's transform.
+void SpatialIndexUnified::Refit() {
+	// Skip if the entity manager is not set
+	if (!m_entityManager) return;
+
+	// Skip if there are no dynamic entities to process
+	if (m_dynamicEntities.empty()) return;
+
+	// Get a reference to the TransformSoA for efficient access to entity positions
+	auto& T = m_entityManager->GetTransformSoA();
+
+	// Iterate over all dynamic entities and update their positions in the dynamic grid and BVH if they are marked as dirty
+	for (Entity* e : m_dynamicEntities) {
+		if (!e || !e->IsAlive())
+			continue;
+
+		size_t idx = e->transformIndex;
+		if (idx == SIZE_MAX)
+			continue;
+
+		// Bounds check: ensure idx is within the TransformSoA arrays
+		if (idx >= T.posX.size() || idx >= T.dirty.size())
+			continue;
+
+		if (!T.IsDirty(idx))
+			continue; // NEW: skip clean transforms
+
+		float x = T.posX[idx];
+		float y = T.posY[idx];
+
+		m_dynamicGrid.UpdateFromSoA(e, x, y);
+		m_bvh.Update(e);
+
+		T.ClearDirty(idx); // NEW: clear dirty flag
+	}
+}
+//////////////////////////////////
+
+
+
+//////////////////////////////////
+void SpatialIndexUnified::UpdateEntity(Entity* e) {
 	if (!e || !e->IsAlive())
 		return;
 
-	// Only dynamic, non-static entities go into the dynamic grid
+	// Static or shapeless entities only live in BVH (or nowhere)
 	if (!e->GetShape() || e->HasComponent<CStatic>()) {
 		m_bvh.Update(e);
 		return;
@@ -129,121 +169,11 @@ void SpatialIndexUnified::Update(Entity* e) {
 	float x = T.posX[idx];
 	float y = T.posY[idx];
 
-	// SoA-powered dynamic grid update
+	// Dynamic grid update from SoA
 	m_dynamicGrid.UpdateFromSoA(e, x, y);
 
-	// BVH update
+	// BVH refit for this single entity
 	m_bvh.Update(e);
-}
-//////////////////////////////////
-
-
-
-//////////////////////////////////
-void SpatialIndexUnified::Reset() {
-	m_dynamicGrid.Clear();
-	m_bvh = BVHSystem{};
-	m_dynamicInitialized = false;
-	m_worldMask.clear();
-	m_worldWidth = 0;
-	m_worldHeight = 0;
-	m_worldOffsetX = 0;
-	m_worldOffsetY = 0;
-	m_worldMaskDirty = false;
-	m_lastWorldRevision = 0;
-}
-//////////////////////////////////
-
-
-
-//////////////////////////////////
-void SpatialIndexUnified::InitialBuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities) {
-	m_dynamicGrid.Clear();
-
-	auto& T = m_entityManager->GetTransformSoA();
-
-	for (auto& u : entities) {
-		Entity* e = u.get();
-		if (!e->IsAlive())
-			continue;
-		if (!e->GetShape())
-			continue;
-		if (e->HasComponent<CStatic>())
-			continue;
-
-		size_t idx = e->transformIndex;
-		float x = T.posX[idx];
-		float y = T.posY[idx];
-		m_dynamicGrid.InsertFromSoA(e, x, y);
-	}
-
-	m_dynamicInitialized = true;
-}
-//////////////////////////////////
-
-
-
-//////////////////////////////////
-void SpatialIndexUnified::RebuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities) {
-	m_dynamicGrid.Clear();
-
-	auto& T = m_entityManager->GetTransformSoA();
-
-	for (auto& u : entities) {
-		Entity* e = u.get();
-		if (!e->IsAlive())
-			continue;
-		if (!e->GetShape())
-			continue;
-		if (e->HasComponent<CStatic>())
-			continue;
-
-		size_t idx = e->transformIndex;
-		float x = T.posX[idx];
-		float y = T.posY[idx];
-		m_dynamicGrid.InsertFromSoA(e, x, y);
-	}
-
-	m_dynamicInitialized = true;
-}
-//////////////////////////////////
-
-
-
-//////////////////////////////////
-void SpatialIndexUnified::RebuildBVH(const std::vector<std::unique_ptr<Entity>>& entities) {
-	// Build BVH once at scene load or when world is reset
-	std::vector<Entity*> dynamic;
-	dynamic.reserve(entities.size());
-
-	for (auto& u : entities) {
-		Entity* e = u.get();
-		if (!e->IsAlive())
-			continue;
-		if (!e->GetShape())
-			continue;
-
-		if (e->GetType() == EntityType::Tile || e->GetType() == EntityType::TileMap ||
-			e->GetType() == EntityType::Chunk)
-			continue;
-
-		dynamic.push_back(e);
-	}
-
-	// Build initial BVH tree
-	m_bvh.Rebuild(dynamic);
-}
-//////////////////////////////////
-
-
-
-//////////////////////////////////
-void SpatialIndexUnified::RebuildWorldMask(ChunkManager* chunks) {
-	if (!chunks)
-		return;
-
-	m_tileSize = chunks->GetTileSize();
-	chunks->GetWorldMaskSnapshot(m_worldMask, m_worldWidth, m_worldHeight, m_worldOffsetX, m_worldOffsetY, m_lastWorldRevision);
 }
 //////////////////////////////////
 

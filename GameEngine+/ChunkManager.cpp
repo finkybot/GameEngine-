@@ -206,7 +206,7 @@ void ChunkManager::LoadAllSavedChunks() {
 			int cx = std::stoi(body.substr(us1+1, us2 - (us1+1)));
 			int cy = std::stoi(body.substr(us2+1, dot - (us2+1)));
 
-			std::cout << "[LOADALL] Found saved chunk (" << cx << "," << cy << ")\n";
+			//std::cout << "[LOADALL] Found saved chunk (" << cx << "," << cy << ")\n";
 
 			chunksToCreate.insert({cx, cy});
 		}
@@ -1826,8 +1826,7 @@ void ChunkManager::ScheduleChunkForRebuild(Chunk& c) {
 // has changed since the load was enqueued, the loaded data is discarded to avoid overwriting newer changes.
 void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue) {
 
-	std::cout << "[FINALIZE] C(" << chunkX << "," << chunkY << ")"
-			  << " L=" << layer << " ver=" << versionAtEnqueue << "\n";
+	//std::cout << "[FINALIZE] C(" << chunkX << "," << chunkY << ")" << " L=" << layer << " ver=" << versionAtEnqueue << "\n";
 
 	// Lock the mutex to ensure thread safety while accessing and modifying the chunk data structures
 	std::lock_guard<std::mutex> lock(m_mutex);

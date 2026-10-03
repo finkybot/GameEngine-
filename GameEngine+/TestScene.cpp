@@ -109,7 +109,7 @@ void TestScene::Update(float dt) {
 			Entity* e = uptr.get();
 			if (!e->IsAlive())
 				continue;
-			spatialIndex->Update(e);
+			spatialIndex->UpdateEntity(e);
 		}
 	}
 
@@ -246,9 +246,11 @@ void TestScene::OnEnter() {
 		e->currentCellY = INT_MIN;
 	}
 	std::cout << "Initial build of spatial index with " << entities.size() << " entities.\n";
-	m_entityManager.GetSpatialIndex()->InitialBuildDynamic(entities);
+	m_entityManager.GetSpatialIndex()->Build(m_entityManager.GetDynamicEntities());
 
-	std::cout << "Task completed for " << entities.size() << " entities.\n";
+	std::cout << "Task completed for " << m_entityManager.GetDynamicEntities().size() << " entities.\n";
+	
+	m_entityManager.GetBVH().ReportBVHSize();
 }
 /////////////////////////////////
 

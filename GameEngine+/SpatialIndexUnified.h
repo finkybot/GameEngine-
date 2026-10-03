@@ -9,67 +9,75 @@
 #include "ISpatialIndex.h"
 #include "SpatialHashGrid.h"
 #include "BVHSystem.h"
-#include "ChunkManager.h"
 ////////////////////////////////
 
+
+
+////////////////////////////////
+// Forward declarations
 class EntityManager;
+class Entity;
+////////////////////////////////
 
 
 
 ////////////////////////////////
-//	|	SpatialIndexUnified class - Implements a unified spatial index that combines a dynamic spatial hash grid for entities and a BVH system for efficient raycasting. It also maintains a world mask for collision detection with the game world. This class provides methods for rebuilding the spatial index,
-//	|	querying entities, performing raycasts, and checking world solidity.
+//	|	SpatialIndexUnified class - Implements a Scene-agnostic unified spatial index combining, dynamic spatial hash grid and BVH for efficent raycasting. Provides incremental update paths, Build(), Refit(), and UpdateEntity() to support dynamic entity movement and topology changes. Queries are supported for both 
+//	|	entities and world tiles. This class is designed to be used in conjunction with an EntityManager, which manages the lifecycle of entities in the scene.
 //	|_______________________________________________________________________
 class SpatialIndexUnified : public ISpatialIndex {
 public:
 	SpatialIndexUnified(float dynamicCellSize = 100.0f) : m_dynamicGrid(dynamicCellSize) {}
 
-	void Rebuild(const std::vector<std::unique_ptr<Entity>>& entities, ChunkManager* chunks) override;
+	// Topology + movement
+	void Build(const std::vector<Entity*>& dynamicEntities) override;
+	void Refit() override;
+	void UpdateEntity(Entity* e) override;
 
-	void QueryEntities(std::vector<Entity*>& outFound, const Vec2& position, float radius,
-					   const Entity* exclude) const override;
+	// Entity lifecycle
+	void Insert(Entity* e) override;
+	void Remove(Entity* e) override;
+	void Reset() override;
 
-	bool RaycastEntities(const Vec2& origin, const Vec2& dirN, float maxDist, RaycastHit& outHit,
-						 Entity*& outEntity) const override;
+	// Queries
+	void QueryEntities(std::vector<Entity*>& outFound, const Vec2& position, float radius, const Entity* exclude) const override;
+
+	bool RaycastEntities(const Vec2& origin, const Vec2& dirN, float maxDist, RaycastHit& outHit, Entity*& outEntity) const override;
 
 	RaycastHit RaycastWorld(const Vec2& origin, const Vec2& dir, float maxDist) const override;
 
 	bool IsWorldSolid(int tileX, int tileY) const override;
 
-	
-	void Insert(Entity* e) override;
-	void Remove(Entity* e) override;
-	void Update(Entity* e) override;
-	void Reset() override;
+	// Engine wiring
+	void SetEntityManager(EntityManager* entityManager) override { m_entityManager = entityManager;	} // Set the EntityManager reference for this spatial index.
 
-		// Call this when chunks/tilemaps change
-	void MarkWorldMaskDirty() { m_worldMaskDirty = true; }
+	void MarkTopologyDirty() { m_topologyDirty = true; } // Mark the topology as dirty.
+	bool IsTopologyDirty() const { return m_topologyDirty; } // Check if the topology is dirty.
+	void ClearTopologyDirty() { m_topologyDirty = false; }	 // Clear the topology dirty flag.
 
 
-	void InitialBuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities);
-	void RebuildDynamic(const std::vector<std::unique_ptr<Entity>>& entities);
-	void RebuildBVH(const std::vector<std::unique_ptr<Entity>>& entities);
-	void SetEntityManager(EntityManager* entityManager) { m_entityManager = entityManager; }
 
 private:
+	// Dynamic entities
+	std::vector<Entity*> m_dynamicEntities;
+
+	bool m_topologyDirty = false;
+
+	// Spatial structures
 	SpatialHashGrid<Entity> m_dynamicGrid;
 	BVHSystem m_bvh;
 
-	ChunkManager* m_chunks = nullptr;
+	// Engine reference
+	EntityManager* m_entityManager = nullptr;
 
-
+	// World mask data (needed by RaycastWorld / IsWorldSolid)
 	std::vector<uint8_t> m_worldMask;
 	int m_worldWidth = 0;
 	int m_worldHeight = 0;
 	int m_worldOffsetX = 0;
 	int m_worldOffsetY = 0;
-	float m_tileSize = 32.0f;
-
+	int m_tileSize = 0;
 	bool m_worldMaskDirty = false;
-	bool m_dynamicInitialized = false;
 	uint64_t m_lastWorldRevision = 0;
-	EntityManager* m_entityManager = nullptr;
-
-	void RebuildWorldMask(ChunkManager* chunks);
 };
 ////////////////////////////////

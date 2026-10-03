@@ -62,6 +62,8 @@ public:
 	void Remove(Entity* e);
 	void Update(Entity* e);
 
+	void ReportBVHSize() const;
+	int ComputeDepth(BVHNode* node) const;
 private:
 	BVHNode* m_root = nullptr; 
 	std::vector<Entity*> m_dynamicEntities;

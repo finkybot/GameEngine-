@@ -62,8 +62,8 @@ EntityManager::EntityManager(sf::RenderWindow& window, float cellSize): m_window
 
 
 /////////////////////////////////
-// Destructor for the EntityManager class. Ensures proper destruction order for forward-declared types by resetting the unique pointers to the main systems (TileSystem, MusicSystem, and SoundSystem) before the EntityManager itself is destroyed. 
-// This prevents potential issues with dangling pointers or incomplete types during destruction.
+// Destructor for the EntityManager class. Ensures proper destruction order for forward-declared types by resetting the unique pointers to the main systems (TileSystem, MusicSystem, and SoundSystem) before the EntityManager itself is destroyed. This prevents potential issues with dangling pointers or incomplete 
+// types during destruction.
 EntityManager::~EntityManager() {
 	// ensure proper destruction order for forward-declared types
 	m_soundSystem.reset();
@@ -73,9 +73,9 @@ EntityManager::~EntityManager() {
 /////////////////////////////////
 
 
+
 /////////////////////////////////
-// ClearAll - immediately removes every entity from the EntityManager without going through the normal kill/process cycle.
-// Call this when switching scenes so the previous scene's entities do not bleed into the next one.
+// ClearAll - immediately removes every entity from the EntityManager without going through the normal kill/process cycle. Call this when switching scenes so the previous scene's entities do not bleed into the next one.
 void EntityManager::ClearAll() {
 	// Hard-reset spatial structures before destroying entity storage.
 	if (m_spatialIndex) {
@@ -84,11 +84,18 @@ void EntityManager::ClearAll() {
 
 	m_toAdd.clear();
 	m_entityMap.clear();
-	for (auto& bucket : m_layerBuckets) bucket.clear();
-	//m_spatialHash.Clear();
+	for (auto& bucket : m_layerBuckets)
+		bucket.clear();
 	m_entities.clear();
 	m_deathCountThisFrame = 0;
 	m_hasPendingTileMaps = false;
+
+	// clear dynamic/static topology lists
+	m_dynamicEntities.clear();
+	m_staticEntities.clear();
+
+	// Clear TransformSoA to prevent stale indices
+	m_transformSoA = TransformSoA{};
 }
 /////////////////////////////////
 
@@ -132,12 +139,6 @@ bool EntityManager::MatchesFilter(Entity* e, const SpatialLayerFilter& filter) {
 /////////////////////////////////
 // AddPendingEntities - processes all entities that were queued for addition to the EntityManager. This method is called during the update cycle to add new entities to the main entity list and update relevant data structures such as the entity map and layer buckets.
 void EntityManager::AddPendingEntities() {
-#ifdef _DEBUG
-	if (std::this_thread::get_id() != m_ownerThreadId) {
-		std::cerr << "EntityManager::AddPendingEntities called from non-owner thread\n";
-	}
-#endif
-
 	if (m_toAdd.empty())
 		return;
 
@@ -160,14 +161,12 @@ void EntityManager::AddPendingEntities() {
 		// Store bucket metadata for O(1) removal
 		e->SetBucketInfo(layerIdx, static_cast<int>(bucket.size()) - 1);
 
-		// Insert into spatial index
-		if (m_spatialIndex)
-			m_spatialIndex->Insert(e);
-
-		// NEW: Allocate SoA transform slot
-		if (auto* t = e->GetComponent<CTransform>()) {
+		// Allocate SoA transform slot
+		if (auto* t = e->GetComponent<CTransform>())
 			e->transformIndex = m_transformSoA.Add(e, *t);
-		}
+
+		// Topology hook – classify dynamic/static + Build()
+		OnEntityAdded(e);
 	}
 
 	m_toAdd.clear();
@@ -177,8 +176,7 @@ void EntityManager::AddPendingEntities() {
 
 
 /////////////////////////////////
-// RemoveDeadEntities - removes entities that have been marked as dead from the EntityManager. This method is called during the update cycle to clean up entities that are no longer alive, 
-// ensuring that they are properly removed from all relevant data structures and deleted from memory.
+// RemoveDeadEntities - removes entities that have been marked as dead from the EntityManager. This method is called during the update cycle to clean up entities that are no longer alive, ensuring that they are properly removed from all relevant data structures and deleted from memory.
 void EntityManager::RemoveDeadEntities() {
 #ifdef _DEBUG
 	if (std::this_thread::get_id() != m_ownerThreadId) {
@@ -186,7 +184,6 @@ void EntityManager::RemoveDeadEntities() {
 	}
 #endif
 
-	// Collect raw pointers to dead entities
 	std::vector<Entity*> deadEntities;
 	deadEntities.reserve(m_entities.size() / 10);
 
@@ -198,17 +195,16 @@ void EntityManager::RemoveDeadEntities() {
 	if (deadEntities.empty())
 		return;
 
-	// Build lookup set
 	std::unordered_set<Entity*> deadSet(deadEntities.begin(), deadEntities.end());
 
-	// Remove dead entities from spatial index BEFORE deleting them
-	if (m_spatialIndex) {
-		for (Entity* d : deadEntities) {
-			m_spatialIndex->Remove(d);
-		}
+	// Topology + spatial index removal
+	for (Entity* d : deadEntities) {
+		OnEntityRemoved(d); // updates m_dynamicEntities/m_staticEntities + Build()
+		if (m_spatialIndex)
+			m_spatialIndex->Remove(d); // optional if Build() fully clears/rebuilds internally
 	}
 
-	// NEW: Remove from TransformSoA
+	// Remove from TransformSoA
 	for (Entity* d : deadEntities) {
 		if (d->transformIndex != SIZE_MAX) {
 			m_transformSoA.Remove(d->transformIndex);
@@ -250,8 +246,7 @@ void EntityManager::RemoveDeadEntities() {
 
 
 /////////////////////////////////
-// SetEntityLayer - updates the rendering layer of an entity and moves it to the appropriate layer bucket for incremental rendering. This method ensures that the entity is removed from its old bucket and added to the new bucket based 
-// on the specified layer, allowing for efficient rendering based on layers.
+// SetEntityLayer - updates the rendering layer of an entity and moves it to the appropriate layer bucket for incremental rendering. This method ensures that the entity is removed from its old bucket and added to the new bucket based on the specified layer, allowing for efficient rendering based on layers.
 void EntityManager::SetEntityLayer(Entity* e, Entity::Layer layer) {
     // Debug: assert caller thread is owner
 #ifdef _DEBUG
@@ -344,14 +339,15 @@ void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem, const CCame
 
 
 /////////////////////////////////
-// AddTileMapAsEntities - processes a tile map and creates entities for solid tiles, using a greedy rectangle merging algorithm to combine contiguous solid tiles into larger rectangles for efficient collision handling. This method ensures that the spatial hash grid is updated 
-// to match the tile size for optimal performance when querying tile entities.
+// AddTileMapAsEntities - processes a tile map and creates entities for solid tiles, using a greedy rectangle merging algorithm to combine contiguous solid tiles into larger rectangles for efficient collision handling. This method ensures that the spatial hash grid is updated to match the tile size for optimal 
+// performance when querying tile entities.
 void EntityManager::AddTileMapAsEntities(const TileMap& map, int tileValueToTreatAsSolid) {
 	if (map.width <= 0 || map.height <= 0)
 		return;
+
 	// Ensure spatial hash cell size matches tile size for optimal alignment and query accuracy
 	// Recreate the spatial hash with the tile size so tiles map 1:1 to cells when possible
-	//m_spatialHash = SpatialHashGrid<Entity>(map.tileSize);
+	// m_spatialHash = SpatialHashGrid<Entity>(map.tileSize);
 
 	// 2D greedy rectangle merging: create maximal rectangles of contiguous solid tiles
 	std::vector<char> used(map.width * map.height, 0);
@@ -409,9 +405,8 @@ void EntityManager::AddTileMapAsEntities(const TileMap& map, int tileValueToTrea
 
 
 /////////////////////////////////
-// UpdateSpatialHashAndRender - updates the spatial hash grid with the current positions of all entities and prepares them for rendering. This method is called during the update cycle to ensure that the spatial hash is accurate for collision detection and 
-// that entities are rendered in the correct order based on their layers.
-/////////////////////////////////
+// UpdateSpatialHashAndRender - updates the spatial hash grid with the current positions of all entities and prepares them for rendering. This method is called during the update cycle to ensure that the spatial hash is accurate for collision detection and that entities are rendered in the correct order 
+// based on their layers.
 void EntityManager::UpdateSpatialHashAndRender() {
 
 	// Spatial layer update stays the same
@@ -436,6 +431,69 @@ void EntityManager::UpdateSpatialHashAndRender() {
 		//RenderGLShapes(m_gpuRenderSystem); // or pass from GameEngine
 	}
 }
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// OnEntityAdded - called when an entity is added to the EntityManager. This method classifies the entity as static or dynamic based on the presence of a CStatic component and adds it to the appropriate list. It also marks the spatial index as dirty so that it can rebuild if necessary.
+void EntityManager::OnEntityAdded(Entity* e) {
+	if (!e || !e->IsAlive())
+		return;
+
+	const bool isStatic = e->HasComponent<CStatic>();
+
+	if (isStatic)
+		m_staticEntities.push_back(e);
+	else
+		m_dynamicEntities.push_back(e);
+
+	// Mark topology dirty so spatial index can rebuild if necessary
+	if (m_spatialIndex)
+		m_spatialIndex->MarkTopologyDirty();
+
+	//std::cout << "[Topology] Added entity id=" << e->GetId() << " type=" << EntityTypeToString(e->GetType()) << " hasStatic=" << e->HasComponent<CStatic>() << "\n";
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// OnEntityRemoved - called when an entity is removed from the EntityManager. This method removes the entity from the dynamic and static lists, and marks the spatial index as dirty so that it can rebuild if necessary.
+void EntityManager::OnEntityRemoved(Entity* e) {
+	if (!e)
+		return;
+
+	std::erase(m_dynamicEntities, e);
+	std::erase(m_staticEntities, e);
+
+	// Mark topology dirty so spatial index can rebuild if necessary
+	if (m_spatialIndex)
+		m_spatialIndex->MarkTopologyDirty();
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// OnStaticStateChanged - called when an entity's static state changes (e.g., it gains or loses a CStatic component). This method updates the dynamic and static lists accordingly and marks the spatial index as dirty so that it can rebuild if necessary.
+void EntityManager::OnStaticStateChanged(Entity* e, bool nowStatic) {
+	if (!e)
+		return;
+
+	std::erase(m_dynamicEntities, e);
+	std::erase(m_staticEntities, e);
+
+	if (nowStatic)
+		m_staticEntities.push_back(e);
+	else
+		m_dynamicEntities.push_back(e);
+
+	// Mark topology dirty so spatial index can rebuild if necessary
+	if (m_spatialIndex)
+		m_spatialIndex->MarkTopologyDirty(); 
+}
+/////////////////////////////////
 
 
 
@@ -465,7 +523,6 @@ void EntityManager::RenderGL(GPURenderSystem& gpuRenderSystem, const CCamera& ca
 
 /////////////////////////////////
 // ValidateIntegrity - a debug method that checks the internal consistency of the EntityManager's data structures. This method can be called during development to ensure that entities are properly added and removed, and that all references are valid.
-/////////////////////////////////
 void EntityManager::ValidateIntegrity() const {
     // ValidateIntegrity disabled per user request. Keep function as no-op to avoid
 	// impacting performance in production runs while preserving call sites.
@@ -515,53 +572,63 @@ void EntityManager::RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::Re
 
 
 /////////////////////////////////
-// Update - the main update method for the EntityManager, called once per frame to update all systems, process pending entities, and manage the lifecycle of entities. This method handles adding new entities, removing dead entities, updating the spatial hash grid, 
-// and allowing systems like the MusicSystem and TileSystem to process their logic.
+// Update - the main update method for the EntityManager, called once per frame to update all systems, process pending entities, and manage the lifecycle of entities. This method handles adding new entities, removing dead entities, updating the spatial hash grid, and allowing systems like the MusicSystem and 
+// TileSystem to process their logic.
 void EntityManager::Update(float deltaTime) {
-	//if (m_spatialIndex)	m_spatialIndex->Rebuild(m_entities, m_chunks);
-
-	//SpatialHashGrid<Entity>::ResetQueryStats();
-
 	m_deathCountThisFrame = 0;
 
-	//AddPendingEntities();
-	//RemoveDeadEntities();
+	// 1. Lifecycle
+	RemoveDeadEntities();
+	AddPendingEntities();
 
-	// Let MusicSystem reconcile component data with runtime sf::Music instances.
+	// 2. Music system
 	if (m_musicSystem)
 		m_musicSystem->Process();
 
-	// Let SoundSystem process sound effect components and apply spatial audio
+	// 3. Sound system
 	if (m_soundSystem) {
+		// Process all CSoundEffect components, handle spatial audio, and update sound states (fade, distance, etc.)
 		m_soundSystem->Process(*this, deltaTime);
 		m_soundSystem->Update(deltaTime);
 	}
 
-	// Wire CollisionSystem to SoundSystem for explosion sound creation
+	// Wire CollisionSystem to SoundSystem and spatial index
 	m_collisionSystem.SetSoundSystem(m_soundSystem.get());
 	m_collisionSystem.SetSpatialIndex(m_spatialIndex.get());
 
-
-	// Process tilemaps into tile entities before rebuilding spatial hash
+	// 4. Tilemaps → tile entities
 	if (m_tileSystem && m_hasPendingTileMaps) {
-		m_tileSystem->Process(); // Process pending tilemaps
+		// Process all CTileMap components, generate colliders for solid tiles, and update the spatial index with new tile entities
+		m_tileSystem->Process();
 		m_hasPendingTileMaps = false;
-		AddPendingEntities(); // Add any new tile entities created by TileSystem
-		// allow music system to pick up any newly-created entities with CMusic
+		
+		// After processing tile maps, we may have added new tile entities to the manager. We need to ensure that these new entities are integrated into the EntityManager's data structures before proceeding with other systems.
+		AddPendingEntities();
+		
+		// After adding pending entities, we should also update the spatial index to include the new tile entities. This ensures that any subsequent collision detection or spatial queries will correctly account for the newly added tile entities.
 		if (m_musicSystem)
 			m_musicSystem->Process();
 	}
 
-	//UpdateSpatialHashAndRender();
-	//UpdateBVH();
+	// 5. Spatial index incremental update
+	if (m_spatialIndex)
+		m_spatialIndex->Refit();
+
+	// 5b. Batched topology rebuild
+	if (m_spatialIndex && m_spatialIndex->IsTopologyDirty()) {
+		m_spatialIndex->Build(m_dynamicEntities);
+		m_spatialIndex->ClearTopologyDirty();
+	}
+
+	// 6. Rendering / spatial layers
+	UpdateSpatialHashAndRender();
 }
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// ProcessPending - a method that can be called to process pending entities without performing a full update cycle. This allows the caller to add new entities and have them integrated into the EntityManager's data structures without immediately running all 
-// systems or rebuilding the spatial hash,
+// ProcessPending - a method that can be called to process pending entities without performing a full update cycle. This allows the caller to add new entities and have them integrated into the EntityManager's data structures without immediately running all systems or rebuilding the spatial hash,
 void EntityManager::ProcessPending() {
 	// 1. Remove dead entities
 	RemoveDeadEntities();
@@ -569,7 +636,6 @@ void EntityManager::ProcessPending() {
 	// 2. Add new entities
 	AddPendingEntities();
 }
-
 /////////////////////////////////
 
 
@@ -583,18 +649,18 @@ Entity* EntityManager::AddEntity(EntityType type) {
 	// Always add a transform
 	entity->AddComponent<CTransform>(Vec2::Zero, Vec2::Zero);
 
+	// Capture the raw pointer before moving the unique_ptr into m_toAdd, so we can return it to the caller
 	Entity* entityPtr = entity.get(); // Capture pointer BEFORE moving
 
-	// Register in SoA
-	auto* tform = entityPtr->GetComponent<CTransform>();
-	entityPtr->transformIndex = m_transformSoA.Add(entityPtr, *tform);
+	// REMOVED: SoA registration here – now done only in AddPendingEntities
+	// auto* tform = entityPtr->GetComponent<CTransform>();
+	// entityPtr->transformIndex = m_transformSoA.Add(entityPtr, *tform);
 
 	// Explosion setup
 	if (type == EntityType::Explosion) {
-		// Explosion logic component
 		entityPtr->AddComponent<CExplosion>();
 
-		// Render instance (GPU batching)
+		// Add a CRenderInstance for GPU rendering of the explosion
 		auto* inst = entityPtr->AddComponent<CRenderInstance>();
 		inst->radius = 8.0f;
 		inst->r = 255;
@@ -602,13 +668,14 @@ Entity* EntityManager::AddEntity(EntityType type) {
 		inst->b = 200;
 		inst->a = 220;
 
-		// Shape (collision + rendering)
+		// Add a CShape component for visual representation of the explosion
 		auto circle = std::make_unique<CCircle>();
 		circle->SetRadius(inst->radius);
 		circle->SetColor(inst->r, inst->g, inst->b, inst->a);
 		entityPtr->AddComponentPtr<CShape>(std::move(circle));
 	}
 
+	// Add the entity to the list of entities to be processed in the next update cycle
 	m_toAdd.push_back(std::move(entity));
 	return entityPtr;
 }
@@ -617,42 +684,40 @@ Entity* EntityManager::AddEntity(EntityType type) {
 
 
 /////////////////////////////////
-// KillEntity - marks an entity for removal by calling its Destroy method and increments the death count for the current frame. This method allows systems and gameplay logic to track how many entities have been marked as dead during the frame, which can be useful 
-// for debugging, performance monitoring, or gameplay mechanics that depend on entity deaths.
+// KillEntity - marks an entity for removal by calling its Destroy method and increments the death count for the current frame. This method allows systems and gameplay logic to track how many entities have been marked as dead during the frame, which can be useful for debugging, performance monitoring, 
+// or gameplay mechanics that depend on entity deaths.
 void EntityManager::KillEntity(Entity* entity) {
+	// Debug: assert caller thread is owner
 	if (!entity || !entity->IsAlive())
 		return;
 
-	//std::cout << "KillEntity: id=" << entity->GetId() << "\n";
-
+	// Mark the entity as dead and increment the death count for this frame. The actual removal of the entity from the EntityManager's data structures will occur in RemoveDeadEntities during the next update cycle.
 	entity->Destroy();
 	m_deathCountThisFrame++;
 
-	// Remove from SoA
-	if (entity->transformIndex != SIZE_MAX) {
-		m_transformSoA.Remove(entity->transformIndex);
-		entity->transformIndex = SIZE_MAX;
-	}
+	// REMOVED: SoA and spatial index removal – now handled in RemoveDeadEntities
+	// if (entity->transformIndex != SIZE_MAX) { ... }
+	// if (m_spatialIndex) m_spatialIndex->Remove(entity);
 
-	// Remove from spatial index
-	if (m_spatialIndex)
-		m_spatialIndex->Remove(entity);
-
-	// Queue for removal in ProcessPending
-	m_pendingKill.push_back(entity);
+	// we can keep m_pendingKill if we actually use it elsewhere,
+	// otherwise we should consider removing that vector entirely.
 }
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// Kill the entity only if it is present in our managed collections. Avoids calling Destroy
-// on pointers that the manager doesn't own which can lead to use-after-free from external callers.
+// Kill the entity only if it is present in our managed collections. Avoids calling Destroy on pointers that the manager doesn't own which can lead to use-after-free from external callers.
 void EntityManager::SafeKillEntity(Entity* entity) {
+	// Debug: assert caller thread is owner
 	if (!entity) return;
+
 	// check if pointer exists in m_entities or m_toAdd by pointer identity
 	for (const auto& up : m_entities) if (up.get() == entity) { KillEntity(entity); return; }
+	
+	// check if pointer exists in m_toAdd by pointer identity
 	for (const auto& up : m_toAdd) if (up.get() == entity) { KillEntity(entity); return; }
+	
 	// Also check type-map lists
 	for (auto &pr : m_entityMap) {
 		for (Entity* e : pr.second) if (e == entity) { KillEntity(entity); return; }
@@ -664,8 +729,7 @@ void EntityManager::SafeKillEntity(Entity* entity) {
 
 
 /////////////////////////////////
-// GetEntities - returns a reference to the vector of active entities in the EntityManager. This allows systems and other parts of the code to access the list of entities for processing, 
-// rendering, or other operations.
+// GetEntities - returns a reference to the vector of active entities in the EntityManager. This allows systems and other parts of the code to access the list of entities for processing, rendering, or other operations.
 EntityVector& EntityManager::GetEntities() {
 	return m_entities;
 }
@@ -674,27 +738,29 @@ EntityVector& EntityManager::GetEntities() {
 
 
 /////////////////////////////////
- // UpdateBVH - updates the bounding volume hierarchy (BVH) used for spatial queries. This method collects all dynamic entities (those that are alive and have a shape) and rebuilds the BVH tree to 
- // optimize spatial queries such as raycasting.
+ // UpdateBVH - updates the bounding volume hierarchy (BVH) used for spatial queries. This method collects all dynamic entities (those that are alive and have a shape) and rebuilds the BVH tree to optimize spatial queries such as raycasting.
 void EntityManager::UpdateBVH() {
-	// BVH update logic would go here if we were using a BVH for spatial queries.
-	// Currently, we are using a SpatialHashGrid, so this function is a placeholder.
+	// BVH update logic would go here if we were using a BVH for spatial queries; currently, we are using a SpatialHashGrid, so this function is a placeholder.
 	std::vector<Entity*> dynamicEntities;
 
+	// Collect all dynamic entities that are alive and have a shape for BVH rebuilding
 	for (auto& e : m_entities) {
-		if (!e->IsAlive())
-			continue;
-		if (!e->GetShape())
-			continue;
+		// Skip dead entities and those without a shape
+		if (!e->IsAlive())	continue;
+
+		// Skip entities without a shape, as they cannot be part of the BVH
+		if (!e->GetShape())	continue;
 
 		// Skip static geometry
 		if (e->GetType() == EntityType::Tile || e->GetType() == EntityType::TileMap ||
 			e->GetType() == EntityType::Chunk)
 			continue;
 
+		// Add the entity to the list of dynamic entities for BVH rebuilding
 		dynamicEntities.push_back(e.get());
 	}
 
+	// Rebuild the BVH with the collected dynamic entities. This will optimize spatial queries for collision detection and other operations that require knowledge of entity positions and bounding volumes.
 	m_bvh.Rebuild(dynamicEntities);
 }
 /////////////////////////////////
@@ -702,19 +768,8 @@ void EntityManager::UpdateBVH() {
 
 
 /////////////////////////////////
-// GetEntities (overloaded) - returns a reference to the vector of pointers to entities of a specific type. This allows systems and other parts of the code to access entities of a particular type for processing, rendering, 
-// or other operations without needing to filter the main entity list.
+// GetEntities (overloaded) - returns a reference to the vector of pointers to entities of a specific type. This allows systems and other parts of the code to access entities of a particular type for processing, rendering, or other operations without needing to filter the main entity list.
 std::vector<Entity*>& EntityManager::GetEntities(EntityType type) {
 	return m_entityMap[type];
 }
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// GetSpatialHash - returns a reference to the spatial hash grid used for spatial queries. This allows systems like the CollisionSystem to perform efficient spatial queries for nearby entities based on their positions, 
-// which can improve performance for collision detection and other spatial operations.
-//SpatialHashGrid<Entity>& EntityManager::GetSpatialHash() {
-//	return m_spatialHash;
-//}
 /////////////////////////////////

@@ -842,19 +842,30 @@ void RayCastScene::OnEnter() {
 
 	auto& em = GetEntityManager();
 
+	// Match TestScene: clear everything and set rendering mode
+	em.ClearAll();
+	em.SetSFMLRenderingEnabled(true); // or false if you only want GL
+	em.SetGLRenderingEnabled(true);
+
 	// -------------------------
-	// Recreate camera (GameEngine clears all entities on scene switch)
+	// Recreate camera
 	// -------------------------
 	sf::Vector2u windowSize = m_window.getSize();
-	m_cameraEntity = em.AddEntity(EntityType::Default);
-	auto camera = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
+	m_cameraEntity = em.AddEntity(EntityType::Camera);
+
+	Vec2 initialCamPos(0.0f, 0.0f);
+	auto* camera = m_cameraEntity->AddComponent<CCamera>(initialCamPos, 1.0f);
 	camera->isMainCamera = true;
 	camera->isActive = true;
 	camera->viewportWidth = static_cast<float>(windowSize.x);
 	camera->viewportHeight = static_cast<float>(windowSize.y);
 	camera->smoothness = 0.0f;
 
-	  // -------------------------
+	// If you have map bounds, wire them to the camera
+	camera->worldWidth = m_mapMax.x - m_mapMin.x;
+	camera->worldHeight = m_mapMax.y - m_mapMin.y;
+
+	// -------------------------
 	// DynamicBox1 (Red)
 	// -------------------------
 	{
@@ -868,7 +879,6 @@ void RayCastScene::OnEnter() {
 		auto* tform = e->GetComponent<CTransform>();
 		tform->position = Vec2(position.x + 0.4f, position.y - 0.5f);
 
-		// CRectangle
 		auto rect = std::make_unique<CRectangle>(40.f, 40.f);
 		rect->GetShape().setFillColor(sf::Color(255, 0, 0, 180));
 		e->AddComponentPtr<CShape>(std::move(rect));
@@ -912,28 +922,39 @@ void RayCastScene::OnEnter() {
 		e->AddComponentPtr<CShape>(std::move(rect));
 	}
 
-	em.ProcessPending(); // ensure entities are in m_entities
-	//em.UpdateBVH();		 // build BVH from current entities
-	//std::cout << "EntityManager BVH root: " << em.GetBVH().GetRoot() << "\n";
+	// Commit entities so they get transformIndex + topology classification
+	em.ProcessPending();
+
+	//std::cout << "[RayCastScene] dynamic count = " << em.GetDynamicEntities().size() << "\n";
+	//for (auto* e : em.GetDynamicEntities()) {
+	//	std::cout << "  dynamic: " << EntityTypeToString(e->GetType()) << " id=" << e->GetId() << "\n";
+	//}
+
+	// -------------------------
+	// Build dynamic spatial index + BVH
+	// -------------------------
+	auto* si = em.GetSpatialIndex();
+	if (si) {
+		//std::cout << "Initial build of spatial index with " << em.GetDynamicEntities().size() << " dynamic entities.\n";
+		si->Build(em.GetDynamicEntities());
+	}
 
 	// -------------------------
 	// Refresh map bounds from loaded chunks
 	// -------------------------
-	std::cout << "Calling RefreshMapBounds()...\n";
+	//std::cout << "Calling RefreshMapBounds()...\n";
 	RefreshMapBounds();
-	std::cout << "m_haveBounds: " << m_haveBounds << "\n";
-	std::cout << "Map bounds: (" << m_mapMin.x << ", " << m_mapMin.y << ") to (" << m_mapMax.x << ", " << m_mapMax.y << ")\n";
+	//std::cout << "m_haveBounds: " << m_haveBounds << "\n";
+	//std::cout << "Map bounds: (" << m_mapMin.x << ", " << m_mapMin.y << ") to (" << m_mapMax.x << ", " << m_mapMax.y  << ")\n";
 
 	// -------------------------
 	// Position camera to top-left of level
 	// -------------------------
 	if (m_cameraEntity) {
 		if (auto cam = m_cameraEntity->GetComponent<CCamera>()) {
-			// Get viewport size for proper offset
 			float halfWidth = cam->viewportWidth * 0.5f;
 			float halfHeight = cam->viewportHeight * 0.5f;
 
-			// Position camera so top-left of viewport is at top-left of map bounds
 			Vec2 topLeft = m_haveBounds ? m_mapMin : Vec2(0, 0);
 			cam->position = Vec2(topLeft.x + halfWidth, topLeft.y + halfHeight);
 
@@ -944,6 +965,12 @@ void RayCastScene::OnEnter() {
 	} else {
 		std::cout << "WARNING: m_cameraEntity is null!\n";
 	}
+
+	auto dyn = m_entityManager.GetDynamicEntities();
+	m_entityManager.GetBVH().Rebuild(dyn);
+
+	m_entityManager.GetSpatialIndex()->Build(m_entityManager.GetDynamicEntities());
+	std::cout << "Task completed for " << m_entityManager.GetDynamicEntities().size() << " entities.\n";
 }
 /////////////////////////////////
 

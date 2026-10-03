@@ -157,6 +157,10 @@ public:
 	void SetSFMLRenderingEnabled(bool v) { m_sfmlRenderingEnabled = v; }
 	void SetGLRenderingEnabled(bool v) { m_GLRenderingEnabled = v; }
 
+	std::vector<Entity*> GetDynamicEntities() { return m_dynamicEntities; }
+
+	BVHSystem& GetBVH() { return m_bvh; } // BVH system for efficient raycasting and spatial queries, - deprecated in favor of ISpatialIndex interface for more flexible spatial indexing.
+
 private:
 	// AddPendingEntities - move entities from the pending add queue into the main entity list and spatial hash, and update the entity map by type. This method is called during the Update process to integrate newly added entities into the main systems.
 	void AddPendingEntities();
@@ -167,7 +171,6 @@ private:
 	// UpdateSpatialHashAndRender - update the spatial hash grid with the current positions of all entities, and prepare the layer buckets for rendering. This method is called during the Update process to ensure that the spatial hash is accurate for collision detection and that entities are organized into their respective rendering layers.
 	void UpdateSpatialHashAndRender();
 
-private:
 	//SpatialHashGrid<Entity> m_spatialHash;
 	SpatialLayerRegistry* m_layerRegistry =	nullptr;			// Optional: pointer to a SpatialLayerRegistry for managing spatial layers (may be nullptr)`
 	std::unique_ptr<ISpatialIndex> m_spatialIndex =	nullptr;	// Optional: pointer to a spatial index for efficient spatial queries (may be nullptr)
@@ -179,6 +182,14 @@ private:
 	size_t m_totalEntities = 0;
 	sf::RenderWindow& m_window;
 	int m_deathCountThisFrame = 0;
+
+	// Internal event handlers for entity lifecycle events. These methods are called when an entity is added, removed, or has its static state changed, allowing the EntityManager to update its internal data structures accordingly (these are added with the updated SpatialIndexUnified interface in mind).
+	void OnEntityAdded(Entity* entity);
+	void OnEntityRemoved(Entity* entity);
+	void OnStaticStateChanged(Entity* entity, bool isStatic);
+
+	std::vector<Entity*> m_dynamicEntities;
+	std::vector<Entity*> m_staticEntities;
 
 	CollisionSystem m_collisionSystem;
 	RenderSystem m_renderSystem;

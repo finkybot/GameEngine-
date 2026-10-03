@@ -197,7 +197,7 @@ void TechSimulationScene::CreateTechTestWorld() {
 	//m_entityManager.GetSpatialIndex()->Rebuild(m_entityManager.GetEntities(), m_entityManager.GetChunkManager());
 
 	auto* si = m_entityManager.GetSpatialIndex();
-	si->Rebuild(m_entityManager.GetEntities(), &m_chunkManager);
+	si->Build(m_entityManager.GetDynamicEntities());
 
 
 	for (int i = 0; i < civCount; i++) {

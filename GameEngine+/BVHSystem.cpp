@@ -57,13 +57,20 @@ static sf::FloatRect GetEntityBounds(Entity* e) {
 /////////////////////////////////
 // Rebuild - rebuilds the BVH tree based on the provided list of entities. This method takes a vector of pointers to Entity objects and constructs a new BVH tree that organizes the entities
 void BVHSystem::Rebuild(const std::vector<Entity*>& entities) {
-	DestroyRecursive(m_root);		// Destroy the existing BVH tree to free memory and avoid memory leaks
-	m_root = nullptr;				// Reset the root pointer to null before building a new tree
+    //std::cout << "[BVH] Rebuild called with " << entities.size() << " entities\n";
 
-	if (entities.empty()) return;	// If there are no entities, there's nothing to build, so return early
+    DestroyRecursive(m_root);
+    m_root = nullptr;
 
-	std::vector<Entity*> validEntities = entities;	// Create a vector to hold valid entities that have a CShape component
-	m_root = BuildRecursive(validEntities, 4);		// Example leaf size
+    //if (entities.empty()) {
+    //    std::cout << "[BVH] No entities — BVH empty\n";
+    //    return;
+    //}
+	
+    std::vector<Entity*> validEntities = entities;	// Create a vector to hold valid entities that have a CShape component
+    m_root = BuildRecursive(validEntities, 4);
+
+    //std::cout << "[BVH] Build complete\n";
 }
 /////////////////////////////////
 
@@ -334,6 +341,29 @@ void BVHSystem::Update(Entity* e) {
 
 
 /////////////////////////////////
+void BVHSystem::ReportBVHSize() const {
+	int depth = ComputeDepth(m_root);
+	std::cout << "[BVH] Depth: " << depth << "\n";
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+int BVHSystem::ComputeDepth(BVHNode* node) const {
+	if (!node)
+		return 0;
+	if (node->IsLeaf())
+		return 1;
+	return 1 + std::max(ComputeDepth(node->left), ComputeDepth(node->right));
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// RaycastDynamic - performs a raycast against the dynamic entities stored in the BVHSystem. This method iterates through the list of dynamic entities, checking for intersections between the ray and the bounding boxes of each entity. If an intersection is found, it updates the 
+// output hit information and returns true.
 bool BVHSystem::RaycastDynamic(const Vec2& origin, const Vec2& dirN, float maxDist, RaycastHit& outHit,
 							   Entity*& outEntity) const {
 	float closest = maxDist;

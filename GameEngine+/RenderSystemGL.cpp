@@ -1070,7 +1070,7 @@ void RenderSystemGL::RenderTiles(const EntityManager& entityManager) {
 
 	glBindVertexArray(m_tileVAO);
 
- 	std::cout << "\x1b[93m[RenderSystemGL]\x1b[0m Rendering tiles..." << std::endl;
+ 	//std::cout << "\x1b[93m[RenderSystemGL]\x1b[0m Rendering tiles..." << std::endl;
 	// OMG three days, code rewrites, three fucking days and its was the fucking file location of the vert and frag files, ffs
 	glDrawArraysInstanced(GL_TRIANGLES, 0, 6, instances.size());
 

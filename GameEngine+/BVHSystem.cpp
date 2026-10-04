@@ -57,8 +57,6 @@ static sf::FloatRect GetEntityBounds(Entity* e) {
 /////////////////////////////////
 // Rebuild - rebuilds the BVH tree based on the provided list of entities. This method takes a vector of pointers to Entity objects and constructs a new BVH tree that organizes the entities
 void BVHSystem::Rebuild(const std::vector<Entity*>& entities) {
-    //std::cout << "[BVH] Rebuild called with " << entities.size() << " entities\n";
-
     DestroyRecursive(m_root);
     m_root = nullptr;
 
@@ -107,6 +105,7 @@ BVHNode* BVHSystem::BuildRecursive(std::vector<Entity*>& entities, int leafSize)
 		for (size_t i = 1; i < entities.size(); ++i) {
 			bounds = UnionBounds(bounds, GetEntityBounds(entities[i])); // Expand bounds to include all entities
 		}
+		//std::cout << "Node bounds: " << bounds.position.x << ", " << bounds.position.y << " size " << bounds.size.x  << ", " << bounds.size.y << "\n";
 		node->bounds = bounds;
 		return node; // Return the created leaf node
 	}

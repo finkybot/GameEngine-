@@ -55,6 +55,22 @@ public:
 	bool IsTopologyDirty() const { return m_topologyDirty; } // Check if the topology is dirty.
 	void ClearTopologyDirty() { m_topologyDirty = false; }	 // Clear the topology dirty flag.
 
+	BVHSystem& GetDynamicBVH() { return m_bvh; } // Get a reference to the BVH system for this spatial index.
+
+	static SpatialIndexUnified& Get() {
+		static SpatialIndexUnified instance;
+		return instance;	
+	}
+
+	// World mask accessors
+	int GetTileSize() const { return m_tileSize; }
+	int GetWorldWidth() const { return m_worldWidth; }
+	int GetWorldHeight() const { return m_worldHeight; }
+	int GetWorldOffsetX() const { return m_worldOffsetX; }
+	int GetWorldOffsetY() const { return m_worldOffsetY; }
+
+	int GetWorldTileValue(int x, int y) const { return m_worldMask[y * m_worldWidth + x]; }
+
 
 
 private:

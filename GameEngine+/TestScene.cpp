@@ -31,7 +31,9 @@
 #include "CRenderInstance.h"
 
 #include "CCamera.h"
+#include "CRayCast.h"
 #include "CTransform.h"
+#include "CMouseState.h"
 #include "CameraSystem.h"
 
 
@@ -71,6 +73,30 @@ TestScene::~TestScene() = default;
 // Update - updates the game logic for the TestScene, including handling events, managing entity population, updating explosions, and performing physics and collision detection. It also calculates and reports FPS using an exponential moving average for smoothing, and renders the ImGui game information 
 // window with current entity count, death count, and explosion count.
 void TestScene::Update(float dt) {
+	m_mouseSystem->Update(dt);
+
+	// Now we can read the mouse state
+	CMouseState* ms = m_mouseEntity->GetComponent<CMouseState>();
+	if (!ms) return;
+
+	m_raycastSystem->Update(dt);
+
+	CRaycast* raycast = m_mouseEntity->GetComponent<CRaycast>();
+	
+	raycast->screenPos = ms->screenPos;
+	raycast->worldPos = ms->worldPos;
+
+	raycast->direction = Vec2(0.0f, 1.0f); // vertical ray
+	raycast->maxDistance = 5000.0f;		   // long enough to hit balls
+
+	if (raycast->lastHit.hit) {
+		std::cout << "Raycast HIT entity ID: " << raycast->lastHit.entity->GetId() << " at ("
+				  << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n";
+	}
+
+	// Debug output
+	//std::cout << "Mouse Screen: " << ms->screenPos.x << ", " << ms->screenPos.y << " | World: " << ms->worldPos.x  << ", " << ms->worldPos.y << std::endl;
+
 	m_dt = dt;
 	UpdateFPS(dt);
 
@@ -82,7 +108,9 @@ void TestScene::Update(float dt) {
 	}
 
 	UpdateSpawning(dt);
+	
 
+	
 	auto& entities = m_entityManager.GetEntities();
 
 
@@ -235,6 +263,18 @@ void TestScene::OnEnter() {
 	camera->smoothness = 0.0f; // Disable smoothing - camera is controlled directly via panning and bounds clamping
 	camera->worldWidth = m_mapMax.x - m_mapMin.x;  // your actual world width
 	camera->worldHeight = m_mapMax.y - m_mapMin.y;	   // your actual world height
+
+
+
+	// Create a mouse entity
+	Entity* mouseEntity = m_entityManager.AddEntity(EntityType::Mouse); // Mouse entity
+	mouseEntity->AddComponent<CMouseState>();
+	mouseEntity->AddComponent<CRaycast>(); // optional, but we'll need it soon
+
+	m_mouseEntity = mouseEntity; // store pointer for easy access
+	m_mouseSystem = new MouseSystem(&m_entityManager, &m_window);
+
+	m_raycastSystem = new RaycastSystem(&m_entityManager);
 
 	SpawnInitialPopulation();
 	m_entityManager.ProcessPending();

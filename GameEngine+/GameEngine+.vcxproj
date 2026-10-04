@@ -178,12 +178,15 @@
     <ClCompile Include="main.cpp" />
     <ClCompile Include="MainMenuScene.cpp" />
     <ClCompile Include="MainThreadTasks.cpp" />
+    <ClCompile Include="MouseSystem.cpp" />
     <ClCompile Include="MusicSystem.cpp" />
     <ClCompile Include="MusicVisualiserScene.cpp" />
     <ClCompile Include="ParticleBVHSystem.cpp" />
     <ClCompile Include="PathFinder.cpp" />
     <ClCompile Include="PathFindingSystem.cpp" />
     <ClCompile Include="PathTestScene.cpp" />
+    <ClCompile Include="RaycastEngine.cpp" />
+    <ClCompile Include="RaycastSystem.cpp" />
     <ClCompile Include="RenderSystemGL.cpp" />
     <ClCompile Include="Scene.cpp" />
     <ClCompile Include="ShutdownGuard.cpp" />
@@ -226,12 +229,14 @@
     <ClInclude Include="ChunkManagerV2.h" />
     <ClInclude Include="CCivilisationTech.h" />
     <ClInclude Include="CLayer.h" />
+    <ClInclude Include="CMouseState.h" />
     <ClInclude Include="CMusic.h" />
     <ClInclude Include="CName.h" />
     <ClInclude Include="Component.h" />
     <ClInclude Include="ComponentTypeId.h" />
     <ClInclude Include="CParticleInfluence.h" />
     <ClInclude Include="CPathRequest.h" />
+    <ClInclude Include="CRayCast.h" />
     <ClInclude Include="CRectangle.h" />
     <ClInclude Include="CShape.h" />
     <ClInclude Include="CSoundEffect.h" />
@@ -278,6 +283,7 @@
     <ClInclude Include="LevelEditorScene.h" />
     <ClInclude Include="MainMenuScene.h" />
     <ClInclude Include="MainThreadTasks.h" />
+    <ClInclude Include="MouseSystem.h" />
     <ClInclude Include="MusicSystem.h" />
     <ClInclude Include="MusicVisualiserScene.h" />
     <ClInclude Include="ParticleBVHSystem.h" />
@@ -286,6 +292,8 @@
     <ClInclude Include="PathTestScene.h" />
     <ClInclude Include="QuadTree.h" />
     <ClInclude Include="Raycast.h" />
+    <ClInclude Include="RaycastEngine.h" />
+    <ClInclude Include="RaycastSystem.h" />
     <ClInclude Include="RenderQueue.h" />
     <ClInclude Include="RenderSystemGL.h" />
     <ClInclude Include="resource.h" />

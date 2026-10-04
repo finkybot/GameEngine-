@@ -10,6 +10,8 @@
 #pragma once
 #include <string>
 #include <optional>
+#include "Vec2.h"
+#include "CCamera.h"
 /////////////////////////////////
 
 
@@ -94,4 +96,21 @@ struct TileMap;
 // ReadFile - Reads the contents of a file specified by the filePath and returns it as a C-style string (const char*). The caller is responsible for managing the memory of the returned string, which should be freed when no longer needed. This function is used to read text files, such as JSON files for tile maps, 
 // and return their contents for further processing. (TileMap JSON helpers moved into TileMap.*) Use TileMap::SaveToJSON / TileMap::LoadFromJSON
 const char* ReadFile(const char* filePath); // Can you guess what it does? Really hard to figure it out from the name, I know. Reads the contents of a file specified by the filePath and returns it as a C-style string (const char*). You better take responsiblity for managing the memory of the returned string.
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Converts screen-space mouse coordinates to world-space using the camera component.
+inline Vec2 ScreenToWorld(const Vec2& screen, const CCamera& cam) {
+	// Convert screen → NDC (0..1)
+	float ndcX = screen.x / cam.viewportWidth;
+	float ndcY = screen.y / cam.viewportHeight;
+
+	// Convert NDC → world units
+	float worldX = cam.position.x + (ndcX - 0.5f) * (cam.viewportWidth / cam.zoom);
+	float worldY = cam.position.y + (ndcY - 0.5f) * (cam.viewportHeight / cam.zoom);
+
+	return Vec2(worldX, worldY);
+}
 /////////////////////////////////

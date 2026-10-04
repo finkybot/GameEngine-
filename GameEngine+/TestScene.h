@@ -17,6 +17,8 @@
 #include "ShapeTemplateRegistry.h"
 #include "CCamera.h"
 #include "CameraSystem.h"
+#include "MouseSystem.h"
+#include "RaycastSystem.h"
 
 #include "Systems/PhysicsSystem.h"
 /////////////////////////////////
@@ -54,7 +56,7 @@ public:
 	int GetExplosionCount() const { return m_explosionCount; } 
 
 
-	// InitializeGame - responsible for initializing the game state for the scene, including spawning entities with random properties and setting up any necessary game logic or mechanics. This method will be called when the scene is entered to set up the initial state of the game.
+	// InitialiseGame - responsible for initializing the game state for the scene, including spawning entities with random properties and setting up any necessary game logic or mechanics. This method will be called when the scene is entered to set up the initial state of the game.
 	void InitialiseGame(sf::Vector2u windowSize);
 
 
@@ -100,30 +102,33 @@ private:
 	// Private member variables for the TestScene class. These include references to the GameEngine, EntityManager, and SFML window, as well as random distributions for entity properties and tracking variables for explosions and FPS
 
 	int m_targetEntityCount = 3200;
-	sf::RenderWindow& m_window;				// Reference to the SFML render window for rendering the scene
-	int m_explosionCount = 0;				// Number of active explosions currently playing, used for tracking and displaying explosion count in the game info window.
-	int m_deathCount =	0;					// Number of entities that have died, used for tracking and displaying death count in the game info window.
+	sf::RenderWindow& m_window;							// Reference to the SFML render window for rendering the scene
+	int m_explosionCount = 0;							// Number of active explosions currently playing, used for tracking and displaying explosion count in the game info window.
+	int m_deathCount =	0;								// Number of entities that have died, used for tracking and displaying death count in the game info window.
 	
 
-	std::vector<Entity*> m_explosions;		// scene‑local explosion registry (currently unused, but will be used for tracking active explosions in the scene at a later date)
+	std::vector<Entity*> m_explosions;					// scene‑local explosion registry (currently unused, but will be used for tracking active explosions in the scene at a later date)
 
-	Entity* m_cameraEntity =	nullptr;	// Pointer to the camera entity in the scene, used for managing camera movement and view transformations.
-	CameraSystem m_cameraSystem;			// Camera system for updating and managing camera entities.
+	Entity* m_cameraEntity =	nullptr;				// Pointer to the camera entity in the scene, used for managing camera movement and view transformations.
+	CameraSystem m_cameraSystem;						// Camera system for updating and managing camera entities.
 
-	Vec2 m_mapMin = Vec2::Zero;				// Minimum bounds of the map for clamping camera movement and ensuring the camera stays within the defined area.
-	Vec2 m_mapMax = Vec2::Zero;				// Maximum bounds of the map for clamping camera movement and ensuring the camera stays within the defined area.
-	bool m_hasMapBounds = false;			// Flag indicating whether the map has defined bounds for camera clamping.
+	Vec2 m_mapMin = Vec2::Zero;							// Minimum bounds of the map for clamping camera movement and ensuring the camera stays within the defined area.
+	Vec2 m_mapMax = Vec2::Zero;							// Maximum bounds of the map for clamping camera movement and ensuring the camera stays within the defined area.
+	bool m_hasMapBounds = false;						// Flag indicating whether the map has defined bounds for camera clamping.
 
-	float m_dt = 0.0f;						// Delta time for the current frame, used for time-based calculations and updates in the scene.
-	float m_fps = 0.0f;						// Current frames per second (FPS).
-	float m_fpsAccumulator = 0.0f;			// Accumulator for calculating FPS over time.
-	float m_fpsSmooth =	0.0f;				// Smoothed FPS value using an exponential moving average to reduce fluctuations in the reported FPS.
-	const double m_alpha = 0.15;			// smoothing factor
+	float m_dt = 0.0f;									// Delta time for the current frame, used for time-based calculations and updates in the scene.
+	float m_fps = 0.0f;									// Current frames per second (FPS).
+	float m_fpsAccumulator = 0.0f;						// Accumulator for calculating FPS over time.
+	float m_fpsSmooth =	0.0f;							// Smoothed FPS value using an exponential moving average to reduce fluctuations in the reported FPS.
+	const double m_alpha = 0.15;						// smoothing factor
 
 
-	float m_growthTimer = 0.0f;				// Timer for controlling the growth of the entity population over time.
-	bool m_spatialCollisionEnabled = true;	// Flag indicating whether spatial collision detection is enabled.
-
+	float m_growthTimer = 0.0f;							// Timer for controlling the growth of the entity population over time.
+	bool m_spatialCollisionEnabled = true;				// Flag indicating whether spatial collision detection is enabled.
+	
+	MouseSystem* m_mouseSystem = nullptr;				// Pointer to the mouse system for updating and managing mouse input.
+	Entity* m_mouseEntity =	nullptr;					// Pointer to the mouse entity in the scene, used for tracking mouse position and interactions with other entities.
+	RaycastSystem* m_raycastSystem = nullptr;			// Raycast system for performing raycasting operations in the scene, allowing for line-of-sight checks and interactions with entities based on mouse input or other criteria.
 
 
 

@@ -56,6 +56,8 @@ public:
 
 	BVHNode* GetRoot() const { return m_root; }
 
+	// Raycast - performs a raycast against the BVH tree, starting from the root node. It takes the origin and direction of the ray, the maximum distance to check for intersections, and output parameters for hit information and the entity that was hit. The method returns true if an intersection is found, 
+	// and false otherwise. We can use this as a traversal method to test the ray against the entire BVH tree, and it will recursively traverse the tree to find potential intersections with entities in the scene.
 	bool Raycast(const Vec2& origin, const Vec2& dirN, float maxDist, RaycastHit& outHit, Entity*& outEntity, BVHDebugTraversal* debug = nullptr) const;
 
 	void Insert(Entity* e);

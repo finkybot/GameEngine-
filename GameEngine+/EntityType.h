@@ -35,6 +35,7 @@ enum class EntityType {
 	KnowledgeParticle = 14,
 	Civilisation = 15,
 	Camera = 16,
+	Mouse = 17,
 };
 /////////////////////////////////
 

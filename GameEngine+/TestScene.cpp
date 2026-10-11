@@ -31,7 +31,7 @@
 #include "CRenderInstance.h"
 
 #include "CCamera.h"
-#include "CRayCast.h"
+#include "CRaycast.h"
 #include "CTransform.h"
 #include "CMouseState.h"
 #include "CameraSystem.h"
@@ -77,25 +77,35 @@ void TestScene::Update(float dt) {
 
 	// Now we can read the mouse state
 	CMouseState* ms = m_mouseEntity->GetComponent<CMouseState>();
-	if (!ms) return;
-
-	m_raycastSystem->Update(dt);
+	if (!ms)
+		return;
 
 	CRaycast* raycast = m_mouseEntity->GetComponent<CRaycast>();
-	
+
+	//
+	// --- IMPORTANT: update raycast fields BEFORE running RaycastSystem ---
+	//
 	raycast->screenPos = ms->screenPos;
-	raycast->worldPos = ms->worldPos;
 
-	raycast->direction = Vec2(0.0f, 1.0f); // vertical ray
-	raycast->maxDistance = 5000.0f;		   // long enough to hit balls
+	//raycast->worldPos = ms->worldPos; // or override for testing
+	
+	raycast->worldPos = Vec2(600.f, 0.f); // directly above the test circle
 
+	raycast->direction = Vec2(0.0f, 1.0f).Normalise();
+	raycast->maxDistance = 5000.0f;
+
+	//
+	// --- NOW run the raycast system with fresh data ---
+	//
+	m_raycastSystem->Update(dt);
+
+	//
+	// Debug hit output
+	//
 	if (raycast->lastHit.hit) {
 		std::cout << "Raycast HIT entity ID: " << raycast->lastHit.entity->GetId() << " at ("
 				  << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n";
 	}
-
-	// Debug output
-	//std::cout << "Mouse Screen: " << ms->screenPos.x << ", " << ms->screenPos.y << " | World: " << ms->worldPos.x  << ", " << ms->worldPos.y << std::endl;
 
 	m_dt = dt;
 	UpdateFPS(dt);
@@ -108,11 +118,11 @@ void TestScene::Update(float dt) {
 	}
 
 	UpdateSpawning(dt);
-	
 
-	
+	//
+	// --- SINGLE declaration of entities ---
+	//
 	auto& entities = m_entityManager.GetEntities();
-
 
 	// --- Main unified per‑entity pass ---
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
@@ -125,7 +135,7 @@ void TestScene::Update(float dt) {
 		Entity* e = uptr.get();
 		if (!e->IsAlive())
 			continue;
-		
+
 		UpdateEntity(e, dt, worldW, worldH);
 	}
 
@@ -141,12 +151,10 @@ void TestScene::Update(float dt) {
 		}
 	}
 
-
 	// --- Broad‑phase collision (optional / throttled) ---
 	if (m_spatialCollisionEnabled && m_entityManager.GetSpatialIndex()) {
 		m_entityManager.GetCollisionSystem().DetectAndResolveSpatial(entities, m_entityManager.GetSpatialIndex(), dt);
 	}
-
 
 	// --- Audio listener (camera only) ---
 	if (cam && m_entityManager.GetSoundSystem()) {
@@ -154,9 +162,9 @@ void TestScene::Update(float dt) {
 		m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
 	}
 
-
 	// --- Commit pending entities ---
 	m_entityManager.ProcessPending();
+
 	// --- Camera movement + view ---
 	if (m_cameraEntity) {
 		m_cameraSystem.Update(dt, GetEntityManager());
@@ -240,56 +248,79 @@ void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 /////////////////////////////////
 // OnEnter - called when the scene becomes active, allowing for any necessary setup or initialization that should occur each time the scene is entered. This can include resetting game state, starting timers, or preparing resources specific to this scene.
 void TestScene::OnEnter() {
-	m_entityManager.SetSFMLRenderingEnabled(false); // Disable SFML rendering for this scene
-	m_entityManager.SetGLRenderingEnabled(true);	// Enable OpenGL rendering for this scene
+	m_entityManager.SetSFMLRenderingEnabled(false);
+	m_entityManager.SetGLRenderingEnabled(true);
 	m_entityManager.ClearAll();
 
-	// Expand world bounds (example: double window size)
+	// Expand world bounds
 	m_mapMin = Vec2(0, 0);
 	m_mapMax = Vec2((float)m_window.getSize().x * 2.0f, (float)m_window.getSize().y * 3.0f);
 	m_hasMapBounds = true;
 
-
-	// Create  and setup a camera entity, similar to the LevelEditorScene
+	// Camera entity
 	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Camera);
-	//m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
 
 	Vec2 initialCamPos((m_mapMin.x + m_mapMax.x) * 0.5f, (m_mapMin.y + m_mapMax.y) * 0.5f);
+
 	auto camera = m_cameraEntity->AddComponent<CCamera>(initialCamPos, 1.0f);
 	camera->isMainCamera = true;
 	camera->isActive = true;
 	camera->viewportWidth = (float)m_window.getSize().x;
 	camera->viewportHeight = (float)m_window.getSize().y;
-	camera->smoothness = 0.0f; // Disable smoothing - camera is controlled directly via panning and bounds clamping
-	camera->worldWidth = m_mapMax.x - m_mapMin.x;  // your actual world width
-	camera->worldHeight = m_mapMax.y - m_mapMin.y;	   // your actual world height
+	camera->smoothness = 0.0f;
+	camera->worldWidth = m_mapMax.x - m_mapMin.x;
+	camera->worldHeight = m_mapMax.y - m_mapMin.y;
 
-
-
-	// Create a mouse entity
-	Entity* mouseEntity = m_entityManager.AddEntity(EntityType::Mouse); // Mouse entity
+	// Mouse entity
+	Entity* mouseEntity = m_entityManager.AddEntity(EntityType::Mouse);
 	mouseEntity->AddComponent<CMouseState>();
-	mouseEntity->AddComponent<CRaycast>(); // optional, but we'll need it soon
+	mouseEntity->AddComponent<CRaycast>();
 
-	m_mouseEntity = mouseEntity; // store pointer for easy access
+	m_mouseEntity = mouseEntity;
 	m_mouseSystem = new MouseSystem(&m_entityManager, &m_window);
-
 	m_raycastSystem = new RaycastSystem(&m_entityManager);
 
+	// --- Static test circle for raycast debugging ---
+	{
+		Entity* testCircle = m_entityManager.AddEntity(EntityType::TeamEagle);
+
+		auto* t = testCircle->GetComponent<CTransform>();
+		t->position = Vec2(600.f, 300.f);
+		t->velocity = Vec2(0.f, 0.f);
+
+		auto circle = std::make_unique<CCircle>();
+		circle->SetRadius(150.f);
+		circle->SetColor(255, 60, 60, 255);
+		testCircle->AddComponentPtr<CCircle>(std::move(circle));
+
+		auto* inst = testCircle->AddComponent<CRenderInstance>();
+		inst->radius = 150.f;
+		inst->r = 255;
+		inst->g = 60;
+		inst->b = 60;
+		inst->a = 255;
+	}
+
+	// Spawn initial population ONCE
 	SpawnInitialPopulation();
 	m_entityManager.ProcessPending();
-	auto& entities = m_entityManager.GetEntities();
 
+	// Build spatial index ONCE
+	auto& entities = m_entityManager.GetEntities();
+	m_entityManager.GetSpatialIndex()->Build(m_entityManager.GetDynamicEntities());
+
+	std::cout << "Dynamic entities: " << m_entityManager.GetDynamicEntities().size() << "\n";
+
+	// Reset cell markers
 	for (auto& u : entities) {
 		Entity* e = u.get();
 		e->currentCellX = INT_MIN;
 		e->currentCellY = INT_MIN;
 	}
-	std::cout << "Initial build of spatial index with " << entities.size() << " entities.\n";
-	m_entityManager.GetSpatialIndex()->Build(m_entityManager.GetDynamicEntities());
 
+	std::cout << "Initial build of spatial index with " << entities.size() << " entities.\n";
 	std::cout << "Task completed for " << m_entityManager.GetDynamicEntities().size() << " entities.\n";
-	
+
 	m_entityManager.GetBVH().ReportBVHSize();
 }
 /////////////////////////////////
@@ -796,7 +827,7 @@ void TestScene::ApplyCameraMovement(float deltaTime) {
 		move.x += 1;
 
 	if (move.Mag2() > 0.0f) {
-		move.Normalize();
+		move.Normalise();
 		move *= 600.0f * deltaTime;
 		cam->position += move;
 

@@ -90,8 +90,8 @@ public:
 	size_t explosionIndex	=	SIZE_MAX;
 
 
+	bool HasComponent(std::type_index type) const { return m_components.find(type) != m_components.end(); }
 
-	
 	
 	
 	// ---------------------------------

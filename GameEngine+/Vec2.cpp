@@ -151,7 +151,7 @@ float Vec2::Mag() const {
 
 
 /////////////////////////////////
-// GetUnitVec - returns a new Vec2 instance that is the unit vector (or normalized vector) in the same direction as the current vector. It calculates the magnitude of the vector and divides the vector by its magnitude to obtain the unit vector.
+// GetUnitVec - returns a new Vec2 instance that is the unit vector (or normalised vector) in the same direction as the current vector. It calculates the magnitude of the vector and divides the vector by its magnitude to obtain the unit vector.
 Vec2 Vec2::GetUnitVec() const {
 	float mag = Mag();
 	if (mag > EPSILON)
@@ -163,8 +163,8 @@ Vec2 Vec2::GetUnitVec() const {
 
 
 /////////////////////////////////
-// Normalize - modifies the current vector to become a unit vector (or normalized vector) in the same direction. It calculates the magnitude of the vector and divides the vector by its magnitude to normalize it. If the magnitude is too small (less than EPSILON),
-Vec2& Vec2::Normalize() {
+// Normalise - modifies the current vector to become a unit vector (or normalised vector) in the same direction. It calculates the magnitude of the vector and divides the vector by its magnitude to normalise it. If the magnitude is too small (less than EPSILON),
+Vec2& Vec2::Normalise() {
 	float mag = Mag();
 	if (mag > EPSILON)
 		*this /= mag;

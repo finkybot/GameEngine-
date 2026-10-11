@@ -9,45 +9,63 @@
 #include "RaycastEngine.h"
 #include "BVHSystem.h"
 #include "SpatialIndexUnified.h"
+#include "RaycastDispatcher.h"
+#include "RaycastFns.h"
 #include "BVHSystem.h"
 #include "Raycast.h"
 #include <limits>
 /////////////////////////////////
 
-
+extern RaycastDispatcher g_RaycastDispatcher;
 
 /////////////////////////////////
 // RaycastDynamic - Perform a raycast against dynamic entities using the dynamic BVH. Returns the nearest dynamic entity hit (if any).
 RaycastResult RaycastEngine::RaycastDynamic(const Vec2& origin, const Vec2& direction, float maxDistance) {
-	RaycastResult result;
+	RaycastResult best;
+	best.hit = false;
+	best.distance = maxDistance;
 
 	SpatialIndexUnified& spatial = SpatialIndexUnified::Get();
 	BVHSystem& bvh = spatial.GetDynamicBVH();
 
 	if (!bvh.GetRoot())
-		return result;
+		return best;
 
-	RaycastHit hit; // tile-style hit struct
-	Entity* hitEntity = nullptr;
+	//
+	// 1. BVH broad‑phase: collect candidate entities
+	//
+	std::vector<Entity*> candidates;
+	bvh.QueryRayCandidates(origin, direction, maxDistance, candidates);
 
-	bool didHit = bvh.Raycast(origin, direction, maxDistance, hit, hitEntity);
+	//
+	// 2. Narrow‑phase: test actual shapes using dispatcher
+	//
+	for (Entity* e : candidates) {
+		for (auto& [typeIndex, fn] : g_RaycastDispatcher.GetRegistry()) {
+			// NEW: correct HasComponent using std::type_index
+			if (e->HasComponent(typeIndex)) {
+				float t;
+				Vec2 normal;
 
-	if (!didHit || !hitEntity)
-		return result;
+				// Shape‑specific raycast
+				if (fn(origin, direction, maxDistance, *e, t, normal)) {
+					if (t < best.distance) {
+						best.hit = true;
+						best.entity = e;
+						best.distance = t;
+						best.position = origin + direction * t;
+						best.normal = normal;
 
-	// Convert BVH hit → unified RaycastResult
-	result.hit = true;
-	result.distance = hit.distance;
-	result.position = hit.position;
-	result.normal = hit.normal;
-	result.entity = hitEntity;
+						best.tileX = -1;
+						best.tileY = -1;
+						best.tileValue = -1;
+					}
+				}
+			}
+		}
+	}
 
-	// dynamic hit → no tile data
-	result.tileX = -1;
-	result.tileY = -1;
-	result.tileValue = -1;
-
-	return result;
+	return best;
 }
 /////////////////////////////////
 

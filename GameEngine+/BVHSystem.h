@@ -18,9 +18,9 @@ struct RaycastHit;
 
 
 /////////////////////////////////
-// BVHNode struct - represents a node in the Bounding Volume Hierarchy (BVH) tree. Each node contains a bounding box (sf::FloatRect) that encompasses the entities within that node,
+// BVHNode struct - represents a node in the Bounding Volume Hierarchy (BVH) tree. Each node contains a bounding box (AABB) that encompasses the entities within that node,
 struct BVHNode {
-	sf::FloatRect bounds;
+	AABB bounds;
 	BVHNode* left;
 	BVHNode* right;
 	std::vector<Entity*> leafEntities;
@@ -65,6 +65,9 @@ public:
 	void Update(Entity* e);
 
 	void ReportBVHSize() const;
+
+	void QueryRayCandidates(const Vec2& origin, const Vec2& dir, float maxDist,	std::vector<Entity*>& outEntities) const;
+
 	int ComputeDepth(BVHNode* node) const;
 private:
 	BVHNode* m_root = nullptr; 

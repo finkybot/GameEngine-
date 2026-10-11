@@ -267,6 +267,12 @@
     <ClCompile Include="MouseSystem.cpp">
       <Filter>Source Files\Systems</Filter>
     </ClCompile>
+    <ClCompile Include="RaycastDispatcher.cpp">
+      <Filter>Source Files\Systems</Filter>
+    </ClCompile>
+    <ClCompile Include="RaycastFns.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="imgui\backends\imgui_impl_dx9.h">
@@ -608,7 +614,7 @@
     <ClInclude Include="TransformSoA.h">
       <Filter>Header Files\SoA</Filter>
     </ClInclude>
-    <ClInclude Include="CRayCast.h">
+    <ClInclude Include="CRaycast.h">
       <Filter>Header Files\Components</Filter>
     </ClInclude>
     <ClInclude Include="RaycastSystem.h">
@@ -622,6 +628,12 @@
     </ClInclude>
     <ClInclude Include="MouseSystem.h">
       <Filter>Header Files\Systems</Filter>
+    </ClInclude>
+    <ClInclude Include="RaycastDispatcher.h">
+      <Filter>Header Files\Systems</Filter>
+    </ClInclude>
+    <ClInclude Include="RaycastFns.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

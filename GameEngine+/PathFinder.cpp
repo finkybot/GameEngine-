@@ -196,7 +196,7 @@ std::vector<Portal> Pathfinder::BuildPortals(const std::vector<Vec2>& tileCenter
 		else {
 			// Build diagonal portals
 			Vec2 perp(dir.y, -dir.x);
-			perp = perp.Normalize() * 16;
+			perp = perp.Normalise() * 16;
 
 			portals.push_back({a + perp, a - perp});
 		}

@@ -51,7 +51,7 @@ public:
 	float Mag2() const;																// Returns the squared magnitude of the vector, which is more efficient than calculating the actual magnitude when only relative comparisons are needed.
 	float Mag() const;																// Returns the magnitude (length) of the vector, which is the square root of the squared magnitude.
 	Vec2 GetUnitVec() const;														// Returns a unit vector (vector with magnitude of 1) in the same direction as the original vector. This is useful for normalizing vectors for direction calculations.
-	Vec2& Normalize();																// Normalizes the vector in place, modifying its components to have a magnitude of 1 while maintaining its direction. Returns a reference to the modified vector.
+	Vec2& Normalise();																// Normalizes the vector in place, modifying its components to have a magnitude of 1 while maintaining its direction. Returns a reference to the modified vector.
 
 	float Distance(const Vec2& vector) const;										// Returns the distance between this vector and another vector, calculated as the magnitude of the difference between the two vectors.
 	float Dot(const Vec2& vector) const;											// Returns the dot product of this vector and another vector, which is a measure of how much the two vectors point in the same direction. It is calculated as the sum of the products of their corresponding components.

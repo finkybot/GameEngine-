@@ -185,7 +185,9 @@
     <ClCompile Include="PathFinder.cpp" />
     <ClCompile Include="PathFindingSystem.cpp" />
     <ClCompile Include="PathTestScene.cpp" />
+    <ClCompile Include="RaycastDispatcher.cpp" />
     <ClCompile Include="RaycastEngine.cpp" />
+    <ClCompile Include="RaycastFns.cpp" />
     <ClCompile Include="RaycastSystem.cpp" />
     <ClCompile Include="RenderSystemGL.cpp" />
     <ClCompile Include="Scene.cpp" />
@@ -236,7 +238,7 @@
     <ClInclude Include="ComponentTypeId.h" />
     <ClInclude Include="CParticleInfluence.h" />
     <ClInclude Include="CPathRequest.h" />
-    <ClInclude Include="CRayCast.h" />
+    <ClInclude Include="CRaycast.h" />
     <ClInclude Include="CRectangle.h" />
     <ClInclude Include="CShape.h" />
     <ClInclude Include="CSoundEffect.h" />
@@ -292,7 +294,9 @@
     <ClInclude Include="PathTestScene.h" />
     <ClInclude Include="QuadTree.h" />
     <ClInclude Include="Raycast.h" />
+    <ClInclude Include="RaycastDispatcher.h" />
     <ClInclude Include="RaycastEngine.h" />
+    <ClInclude Include="RaycastFns.h" />
     <ClInclude Include="RaycastSystem.h" />
     <ClInclude Include="RenderQueue.h" />
     <ClInclude Include="RenderSystemGL.h" />

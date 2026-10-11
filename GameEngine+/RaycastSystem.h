@@ -20,7 +20,7 @@
 //	|_______________________________________________________________________
 class RaycastSystem {
 public:
-	RaycastSystem(EntityManager* entityManager) : m_entityManager(entityManager) {}
+	RaycastSystem(EntityManager* entityManager);
 
 	void Update(float dt);
 

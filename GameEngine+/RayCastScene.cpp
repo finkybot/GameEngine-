@@ -62,8 +62,12 @@ void RayCastScene::DrawBVHNode(sf::RenderWindow& window, BVHNode* node) {
 		return;
 
 	sf::RectangleShape rect;
-	rect.setPosition(node->bounds.position);
-	rect.setSize(node->bounds.size);
+
+	// SFML 3.x requires sf::Vector2f, not two floats
+	rect.setPosition(sf::Vector2f(node->bounds.min.x, node->bounds.min.y));
+
+	rect.setSize(sf::Vector2f(node->bounds.max.x - node->bounds.min.x, node->bounds.max.y - node->bounds.min.y));
+
 	rect.setFillColor(sf::Color::Transparent);
 
 	if (node->IsLeaf())
@@ -725,8 +729,8 @@ void RayCastScene::DrawBVHLeafNode(BVHNode* node) {
 		return;
 
 	sf::RectangleShape rect;
-	rect.setPosition({node->bounds.position.x, node->bounds.position.y});
-	rect.setSize(sf::Vector2f(node->bounds.size.x, node->bounds.size.y));
+	rect.setPosition({node->bounds.min.x, node->bounds.min.y});
+	rect.setSize(sf::Vector2f(node->bounds.max.x - node->bounds.min.x, node->bounds.max.y - node->bounds.min.y));
 	rect.setFillColor(sf::Color::Transparent);
 	rect.setOutlineColor(sf::Color::Green);
 	rect.setOutlineThickness(2.f);
@@ -804,8 +808,8 @@ void RayCastScene::HandleEvent(const std::optional<sf::Event>& event) {
 void RayCastScene::DrawBVHNodeColored(BVHNode* node, const sf::Color& color) {
 	sf::RectangleShape box;
 
-	box.setPosition(node->bounds.position);	
-	box.setSize(sf::Vector2f(node->bounds.size.x, node->bounds.size.y));
+	box.setPosition(sf::Vector2f(node->bounds.min.x, node->bounds.min.y));
+	box.setSize(sf::Vector2f(node->bounds.max.x - node->bounds.min.x, node->bounds.max.y - node->bounds.min.y));
 
 	box.setFillColor(sf::Color(0, 0, 0, 0)); // Transparent fill
 	box.setOutlineColor(color);				 // Outline color based on the parameter
@@ -971,6 +975,11 @@ void RayCastScene::OnEnter() {
 
 	m_entityManager.GetSpatialIndex()->Build(m_entityManager.GetDynamicEntities());
 	std::cout << "Task completed for " << m_entityManager.GetDynamicEntities().size() << " entities.\n";
+
+
+	BVHSystem& bvh = m_entityManager.GetBVH();
+	int depth = bvh.ComputeDepth(bvh.GetRoot());
+	std::cout << "[RayCastScene] Dynamic BVH depth = " << depth << "\n";
 }
 /////////////////////////////////
 

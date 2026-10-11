@@ -491,7 +491,7 @@ void MovementSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities
 		// Move towards the current waypoint if there's distance to cover
 		if (distanceToWaypoint > 0.001f) {
 			// Normalize direction and apply speed
-			direction.Normalize();
+			direction.Normalise();
 			float moveDistance = follower->speed * deltaTime;
 			transform->position = transform->position + (direction * moveDistance);
 		}

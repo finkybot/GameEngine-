@@ -271,7 +271,7 @@
       <Filter>Source Files\Systems</Filter>
     </ClCompile>
     <ClCompile Include="RaycastFns.cpp">
-      <Filter>Source Files</Filter>
+      <Filter>Source Files\Systems</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -633,7 +633,7 @@
       <Filter>Header Files\Systems</Filter>
     </ClInclude>
     <ClInclude Include="RaycastFns.h">
-      <Filter>Header Files</Filter>
+      <Filter>Header Files\Systems</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

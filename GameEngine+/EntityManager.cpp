@@ -169,6 +169,7 @@ void EntityManager::AddPendingEntities() {
 		OnEntityAdded(e);
 	}
 
+	//std::cout << "Added " << m_toAdd.size() << " pending entities." << std::endl;
 	m_toAdd.clear();
 }
 /////////////////////////////////

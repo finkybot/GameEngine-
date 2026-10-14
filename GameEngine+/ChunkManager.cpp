@@ -173,15 +173,20 @@ void ChunkManager::BuildWorldMask() {
 
 
 /////////////////////////////////
-// LoadAllSavedChunks - Scans the base directory for saved chunk files and enqueues them for loading in the background thread. 
-// Each chunk file is expected to be named in the format "chunk_X_Y.dat" where X and Y are the chunk coordinates.
+// LoadAllSavedChunks - Scans the base directory for saved chunk files and enqueues them for loading in the background thread. Each chunk file is expected to be named in the format "chunk_X_Y.dat" where X and Y are the chunk coordinates.
 void ChunkManager::LoadAllSavedChunks() {
 	if (m_basePath.empty()) {
 		std::cout << "[ChunkManager] ERROR: m_basePath is empty!\n";
 		return;
 	}
-	std::cout << "[ChunkManager] LoadAllSavedChunks from: " << m_basePath << "\n";
-	std::cout << "[ChunkManager] m_numLayers = " << m_numLayers << "\n";
+
+	//std::cout << "[ChunkManager] LoadAllSavedChunks from: " << m_basePath << "\n";
+	//std::cout << "[ChunkManager] m_numLayers = " << m_numLayers << "\n";
+
+	// We are going to do three passes:
+	// The first pass discovers all chunk files and which chunks need to be created.
+	// The second pass creates all chunks that need to exist in memory (with all layers).
+	// The third pass enqueues load jobs for all discovered files.
 	try {
 		int fileCount = 0;
 		std::set<std::pair<int, int>> chunksToCreate;  // Track unique (cx, cy) pairs
@@ -211,7 +216,7 @@ void ChunkManager::LoadAllSavedChunks() {
 			chunksToCreate.insert({cx, cy});
 		}
 
-		// Second pass: create all chunks that need to exist
+		// Second pass: create all chunks that need to exist, NOTE!!!! I'm creating new chunks so I don't need to set the chunk as dirty (its the default state) thus rebuild will be correctly called when required.
 		{
 			std::lock_guard<std::mutex> lock(m_mutex);
 			for (const auto& [cx, cy] : chunksToCreate) {
@@ -239,7 +244,9 @@ void ChunkManager::LoadAllSavedChunks() {
 			int cy = std::stoi(body.substr(us2+1, dot - (us2+1)));
 			EnqueueLoadChunk(cx, cy, layer);
 		}
-		std::cout << "[ChunkManager] Total chunk files found: " << fileCount << "\n";
+
+
+		//	std::cout << "[ChunkManager] Total chunk files found: " << fileCount << "\n";
 		if (fileCount == 0) {
 			std::cout << "[ChunkManager] WARNING: No chunk files found! All files in directory:\n";
 			for (const auto& f : filenames) {
@@ -392,7 +399,7 @@ void ChunkManager::GetMinChunkCoords(int& outMinCx, int& outMinCy) const {
 /////////////////////////////////
 // ShiftChunksToPositiveCoords - Shift all chunks so min coordinates are >= 0
 void ChunkManager::ShiftChunksToPositiveCoords() {
-	std::lock_guard<std::mutex> lk(m_mutex);
+	std::unique_lock<std::mutex> lk(m_mutex);
 
 	if (m_chunks.empty()) return;
 
@@ -438,12 +445,11 @@ void ChunkManager::ShiftChunksToPositiveCoords() {
 
 	// Save all shifted chunks to disk
 	// Note: Unlock mutex before calling SaveAllChunks as it may use mutexes internally
-	m_mutex.unlock();
+	lk.unlock();
 	SaveAllChunks();
-	m_mutex.lock();
+	lk.lock();
 
-	std::cout << "[ChunkManager] Shifted " << chunksToShift.size() << " chunks and saved to disk. New min coords: (" 
-			  << (minCx >= 0 ? minCx : 0) << ", " << (minCy >= 0 ? minCy : 0) << ")\n";
+	std::cout << "[ChunkManager] Shifted " << chunksToShift.size() << " chunks and saved to disk. New min coords: ("  << (minCx >= 0 ? minCx : 0) << ", " << (minCy >= 0 ? minCy : 0) << ")\n";
 }
 /////////////////////////////////
 
@@ -495,7 +501,7 @@ void ChunkManager::RebuildAllChunksFromTileset() {
 		auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
 		if (atlasOpt.has_value() && *atlasOpt) {
 			atlasPtr = *atlasOpt;
-			std::cout << "ChunkManager::RebuildAllChunksFromTileset - Atlas '" << m_tilesetKey << "' loaded successfully\n";
+			//std::cout << "ChunkManager::RebuildAllChunksFromTileset - Atlas '" << m_tilesetKey << "' loaded successfully\n";
 		} else {
 			std::cout << "ChunkManager::RebuildAllChunksFromTileset - Atlas '" << m_tilesetKey << "' NOT FOUND!\n";
 		}
@@ -1137,6 +1143,7 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 	chunk.tilesPerLayer[layerIndex][index] = tileValue;
 	chunk.dirty[layerIndex] = 1;
 	chunk.editVersion[layerIndex]++;
+	chunk.bvhDirty = true; // Mark the BVH as dirty since the tile data has changed
 	m_worldRevision.fetch_add(1, std::memory_order_relaxed);
 
 	// LRU touch
@@ -1440,8 +1447,7 @@ void ChunkManager::UpdateMainThread() {
 
 
 /////////////////////////////////
-// UpdateMainThread_NoLock - This method performs the main thread update logic without acquiring the mutex lock. It processes pending loaded chunks 
-// from the background loader and handles scheduled rebuilds for GPU/SFML dependent work. It is intended to be called when the caller already holds the mutex lock.
+// UpdateMainThread_NoLock - This method performs the main thread update logic without acquiring the mutex lock. It processes pending loaded chunks from the background loader and handles scheduled rebuilds for GPU/SFML dependent work. It is intended to be called when the caller already holds the mutex lock.
 void ChunkManager::UpdateMainThread_NoLock() {
 // === 1. Process pending loaded chunks (from background loader) ===
 	const int kMaxPendingPerFrame = 16;
@@ -1463,10 +1469,10 @@ void ChunkManager::UpdateMainThread_NoLock() {
 			s_pendingChunks.erase(s_pendingChunks.begin(), s_pendingChunks.begin() + take);
 	}
 
-	// Finalize each loaded chunk
+	// Finalise each loaded chunk
 	for (const auto& pending : pendingChunksCopy) {
 		const auto& [chunkX, chunkY, layer, tileData, version] = pending;
-		FinalizeLoadedChunk(chunkX, chunkY, layer, tileData, version);
+		FinaliseLoadedChunk(chunkX, chunkY, layer, tileData, version);
 	}
 
 	// === 2. Process scheduled rebuilds (GPU / SFML dependent work) ===
@@ -1505,10 +1511,13 @@ void ChunkManager::UpdateMainThread_NoLock() {
 			chunk.readyForRendering[L] = 1;
 	}
 
-	// === 3. Rebuild per‑chunk BVH trees ===
+	// === 4. Rebuild per‑chunk BVH trees ===
 	// (Caller already holds m_mutex, so this is safe)
 	for (auto& [key, chunk] : m_chunks) {
-		chunk.dynamicBVH.Rebuild(chunk.dynamicEntities);
+		if (chunk.bvhDirty) {
+			chunk.dynamicBVH.Rebuild(chunk.dynamicEntities);
+			chunk.bvhDirty = false;
+		}
 	}
 }
 /////////////////////////////////
@@ -1799,6 +1808,9 @@ void ChunkManager::RebuildChunkEntities(Chunk& chunk) {
 			}
 		}
 	} catch(...) {}
+
+	// Mark the chunk's BVH as dirty since the collider entities have changed, which will trigger a rebuild of the BVH in the next update cycle.
+	chunk.bvhDirty = true;
 }
 /////////////////////////////////
 
@@ -1820,13 +1832,13 @@ void ChunkManager::ScheduleChunkForRebuild(Chunk& c) {
 
 
 /////////////////////////////////
-// FinalizeLoadedChunk
-// This method is called on the main thread after a chunk has been loaded in the background. It finalizes the loaded chunk by updating its tile data, 
-// marking it as ready for rendering, and scheduling it for GPU/collider rebuild. If the chunk was evicted before finalization or if the editVersion 
+// FinaliseLoadedChunk
+// This method is called on the main thread after a chunk has been loaded in the background. It finalises the loaded chunk by updating its tile data, 
+// marking it as ready for rendering, and scheduling it for GPU/collider rebuild. If the chunk was evicted before finalisation or if the editVersion 
 // has changed since the load was enqueued, the loaded data is discarded to avoid overwriting newer changes.
-void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue) {
+void ChunkManager::FinaliseLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue) {
 
-	//std::cout << "[FINALIZE] C(" << chunkX << "," << chunkY << ")" << " L=" << layer << " ver=" << versionAtEnqueue << "\n";
+	//std::cout << "[FINALISE] C(" << chunkX << "," << chunkY << ")" << " L=" << layer << " ver=" << versionAtEnqueue << "\n";
 
 	// Lock the mutex to ensure thread safety while accessing and modifying the chunk data structures
 	std::lock_guard<std::mutex> lock(m_mutex);
@@ -1834,7 +1846,7 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::v
 	uint64_t key = GetChunkKey(chunkX, chunkY);
 	auto itr = m_chunks.find(key);
 	if (itr == m_chunks.end()) {
-		// Chunk was evicted before we could finalize — discard the load
+		// Chunk was evicted before we could finalise — discard the load
 		return;
 	}
 
@@ -1851,6 +1863,9 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::v
 		}
 		chunk.dirty[layer] = 0;
 		chunk.readyForRendering[layer] = 1;
+
+		chunk.bvhDirty = true; // Tile geometry changed → BVH must rebuild
+
 		m_worldRevision.fetch_add(1, std::memory_order_relaxed);
 	}
 
@@ -1892,9 +1907,7 @@ void ChunkManager::FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::v
 		}
 	}
 
-	// Defer GPU / SFML dependent work: schedule a rebuild on the main thread instead of building vertex arrays here.
-	// This avoids touching SFML/OpenGL from background loader threads.
-	// Note: FinalizeLoadedChunk runs on the main thread via UpdateMainThread normally; we still schedule to be safe.
+	// Defer GPU / SFML dependent work: schedule a rebuild on the main thread instead of building vertex arrays here. This avoids touching SFML/OpenGL from background loader threads. Note: FinaliseLoadedChunk runs on the main thread via UpdateMainThread normally; we still schedule to be safe.
 	ScheduleChunkForRebuild(chunk);
 	// O(1) LRU touch
 	{

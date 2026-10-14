@@ -99,7 +99,8 @@ void SpatialIndexUnified::Build(const std::vector<Entity*>& dynamicEntities) {
 		m_dynamicGrid.InsertFromSoA(e, x, y);
 	}
 
-	m_bvh.Rebuild(dynamicEntities); // Rebuild the BVH tree based on the current dynamic entities
+	m_bvh.Rebuild(dynamicEntities);		// Rebuild the BVH tree based on the current dynamic entities
+	//m_bvh.ReportBVHSize();			// Optional: report the size of the BVH tree for debugging or performance analysis
 }
 //////////////////////////////////
 

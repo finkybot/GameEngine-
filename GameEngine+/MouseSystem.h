@@ -22,9 +22,11 @@ public:
 		: m_entityManager(entityManager), m_window(window) {}
 
 	void Update(float dt);
+	void SetUseSFMLCoords(bool useSFML) { m_useSFMLCoords = useSFML; }
 
 private:
 	EntityManager* m_entityManager = nullptr;
 	sf::RenderWindow* m_window = nullptr;
+	bool m_useSFMLCoords = true;
 };
 /////////////////////////////////

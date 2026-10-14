@@ -62,7 +62,6 @@ public:
 	float GetRadius() const override { return m_rectangle.getSize().x; }
 	float GetWidth() const override { return m_rectangle.getSize().x; }
 
-
 	// GetColor - Return the current fill color of the rectangle shape as an SFML Color object. This method allows for querying the current color of the shape
 	sf::Color GetColor() const { return m_rectangle.getFillColor();	} 
 

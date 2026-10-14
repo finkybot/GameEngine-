@@ -552,6 +552,7 @@ void RayCastScene::Update(float deltaTime) {
 	// Poll live input every frame so drag transitions are captured reliably even near window edges.
 	const bool escapeKeyDown = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape);
 	const bool debugToggle = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
+	
 	ProcessDebugToggle(debugToggle);
 	ProcessEscapeKey(escapeKeyDown);
 
@@ -971,7 +972,7 @@ void RayCastScene::OnEnter() {
 	}
 
 	auto dyn = m_entityManager.GetDynamicEntities();
-	m_entityManager.GetBVH().Rebuild(dyn);
+	//m_entityManager.GetBVH().Rebuild(dyn);
 
 	m_entityManager.GetSpatialIndex()->Build(m_entityManager.GetDynamicEntities());
 	std::cout << "Task completed for " << m_entityManager.GetDynamicEntities().size() << " entities.\n";

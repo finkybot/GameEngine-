@@ -102,15 +102,25 @@ const char* ReadFile(const char* filePath); // Can you guess what it does? Reall
 
 /////////////////////////////////
 // Converts screen-space mouse coordinates to world-space using the camera component.
-inline Vec2 ScreenToWorld(const Vec2& screen, const CCamera& cam) {
-	// Convert screen → NDC (0..1)
-	float ndcX = screen.x / cam.viewportWidth;
-	float ndcY = screen.y / cam.viewportHeight;
+inline Vec2 ScreenToWorld(const Vec2& screen, const CCamera& cam, bool useSFML) {
+	if (useSFML) {
+		// SFML path (current behaviour)
+		float ndcX = screen.x / cam.viewportWidth;
+		float ndcY = screen.y / cam.viewportHeight;
 
-	// Convert NDC → world units
-	float worldX = cam.position.x + (ndcX - 0.5f) * (cam.viewportWidth / cam.zoom);
-	float worldY = cam.position.y + (ndcY - 0.5f) * (cam.viewportHeight / cam.zoom);
+		float worldX = cam.position.x + (ndcX - 0.5f) * (cam.viewportWidth / cam.zoom);
+		float worldY = cam.position.y + (ndcY - 0.5f) * (cam.viewportHeight / cam.zoom);
 
-	return Vec2(worldX, worldY);
+		return Vec2(worldX, worldY);
+	} else {
+		// Pure world-space path (correct for OpenGL + custom camera)
+		float halfW = cam.viewportWidth * 0.5f;
+		float halfH = cam.viewportHeight * 0.5f;
+
+		float dx = (screen.x - halfW) / cam.zoom;
+		float dy = (screen.y - halfH) / cam.zoom;
+
+		return Vec2(cam.position.x + dx, cam.position.y + dy);
+	}
 }
 /////////////////////////////////

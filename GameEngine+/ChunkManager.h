@@ -58,12 +58,15 @@ struct Chunk {
 	std::vector<Entity*> dynamicEntities;   // dynamic entities (e.g., enemies, items) that are spawned in this chunk
 
 	BVHSystem dynamicBVH; // BVH for dynamic entities in this chunk, used for efficient collision detection and raycasting.
+	bool bvhDirty = true; // BVH must rebuild once when chunk is created
 
 	std::vector<float> cpuVertexBuffer;			// CPU-side vertex buffer for the chunk's tiles, used for rendering.
 	std::vector<sf::VertexArray> vertexArrays;	// one vertex array per layer
 	std::shared_ptr<sf::Texture> vertexTexture; // texture used by the vertexArrays (if any)
 
 	std::vector<sf::VertexArray> tempVertexArraysForRendering; // temporary storage per-layer for alpha-modulated vertex data during enqueue
+
+
 
 	Chunk() = default; // default constructor
 
@@ -224,7 +227,7 @@ private:
 	void EnqueueLoadChunk(int chunkX, int chunkY, int layer);	// Enqueue a specific layer of a chunk for loading in the background.
 	void EnqueueLoadChunk_NoLock(int chunkX, int chunkY);		// version that assumes callder holds m_mutex
 	
-	void FinalizeLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue);	// Finalize a chunk that has finished loading in the background. This method updates the chunk's tile data, marks it as ready for rendering, and increments the world revision counter.
+	void FinaliseLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue);	// Finalize a chunk that has finished loading in the background. This method updates the chunk's tile data, marks it as ready for rendering, and increments the world revision counter.
 	void RebuildChunkEntities(Chunk& chunk);																			// Rebuilds merged collider entities for a chunk; call after tile edits.
 	void ScheduleChunkForRebuild(Chunk& chunk);																			// Schedule chunk for main-thread-only GPU/collider rebuild
 

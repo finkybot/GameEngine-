@@ -87,22 +87,28 @@ void TestScene::Update(float dt) {
 	//
 	raycast->screenPos = ms->screenPos;
 
-	//raycast->worldPos = ms->worldPos; // or override for testing
-	
-	raycast->worldPos = Vec2(600.f, 0.f); // directly above the test circle
+	auto cCam = m_cameraSystem.GetMainCamera(GetEntityManager());
+	if (cCam) {
+		// Ray starts at the mouse world position
+		raycast->worldPos = ms->worldPos;
 
-	raycast->direction = Vec2(0.0f, 1.0f).Normalise();
-	raycast->maxDistance = 5000.0f;
+		// Ray goes straight down a few pixels
+		raycast->direction = Vec2(0.0f, -1.0f);
 
-	//
-	// --- NOW run the raycast system with fresh data ---
-	//
-	m_raycastSystem->Update(dt);
+		// Only check a small distance
+		raycast->maxDistance = 2.0f;
+	}
+
+
+	//std::cout << "Ray origin: " << raycast->worldPos.x << "," << raycast->worldPos.y << " dir: " << raycast->direction.x << "," << raycast->direction.y << "\n";
+
 
 	//
 	// Debug hit output
 	//
 	if (raycast->lastHit.hit) {
+		std::cout << "Mouse worldPos: " << ms->worldPos.x << ", " << ms->worldPos.y << "\n";
+
 		std::cout << "Raycast HIT entity ID: " << raycast->lastHit.entity->GetId() << " at ("
 				  << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n";
 	}
@@ -112,8 +118,8 @@ void TestScene::Update(float dt) {
 
 	// --- Scene growth + spawning (bounded) ---
 	m_growthTimer += dt;
-	if (m_growthTimer >= 5.0f) {
-		m_targetEntityCount += 20;
+	if (m_growthTimer >= 10.0f) {
+		m_targetEntityCount += 28;
 		m_growthTimer = 0.0f;
 	}
 
@@ -165,12 +171,18 @@ void TestScene::Update(float dt) {
 	// --- Commit pending entities ---
 	m_entityManager.ProcessPending();
 
+
+	m_raycastSystem->Update(dt);
+
+	//m_entityManager.GetBVH().ReportBVHSize();
 	// --- Camera movement + view ---
 	if (m_cameraEntity) {
 		m_cameraSystem.Update(dt, GetEntityManager());
 		ApplyCameraMovement(dt);
 		ApplyMainCameraView(dt);
 	}
+
+
 
 	// --- UI (ImGui) ---
 	RenderUI();
@@ -280,26 +292,6 @@ void TestScene::OnEnter() {
 	m_mouseSystem = new MouseSystem(&m_entityManager, &m_window);
 	m_raycastSystem = new RaycastSystem(&m_entityManager);
 
-	// --- Static test circle for raycast debugging ---
-	{
-		Entity* testCircle = m_entityManager.AddEntity(EntityType::TeamEagle);
-
-		auto* t = testCircle->GetComponent<CTransform>();
-		t->position = Vec2(600.f, 300.f);
-		t->velocity = Vec2(0.f, 0.f);
-
-		auto circle = std::make_unique<CCircle>();
-		circle->SetRadius(150.f);
-		circle->SetColor(255, 60, 60, 255);
-		testCircle->AddComponentPtr<CCircle>(std::move(circle));
-
-		auto* inst = testCircle->AddComponent<CRenderInstance>();
-		inst->radius = 150.f;
-		inst->r = 255;
-		inst->g = 60;
-		inst->b = 60;
-		inst->a = 255;
-	}
 
 	// Spawn initial population ONCE
 	SpawnInitialPopulation();
@@ -308,6 +300,11 @@ void TestScene::OnEnter() {
 	// Build spatial index ONCE
 	auto& entities = m_entityManager.GetEntities();
 	m_entityManager.GetSpatialIndex()->Build(m_entityManager.GetDynamicEntities());
+
+	// Build BVH once after initial spawn (not needed as we build the bvh in the spatial index build)
+	//auto dyn = m_entityManager.GetDynamicEntities();
+	//m_entityManager.GetBVH().Rebuild(dyn);
+	//m_entityManager.GetBVH().ReportBVHSize();
 
 	std::cout << "Dynamic entities: " << m_entityManager.GetDynamicEntities().size() << "\n";
 
@@ -318,10 +315,10 @@ void TestScene::OnEnter() {
 		e->currentCellY = INT_MIN;
 	}
 
+	m_mouseSystem->SetUseSFMLCoords(false);
+
 	std::cout << "Initial build of spatial index with " << entities.size() << " entities.\n";
 	std::cout << "Task completed for " << m_entityManager.GetDynamicEntities().size() << " entities.\n";
-
-	m_entityManager.GetBVH().ReportBVHSize();
 }
 /////////////////////////////////
 
@@ -655,7 +652,6 @@ void TestScene::SpawnInitialPopulation() {
 
 		float spawnY = std::uniform_real_distribution<float>(m_mapMin.y + 50.0f, m_mapMax.y - 50.0f)(m_rng);
 
-
 		// 3. Initial velocity (full 2D motion)
 		float velX = std::uniform_real_distribution<float>(-180.0f, 180.0f)(m_rng);
 		float velY = std::uniform_real_distribution<float>(-180.0f, 180.0f)(m_rng);
@@ -692,36 +688,29 @@ void TestScene::SpawnReplacementEntities(int count) {
 		unsigned int teamType = (direction == 1) ? 0u : 1u;
 
 		// 3. Sample velocity (horizontal only)
-		//float velX = m_xVelocity(m_rng);
 		float velX = 30.0f;
-		//std::cout << "SpawnReplacementEntities: direction=" << direction << ", velX=" << velX << "\n";
 		float velY = 0.0f;
-
-		// Reverse velocity if moving rightward
 		if (direction == 1)
 			velX = -velX;
 
 		// 4. Sample spawn position
 		float spawnX;
-		const auto windowSize = m_window.getSize();
 		float spawnY = std::uniform_real_distribution<float>(m_mapMin.y + 150.0f, m_mapMax.y - 150.0f)(m_rng);
 
 		if (direction == 1) {
-			// Spawn just off the left edge
 			spawnX = std::uniform_real_distribution<float>(m_mapMin.x - 150.0f, m_mapMin.x)(m_rng);
 		} else {
-			// Spawn just off the right edge
 			spawnX = m_mapMax.x + std::uniform_real_distribution<float>(0.0f, 150.0f)(m_rng);
 		}
 
-		// 5. Sample visual properties
+		// 5. Visual properties
 		int r = m_redVal(m_rng);
 		int g = m_greenVal(m_rng);
 		int b = m_blueVal(m_rng);
 		int a = m_alphaVal(m_rng);
-		float radius = m_radiusDistro(m_rng)*3.0f;
+		float radius = m_radiusDistro(m_rng) * 3.0f;
 
-		// 6. Spawn the entity
+		// 6. Queue the entity (don’t commit yet)
 		SpawnEntityByType(teamType, radius, Vec3(r, g, b), Vec2(spawnX, spawnY), Vec2(velX, velY), a);
 	}
 }

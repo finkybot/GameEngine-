@@ -9,7 +9,8 @@
 #include "RaycastSystem.h"
 #include "Entity.h"
 #include "RaycastDispatcher.h" 
-#include "RaycastFns.h"		  
+#include "RaycastFns.h"
+#include "Raycast.h"
 ////////////////////////////////
 
 
@@ -50,7 +51,23 @@ void RaycastSystem::Update(float /*dt*/) {
 		Vec2 direction = rc->direction; // assumed normalized
 		float maxDist = rc->maxDistance;
 
-		RaycastResult hit = RaycastEngine::RaycastUnified(origin, direction, maxDist);
+		RaycastResult hit{};
+
+		auto* spatial = m_entityManager->GetSpatialIndex();
+		if (spatial) {
+			RaycastHit entityHit{};
+			Entity* hitEntity = nullptr;
+			if (spatial->RaycastEntities(origin, direction, maxDist, entityHit, hitEntity)) {
+				hit.hit = true;
+				hit.distance = entityHit.distance;
+				hit.position = entityHit.position;
+				hit.normal = entityHit.normal;
+				hit.entity = hitEntity;
+				hit.tileX = -1;
+				hit.tileY = -1;
+				hit.tileValue = -1;
+			}
+		}
 
 		rc->lastHit = hit;
 

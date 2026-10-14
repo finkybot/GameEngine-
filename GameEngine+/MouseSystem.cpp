@@ -55,7 +55,7 @@ void MouseSystem::Update(float /*dt*/) {
 		ms->leftDown = down;
 
 		// Convert to world-space using CCamera
-		ms->worldPos = ScreenToWorld(ms->screenPos, *cam);
+		ms->worldPos = ScreenToWorld(ms->screenPos, *cam, m_useSFMLCoords);
 	}
 }
 /////////////////////////////////

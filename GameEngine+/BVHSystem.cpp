@@ -11,6 +11,7 @@
 #include "CShape.h"
 #include "Raycast.h"
 #include <algorithm>
+#include <math.h>
 #include "AABB.h"
 /////////////////////////////////
 
@@ -68,7 +69,7 @@ void BVHSystem::Rebuild(const std::vector<Entity*>& entities) {
     std::vector<Entity*> validEntities = entities;	// Create a vector to hold valid entities that have a CShape component
     m_root = BuildRecursive(validEntities, 1);
 
-    //std::cout << "[BVH] Build complete\n";
+    std::cout << "[BVH] Build complete\n";
 }
 /////////////////////////////////
 
@@ -90,39 +91,52 @@ bool BVHSystem::Raycast(const Vec2& origin, const Vec2& dirN, float maxDist, Ray
 
 
 /////////////////////////////////
-// BuildRecursive - recursively builds the BVH tree from a list of entities. This method partitions the entities into two groups based on their bounding boxes and creates child nodes for each group. The 
-// recursion continues until the number of entities in a node is less than or equal to the specified leaf size, at which point a leaf node is created containing the entities.
+// BuildRecursive - recursively builds the BVH tree from a list of entities. This method divides the entities into two groups based on their bounding boxes and creates internal nodes until the number of entities in a node is less than or equal to the specified leaf size. Leaf nodes contain the actual entities, 
+// while internal nodes contain bounding boxes that encompass their child nodes.
 BVHNode* BVHSystem::BuildRecursive(std::vector<Entity*>& entities, int leafSize) {
-	if (entities.empty())
-		return nullptr;
+	// Base case: if there are no entities, return null
+	if (entities.empty()) return nullptr;
 
-	// Leaf node
+	// Leaf node: if the number of entities is less than or equal to the leaf size, create a leaf node containing the entities
 	if ((int)entities.size() <= leafSize) {
+		// Create a new leaf node
 		BVHNode* node = new BVHNode();
 		node->leafEntities = entities;
 
+		// Compute the bounding box for the leaf node by combining the bounding boxes of all entities in the leaf
 		AABB bounds = ComputeBounds(entities[0]);
-		for (size_t i = 1; i < entities.size(); ++i)
-			bounds.expand(ComputeBounds(entities[i]));
 
+		// Expand the bounding box to include all entities in the leaf
+		for (size_t i = 1; i < entities.size(); ++i) bounds.expand(ComputeBounds(entities[i]));
+
+		// Assign the computed bounding box to the leaf node
 		node->bounds = bounds;
+
+		// NEW: map each entity to this leaf
+		for (Entity* e : entities)	m_entityLeaf[e] = node;
+
+		// Return the created leaf node
 		return node;
 	}
 
-	// Internal node sort along X axis (AABB only)
-	std::sort(entities.begin(), entities.end(),
-			  [this](Entity* a, Entity* b) { return ComputeBounds(a).min.x < ComputeBounds(b).min.x; });
+	// Sort entities by their bounding box's minimum x-coordinate to prepare for splitting. This helps in creating a balanced BVH tree by dividing the entities into two groups based on their spatial distribution.
+	std::sort(entities.begin(), entities.end(), [this](Entity* a, Entity* b) { return ComputeBounds(a).min.x < ComputeBounds(b).min.x; });
 
-	// Split
+	// Split the entities into two groups for the left and right child nodes. The midpoint is calculated to divide the sorted entities into two halves.
 	int mid = entities.size() / 2;
 	std::vector<Entity*> leftEntities(entities.begin(), entities.begin() + mid);
 	std::vector<Entity*> rightEntities(entities.begin() + mid, entities.end());
 
+	// Create a new internal node and recursively build the left and right child nodes using the split entity groups.
 	BVHNode* node = new BVHNode();
 	node->left = BuildRecursive(leftEntities, leafSize);
 	node->right = BuildRecursive(rightEntities, leafSize);
 
-	// Internal node bounds (AABB only)
+	// Set the parent pointers of the child nodes to the current node. This establishes the hierarchical relationship between the internal node and its children.
+	if (node->left)	node->left->parent = node;
+	if (node->right) node->right->parent = node;
+
+	// Compute the bounding box for the internal node by combining the bounding boxes of its child nodes. This ensures that the internal node's bounding box encompasses all entities in its subtree.
 	if (node->left && node->right) {
 		AABB combined = node->left->bounds;
 		combined.expand(node->right->bounds);
@@ -157,8 +171,7 @@ void BVHSystem::DestroyRecursive(BVHNode* node) {
 // RaycastNode - performs a raycast against the BVH tree starting from the given node. This method recursively traverses the tree, testing the ray against the bounding boxes of each node and
 // its child nodes. It returns true if the ray intersects any entity within the BVH tree and updates the output hit information accordingly.
 bool BVHSystem::RaycastNode(BVHNode* node, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity, BVHDebugTraversal* debug) const {
-	std::cout << "RaycastNode: testing bounds " << node->bounds.min.x << ", " << node->bounds.min.y
-			  << " size " << node->bounds.max.x - node->bounds.min.x << ", " << node->bounds.max.y - node->bounds.min.y << "\n";
+	//std::cout << "RaycastNode: testing bounds " << node->bounds.min.x << ", " << node->bounds.min.y  << " size " << node->bounds.max.x - node->bounds.min.x << ", " << node->bounds.max.y - node->bounds.min.y << "\n";
 
 	float dummyDistance = 0.0f;
 
@@ -173,7 +186,7 @@ bool BVHSystem::RaycastNode(BVHNode* node, const Vec2& origin, const Vec2& dirN,
 			dummyDistance, maxDistance)) {
 		return false;
 	} else {
-		std::cout << "RaycastNode: ray intersects bounds\n";
+		//std::cout << "RaycastNode: ray intersects bounds\n";
 	}
 
 	// Leaf node: perform raycast against entities in the leaf
@@ -197,58 +210,58 @@ bool BVHSystem::RaycastNode(BVHNode* node, const Vec2& origin, const Vec2& dirN,
 
 
 /////////////////////////////////
-// RaycastLeaf - performs a raycast against the entities contained in a leaf node of the BVH tree. This method checks for intersections between the ray and the bounding boxes of the
-// entities in the leaf node. It iterates through each entity, checks if it is alive and has a valid shape, and then performs a ray-AABB intersection test. If an intersection is found, 
-// it updates the output hit information and returns true.
-bool BVHSystem::RaycastLeaf(const std::vector<Entity*>& leaf, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity, BVHDebugTraversal* debug) const {
-	// Iterate through each entity in the leaf node and perform a raycast against its bounding box
+// RaycastLeaf - performs a raycast against the entities contained in a leaf node of the BVH tree. This method checks for intersections between the ray and the bounding boxes of the entities in the leaf node. It iterates through each entity, checks if it is alive and has a valid shape, and then performs a ray-AABB 
+// intersection test. If an intersection is found, it updates the output hit information and returns true.
+bool BVHSystem::RaycastLeaf(const std::vector<Entity*>& leaf, const Vec2& origin, const Vec2& dirN, float maxDistance,
+							RaycastHit& outHit, Entity*& outEntity, BVHDebugTraversal* debug) const {
 	float nearestDistance = maxDistance;
 	bool hitAny = false;
 
 	for (Entity* entity : leaf) {
-		if (!entity || !entity->IsAlive()) continue; // Skip dead or null entities
+		if (!entity || !entity->IsAlive())
+			continue;
 
-		CShape* shape = entity->GetShape();
-		if (!shape)	continue; // Skip entities without a shape
+		// Use engine-native AABB instead of SFML FloatRect
+		AABB box = ComputeBounds(entity);
 
-		sf::FloatRect bounds = shape->GetShape().getGlobalBounds(); // Get the bounding box of the shape
-		if (bounds.size.x <= 0.0f || bounds.size.y <= 0.0f)	continue; // Skip degenerate bounding boxes
+		// Skip degenerate boxes
+		if (box.min.x == box.max.x || box.min.y == box.max.y)
+			continue;
 
-		float hitDistance = 0.0f;
-		if (!RayIntersectsAABB(origin, dirN, 
-								Vec2(bounds.position.x, bounds.position.y),
-								Vec2(bounds.position.x + bounds.size.x, bounds.position.y + bounds.size.y), 
-								hitDistance, nearestDistance)) {
-			continue; // If the ray does not intersect the bounding box, continue to the next entity
-		}
+		float hitDistance = nearestDistance;
 
-		if (hitDistance < 0.0f || hitDistance > nearestDistance) continue; // Skip hits that are out of range
+		// Use your AABB ray test
+		if (!RIntersectsAABB(origin, dirN, box, hitDistance))
+			continue;
 
-		// Update the nearest hit information if this hit is closer than any previous hits
+		// Update nearest hit
 		nearestDistance = hitDistance;
 		outEntity = entity;
 		outHit.hit = true;
 		outHit.distance = hitDistance;
-		outHit.position = Vec2(origin.x + dirN.x * hitDistance, origin.y + dirN.y * hitDistance);
+		outHit.position = origin + dirN * hitDistance;
 
+		// Compute normal from AABB center
+		Vec2 center((box.min.x + box.max.x) * 0.5f, (box.min.y + box.max.y) * 0.5f);
 
-		// Compute normal based on the hit position and the center of the bounding box
-		Vec2 center(bounds.position.x + bounds.size.x * 0.5f, bounds.position.y + bounds.size.y * 0.5f);
 		Vec2 delta = outHit.position - center;
 
-		float nx = delta.x / (bounds.size.x * 0.5f);
-		float ny = delta.y / (bounds.size.y * 0.5f);
-		
-		if (std::fabs(nx) > std::fabs(ny)) {
-			outHit.normal = Vec2((nx > 0.0f) ? 1.0f : -1.0f, 0.0f); // Hit on left or right side
-		} else {
-			outHit.normal = Vec2(0.0f, (ny > 0.0f) ? 1.0f : -1.0f); // Hit on top or bottom side
-		}
-		hitAny = true; // Mark that we hit at least one entity
+		float halfW = (box.max.x - box.min.x) * 0.5f;
+		float halfH = (box.max.y - box.min.y) * 0.5f;
+
+		float nx = delta.x / halfW;
+		float ny = delta.y / halfH;
+
+		if (std::fabs(nx) > std::fabs(ny))
+			outHit.normal = Vec2((nx > 0.f) ? 1.f : -1.f, 0.f);
+		else
+			outHit.normal = Vec2(0.f, (ny > 0.f) ? 1.f : -1.f);
+
+		hitAny = true;
 	}
 
-	   // If this leaf produced a hit, record it
-		if (hitAny && debug) debug->hitLeaf = debug->visited.back(); // last visited node is the leaf
+	if (hitAny && debug)
+		debug->hitLeaf = debug->visited.back();
 
 	return hitAny;
 }
@@ -264,10 +277,17 @@ AABB BVHSystem::ComputeBounds(Entity* e) const {
 	if (!t || !s)
 		return AABB(Vec2(0, 0), Vec2(0, 0));
 
-	float r = s->GetRadius();
 	Vec2 pos = t->position;
+	auto& shape = s->GetShape();
+	sf::Vector2f origin = shape.getOrigin();
 
-	return AABB(Vec2(pos.x - r, pos.y - r), Vec2(pos.x + r, pos.y + r));
+	const float w = s->GetWidth();
+	const float h = s->GetHeight();
+
+	Vec2 min(pos.x - origin.x, pos.y - origin.y);
+	Vec2 max(min.x + w, min.y + h);
+
+	return AABB(min, max);
 }
 /////////////////////////////////
 
@@ -328,11 +348,31 @@ void BVHSystem::Remove(Entity* e) {
 
 /////////////////////////////////
 void BVHSystem::Update(Entity* e) {
-	if (!e || !e->IsAlive())
+	auto it = m_entityLeaf.find(e);
+	if (it == m_entityLeaf.end())
 		return;
 
-	// No per‑node update needed with this design; just mark dirty
-	m_dirty = true;
+	BVHNode* leaf = it->second;
+
+	// 1. Update leaf bounds
+	leaf->bounds = ComputeBounds(e);
+
+	// 2. Bubble updated bounds up the tree
+	BVHNode* parent = leaf->parent;
+	while (parent) {
+		AABB newBounds;
+
+		if (parent->left)
+			newBounds = parent->left->bounds;
+
+		if (parent->right)
+			newBounds.expand(parent->right->bounds);
+
+		parent->bounds = newBounds;
+		parent = parent->parent;
+	}
+
+	//ReportBVHSize();
 }
 /////////////////////////////////
 

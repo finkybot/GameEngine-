@@ -23,6 +23,9 @@ struct BVHNode {
 	AABB bounds;
 	BVHNode* left;
 	BVHNode* right;
+
+	BVHNode* parent = nullptr;
+
 	std::vector<Entity*> leafEntities;
 
 	bool IsLeaf() const { return left == nullptr && right == nullptr; }
@@ -72,6 +75,7 @@ public:
 private:
 	BVHNode* m_root = nullptr; 
 	std::vector<Entity*> m_dynamicEntities;
+	std::unordered_map<Entity*, BVHNode*> m_entityLeaf;
 	bool m_dirty = false;
 
 	// Internal helper methods for building the BVH tree and performing raycasting. These methods are used to recursively build the tree, perform ray-AABB intersection tests, and traverse the tree during raycasting.
@@ -88,7 +92,6 @@ private:
 	bool RaycastLeaf(const std::vector<Entity*>& leaf, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity, BVHDebugTraversal* debug) const;
 	AABB ComputeBounds(Entity* e) const;
 	bool RIntersectsAABB(const Vec2& origin, const Vec2& dirN, const AABB& box, float& outDist) const;
-
 
 	bool RaycastDynamic(const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit, Entity*& outEntity) const;
 };

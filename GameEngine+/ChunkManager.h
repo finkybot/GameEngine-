@@ -17,9 +17,12 @@
 #include <atomic>
 #include "BVHSystem.h"
 
+
+#include <glad/glad.h>
 #include "TileMap.h"
 #include "RenderQueue.h"
 #include <SFML/Graphics.hpp>
+#include "ChunkRenderData.h"
 
 // forward declarations to avoid include cycles
 class Entity;
@@ -41,56 +44,83 @@ class TextureAtlas;
 //	|	Chunk struct represents a section of the tile map, containing tile data and metadata for rendering and collision. Each chunk corresponds to a specific area of the game world and can be loaded/unloaded independently to optimize performance and memory usage.
 //	|_______________________________________________________________________
 struct Chunk {
-	// Public member variables for the Chunk struct, including chunk coordinates, size, tile data, rendering information, and generated entities for collision.
-	int chunkX = 0,	chunkY = 0; // chunk coordinates (e.g., chunkX = 0, chunkY = 0 is the origin chunk)
-	int width = 0, height = 0; // chunk size in tiles (e.g., 16x16 tiles per chunk)
+	// --- RenderGL GPU buffers (new, safe to add) ---
+	struct ChunkGpuBuffers {
+		GLuint vao = 0;
+		GLuint vbo = 0;
+		GLuint instanceBuffer = 0;
+		uint32_t vertexCount = 0;
+		bool gpuReady = false;
+	};
+	std::vector<ChunkGpuBuffers> gpuBuffers;
 
-	float tileSize = 32.0f; // size of each tile in pixels (for rendering and collision)
-	
-	// per-layer storage: tilesPerLayer[layer][y * width + x]
+	// --- Core chunk metadata ---
+	int chunkX = 0, chunkY = 0;
+	int width = 0, height = 0;
+	float tileSize = 32.0f;
+
 	int numLayers = 1;
 	std::vector<std::vector<int>> tilesPerLayer;
-	std::vector<char> dirty;					// per-layer dirty flags
-	std::vector<char> readyForRendering;		// per-layer ready flags
-	std::vector<uint32_t> editVersion;			// per-layer edit versions
+	std::vector<char> dirty;
+	std::vector<char> readyForRendering;
+	std::vector<uint32_t> editVersion;
 
-	std::vector<Entity*> generatedEntities; // generated entities for collision/pathfinding, one per tile (if any)
-	std::vector<Entity*> dynamicEntities;   // dynamic entities (e.g., enemies, items) that are spawned in this chunk
+	// --- Collision / entities ---
+	std::vector<Entity*> generatedEntities;
+	std::vector<Entity*> dynamicEntities;
 
-	BVHSystem dynamicBVH; // BVH for dynamic entities in this chunk, used for efficient collision detection and raycasting.
-	bool bvhDirty = true; // BVH must rebuild once when chunk is created
+	bool renderDirty = true;
+	bool bvhDirty = true;
 
-	std::vector<float> cpuVertexBuffer;			// CPU-side vertex buffer for the chunk's tiles, used for rendering.
-	std::vector<sf::VertexArray> vertexArrays;	// one vertex array per layer
-	std::shared_ptr<sf::Texture> vertexTexture; // texture used by the vertexArrays (if any)
+	BVHSystem dynamicBVH;
 
-	std::vector<sf::VertexArray> tempVertexArraysForRendering; // temporary storage per-layer for alpha-modulated vertex data during enqueue
+	// --- SFML rendering fields (must stay until SFML scenes are removed) ---
+	std::vector<float> cpuVertexBuffer;
+	std::vector<sf::VertexArray> vertexArrays;
+	std::shared_ptr<sf::Texture> vertexTexture;
+	std::vector<sf::VertexArray> tempVertexArraysForRendering;
 
+	Chunk() = default;
 
+	Chunk(int x, int y, int w, int h, float ts, int layers) : chunkX(x), chunkY(y), width(w), height(h), tileSize(ts) {
+		numLayers = std::max(1, layers);
 
-	Chunk() = default; // default constructor
-
-	// Parameterized constructor for the Chunk struct, initializes member variables based on provided parameters and sets up per-layer storage for tiles and rendering information.
-	Chunk(int x, int y, int width, int height, float tileSize, int numLayers)
-		: chunkX(x), chunkY(y), width(width), height(height), tileSize(tileSize) {
-		numLayers = std::max(1, numLayers);
-		this->numLayers = numLayers;
 		tilesPerLayer.resize(numLayers);
 		dirty.resize(numLayers, false);
 		readyForRendering.resize(numLayers, false);
 		editVersion.resize(numLayers, 0);
-		for (int i = 0; i < numLayers; ++i) {
+
+		for (int i = 0; i < numLayers; ++i)
 			tilesPerLayer[i].resize(width * height, 0);
-		}
+
+		// SFML compatibility
 		vertexArrays.resize(numLayers);
-		for (auto &va : vertexArrays) va.setPrimitiveType(sf::PrimitiveType::Triangles);
 		tempVertexArraysForRendering.resize(numLayers);
-		for (auto &va : tempVertexArraysForRendering) va.setPrimitiveType(sf::PrimitiveType::Triangles);
+		for (auto& va : vertexArrays)
+			va.setPrimitiveType(sf::PrimitiveType::Triangles);
+		for (auto& va : tempVertexArraysForRendering)
+			va.setPrimitiveType(sf::PrimitiveType::Triangles);
 	}
 
-	// Backwards compat helpers for single-layer access
-	int GetTileSingleLayer(int x, int y) const { return (tilesPerLayer.empty() ? 0 : tilesPerLayer[0][y * width + x]); }
-	void SetTileSingleLayer(int x, int y, int v) { if (!tilesPerLayer.empty()) tilesPerLayer[0][y * width + x] = v; }
+	int GetTileSingleLayer(int x, int y) const { return tilesPerLayer.empty() ? 0 : tilesPerLayer[0][y * width + x]; }
+
+	void SetTileSingleLayer(int x, int y, int v) {
+		if (!tilesPerLayer.empty())
+			tilesPerLayer[0][y * width + x] = v;
+	}
+};
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+//	|	WorldViewBounds struct represents the bounds of the visible world in world coordinates. It is used to determine which chunks are visible and need to be rendered based on the current view of the game world. (this is for future use, not currently used in the code)
+//	|_______________________________________________________________________
+struct WorldViewBounds {
+	float minX;
+	float minY;
+	float maxX;
+	float maxY;
 };
 /////////////////////////////////
 
@@ -115,35 +145,33 @@ public:
 		float tileSize = 32.f;
 	};
 
-	// BuildWorldMask - Builds a world mask for collision/pathfinding based on the currently loaded chunks. The world mask is a 2D grid of uint8_t values, where each value corresponds to a specific tile's collision properties.
-	void BuildWorldMask(std::vector<uint8_t>& outMask, int& outW, int& outH);
+	void BuildWorldMask(std::vector<uint8_t>& outMask, int& outW, int& outH); // Build a world mask for collision/pathfinding based on the currently loaded chunks. The world mask is a 2D array of uint8_t values representing the collision properties of each tile in the world.
 
-	// Public member variables for the ChunkManager class for world mask for collision, pathfinding, and other gameplay mechanics. Each value corresponds to a specific tile's collision properties.
-	std::vector<uint8_t> worldMask;
+	std::vector<uint8_t> worldMask;			// World mask for collision/pathfinding, where 1 indicates an occupied tile and 0 indicates an empty tile. This mask is built from the currently loaded chunks and is used for efficient collision detection and pathfinding in the game world.
 	int worldOffsetX = 0, worldOffsetY = 0; // World offset in pixels for coordinate system alignment
-	int worldWidth = 0, worldHeight = 0;
+	int worldWidth = 0,	worldHeight = 0;	// World size in pixels, representing the dimensions of the game world based on the loaded chunks. This is used for rendering and collision detection.
 
 	Chunk* GetChunkForPosition(const Vec2& pos)	const; // Returns a pointer to the chunk that contains the specified world position. Returns nullptr if no chunk is loaded for that position.
 
 	int GetTileAt(int tileX, int tileY, int layerIndex = 0);				// Returns the tile value at the specified tile coordinates (tileX, tileY) and layer index. Returns -1 if the tile is not found or if the layer index is invalid.
 	int SetTileAt(int tileX, int tileY, int tileValue, int layerIndex = 0); // Sets the tile value at the specified tile coordinates (tileX, tileY) and layer index. Returns 0 on success, or -1 if the tile is not found or if the layer index is invalid.
 
-	std::vector<uint8_t> GetWorldMask() const { return worldMask; }
-	void GetWorldMaskSnapshot(std::vector<uint8_t>& outMask, int& outW, int& outH, int& outOffsetX, int& outOffsetY, uint64_t& outRevision);
+	std::vector<uint8_t> GetWorldMask() const {	return worldMask; } // Returns a copy of the current world mask for collision/pathfinding. The world mask is a 2D array of uint8_t values representing the collision properties of each tile in the world.
+	void GetWorldMaskSnapshot(std::vector<uint8_t>& outMask, int& outW, int& outH, int& outOffsetX, int& outOffsetY, uint64_t& outRevision); // Get a snapshot of the current world mask, including its dimensions, offset, and revision number. This allows for efficient retrieval of the world mask without locking the mutex for extended periods.
+	void CollectVisibleRenderData(const WorldViewBounds& bounds, std::vector<ChunkRenderData>&out); // Collects rendering data for all chunks that are visible within the specified world bounds. The collected data includes chunk coordinates, dimensions, tile size, number of layers, and pointers to the tile data for each layer. This data is used for rendering the visible chunks in the game world.
+	void CollectVisibleRenderData(const sf::View& view,	std::vector<ChunkRenderData>&out); // Collects rendering data for all chunks that are visible within the specified view. The collected data includes chunk coordinates, dimensions, tile size, number of layers, and pointers to the tile data for each layer. This data is used for rendering the visible chunks in the game world.
 
 	// Least Recently Used (LRU) eviction policy for managing loaded chunks in memory. The ChunkManager maintains a list of loaded chunks and their usage order, allowing it to unload the least recently used chunks when memory limits are exceeded.
 	void TouchChunkLRU(uint64_t key);		// Mark a chunk as recently used in the LRU list. This is called whenever a chunk is accessed to update its usage order.
 	void RemoveChunkFromLRU(uint64_t key);	// Remove a chunk from the LRU list. This is called when a chunk is unloaded or evicted from memory.
 
-	// EnsureChunksInTileRect - Ensure all chunks that intersect the specified tile rectangle (tileX0, tileY0, tileX1, tileY1) are loaded and ready for rendering. The marginChunks parameter allows for loading additional chunks around the specified rectangle 
-	// to prevent visual gaps during rendering.
-	void EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, int tileY1, int marginChunks);
-	void EnsureChunksInTileRect_NoLock(int tileX0, int tileY0, int tileX1, int tileY1, int marginChunks); // version that assumes caller holds m_mutex
+	void EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, int tileY1,	int marginChunks);			// Ensure that all chunks covering the specified tile rectangle (tileX0, tileY0, tileX1, tileY1) are loaded into memory, with an optional margin of additional chunks around the rectangle. This method will load any missing chunks from disk or generate new chunks as needed.
+	void EnsureChunksInTileRect_NoLock(int tileX0, int tileY0, int tileX1, int tileY1, int marginChunks);	// version that assumes caller holds m_mutex
 
 	void EvictIfNeeded(); // Check if the number of loaded chunks exceeds the maximum allowed, and evict least recently used chunks if necessary to free up memory.
 
-	void UpdateMainThread();		// Called from the main thread to process any chunks that have finished loading in the background.
-	void UpdateMainThread_NoLock(); // version that assumes caller holds m_mutex
+	void UpdateMainThread();			// Called from the main thread to process any chunks that have finished loading in the background.
+	void UpdateMainThread_NoLock();		// version that assumes caller holds m_mutex
 
 	void SaveAllChunks();									// Save all dirty chunks to disk in the specified directory. Each chunk will be saved as a separate file named "chunk_X_Y.dat" where X and Y are the chunk coordinates.
 	void SetBasePath(const std::string& basePath);			// Set the base directory path for chunk files. This path is used for loading and saving chunk data to disk.
@@ -155,11 +183,10 @@ public:
 		worldOffsetY = offsetY;
 	}
 	
-	void SetWorldSize(int width, int height);	// Set the size of the world in pixels. This is used to
 
+	void SetWorldSize(int width, int height);	// Set the size of the world in pixels. This is used to
 	void BuildWorldMask();						// Build the world mask for collision/pathfinding
 	void RefreshWorldBoundsFromLoadedChunks();	// Recompute world offset/size from currently loaded chunks
-	/////////////////////////////////
 
 	
 	void LoadAllSavedChunks();		// Load all saved chunk files from disk into memory (called on startup)
@@ -171,8 +198,6 @@ public:
 
 	
 	bool LoadLevelFromFile(const std::string& path, std::string* outErr = nullptr);	// LoadLevelFromFile - Load a TileMap JSON file into the chunked world. This will replace current in-memory chunks with the data from the file. Returns true on success and writes an optional error message to outErr.
-
-	
 	bool GetSavedChunkBounds(float& outMinX, float& outMinY, float& outMaxX, float& outMaxY) const;	// Scan saved chunk filenames on disk and return the bounding box of all saved chunks in world pixels. Returns false if no saved chunks exist. Does not load tile data.
 	void GetMinChunkCoords(int& outMinCx, int& outMinCy) const;										// Get the minimum loaded chunk coordinates (for coordinate system offset in pathfinding)	
 	void ShiftChunksToPositiveCoords();																// Shift all loaded chunks so that minChunkX >= 0 and minChunkY >= 0. Saves shifted chunks to disk. This is useful for level editors to ensure pathfinding doesn't cross negative boundaries.
@@ -180,14 +205,12 @@ public:
 
 	void SetTilesetKey(const std::string& key) { m_tilesetKey = key; }	// Set the key for the tileset atlas used to texture chunk vertex arrays. This allows the ChunkManager to use a specific tileset for rendering.
 	std::string GetTilesetKey() const { return m_tilesetKey; }			// Get the current key for the tileset atlas used to texture chunk vertex arrays.
-	
 	void SetMaxLoadedChunks(size_t maxChunks) {	m_maxLoadedChunks = maxChunks; }	// Set the maximum number of chunks that can be loaded in memory at once. If the limit is exceeded, least recently used chunks will be unloaded.
 
 	
 	void SetActiveLayer(int layer) { m_activeLayer = std::max(0, std::min(layer, m_numLayers-1)); } // Set the active layer for editing or rendering. This allows the caller to control which layer is currently active.
 	int GetActiveLayer() const {return m_activeLayer; }												// Get the current active layer for editing or rendering. This allows the caller to inspect which layer is currently active.
-	void SetNumLayers(int n) { m_numLayers = std::max(1, n); }										// Set the number of layers in the chunk manager. This allows the caller to control how many layers are used for tile data and rendering.
-	
+	void SetNumLayers(int n) { m_numLayers = std::max(1, n); }										// Set the number of layers in the chunk manager. This allows the caller to control how many layers are used for tile data and rendering.	
 	int GetNumLayers() const { return m_numLayers; }												// Get the current number of layers in the chunk manager.
 	
 	void SetUnselectedLayerAlpha(float a) { m_unselectedLayerAlpha = std::clamp(a, 0.0f, 1.0f); }	// Set the alpha value for unselected layers, controlling their transparency in the editor or renderer.
@@ -215,10 +238,13 @@ public:
 	}
 
 	// GetChunkKey - Generate a unique 64-bit key for a chunk based on its chunkX and chunkY coordinates. This key is used to index the chunks map and LRU list, allowing for efficient retrieval and management of chunks in memory.
-	static uint64_t GetChunkKey(int chunkX, int chunkY) {
+	static uint64_t GetChunkKey(int chunkX, int chunkY) 
+	{
 		return (static_cast<uint64_t>(chunkX) << 32) | static_cast<unsigned int>(chunkY);
 	}
 
+	template <typename RenderCallback>
+	void DrawChunkCallback(const sf::View& view, RenderCallback&& callback); // DrawChunkCallback - Iterate over all chunks that intersect the specified view and invoke the provided callback function for each chunk. This allows the caller to perform custom rendering or processing for visible chunks without holding the mutex for extended periods.
 
 
 private:
@@ -296,4 +322,20 @@ public:
 	void UnregisterChunkColliders(EntityManager& em);
 	/////////////////////////////////
 };
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+template <typename RenderCallback>
+void ChunkManager::DrawChunkCallback(const sf::View& view, RenderCallback&& callback) {
+	// Collect visible chunks under the mutex, then call the callback outside the lock to avoid contention
+	std::vector<ChunkRenderData> visable;
+	CollectVisibleRenderData(view, visable);
+
+	// Call the callback for each visible chunk outside the lock
+	for (const auto& chunkData : visable) {
+		callback(chunkData);
+	}
+}
 /////////////////////////////////

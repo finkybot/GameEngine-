@@ -191,6 +191,7 @@
     <ClCompile Include="RaycastSystem.cpp" />
     <ClCompile Include="RenderSystemGL.cpp" />
     <ClCompile Include="Scene.cpp" />
+    <ClCompile Include="SFMLChunkRenderer.cpp" />
     <ClCompile Include="ShutdownGuard.cpp" />
     <ClCompile Include="SoundSystem.cpp" />
     <ClCompile Include="SpatialIndexUnified.cpp" />
@@ -230,6 +231,7 @@
     <ClInclude Include="ChunkManager.h" />
     <ClInclude Include="ChunkManagerV2.h" />
     <ClInclude Include="CCivilisationTech.h" />
+    <ClInclude Include="ChunkRenderData.h" />
     <ClInclude Include="CLayer.h" />
     <ClInclude Include="CMouseState.h" />
     <ClInclude Include="CMusic.h" />
@@ -302,6 +304,7 @@
     <ClInclude Include="RenderSystemGL.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="Scene.h" />
+    <ClInclude Include="SFMLChunkRenderer.h" />
     <ClInclude Include="ShapeTemplateRegistry.h" />
     <ClInclude Include="ShutdownGuard.h" />
     <ClInclude Include="SoundSystem.h" />

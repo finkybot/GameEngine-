@@ -28,9 +28,7 @@ namespace fs = std::filesystem;
 /////////////////////////////////
 // Constructor - initializes the level editor scene with references to the game engine, render window, and entity manager, and sets up the 
 // chunk manager with specified chunk dimensions and tile size
-LevelEditorScene::LevelEditorScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em)
-	: Scene(engine, em), m_window(win), m_chunkManager(engine.GetChunkManager()) {
-}
+LevelEditorScene::LevelEditorScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em) : Scene(engine, em), m_window(win), m_chunkManager(engine.GetChunkManager()) {}
 /////////////////////////////////
 
 
@@ -47,20 +45,36 @@ void LevelEditorScene::RefreshAvailableLevels() {
 	char* envBuf = nullptr;
 	size_t len = 0;
 	errno_t er = _dupenv_s(&envBuf, &len, "APPDATA");
+
+	// If APPDATA is set, use it; otherwise, fall back to "levels" in the current working directory
 	if (er == 0 && envBuf && envBuf[0] != '\0') {
 		base = fs::path(envBuf) / "GameEnginePlus" / "levels";
-	} else {
+	} else {	 // If APPDATA is not set, use "levels" in the current working directory
 		base = fs::path("levels");
 	}
+
+	// Free the allocated buffer for the environment variable
 	free(envBuf);
-#else
+
+// If APPDATA is not set, use "levels" in the current working directory 
+#else // Non-MSVC platforms
 	const char* appdata = std::getenv("APPDATA");
-	if (appdata && appdata[0] != '\0') base = fs::path(appdata) / "GameEnginePlus" / "levels";
+	
+	// If APPDATA is set, use it; otherwise, fall back to "levels" in the current working directory
+	if (appdata && appdata[0] != '\0') 	base = fs::path(appdata) / "GameEnginePlus" / "levels";
+	// If APPDATA is not set, use "levels" in the current working directory
 	else base = fs::path("levels");
-#endif
+
+#endif // _MSC_VER
+
+	// Ensure the base directory exists before scanning for levels
 	if (!fs::exists(base, ec)) return;
+
+	//	Iterate through the directory entries in the base path and add any subdirectories to the available levels list
 	for (auto it = fs::directory_iterator(base); it != fs::directory_iterator(); ++it) {
+		// Use try-catch to handle any potential filesystem errors (e.g., permission issues) and continue scanning other entries
 		try {
+			// Check if the entry is a directory; if so, add its name to the available levels list
 			auto &p = *it;
 			if (!p.is_directory()) continue;
 			m_availableLevels.push_back(p.path().filename().string());
@@ -85,47 +99,83 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	// Use same APPDATA-based path as RefreshAvailableLevels
 	// Use secure getenv alternative on MSVC
 	fs::path base;
+
+//	If APPDATA is set, use it; otherwise, fall back to "levels" in the current working directory
 #ifdef _MSC_VER
 	char* envBuf = nullptr;
 	size_t len = 0;
 	errno_t er = _dupenv_s(&envBuf, &len, "APPDATA");
+
+	// If APPDATA is set, use it; otherwise, fall back to "levels" in the current working directory
 	if (er == 0 && envBuf && envBuf[0] != '\0') base = fs::path(envBuf) / "GameEnginePlus" / "levels";
+	// If APPDATA is not set, use "levels" in the current working directory
 	else base = fs::path("levels");
+
+	// Free the allocated buffer for the environment variable
 	free(envBuf);
 #else
 	const char* appdata = std::getenv("APPDATA");
+
+	// If APPDATA is set, use it; otherwise, fall back to "levels" in the current working directory
 	if (appdata && appdata[0] != '\0') base = fs::path(appdata) / "GameEnginePlus" / "levels";
+	// If APPDATA is not set, use "levels" in the current working directory
 	else base = fs::path("levels");
+
 #endif
+	// Set chunk manager base path based on whether a level is selected or not
 	if (m_currentLevelName.empty()) {
+		// If no level is selected, use the base path directly for chunks
 		m_chunkManager.SetBasePath((base / "chunks").string());
-	} else {
+	} else { 
+		// If a level is selected, use the level-specific subdirectory for chunks Ensure the level-specific directory exists before setting the base path
 		m_chunkManager.SetBasePath((base / m_currentLevelName / "chunks").string());
 	}
+
+
 	// Ensure directory exists
 	try {
+		// Create the chunks directory for the selected level (or the base chunks directory if no level is selected)
 		if (m_currentLevelName.empty()) fs::create_directories(base / "chunks");
+		
+		// If a level is selected, create the chunks directory within that level's folder
 		else fs::create_directories(base / m_currentLevelName / "chunks");
-	} catch(...) {}
+	} catch(...) {} // Catch any exceptions that may occur during directory creation (e.g., permission issues) and continue without crashing
+
 
 	// Parse meta.txt to determine available layers and tileset
 	std::vector<std::string> parsedLayers = { "background", "main", "upper" };
+	
 	{
 		auto metaPath = (m_currentLevelName.empty()) ? (base / "meta.txt") : (base / m_currentLevelName / "meta.txt");
+		
+		// Read meta.txt if it exists and parse key-value pairs for layers, tileset, and tilesetPath
 		try {
+			// Open the meta.txt file for reading
 			std::ifstream meta(metaPath.string());
+
+			// If the file is successfully opened, read it line by line and parse key-value pairs
 			if (meta) {
 				std::string line;
+
+				// Read each line from the meta.txt file
 				while (std::getline(meta, line)) {
 					// simple key=value parsing
 					auto eq = line.find('=');
+
+					//	If the line does not contain an '=', skip it and continue to the next line
 					if (eq == std::string::npos) continue;
+
+					// Extract the key and value from the line based on the position of '='
 					std::string key = line.substr(0, eq);
 					std::string val = line.substr(eq+1);
+
+					//	If the key is "layers", parse the value as a comma-separated list of layer names and store them in parsedLayers
 					if (key == "layers") {
 						parsedLayers.clear();
 						// comma separated
 						size_t start = 0;
+
+						//	Split the value string by commas and add each non-empty token to parsedLayers
 						while (start < val.size()) {
 							auto comma = val.find(',', start);
 							if (comma == std::string::npos) comma = val.size();
@@ -134,32 +184,41 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 							start = comma + 1;
 						}
 					}
+					//	If the key is "tileset", copy the value into the UI buffer for displaying the current tileset in the editor
 					else if (key == "tileset") {
 						// copy into UI buffer
 						ImStrncpy(m_tilesetKeyBuf, val.c_str(), sizeof(m_tilesetKeyBuf));
 					}
+					//	If the key is "tilesetPath", store the value in m_currentTilesetPath for later use (e.g., saving or loading the tileset)
 					else if (key == "tilesetPath") {
 						// Restore tileset path for saving later
 						m_currentTilesetPath = val;
 					}
 				}
 			}
-		} catch(...) {}
+		}
+		// Catch any exceptions that may occur during file reading or parsing (e.g., file not found, permission issues) and continue without crashing
+		catch(...) {}
 	}
 
 	// update editor layer names and inform chunk manager of layer count before loading
 	if (!parsedLayers.empty()) {
-		m_layerNames = parsedLayers;
-		m_activeLayer = std::min(m_activeLayer, (int)m_layerNames.size()-1);
-		m_chunkManager.SetNumLayers((int)m_layerNames.size());
+		m_layerNames = parsedLayers;											// update editor layer names
+		m_activeLayer = std::min(m_activeLayer, (int)m_layerNames.size() - 1);	// ensure active layer is valid
+		m_chunkManager.SetNumLayers((int)m_layerNames.size());					// inform chunk manager of layer count
 	}
+
 	// Keep m_currentDir unchanged so tileset browser still points at assets/user folder.
 	fs::path chunkPath = (m_currentLevelName.empty()) ? (base / "chunks") : (base / m_currentLevelName / "chunks");
 	std::cout << "SwitchToLevel: '" << name << "' basePath='" << chunkPath.string() << "'\n";
+	
 	// Count chunk files for diagnostics
 	int fileCount = 0;
 	try {
+		// Iterate through the chunk directory and count the number of chunk files (files starting with "chunk_") for reporting purposes
 		for (auto it = fs::directory_iterator(chunkPath); it != fs::directory_iterator(); ++it) {
+			
+			// Use try-catch to handle any potential filesystem errors (e.g., permission issues) and continue scanning other entries
 			try {
 				auto &e = *it;
 				if (!e.is_regular_file()) continue;
@@ -167,7 +226,10 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 				if (fn.rfind("chunk_", 0) == 0) ++fileCount;
 			} catch(...) { continue; }
 		}
-	} catch(...) { fileCount = 0; }
+	} 
+	catch(...) { fileCount = 0; }
+
+	// Report loading status to the user via m_exportMessage, which can be displayed in the UI to inform the user about the level being loaded and the number of chunk files found
 	m_exportMessage = std::string("Loading level '") + name + "' - found " + std::to_string(fileCount) + " chunk files in " + chunkPath.string();
 	// Load level chunks
 	m_chunkManager.LoadAllSavedChunks();
@@ -198,8 +260,7 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 		int maxTileX = (int)std::ceil(dMaxX / tileSize);
 		int maxTileY = (int)std::ceil(dMaxY / tileSize);
 
-		std::cout << "LevelEditorScene::SwitchToLevel: bounds in tiles: minTileX=" << minTileX
-				  << " minTileY=" << minTileY << " maxTileX=" << maxTileX << " maxTileY=" << maxTileY << "\n";
+		std::cout << "LevelEditorScene::SwitchToLevel: bounds in tiles: minTileX=" << minTileX  << " minTileY=" << minTileY << " maxTileX=" << maxTileX << " maxTileY=" << maxTileY << "\n";
 
 		int worldW = maxTileX - minTileX;
 		int worldH = maxTileY - minTileY;
@@ -208,14 +269,13 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 		//m_chunkManager.SetWorldSize(worldW, worldH); // <-- safe now
 		m_chunkManager.SetWorldOffset(0, 0); // <-- safe now
 		m_chunkManager.SetWorldSize(worldW, worldH); // <-- safe now
-
 	}
 }
 /////////////////////////////////
 // Destructor - ensures that all chunks are saved to disk when the level editor scene is destroyed, preventing data loss and ensuring that any changes made to the level are preserved
-LevelEditorScene::~LevelEditorScene() {
-	// Skip saving chunks during process shutdown to avoid accessing already-destroyed objects
-	// during static destruction order issues (0xC0000005 access violation)
+LevelEditorScene::~LevelEditorScene() 
+{
+	// Skip saving chunks during process shutdown to avoid accessing already-destroyed objects during static destruction order issues (0xC0000005 access violation)
 	if (!ShutdownGuard::IsShuttingDown()) {
 		m_chunkManager.SaveAllChunks();
 	}
@@ -225,8 +285,7 @@ LevelEditorScene::~LevelEditorScene() {
 
 /////////////////////////////////
 // OnPreUnload - Called before the scene is unloaded to allow cleanup
-// void LevelEditorScene::OnPreUnload() {
-// }
+// void LevelEditorScene::OnPreUnload() {}
 /////////////////////////////////
 
 
@@ -236,23 +295,24 @@ LevelEditorScene::~LevelEditorScene() {
 // they are removed.
 void LevelEditorScene::RefreshMapBounds() {
 	float dMinX, dMinY, dMaxX, dMaxY;
+
+	// Compute fixed map bounds from saved chunk files on disk. These bounds are stable and do not grow as new chunks are loaded at runtime.
 	if (m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
 		m_mapMin = Vec2(dMinX, dMinY);
 		m_mapMax = Vec2(dMaxX, dMaxY);
 		m_chunkManager.ShiftChunksToPositiveCoords();
 		m_haveBounds = true;
-	} else {
-		m_haveBounds = false;
-	}
+	} 
+	// If no saved chunks exist, reset bounds to indicate that there are no defined map boundaries
+	else { m_haveBounds = false; }
 }
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// InitializeGame - Initialize the level editor scene by creating a camera entity with a transform and camera component, setting it as the main camera, and configuring the chunk manager with 
-// the base path for chunk files and the maximum number of loaded chunks allowed in memory at once. This setup allows the level editor to manage the camera view and efficiently load and 
-// save chunks of the level as needed.
+// InitializeGame - Initialize the level editor scene by creating a camera entity with a transform and camera component, setting it as the main camera, and configuring the chunk manager with the base path for chunk files and the maximum number of loaded chunks allowed in memory at once. This setup allows the 
+// level editor to manage the camera view and efficiently load and save chunks of the level as needed.
 void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	// create camera entity
 	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Default);
@@ -284,14 +344,18 @@ void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 
 	// Set persistence path for chunks
 	// Default path points inside the current level folder. If no level selected, keep editor empty.
-	if (!m_levelSelected) {
-		m_chunkManager.SetBasePath("");
-	} else {
+	if (!m_levelSelected) {	m_chunkManager.SetBasePath("");	}
+	// If a level is selected, set the base path to the "chunks" subdirectory within that level's folder
+	else {	
+		// Use same APPDATA-based path as RefreshAvailableLevels
 		if (m_currentLevelName.empty()) m_chunkManager.SetBasePath("levels/chunks");
+		// If a level is selected, set the base path to the "chunks" subdirectory within that level's folder
 		else m_chunkManager.SetBasePath((fs::path("levels") / m_currentLevelName / "chunks").string());
 	}
 
 	m_chunkManager.SetMaxLoadedChunks(256);
+
+	// Load any saved chunks for the selected level and rebuild them from the tileset. This ensures that the editor starts with the correct state for the selected level, allowing the user to continue editing where they left off.
 	if (m_levelSelected) {
 		// Load only selected level data; avoid pulling stale maps when no level is selected.
 		m_chunkManager.LoadAllSavedChunks();
@@ -299,26 +363,31 @@ void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 		m_chunkManager.RebuildAllChunksFromTileset();
 	}
 
-	// Compute fixed map bounds from saved chunk files on disk.
-	// These bounds are stable and do not grow as new chunks are loaded at runtime.
+	// Compute fixed map bounds from saved chunk files on disk. These bounds are stable and do not grow as new chunks are loaded at runtime.
 	{
+		// If no saved chunks exist, reset bounds to indicate that there are no defined map boundaries
 		float dMinX, dMinY, dMaxX, dMaxY;
+
+		// Compute fixed map bounds from saved chunk files on disk. These bounds are stable and do not grow as new chunks are loaded at runtime.
 		if (m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
 			m_mapMin = Vec2(dMinX, dMinY);
 			m_mapMax = Vec2(dMaxX, dMaxY);
 			m_haveBounds = true;
-		} else {
-			// No saved chunks yet — start with the initial 3x screen area as soft bounds.
-			m_haveBounds = false;
+		} else { // If no saved chunks exist, reset bounds to indicate that there are no defined map boundaries
+			m_haveBounds = false; // no bounds yet - will be computed from saved chunks on disk
 		}
 	}
 
 	// Set start folder to assets and do not auto-load any tileset at startup
 	std::error_code ec;
 	auto assetsPath = std::filesystem::current_path() / std::filesystem::path("assets");
+
+	// If the assets folder exists, set it as the current directory; otherwise, use the current working directory
 	if (std::filesystem::exists(assetsPath, ec) && !ec) {
+		// Set the current directory to the assets folder for easy access to tilesets and other resources
 		m_currentDir = assetsPath;
-	} else {
+	} else	{
+		// If the assets folder does not exist, use the current working directory as the fallback
 		m_currentDir = std::filesystem::current_path();
 	}
 
@@ -355,8 +424,7 @@ void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 
 
 /////////////////////////////////
-// OnEnter and OnExit methods - called when the level editor scene becomes active or inactive. 
-// OnEnter is currently empty, but we could add logic here if needed (e.g., to reset state or load specific resources). 
+// OnEnter and OnExit methods - called when the level editor scene becomes active or inactive.
 void LevelEditorScene::OnEnter() {
 	// Keep the camera created in InitialiseGame intact.
 	// Clearing main camera here can leave the scene without an active camera after scene transitions.
@@ -392,13 +460,15 @@ void LevelEditorScene::OnEnter() {
  
 
 /////////////////////////////////
-// OnExit ensures that any collider entities generated by the ChunkManager are removed from the EntityManager before the engine clears all entities, preventing dangling pointers and crashes 
-// when returning to the scene. It then saves chunks to disk.
-void LevelEditorScene::OnExit() {
+// OnExit ensures that any collider entities generated by the ChunkManager are removed from the EntityManager before the engine clears all entities, preventing dangling pointers and crashes when returning to the scene. It then saves chunks to disk.
+void LevelEditorScene::OnExit() 
+{ 
 	// Unregister any chunk-generated collider entities before the global EntityManager is cleared by the engine.
 	try {
 		m_chunkManager.UnregisterChunkColliders(GetEntityManager());
 	} catch (...) {}
+
+	// Save all chunks to disk to ensure that any changes made in the level editor are persisted before exiting the scene.
 	std::cout << "[LevelEditorScene] OnExit: Saving all chunks...\n";
 	m_chunkManager.SaveAllChunks();
 	std::cout << "[LevelEditorScene] OnExit: Chunks saved.\n";
@@ -408,8 +478,7 @@ void LevelEditorScene::OnExit() {
 
 
 /////////////////////////////////
-// OnWindowResized - Adjust the main camera's viewport size when the window is resized. This ensures that the camera view remains consistent with the new window dimensions, allowing for proper 
-// rendering of the level editor scene.
+// OnWindowResized - Adjust the main camera's viewport size when the window is resized. This ensures that the camera view remains consistent with the new window dimensions, allowing for proper rendering of the level editor scene.
 void LevelEditorScene::OnWindowResized(sf::Vector2u newSize) {
 	sf::View view;
 	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
@@ -426,17 +495,28 @@ void LevelEditorScene::UnloadResources() {
 	try {
 		// Ensure any collider entities are unregistered
 		m_chunkManager.UnregisterChunkColliders(GetEntityManager());
-	} catch (...) {}
+	} 
+	catch (...) {}
+
+	//	Save all chunks to disk to ensure that any changes made in the level editor are persisted before unloading resources.
 	try {
 		// Persist and then clear chunk data to free memory
 		m_chunkManager.SaveAllChunks();
-	} catch (...) {}
+	} 
+	catch (...) {}
+
+	// Clear all loaded chunks to free memory and resources associated with the level editor scene.
 	try {
 		m_chunkManager.ClearAllLoadedChunks();
-	} catch (...) {}
+	} 
+	catch (...) {}
+
+	// Clear the render queue to free any queued rendering resources.
 	try {
 		// Unload tileset atlas if one is set for this level/editor
 		std::string key = std::string(m_tilesetKeyBuf);
+
+		// Unload the tileset atlas from the texture manager to free memory and resources associated with the tileset used in the level editor scene.
 		if (!key.empty()) {
 			m_gameEngine.GetTextureManager().UnloadAtlas(key);
 		}
@@ -505,6 +585,7 @@ void LevelEditorScene::Update(float deltaTime) {
 	// Tile pick: hold D to activate eyedropper mode, then press left mouse button to pick a tile. While D is held, the eyedropper cursor is visible. When LMB is clicked while D is held, the 
 	// tile at the mouse position is selected and becomes the active brush tile.
 	bool dKey = m_gameEngine.GetInputController().IsKeyboardEnabled() && sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
+	
 	// Switch to eyedropper cursor when D is pressed, revert when released
 	if (dKey && !m_prevDKey) {
 		// D key pressed (edge): switch to eyedropper mode
@@ -515,10 +596,17 @@ void LevelEditorScene::Update(float deltaTime) {
 	}
 
 	// Pick tile on LMB press while D is held (eyedropper mode)
-	if (dKey && lmb && !m_prevLmb && !uiCapturing) {
+	if (dKey && lmb && !m_prevLmb && !uiCapturing) 	{
+		// Determine which layer to pick from based on the active layer index. If the active layer index is invalid, default to the first layer (index 0).
 		int layerToPick = m_activeLayer;
+		
+		// Ensure the layer index is valid; if not, default to the first layer (index 0)
 		if (layerToPick < 0 || layerToPick >= (int)m_layerNames.size()) layerToPick = 0;
+		
+		// Get the tile value at the mouse position for the specified layer. The tile value is an integer representing the tile ID, where a value of 0 indicates no tile is present.
 		int val = m_chunkManager.GetTileAt(tileX, tileY, layerToPick);
+	
+		//	If a valid tile is found (value > 0), update the selected tile index and brush value. The selected tile index is zero-based, so we subtract 1 from the tile value to get the correct index.
 		if (val > 0) {
 			m_selectedTileIndex = val - 1;
 			m_brushValue = val;
@@ -535,19 +623,27 @@ void LevelEditorScene::Update(float deltaTime) {
 
 	// allow panning even if ImGui reports capture so middle-click drag still moves camera
 	if (isMiddleDown) {
+		// If the middle mouse button is pressed and we are not already panning, start the panning process by recording the initial mouse position and camera position.
 		if (!m_panning) {
 			m_panning = true;
 			m_panStart = mousePos;
 			// record current camera position
 			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+
+			// If a main camera is found, record its current position as the starting point for panning. This allows us to calculate the new camera position based on the mouse drag delta.
 			if (camOpt) {
 				m_camPanStart = (*camOpt)->position;
 			}
 		}
-	} else {
+	}
+	// If the middle mouse button is not pressed and we were previously panning, end the panning process. This allows us to stop moving the camera when the user releases the middle mouse button.
+	else {
+		// If we were previously panning and the middle mouse button is now released, end the panning process. This allows us to stop moving the camera when the user releases the middle mouse button.
 		if (m_panning && !isMiddleDown) {
-			// panning ended
+			// panning ended; record the final camera position after panning for debugging purposes. This can help verify that the camera has moved to the expected location based on the user's input.
 			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+
+			// If a main camera is found, we can log its final position after panning. This is useful for debugging and ensuring that the camera has moved to the expected location based on the user's input.
 			if (camOpt) {
 				Vec2 endPos = (*camOpt)->position;
 				(void)endPos; // suppressed debug log
@@ -555,22 +651,31 @@ void LevelEditorScene::Update(float deltaTime) {
 				// no main camera found
 			}
 		}
+
+		// Reset panning state when the middle mouse button is released, allowing the user to start a new panning operation if they press the middle mouse button again.
 		m_panning = false;
 	}
 
-	// If we are currently panning, calculate the delta from the initial mouse position and move the camera in the opposite direction of the mouse drag for a natural panning feel. We also clamp 
-	// the camera's new position within the bounds of the map to prevent panning into empty space. Finally, we update the camera entity's transform to ensure that any smoothing logic in the 
-	// CameraSystem does not pull it back to a previous position.	
+	// If we are currently panning, calculate the delta from the initial mouse position and move the camera in the opposite direction of the mouse drag for a natural panning feel. We also clamp  the camera's new position within the bounds of the map to prevent panning into empty space. Finally, we update the 
+	// camera entity's transform to ensure that any smoothing logic in the CameraSystem does not pull it back to a previous position.	
 	if (m_panning) {
+		// Calculate the difference between the current mouse position and the initial mouse position when panning started. This delta will be used to determine how much to move the camera.
 		sf::Vector2i delta = mousePos - m_panStart;
+
 		// move camera opposite to mouse drag for natural panning
 		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+
+		// If a main camera is found, calculate the new camera position based on the initial camera position and the mouse drag delta. We move the camera in the opposite direction of the mouse drag for a natural panning feel.
 		if (camOpt) {
+			// Calculate the new camera position by subtracting the mouse drag delta from the initial camera position. This effectively moves the camera in the opposite direction of the mouse drag, creating a natural panning effect.
 			Vec2 newPos = m_camPanStart - Vec2((float)delta.x, (float)delta.y);
+			
 			// Compute current map bounds from loaded chunks so clamping is accurate at panning time
 			CCamera* cam = *camOpt;
 			float halfW = cam->viewportWidth * 0.5f * cam->zoom;
 			float halfH = cam->viewportHeight * 0.5f * cam->zoom;
+
+			// Clamp camera position to map bounds if they exist. This prevents the camera from moving outside the defined map area, ensuring that the user cannot pan into empty space.
 			if (m_haveBounds) {
 				float minCx = m_mapMin.x + halfW;
 				float maxCx = m_mapMax.x - halfW;
@@ -581,70 +686,78 @@ void LevelEditorScene::Update(float deltaTime) {
 				if (minCy <= maxCy) newPos.y = std::clamp(newPos.y, minCy, maxCy);
 				else newPos.y = (m_mapMin.y + m_mapMax.y) * 0.5f;
 			}
+
+			// Update the camera's position to the new clamped position, allowing the user to see the level from the new perspective after panning.
 			(*camOpt)->position = newPos;
+
 			// Also update the camera entity's transform so CameraSystem smoothing doesn't pull it back
 			if (m_cameraEntity) {
-				if (auto t = m_cameraEntity->GetComponent<CTransform>()) {
-					t->position = newPos;
-				}
+				// Update the camera entity's transform to the new position, ensuring that any smoothing logic in the CameraSystem does not pull it back to a previous position. This keeps the camera's visual representation in sync with its logical position.
+				if (auto t = m_cameraEntity->GetComponent<CTransform>()) { t->position = newPos; }
 			}
 		}
 	}
 
-	// Handle mouse input for painting or erasing tiles; check we are off the UI before modifying the map m_inputReady gates all painting until every button has been physically released at least 
-	// once after the scene was entered — this prevents the click that opened the scene from painting.
-	if (!m_inputReady) {
-		if (!lmb && !rmb) m_inputReady = true;
-	}
+	// Handle mouse input for painting or erasing tiles; check we are off the UI before modifying the map m_inputReady gates all painting until every button has been physically released at least once after the scene was entered — this prevents the click that opened the scene from painting.
+	if (!m_inputReady) { if (!lmb && !rmb) m_inputReady = true;	}
 
-	// If the UI is not capturing the mouse and input is ready, handle tile painting/erasing based on mouse button states. This includes starting a selection on button down, updating the selection 
-	// rectangle while dragging, and applying the brush value to all tiles within the selected area on button release. The selection is defined in pixel coordinates and converted to world coordinates 
-	// and then tile coordinates for editing the level.
+	// If the UI is not capturing the mouse and input is ready, handle tile painting/erasing based on mouse button states. This includes starting a selection on button down, updating the selection rectangle while dragging, and applying the brush value to all tiles within the selected area on button release. 
+	// The selection is defined in pixel coordinates and converted to world coordinates and then tile coordinates for editing the level.
 	if (!uiCapturing && m_inputReady) {
 		// start selection on left-button down (edge)
 		if (lmb && !m_prevLmb) {
+			// If the left mouse button is pressed and it wasn't pressed in the previous frame, start the selection process. Record the initial mouse position as the starting point for the selection rectangle. This allows the user to click and drag to define a rectangular area for painting or erasing tiles.
 			if (m_levelSelected) {
 				m_lmbSelecting = true;
 				m_selectLmbStartPx = mousePos;
 				m_selectLmbEndPx = mousePos;
-			} else {
-				m_exportMessage = "Select or create a level before editing.";
-			}
+			} else { m_exportMessage = "Select or create a level before editing."; } // If no level is selected, display a message to the user indicating that they need to select or create a level before editing. This prevents the user from attempting to edit a level when none is currently active.
 		}
+
 		// update drag end while holding
-		if (m_lmbSelecting && lmb) {
-			m_selectLmbEndPx = mousePos;
-		}
+		if (m_lmbSelecting && lmb) { m_selectLmbEndPx = mousePos; }
+
 		// finish selection on left-button release
 		if (m_lmbSelecting && !lmb && m_prevLmb) {
+			// If the left mouse button is released and we were previously selecting, finish the selection process. Convert the pixel coordinates of the selection rectangle to world coordinates using the current view, then convert those world coordinates to tile coordinates. This allows us to determine which tiles are within the selected area for painting or erasing.
 			m_lmbSelecting = false;
+			
 			// convert pixel corners -> world coords using current view
 			sf::Vector2f w0 = m_window.mapPixelToCoords(m_selectLmbStartPx, m_window.getView());
 			sf::Vector2f w1 = m_window.mapPixelToCoords(m_selectLmbEndPx, m_window.getView());
+			
 			// tile coords (floor) and normalize min/max
 			int tx0 = (int)std::floor(std::min(w0.x, w1.x) / m_tileSize);
 			int ty0 = (int)std::floor(std::min(w0.y, w1.y) / m_tileSize);
 			int tx1 = (int)std::floor(std::max(w0.x, w1.x) / m_tileSize);
 			int ty1 = (int)std::floor(std::max(w0.y, w1.y) / m_tileSize);
-			// clamp loop if you want (optional)
+			
+			// clamp loop if desired (optional)
 			// Safety: avoid processing excessively large selections that could hang the editor.
 			const int maxSelectionTiles = 1024 * 1024; // 1M tiles
 			uint64_t selW = (uint64_t)tx1 - (uint64_t)tx0 + 1;
 			uint64_t selH = (uint64_t)ty1 - (uint64_t)ty0 + 1;
-			if (selW <= 0 || selH <= 0) { /* nothing */; }
+
+			// If the selection area is valid (non-zero width and height) and does not exceed the maximum allowed size, apply the brush value to all tiles within the selected area on the active layer. This allows the user to paint or erase tiles in a rectangular region defined by their mouse drag. After painting, refresh the map bounds to ensure that any changes to the level are reflected in the camera's view and panning limits.
+			if (selW <= 0 || selH <= 0) { /* do nothing */; }
+			// If the selection area exceeds the maximum allowed size, display an error message to the user indicating that the selection is too large and the operation will be ignored. This prevents the editor from attempting to process an excessively large number of tiles, which could cause performance issues or crashes.
 			else if (selW * selH > maxSelectionTiles) {
 				std::cerr << "Selection too large (" << selW*selH << " tiles) - operation ignored" << std::endl;
-			} else {
-				if (!m_levelSelected) {
-					m_exportMessage = "Select or create a level before editing.";
-				} else {
+			}
+			// If a level is not selected, display a message to the user indicating that they need to select or create a level before editing. This prevents the user from attempting to edit a level when none is currently active.
+			else {
+				// If a level is not selected, display a message to the user indicating that they need to select or create a level before editing. This prevents the user from attempting to edit a level when none is currently active.
+				if (!m_levelSelected) {	m_exportMessage = "Select or create a level before editing."; } 
+				// If a level is selected, apply the brush value to all tiles within the selected area on the active layer. This allows the user to paint or erase tiles in a rectangular region defined by their mouse drag. After painting, refresh the map bounds to ensure that any changes to the level are reflected in the camera's view and panning limits.
+				else {
 					// Silently paint tiles - no debug spam
 					for (int ty = ty0; ty <= ty1; ++ty) {
+						// Loop through each tile in the selected area and set its value to the current brush value on the active layer. This effectively paints or erases tiles in the rectangular region defined by the user's mouse drag.
 						for (int tx = tx0; tx <= tx1; ++tx) {
 							// Prevent placing tiles at negative coordinates
-							if (tx < 0 || ty < 0) {
-								continue;
-							}
+							if (tx < 0 || ty < 0) continue; 
+
+							// Set the tile at the specified coordinates to the current brush value on the active layer. This allows the user to paint or erase tiles in the selected area.	
 							m_chunkManager.SetTileAt(tx, ty, m_brushValue, m_activeLayer); // paint selection on active layer
 						}
 					}
@@ -656,18 +769,19 @@ void LevelEditorScene::Update(float deltaTime) {
 
 		// start selection on right-button down (edge)
 		if (rmb && !m_prevRmb) {
+			// If the right mouse button is pressed and it wasn't pressed in the previous frame, start the selection process for erasing tiles. Record the initial mouse position as the starting point for the selection rectangle. This allows the user to click and drag to define a rectangular area for erasing tiles.
 			if (m_levelSelected) {
 				m_rmbSelecting = true;
 				m_selectRmbStartPx = mousePos;
 				m_selectRmbEndPx = mousePos;
-			} else {
-				m_exportMessage = "Select or create a level before editing.";
 			}
+			// If no level is selected, display a message to the user indicating that they need to select or create a level before editing. This prevents the user from attempting to edit a level when none is currently active.
+			else { m_exportMessage = "Select or create a level before editing."; }
 		}
+
 		// update drag end while holding
-		if (m_rmbSelecting && rmb) {
-			m_selectRmbEndPx = mousePos;
-		}
+		if (m_rmbSelecting && rmb) 	m_selectRmbEndPx = mousePos;
+
 		// finish selection on right-button release
 		if (m_rmbSelecting && !rmb && m_prevRmb) {
 			m_rmbSelecting = false;
@@ -685,25 +799,34 @@ void LevelEditorScene::Update(float deltaTime) {
 			uint64_t selW2 = (uint64_t)tx1 - (uint64_t)tx0 + 1;
 			uint64_t selH2 = (uint64_t)ty1 - (uint64_t)ty0 + 1;
 			
+			// If the selection area is valid (non-zero width and height) and does not exceed the maximum allowed size, erase all tiles within the selected area on the active layer. This allows the user to erase tiles in a rectangular region defined by their mouse drag. After erasing, refresh the map 
+			// bounds to ensure that any changes to the level are reflected in the camera's view and panning limits.
 			if (selW2 <= 0 || selH2 <= 0) { /* nothing */; }
-			else if (selW2 * selH2 > maxSelectionTiles) {
-				std::cerr << "Selection too large (" << selW2*selH2 << " tiles) - operation ignored" << std::endl;
-			} else {
+
+			// If the selection area exceeds the maximum allowed size, display an error message to the user indicating that the selection is too large and the operation will be ignored. This prevents the editor from attempting to process an excessively large number of tiles, which could cause performance 
+			// issues or crashes.
+			else if (selW2 * selH2 > maxSelectionTiles) { std::cerr << "Selection too large (" << selW2*selH2 << " tiles) - operation ignored" << std::endl; } 
+			// If a level is selected, erase all tiles within the selected area on the active layer. This allows the user to erase tiles in a rectangular region defined by their mouse drag. After erasing, refresh the map bounds to ensure that any changes to the level are reflected in the camera's view and 
+			// panning limits. 
+			else {
+				// If a level is not selected, display a message to the user indicating that they need to select or create a level before editing. This prevents the user from attempting to edit a level when none is currently active.
 				for (int ty = ty0; ty <= ty1; ++ty) {
+					// Loop through each tile in the selected area and set its value to 0 (erased) on the active layer. This effectively erases tiles in the rectangular region defined by the user's mouse drag.
 					for (int tx = tx0; tx <= tx1; ++tx) {
 						// Prevent erasing at negative coordinates
-						if (tx < 0 || ty < 0) {
-							continue;
-						}
+						if (tx < 0 || ty < 0) continue;
+
+						// Set the tile at the specified coordinates to 0 (erased) on the active layer. This allows the user to erase tiles in the selected area.
 						m_chunkManager.SetTileAt(tx, ty, 0, m_activeLayer); // erase selection on active layer
 					}
 				}
 			
-			// Recompute bounds from disk since erasing may shrink the map
-			RefreshMapBounds();
+				// Recompute bounds from disk since erasing may shrink the map
+				RefreshMapBounds();
 			}
 		}
 	}
+
 	m_prevLmb = lmb;
 	m_prevRmb = rmb;
 	m_prevDKey = dKey;
@@ -815,7 +938,8 @@ void LevelEditorScene::Render() {
 	// Camera info
 	{
 		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
-		if (camOpt) {
+		if (camOpt) 
+		{
 			CCamera* cam = *camOpt;
 			ImGui::SeparatorText("Camera");
 			ImGui::Text("Position: (%.1f, %.1f)", cam->position.x, cam->position.y);
@@ -838,7 +962,10 @@ void LevelEditorScene::Render() {
 	{
 		std::lock_guard<std::mutex> lg(m_atlasLoadMutex);
 		atlasMessage = m_atlasLoadMessage;
-		if (m_atlasLoadFinished) {
+
+		// If the atlas loading process has finished, we capture the result (success/failure) and the key of the loaded atlas. This allows us to update the level editor's state based on whether the atlas was successfully loaded or not.
+		if (m_atlasLoadFinished) 
+		{
 			atlasFinished = true;
 			atlasSuccess = m_atlasLoadSuccess;
 			atlasKey = m_atlasLoadKey;
@@ -846,9 +973,11 @@ void LevelEditorScene::Render() {
 		}
 	}
 
-	if (!atlasMessage.empty())
-		ImGui::TextUnformatted(atlasMessage.c_str());
+	// Display any messages related to the atlas loading process, such as errors or status updates. This provides feedback to the user about the result of their attempt to load a texture atlas.
+	if (!atlasMessage.empty())	ImGui::TextUnformatted(atlasMessage.c_str());
 
+	// If the atlas loading process has finished, we check whether it was successful. If it was successful, we update the level editor's state to use the newly loaded atlas by setting the tileset key, rebuilding all chunks from the new tileset, and saving the level metadata. We also reset the selected tile index to 
+	// 0 to ensure that the user starts with a valid tile selection from the new atlas.
 	if (atlasFinished) {
 		if (atlasSuccess) {
 			ImStrncpy(m_tilesetKeyBuf, atlasKey.c_str(), sizeof(m_tilesetKeyBuf));
@@ -916,22 +1045,25 @@ void LevelEditorScene::SelectedBrushWindow(std::optional<std::shared_ptr<Texture
 /////////////////////////////////
 // AtlasBrowserWindow - Renders a file browser for selecting and loading texture atlases. It allows navigation through directories, refreshing the file list, and selecting files.
 void LevelEditorScene::AtlasBrowserWindow() {
-	// File browser: input for load filename, buttons to navigate up and refresh, and list of files in the current directory. Clicking a directory navigates 
-	// into it, while clicking a file selects it for loading.
-	if (m_currentDir.empty())
-		m_currentDir = std::filesystem::current_path();
+	// File browser: input for load filename, buttons to navigate up and refresh, and list of files in the current directory. Clicking a directory navigates into it, while clicking a file selects it for loading.
+	if (m_currentDir.empty()) m_currentDir = std::filesystem::current_path();
 
-	// Cache directory entries in a static vector to avoid re-reading the filesystem on every frame. We will refresh this cache when navigating or when the 
-	// user clicks the Refresh button.
+	// Cache directory entries in a static vector to avoid re-reading the filesystem on every frame. We will refresh this cache when navigating or when the user clicks the Refresh button.
 	static std::vector<std::filesystem::directory_entry>s_entries; // static cache
 	
 	// Lambda to refresh the cached directory entries. This function clears the current cache and repopulates it by iterating over the current directory.
-	auto refresh_entries = [&]() {
+	auto refresh_entries = [&]() 
+		{
 		s_entries.clear();
-		try {
+		try 
+		{
+			// Iterate over the current directory and add each entry to the cache. This allows us to display the contents of the directory in the file browser.
 			for (auto& e : std::filesystem::directory_iterator(m_currentDir))
 				s_entries.push_back(e);
-			std::sort(s_entries.begin(), s_entries.end(), [](const auto& a, const auto& b) {
+
+			// Sort directories first, then files, and sort alphabetically within each group. This ensures that directories are displayed at the top of the list, making it easier for users to navigate through folders.
+			std::sort(s_entries.begin(), s_entries.end(), [](const auto& a, const auto& b) 
+			{
 				bool a_dir = false, b_dir = false;
 				try {
 					a_dir = a.is_directory();
@@ -957,16 +1089,20 @@ void LevelEditorScene::AtlasBrowserWindow() {
 		m_currentDir = m_currentDir.parent_path();
 		refresh_entries();
 	}
+
 	// Refresh button to re-read the current directory and update the file list. This is useful if files have been added or removed externally.
 	ImGui::SameLine();
+
+	// Refresh button to re-read the current directory and update the file list. This is useful if files have been added or removed externally.
 	if (ImGui::Button("Refresh")) {
 		refresh_entries();
 	}
+
 	ImGui::SameLine();
 	ImGui::Text("Current folder: %s", m_currentDir.string().c_str());
 
-	if (s_entries.empty())
-		refresh_entries();
+	// If the cached directory entries are empty, refresh them to ensure that we have the latest contents of the current directory. This is important for displaying the correct list of files and directories in the file browser.
+	if (s_entries.empty()) refresh_entries();
 
 	// Child window to display the list of files and directories in the current folder. This allows for scrolling if there are many entries.
 	ImGui::BeginChild("files_list", ImVec2(0, 200), true);
@@ -980,7 +1116,8 @@ void LevelEditorScene::AtlasBrowserWindow() {
 		// Use try-catch to safely check if the entry is a directory, as some filesystem operations may throw exceptions (e.g., due to permissions).
 		try {
 			is_dir = entry.is_directory();
-		} catch (...) {
+		} 
+		catch (...) {
 			is_dir = false;
 		}
 		
@@ -1010,16 +1147,14 @@ void LevelEditorScene::AtlasBrowserWindow() {
 					}
 					
 					// Load atlas asynchronously to avoid blocking UI
-					if (m_gameEngine.GetTextureManager().LoadAtlas(key, s_selected_file, m_tilesetTileW,
-																	   m_tilesetTileH)) {
+					if (m_gameEngine.GetTextureManager().LoadAtlas(key, s_selected_file, m_tilesetTileW, m_tilesetTileH)) {
 						m_chunkManager.SetTilesetKey(key);
 						m_chunkManager.RebuildAllChunksFromTileset();
 						SaveLevelMetadata();  // Save tileset to meta.txt
 						std::cout << "Loaded atlas: " << s_selected_file << " key='" << key << "'" << std::endl;
 						// copy key into ui buffer
 						ImStrncpy(m_tilesetKeyBuf, key.c_str(), sizeof(m_tilesetKeyBuf));
-					} else
-						std::cerr << "Failed to load atlas: " << s_selected_file << std::endl;
+					} else std::cerr << "Failed to load atlas: " << s_selected_file << std::endl;
 				}
 			}
 		}
@@ -1031,8 +1166,7 @@ void LevelEditorScene::AtlasBrowserWindow() {
 
 
 /////////////////////////////////
-// TilesetKeyWindow - Renders ImGui controls for inputting the tileset key and tile dimensions, plus a button to trigger loading the atlas based on the current UI state. When an atlas is loaded, 
-// we trigger a rebuild of all chunks to update their vertex textures based on the new atlas.
+// TilesetKeyWindow - Renders ImGui controls for inputting the tileset key and tile dimensions, plus a button to trigger loading the atlas based on the current UI state. When an atlas is loaded, we trigger a rebuild of all chunks to update their vertex textures based on the new atlas.
 void LevelEditorScene::TilesetKeyWindow() {
 	// Input for tileset key and tile dimensions, plus button to trigger loading the atlas based on the current UI state. When an atlas is loaded, 
 	// we trigger a rebuild of all chunks to update their vertex textures based on the new atlas.
@@ -1062,6 +1196,7 @@ void LevelEditorScene::TilesetKeyWindow() {
 						key = "";
 					}
 				}
+
 				{
 					std::lock_guard<std::mutex> lg(m_atlasLoadMutex);
 					m_atlasLoadKey = key;
@@ -1087,13 +1222,11 @@ void LevelEditorScene::TilesetKeyWindow() {
 void LevelEditorScene::TilePreviewWindow(std::optional<std::shared_ptr<TextureAtlas>>& atlasOpt) {
 	ImGui::Separator();
 
-	if (!atlasOpt.has_value() || !atlasOpt.value())
-		return;
+	if (!atlasOpt.has_value() || !atlasOpt.value())	return;
 
 	auto atlas = atlasOpt.value();
 	std::shared_ptr<sf::Texture> tex = atlas->GetTexture();
-	if (!tex)
-		return;
+	if (!tex) return;
 
 	int tw = atlas->TileWidth();
 	int th = atlas->TileHeight();

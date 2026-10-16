@@ -23,6 +23,8 @@
 #include <cstdlib>
 #include <cmath>
 #include <Windows.h>
+
+#include "SFMLChunkRenderer.h"
 /////////////////////////////////
 
 
@@ -545,10 +547,15 @@ void PathTestScene::Render() {
 	sf::View worldView = m_window.getView();
 
 	// Enqueue chunks
-	m_chunkManager.EnqueueChunks(m_renderQueue, worldView);
+	//m_chunkManager.EnqueueChunks(m_renderQueue, worldView);
 
 	// Flush render queue first so world tiles are drawn
-	m_renderQueue.Flush(m_window);
+	//m_renderQueue.Flush(m_window);
+
+	m_chunkManager.DrawChunkCallback(
+		worldView, [&](const ChunkRenderData& data) { SFMLChunkRenderer::RenderChunk(data, m_window); });
+
+
 
 	// Draw debug overlay (paths, markers) in world view
 	m_window.setView(worldView);

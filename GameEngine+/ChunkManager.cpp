@@ -180,82 +180,96 @@ void ChunkManager::LoadAllSavedChunks() {
 		return;
 	}
 
-	//std::cout << "[ChunkManager] LoadAllSavedChunks from: " << m_basePath << "\n";
-	//std::cout << "[ChunkManager] m_numLayers = " << m_numLayers << "\n";
-
-	// We are going to do three passes:
-	// The first pass discovers all chunk files and which chunks need to be created.
-	// The second pass creates all chunks that need to exist in memory (with all layers).
-	// The third pass enqueues load jobs for all discovered files.
 	try {
 		int fileCount = 0;
-		std::set<std::pair<int, int>> chunksToCreate;  // Track unique (cx, cy) pairs
+		std::set<std::pair<int, int>> chunksToCreate; // Track unique (cx, cy) pairs
 		std::vector<std::string> filenames;
 
-		// First pass: discover all chunk files and which chunks need to be created
-		for (auto &p : fs::directory_iterator(m_basePath)) {
+		//
+		// PASS 1 — Discover all chunk files
+		//
+		for (auto& p : fs::directory_iterator(m_basePath)) {
 			if (!p.is_regular_file()) continue;
+
 			std::string fname = p.path().filename().string();
 			filenames.push_back(fname);
+
 			if (fname.rfind("chunk_", 0) != 0) continue;
 			fileCount++;
-			
+
 			// parse chunk_<layer>_<cx>_<cy>.dat
 			std::string body = fname.substr(6); // after "chunk_"
 			size_t us1 = body.find('_');
 			size_t us2 = body.find('_', us1 + 1);
 			size_t dot = body.find('.');
-			
-			if (us1 == std::string::npos || us2 == std::string::npos || dot == std::string::npos) continue;
-			int layer = std::stoi(body.substr(0, us1));
-			int cx = std::stoi(body.substr(us1+1, us2 - (us1+1)));
-			int cy = std::stoi(body.substr(us2+1, dot - (us2+1)));
 
-			//std::cout << "[LOADALL] Found saved chunk (" << cx << "," << cy << ")\n";
+			if (us1 == std::string::npos || us2 == std::string::npos || dot == std::string::npos) continue;
+
+			int layer = std::stoi(body.substr(0, us1));
+			int cx = std::stoi(body.substr(us1 + 1, us2 - (us1 + 1)));
+			int cy = std::stoi(body.substr(us2 + 1, dot - (us2 + 1)));
 
 			chunksToCreate.insert({cx, cy});
 		}
 
-		// Second pass: create all chunks that need to exist, NOTE!!!! I'm creating new chunks so I don't need to set the chunk as dirty (its the default state) thus rebuild will be correctly called when required.
+		//
+		// PASS 2 — Create all required chunks
+		//
 		{
 			std::lock_guard<std::mutex> lock(m_mutex);
+
 			for (const auto& [cx, cy] : chunksToCreate) {
 				uint64_t key = GetChunkKey(cx, cy);
+
 				if (m_chunks.find(key) == m_chunks.end()) {
 					// Create chunk with all layers
 					m_chunks[key] = Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers);
+
+					Chunk& c = m_chunks[key];
+
+					// NEW: mark dirty so renderer rebuilds buffers
+					c.renderDirty = true;
+					c.bvhDirty = true;
+
+					// NEW: schedule rebuild for new chunks
+					ScheduleChunkForRebuild(m_chunks[key]);
 				}
 			}
 		}
 
-		// Third pass: enqueue load jobs for all discovered files
-		for (auto &p : fs::directory_iterator(m_basePath)) {
+		//
+		// PASS 3 — Enqueue load jobs for all discovered files
+		//
+		for (auto& p : fs::directory_iterator(m_basePath)) {
 			if (!p.is_regular_file()) continue;
+
 			std::string fname = p.path().filename().string();
 			if (fname.rfind("chunk_", 0) != 0) continue;
+
 			// parse chunk_<layer>_<cx>_<cy>.dat
-			std::string body = fname.substr(6); // after "chunk_"
+			std::string body = fname.substr(6);
 			size_t us1 = body.find('_');
 			size_t us2 = body.find('_', us1 + 1);
 			size_t dot = body.find('.');
+
 			if (us1 == std::string::npos || us2 == std::string::npos || dot == std::string::npos) continue;
+
 			int layer = std::stoi(body.substr(0, us1));
-			int cx = std::stoi(body.substr(us1+1, us2 - (us1+1)));
-			int cy = std::stoi(body.substr(us2+1, dot - (us2+1)));
+			int cx = std::stoi(body.substr(us1 + 1, us2 - (us1 + 1)));
+			int cy = std::stoi(body.substr(us2 + 1, dot - (us2 + 1)));
+
 			EnqueueLoadChunk(cx, cy, layer);
 		}
 
-
-		//	std::cout << "[ChunkManager] Total chunk files found: " << fileCount << "\n";
 		if (fileCount == 0) {
 			std::cout << "[ChunkManager] WARNING: No chunk files found! All files in directory:\n";
-			for (const auto& f : filenames) {
+			for (const auto& f : filenames)
 				std::cout << "  - " << f << "\n";
-			}
 		}
-	} catch(const std::exception& e) {
+
+	} catch (const std::exception& e) {
 		std::cout << "[ChunkManager] Exception in LoadAllSavedChunks: " << e.what() << "\n";
-	} catch(...) {
+	} catch (...) {
 		std::cout << "[ChunkManager] Unknown exception in LoadAllSavedChunks\n";
 	}
 }
@@ -401,7 +415,8 @@ void ChunkManager::GetMinChunkCoords(int& outMinCx, int& outMinCy) const {
 void ChunkManager::ShiftChunksToPositiveCoords() {
 	std::unique_lock<std::mutex> lk(m_mutex);
 
-	if (m_chunks.empty()) return;
+	if (m_chunks.empty())
+		return;
 
 	// Find minimum coordinates
 	int minCx = INT_MAX, minCy = INT_MAX;
@@ -411,15 +426,18 @@ void ChunkManager::ShiftChunksToPositiveCoords() {
 	}
 
 	// If already positive, no need to shift
-	if (minCx >= 0 && minCy >= 0) return;
+	if (minCx >= 0 && minCy >= 0)
+		return;
 
 	// Calculate offset
 	int offsetX = (minCx < 0) ? -minCx : 0;
 	int offsetY = (minCy < 0) ? -minCy : 0;
 
-	if (offsetX == 0 && offsetY == 0) return; // No shift needed
+	if (offsetX == 0 && offsetY == 0)
+		return;
 
-	std::cout << "[ChunkManager] Shifting chunks by (" << offsetX << ", " << offsetY << ") to ensure positive coordinates\n";
+	std::cout << "[ChunkManager] Shifting chunks by (" << offsetX << ", " << offsetY
+			  << ") to ensure positive coordinates\n";
 
 	// Collect old chunks and rebuild map with new coordinates
 	std::vector<Chunk> chunksToShift;
@@ -439,17 +457,25 @@ void ChunkManager::ShiftChunksToPositiveCoords() {
 	for (Chunk& chunk : chunksToShift) {
 		chunk.chunkX += offsetX;
 		chunk.chunkY += offsetY;
+
+		// NEW: mark dirty so renderer rebuilds buffers
+		chunk.renderDirty = true;
+		chunk.bvhDirty = true; // BVH must rebuild due to world-space shift
+
 		uint64_t newKey = GetChunkKey(chunk.chunkX, chunk.chunkY);
 		m_chunks[newKey] = chunk;
+
+		// NEW: schedule rebuild for shifted chunks
+		ScheduleChunkForRebuild(m_chunks[newKey]);
 	}
 
 	// Save all shifted chunks to disk
-	// Note: Unlock mutex before calling SaveAllChunks as it may use mutexes internally
 	lk.unlock();
 	SaveAllChunks();
 	lk.lock();
 
-	std::cout << "[ChunkManager] Shifted " << chunksToShift.size() << " chunks and saved to disk. New min coords: ("  << (minCx >= 0 ? minCx : 0) << ", " << (minCy >= 0 ? minCy : 0) << ")\n";
+	std::cout << "[ChunkManager] Shifted " << chunksToShift.size() << " chunks and saved to disk. New min coords: ("
+			  << (minCx >= 0 ? minCx : 0) << ", " << (minCy >= 0 ? minCy : 0) << ")\n";
 }
 /////////////////////////////////
 
@@ -501,7 +527,6 @@ void ChunkManager::RebuildAllChunksFromTileset() {
 		auto atlasOpt = GameEngine::GetInstance().GetTextureManager().GetAtlas(m_tilesetKey);
 		if (atlasOpt.has_value() && *atlasOpt) {
 			atlasPtr = *atlasOpt;
-			//std::cout << "ChunkManager::RebuildAllChunksFromTileset - Atlas '" << m_tilesetKey << "' loaded successfully\n";
 		} else {
 			std::cout << "ChunkManager::RebuildAllChunksFromTileset - Atlas '" << m_tilesetKey << "' NOT FOUND!\n";
 		}
@@ -510,8 +535,18 @@ void ChunkManager::RebuildAllChunksFromTileset() {
 	}
 
 	std::lock_guard<std::mutex> lock(m_mutex);
+
 	for (auto& pr : m_chunks) {
-		BuildChunkVertexArray(pr.second, atlasPtr);
+		Chunk& chunk = pr.second;
+
+		// NEW: mark chunk dirty so TileRenderSystem rebuilds GPU buffers
+		chunk.renderDirty = true;
+
+		// NEW: schedule rebuild (GPU + colliders)
+		ScheduleChunkForRebuild(chunk);
+
+		// DO NOT call BuildChunkVertexArray anymore — SFML rendering is being extracted
+		// BuildChunkVertexArray(chunk, atlasPtr);   <-- removed
 	}
 }
 /////////////////////////////////
@@ -909,17 +944,24 @@ void ChunkManager::EnsureChunkLoaded(int cx, int cy) {
 
 	uint64_t key = GetChunkKey(cx, cy);
 
-	// Already loaded or already created
-	if (m_chunks.find(key) != m_chunks.end()) return;
+	if (m_chunks.find(key) != m_chunks.end()) {
+		TouchChunkLRU(key);
+		return;
+	}
 
-	// Create empty chunk with correct dimensions
+	// Create empty chunk
 	m_chunks[key] = Chunk(cx, cy, m_chunkWidth, m_chunkHeight, m_tileSize, m_numLayers);
 
-	// Enqueue background load for each layer
+	Chunk& c = m_chunks[key];
+
+	// NEW: mark dirty so renderer rebuilds buffers
+	c.renderDirty = true;
+	c.bvhDirty = true;
+
+	// Enqueue background load
 	for (int layer = 0; layer < m_numLayers; ++layer)
 		EnqueueLoadChunk(cx, cy, layer);
 
-	// Mark as recently used (for LRU)
 	TouchChunkLRU(key);
 }
 /////////////////////////////////
@@ -1043,6 +1085,75 @@ void ChunkManager::GetWorldMaskSnapshot(std::vector<uint8_t>& outMask, int& outW
 
 
 /////////////////////////////////
+void ChunkManager::CollectVisibleRenderData(const WorldViewBounds& b, std::vector<ChunkRenderData>& out) {
+	out.clear();
+
+	const float ts = m_tileSize;
+
+	// Convert world bounds → tile bounds
+	int tx0 = static_cast<int>(std::floor(b.minX / ts));
+	int ty0 = static_cast<int>(std::floor(b.minY / ts));
+	int tx1 = static_cast<int>(std::ceil(b.maxX / ts));
+	int ty1 = static_cast<int>(std::ceil(b.maxY / ts));
+
+	// Convert tile bounds → chunk bounds
+	int cx0 = tx0 / m_chunkWidth;
+	int cy0 = ty0 / m_chunkHeight;
+	int cx1 = tx1 / m_chunkWidth;
+	int cy1 = ty1 / m_chunkHeight;
+
+	if (cx1 < cx0)
+		std::swap(cx0, cx1);
+	if (cy1 < cy0)
+		std::swap(cy0, cy1);
+
+	std::lock_guard<std::mutex> lock(m_mutex);
+
+	for (int cy = cy0; cy <= cy1; ++cy) {
+		for (int cx = cx0; cx <= cx1; ++cx) {
+			uint64_t key = GetChunkKey(cx, cy);
+			auto it = m_chunks.find(key);
+			if (it == m_chunks.end())
+				continue;
+
+			Chunk& chunk = it->second;
+
+			ChunkRenderData rd;
+			rd.chunkX = cx;
+			rd.chunkY = cy;
+			rd.width = m_chunkWidth;
+			rd.height = m_chunkHeight;
+			rd.tileSize = m_tileSize;
+			rd.numLayers = m_numLayers;
+			rd.tilesPerLayer = &chunk.tilesPerLayer;
+			rd.renderDirty = chunk.renderDirty;
+
+			out.push_back(rd);
+		}
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void ChunkManager::CollectVisibleRenderData(const sf::View& view, std::vector<ChunkRenderData>& out) {
+	WorldViewBounds b;
+	const sf::Vector2f center = view.getCenter();
+	const sf::Vector2f size = view.getSize();
+
+	b.minX = center.x - size.x * 0.5f;
+	b.maxX = center.x + size.x * 0.5f;
+	b.minY = center.y - size.y * 0.5f;
+	b.maxY = center.y + size.y * 0.5f;
+
+	CollectVisibleRenderData(b, out);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // GetChunkForPosition - Retrieves the chunk that contains the specified world position (pos). Returns nullptr if the chunk is not loaded.
 Chunk* ChunkManager::GetChunkForPosition(const Vec2& pos) const {
 	int tileX = static_cast<int>(pos.x / m_tileSize);
@@ -1144,10 +1255,13 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 	chunk.dirty[layerIndex] = 1;
 	chunk.editVersion[layerIndex]++;
 	chunk.bvhDirty = true; // Mark the BVH as dirty since the tile data has changed
+	chunk.renderDirty = true; // Mark the chunk as needing a rebuild for rendering
 	m_worldRevision.fetch_add(1, std::memory_order_relaxed);
 
 	// LRU touch
 	auto lruIt = m_lruIndex.find(key);
+
+	// If the chunk is already in the LRU list, remove it from its current position before adding it to the front
 	if (lruIt != m_lruIndex.end())	
 		m_lruList.erase(lruIt->second);
 
@@ -1164,11 +1278,10 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 			bool anyNonZero = false;
 
 			for (int layer = 0; layer < chunk.numLayers; ++layer) {
-				std::string filename =
-					(fs::path(m_basePath) / ("chunk_" + std::to_string(layer) + "_" + std::to_string(chunk.chunkX) +
-											 "_" + std::to_string(chunk.chunkY) + ".dat"))
-						.string();
+				// Construct the filename for the chunk data file based on the base path, layer index, and chunk coordinates
+				std::string filename = (fs::path(m_basePath) / ("chunk_" + std::to_string(layer) + "_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
 
+				// Check if all tiles in this layer are zero. If so, we can delete the file to save space.
 				bool allZero = true;
 				for (int t : chunk.tilesPerLayer[layer]) {
 					if (t != 0) {
@@ -1184,10 +1297,12 @@ int ChunkManager::SetTileAt(int tileX, int tileY, int tileValue, int layerIndex)
 					chunk.dirty[layer] = false;
 				} else {
 					anyNonZero = true;
+					// Open the file for binary writing
 					std::ofstream outFile(filename, std::ios::binary);
+					
+					// Write the tile data for this layer to the file if the file was successfully opened. The tile data is written as a binary array of integers.
 					if (outFile) {
-						outFile.write(reinterpret_cast<const char*>(chunk.tilesPerLayer[layer].data()),
-									  chunk.tilesPerLayer[layer].size() * sizeof(int));
+						outFile.write(reinterpret_cast<const char*>(chunk.tilesPerLayer[layer].data()), chunk.tilesPerLayer[layer].size() * sizeof(int));
 						chunk.dirty[layer] = false;
 					}
 				}
@@ -1313,6 +1428,10 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 
 				if (insertedNow) {
 					Chunk& newChunk = insertedItr->second;
+
+					// Mark the new chunk as dirty so that it will be rebuilt for rendering
+					newChunk.renderDirty = true;
+					newChunk.bvhDirty = true;
 					bool allZero = true;
 
 					for (int i = 0; i < newChunk.width * newChunk.height; ++i) {
@@ -1403,6 +1522,9 @@ void ChunkManager::EnsureChunksInTileRect_NoLock(int tileX0, int tileY0, int til
 			// If we just inserted a new chunk, check if all layers are empty (all tiles are zero). If so, mark the chunk as ready for rendering.
 			if (insertedNow) {
 				Chunk& newChunk = itr2->second;
+
+				newChunk.renderDirty = true;
+				newChunk.bvhDirty = true;
 
 				// Check if all layers are empty (all tiles are zero)
 				bool allZero = true;
@@ -1656,9 +1778,12 @@ void ChunkManager::EnqueueLoadChunk_NoLock(int chunkX, int chunkY) {
 	uint32_t versionAtEnqueue = 0;
 
 	auto it = m_chunks.find(GetChunkKey(chunkX, chunkY));
-	if (it != m_chunks.end()) {
+	
+	if (it != m_chunks.end()) 
+	{
 		// Use layer 0's version (your original two‑argument version implicitly loads all layers)
-		if (!it->second.editVersion.empty()) {
+		if (!it->second.editVersion.empty()) 
+		{
 			versionAtEnqueue = it->second.editVersion[0];
 		}
 	}
@@ -1676,17 +1801,24 @@ void ChunkManager::EnqueueLoadChunk_NoLock(int chunkX, int chunkY) {
 		// Two‑argument version: load ALL layers
 		s_loadQueue.emplace_back(chunkX, chunkY, -1, base, versionAtEnqueue);
 
-		if (!s_loaderStarted) {
+		if (!s_loaderStarted) 
+		{
+			// Start the loader thread pool only once
 			s_loaderStarted = true;
 
+			// Start the loader thread pool
 			for (int i = 0; i < s_maxLoaderThreads; ++i) {
-				std::thread([localChunkW, localChunkH, localNumLayers]() {
+				// -------------------------------------->
+				std::thread([localChunkW, localChunkH, localNumLayers]() 
+				{
+					// Background loader thread loop: wait for jobs and process them
 					while (true) {
 						std::tuple<int, int, int, std::string, uint32_t> job;
 
 						{
 							std::unique_lock<std::mutex> ql(s_loadQueueMutex);
-							s_loadCv.wait(ql, [] { return !s_loadQueue.empty(); });
+							s_loadCv.wait(ql, [] { return !s_loadQueue.empty(); }); // Wait until there is a job in the queue
+							
 							job = s_loadQueue.back();
 							s_loadQueue.pop_back();
 						}
@@ -1697,33 +1829,41 @@ void ChunkManager::EnqueueLoadChunk_NoLock(int chunkX, int chunkY) {
 						std::string jobBase = std::get<3>(job);
 						uint32_t jobVer = std::get<4>(job);
 
-						if (jobLayer < 0) {
+						// Perform the load for this job: attempt to read the specified layer only (or all layers if layer == -1)
+						if (jobLayer < 0) 
+						{
 							// Load ALL layers
-							for (int L = 0; L < localNumLayers; ++L) {
+							for (int L = 0; L < localNumLayers; ++L) 
+							{
+								// Create a vector to hold the tile data for this layer
 								std::vector<int> tileData(localChunkW * localChunkH, 0);
 
-								std::string filename =
-									(fs::path(jobBase) / ("chunk_" + std::to_string(L) + "_" + std::to_string(jobCx) +
-														  "_" + std::to_string(jobCy) + ".dat"))
-										.string();
+								// Construct the filename for this layer's chunk data file
+								std::string filename = (fs::path(jobBase) / ("chunk_" + std::to_string(L) + "_" + std::to_string(jobCx) + "_" + std::to_string(jobCy) + ".dat")).string();
 
-								if (fs::exists(filename)) {
+								// Check if the file exists and read its contents into tileData
+								if (fs::exists(filename)) 
+								{
 									std::ifstream inFile(filename, std::ios::binary);
-									if (inFile)
-										inFile.read(reinterpret_cast<char*>(tileData.data()),
-													tileData.size() * sizeof(int));
+
+									// Read the tile data from the file into the vector if the file was successfully opened
+									if (inFile)	inFile.read(reinterpret_cast<char*>(tileData.data()),tileData.size() * sizeof(int));
 								}
 
+								// Push the loaded chunk data into the pending queue for processing on the main thread
 								{
 									std::lock_guard<std::mutex> lock(s_pendingMutex);
 									s_pendingChunks.emplace_back(jobCx, jobCy, L, std::move(tileData), jobVer);
 								}
 							}
-						} else {
-							// (Not used in your two‑argument version)
+						} 
+						else 
+						{
+							// (Not used in the two‑argument version)
 						}
 					}
-				}).detach();
+				}).detach(); // Detach the thread so it runs independently in the background
+				// <-------------------------------------
 			}
 		}
 	}
@@ -1737,22 +1877,31 @@ void ChunkManager::EnqueueLoadChunk_NoLock(int chunkX, int chunkY) {
 /////////////////////////////////
 // RebuildChunkEntities - Rebuilds the collider entities for a chunk based on its current tile data. This should be called whenever the tile data changes to ensure that the 
 // colliders match the visual representation of the chunk.
-void ChunkManager::RebuildChunkEntities(Chunk& chunk) {
+void ChunkManager::RebuildChunkEntities(Chunk& chunk) 
+{
 	// First, safely kill any existing entities that were generated for this chunk to avoid leaving orphaned entities in the world. We use SafeKillEntity to ensure that we 
 	// don't attempt to access entities that may have already been destroyed.
-	try {
+	try 
+	{
+		// Get a reference to the EntityManager from the GameEngine singleton. This allows us to manage entities in the game world.
 		EntityManager& em = GameEngine::GetInstance().GetEntityManager();
-		for (Entity* ge : chunk.generatedEntities) {
-			if (ge) em.SafeKillEntity(ge);
-		}
+
+		// Iterate over the list of generated entities for this chunk and safely kill each one. This ensures that any old colliders are removed before we create new ones based on the updated tile data.
+		for (Entity* ge : chunk.generatedEntities) if (ge) em.SafeKillEntity(ge);
 
 		// Clear the list of generated entities for this chunk so we can repopulate it with new colliders based on the current tile data.
 		chunk.generatedEntities.clear();
 
 		// Create a 2D array to track which tiles have already been processed into colliders. This prevents creating multiple colliders for the same contiguous area of tiles.
 		std::vector<char> used(chunk.width * chunk.height, 0);
-		for (int y = 0; y < chunk.height; ++y) {
-			for (int x = 0; x < chunk.width; ++x) {
+		
+		// Iterate over each tile in the chunk to identify contiguous areas of tiles with the same value. For each unprocessed tile, we will determine the width and height of the contiguous area and create a single collider entity for that area.
+		for (int y = 0; y < chunk.height; ++y) 
+		{
+			// Iterate over each tile in the current row of the chunk
+			for (int x = 0; x < chunk.width; ++x) 
+			{
+				// Calculate the index of the current tile in the 1D used array. This index corresponds to the position (x, y) in the chunk's tile grid.
 				int index = y * chunk.width + x;
 				
 				// Skip tiles that have already been processed into colliders
@@ -1765,26 +1914,39 @@ void ChunkManager::RebuildChunkEntities(Chunk& chunk) {
 				
 				// Determine the width of the contiguous area of tiles with the same value starting from (x, y). We expand to the right until we hit a different tile value or the edge of the chunk. 
 				int width = 1;
-				while (x + width < chunk.width &&
-					   (!chunk.tilesPerLayer.empty() && chunk.tilesPerLayer[0][y * chunk.width + (x + width)] == val) 
-						&& !used[y * chunk.width + (x + width)]) {
+
+				// Expand to the right while the next tile has the same value and has not been used yet
+				while (x + width < chunk.width 	&& (!chunk.tilesPerLayer.empty() && chunk.tilesPerLayer[0][y * chunk.width + (x + width)] == val) && !used[y * chunk.width + (x + width)]) 
+				{
+					// Increment the width of the contiguous area
 					++width;
 				}
 
 				// Determine the height of the contiguous area of tiles with the same value starting from (x, y). We expand downward until we hit a different tile value or the edge of the chunk.
 				int height = 1;
 				bool canExtend = true;
-				while (y + height < chunk.height && canExtend) {
-					for (int xi = 0; xi < width; ++xi) {
+
+				// Expand downward while the next row has the same value and has not been used yet
+				while (y + height < chunk.height && canExtend) 
+				{
+					// Check each tile in the next row to see if it matches the value and has not been used
+					for (int xi = 0; xi < width; ++xi) 
+					{
+						// If any tile in the next row does not match the value or has already been used, we cannot extend the height further
 						if ((!chunk.tilesPerLayer.empty() && chunk.tilesPerLayer[0][(y + height) * chunk.width + (x + xi)] != val) || used[(y + height) * chunk.width + (x + xi)]) { canExtend = false; break; }
 					}
+
+					// If we can extend the height, increment the height of the contiguous area
 					if (canExtend) ++height;
 				}
 
 				// Mark all tiles in the contiguous area as used so we don't process them again
-				for (int yy = 0; yy < height; ++yy) {
-					for (int xx = 0; xx < width; ++xx) { 
-						used[(y + yy) * chunk.width + (x + xx)] = 1; 
+				for (int yy = 0; yy < height; ++yy) 
+				{
+					// Mark each tile in the current row of the contiguous area as used
+					for (int xx = 0; xx < width; ++xx) 
+					{ 
+						used[(y + yy) * chunk.width + (x + xx)] = 1; // Mark tile as used
 					}
 				}
 
@@ -1797,7 +1959,11 @@ void ChunkManager::RebuildChunkEntities(Chunk& chunk) {
 				
 				// Create a new entity for this contiguous area of tiles. The entity will have a transform component, a rectangle shape component, and a static component to indicate it is not dynamic.
 				Entity* ent = em.AddEntity(EntityType::Tile);
-				if (ent) {
+
+				// Add components to the entity: transform, shape, and static. The transform sets the position and scale, the shape defines the visual representation (rectangle), and the static component indicates that this entity does not move.
+				if (ent) 
+				{
+					// Add a transform component to the entity with the calculated position and zero scale
 					ent->AddComponent<CTransform>(Vec2(posX, posY), Vec2::Zero);
 					auto rect = std::make_unique<CRectangle>(tileW, tileH);
 					rect->SetColor(160.0f, 160.0f, 160.0f, 200);
@@ -1818,13 +1984,16 @@ void ChunkManager::RebuildChunkEntities(Chunk& chunk) {
 
 /////////////////////////////////
 // ScheduleChunkForRebuild - Mark a chunk as requiring GPU/collider rebuild on the main thread.
-void ChunkManager::ScheduleChunkForRebuild(Chunk& c) {
+void ChunkManager::ScheduleChunkForRebuild(Chunk& c) 
+{
 	uint64_t key = GetChunkKey(c.chunkX, c.chunkY);
+	
 	// NOTE: callers (e.g. SetTileAt) may already hold m_mutex. Do not re-lock here
 	// to avoid deadlock / std::system_error from double-locking a non-recursive mutex.
-	if (m_rebuildSet.find(key) == m_rebuildSet.end()) {
-		m_rebuildSet.insert(key);
-		m_rebuildQueue.push_back(key);
+	if (m_rebuildSet.find(key) == m_rebuildSet.end()) 
+	{
+		m_rebuildSet.insert(key);		// Mark this chunk as needing rebuild
+		m_rebuildQueue.push_back(key);	// Add to rebuild queue for main thread processing
 	}
 }
 /////////////////////////////////
@@ -1832,93 +2001,49 @@ void ChunkManager::ScheduleChunkForRebuild(Chunk& c) {
 
 
 /////////////////////////////////
-// FinaliseLoadedChunk
-// This method is called on the main thread after a chunk has been loaded in the background. It finalises the loaded chunk by updating its tile data, 
-// marking it as ready for rendering, and scheduling it for GPU/collider rebuild. If the chunk was evicted before finalisation or if the editVersion 
-// has changed since the load was enqueued, the loaded data is discarded to avoid overwriting newer changes.
+// FinaliseLoadedChunk - Finalises a chunk that has been loaded in the background. This method is called on the main thread after the background loader has finished loading a chunk's tile data. It updates the chunk's tile data, marks it as ready for rendering, and schedules any necessary rebuilds for GPU/collider work.
 void ChunkManager::FinaliseLoadedChunk(int chunkX, int chunkY, int layer, std::vector<int> tileData, uint32_t versionAtEnqueue) {
-
-	//std::cout << "[FINALISE] C(" << chunkX << "," << chunkY << ")" << " L=" << layer << " ver=" << versionAtEnqueue << "\n";
-
-	// Lock the mutex to ensure thread safety while accessing and modifying the chunk data structures
 	std::lock_guard<std::mutex> lock(m_mutex);
-	
+
 	uint64_t key = GetChunkKey(chunkX, chunkY);
 	auto itr = m_chunks.find(key);
-	if (itr == m_chunks.end()) {
-		// Chunk was evicted before we could finalise — discard the load
+	if (itr == m_chunks.end())
 		return;
-	}
 
 	Chunk& chunk = itr->second;
-	if (layer < 0 || layer >= chunk.numLayers) return;
-	// If the chunk's editVersion changed since the load was enqueued, the disk data is stale — skip overwriting
+
+	if (layer < 0 || layer >= chunk.numLayers)
+		return;
+
 	if (chunk.editVersion[layer] != versionAtEnqueue) {
 		chunk.readyForRendering[layer] = 1;
 	} else {
-		if ((int)tileData.size() == chunk.width * chunk.height) {
+		if ((int)tileData.size() == chunk.width * chunk.height)
 			chunk.tilesPerLayer[layer] = std::move(tileData);
-		} else {
+		else
 			chunk.tilesPerLayer[layer].assign(chunk.width * chunk.height, 0);
-		}
+
+		chunk.renderDirty = true; // ensure GPU rebuild
+		chunk.bvhDirty = true;	  // ensure collider rebuild
 		chunk.dirty[layer] = 0;
 		chunk.readyForRendering[layer] = 1;
-
-		chunk.bvhDirty = true; // Tile geometry changed → BVH must rebuild
 
 		m_worldRevision.fetch_add(1, std::memory_order_relaxed);
 	}
 
-	
-	// Update world mask from obstacle layer (layer 1)
-	if (worldWidth > 0 && worldHeight > 0 && !worldMask.empty()) {
+	// Update world mask (unchanged)
 
-		int baseX = chunk.chunkX * chunk.width;
-		int baseY = chunk.chunkY * chunk.height;
-
-		for (int y = 0; y < chunk.height; ++y) {
-			for (int x = 0; x < chunk.width; ++x) {
-
-				int idx = y * chunk.width + x;
-
-				// Read obstacle tile from layer 1
-				int tileVal = (chunk.tilesPerLayer.size() > 1) ? chunk.tilesPerLayer[1][idx] : 0;
-
-				int worldX = baseX + x;
-				int worldY = baseY + y;
-
-				int maskX = worldX - worldOffsetX;
-				int maskY = worldY - worldOffsetY;
-
-				if (maskX >= worldWidth || maskY >= worldHeight) {
-					int newWidth = std::max(worldWidth, maskX + 1);
-					int newHeight = std::max(worldHeight, maskY + 1);
-					worldWidth = newWidth;
-					worldHeight = newHeight;
-					worldMask.resize((size_t)worldWidth * (size_t)worldHeight, false);
-				}
-
-				if (maskX < 0 || maskY < 0 || maskX >= worldWidth || maskY >= worldHeight)
-					continue;
-
-				// true = blocked, false = walkable
-				worldMask[maskY * worldWidth + maskX] = (tileVal != 0);
-			}
-		}
-	}
-
-	// Defer GPU / SFML dependent work: schedule a rebuild on the main thread instead of building vertex arrays here. This avoids touching SFML/OpenGL from background loader threads. Note: FinaliseLoadedChunk runs on the main thread via UpdateMainThread normally; we still schedule to be safe.
 	ScheduleChunkForRebuild(chunk);
-	// O(1) LRU touch
-	{
-		auto lruIt = m_lruIndex.find(key);
-		if (lruIt != m_lruIndex.end()) m_lruList.erase(lruIt->second);
-	}
+
+	// LRU touch
+	auto lruIt = m_lruIndex.find(key);
+	if (lruIt != m_lruIndex.end())
+		m_lruList.erase(lruIt->second);
+
 	m_lruList.push_front(key);
 	m_lruIndex[key] = m_lruList.begin();
 
-	// register colliders
-	RebuildChunkEntities(m_chunks[key]);
+	RebuildChunkEntities(chunk);
 }
 /////////////////////////////////
 
@@ -1927,48 +2052,50 @@ void ChunkManager::FinaliseLoadedChunk(int chunkX, int chunkY, int layer, std::v
 /////////////////////////////////
 // EvictIfNeeded - Evicts least recently used chunks if the number of loaded chunks exceeds the maximum limit. This will unload chunks from memory but will save them to disk if they are dirty.
 void ChunkManager::EvictIfNeeded() {
-
-	// lock the mutex to ensure thread safety while accessing and modifying the chunk data structures
 	std::lock_guard<std::mutex> lock(m_mutex);
 
-	// Evict least recently used chunks until we are within the limit 
 	while (m_chunks.size() > m_maxLoadedChunks && !m_lruList.empty()) {
-		
-		// Get the least recently used chunk key from the back of the LRU list
+
 		uint64_t key = m_lruList.back();
 		auto itr = m_chunks.find(key);
+
 		if (itr != m_chunks.end()) {
 			Chunk& chunk = itr->second;
-			
-			// Save if dirty
+
+			// --- Save dirty layers ---
 			for (int layer = 0; layer < chunk.numLayers; ++layer) {
-				if (!chunk.dirty.empty() && !chunk.dirty[layer]) continue;
+				if (!chunk.dirty.empty() && !chunk.dirty[layer])
+					continue;
+
 				std::filesystem::path p(m_basePath);
-				std::string filename = (p / ("chunk_" + std::to_string(layer) + "_" + std::to_string(chunk.chunkX) + "_" + std::to_string(chunk.chunkY) + ".dat")).string();
+				std::string filename = (p / ("chunk_" + std::to_string(layer) + "_" + std::to_string(chunk.chunkX) +
+											 "_" + std::to_string(chunk.chunkY) + ".dat"))
+										   .string();
+
 				std::ofstream outFile(filename, std::ios::binary);
 				if (outFile) {
-					outFile.write(reinterpret_cast<const char*>(chunk.tilesPerLayer[layer].data()), chunk.tilesPerLayer[layer].size() * sizeof(int));
+					outFile.write(reinterpret_cast<const char*>(chunk.tilesPerLayer[layer].data()),
+								  chunk.tilesPerLayer[layer].size() * sizeof(int));
 				} else {
 					std::cerr << "ChunkManager: eviction save failed: " << filename << "\n";
 				}
 			}
 
+			// --- Kill generated collider entities ---
 			try {
 				EntityManager& em = GameEngine::GetInstance().GetEntityManager();
-				for (Entity* ge : chunk.generatedEntities) {
-					if (ge) em.SafeKillEntity(ge);
-				}
-			} catch(...) {}
+				for (Entity* ge : chunk.generatedEntities)
+					if (ge)
+						em.SafeKillEntity(ge);
+			} catch (...) {}
 
-			// Update world mask to clear the tiles of the evicted chunk if it was an obstacle layer (layer 1)
+			// --- Clear world mask footprint ---
 			if (worldWidth > 0 && worldHeight > 0 && !worldMask.empty()) {
-
 				int baseX = chunk.chunkX * chunk.width;
 				int baseY = chunk.chunkY * chunk.height;
 
 				for (int y = 0; y < chunk.height; ++y) {
 					for (int x = 0; x < chunk.width; ++x) {
-
 						int worldX = baseX + x;
 						int worldY = baseY + y;
 
@@ -1978,15 +2105,29 @@ void ChunkManager::EvictIfNeeded() {
 						if (maskX < 0 || maskY < 0 || maskX >= worldWidth || maskY >= worldHeight)
 							continue;
 
-						worldMask[maskY * worldWidth + maskX] = 0; // clear tile
+						worldMask[maskY * worldWidth + maskX] = 0;
 					}
 				}
 			}
 
-
-
+			// --- Remove chunk ---
 			m_chunks.erase(itr);
+
+			// --- World changed ---
+			m_worldRevision.fetch_add(1, std::memory_order_relaxed);
+
+			// --- Renderer must rebuild world geometry ---
+			// Mark global render state dirty
+			// (this forces TileRenderSystem to rebuild buffers next frame)
+			// NOTE: no lock here; caller already holds m_mutex
+			// We cannot schedule a rebuild for the chunk (it no longer exists)
+			// but we *can* force a global rebuild by marking all remaining chunks dirty.
+			for (auto& [k, c] : m_chunks) {
+				c.renderDirty = true;
+			}
 		}
+
+		// --- Remove from LRU ---
 		m_lruIndex.erase(key);
 		m_lruList.pop_back();
 	}
@@ -1998,167 +2139,25 @@ void ChunkManager::EvictIfNeeded() {
 /////////////////////////////////
 // LoadLevelFromFile - Load a TileMap JSON file into memory and replace active chunks.
 bool ChunkManager::LoadLevelFromFile(const std::string& path, std::string* outErr) {
-	//// Load the TileMap from JSON file.
-	//auto loaded = TileMap::LoadFromJSON(path, outErr);
-
-	//// Guard: if loading failed, return false and append error message to outErr.
-	//if (!loaded.has_value()) {
-	//	outErr->append("\nFailed to load TileMap from file: " + path + "\n");
-	//	return false;
-	//}
-
-	//// No issues, then move the loaded TileMap into a local variable for processing.
-	//TileMap map = std::move(*loaded);
-
-	//// Determine the number of layers to load. If the TileMap has no layers, we will still create a single default layer.
-	//const int newLayerCount = std::max(1, (int)map.layers.size());
-
-	//// Prepare a new chunk map to hold the loaded chunks. This will replace the current m_chunks after loading.
-	//std::unordered_map<uint64_t, Chunk> newChunks;
-
-	//// Get the width and height of the TileMap in tiles.
-	//worldWidth = map.width;
-	//worldHeight = map.height;
-	//// Initialize world-scale walkability mask
-	//worldMask.resize(worldWidth * worldHeight, false);
-
-
-	//// Update world dimensions and resize the world-scale walkability mask to match the new map size.
-
-
-
-
-	//// OPTIMIZATION: Instead of triple-nested loop (ly, y, x) with hash lookups,
-	//// we now pre-create all chunks, then fill them by chunk with better cache locality.
-
-	//// FIRST PASS: Determine all chunks that need to exist
-	//std::set<uint64_t> chunkKeys; // create a set to hold unique (64-bit) chunk keys
-	//for (int y = 0; y < worldHeight; ++y) {
-	//	for (int x = 0; x < worldWidth; ++x) {
-	//		int chunkX = FloorDiv(x, m_chunkWidth);
-	//		int chunkY = FloorDiv(y, m_chunkHeight);
-	//		uint64_t key = GetChunkKey(chunkX, chunkY);
-	//		chunkKeys.insert(key);
-	//	}
-	//}
-
-	//// SECOND PASS: Create all chunks upfront (batch operation, no scatter)
-	//for (uint64_t key : chunkKeys) {
-	//	int chunkX = (int)(key >> 32);
-	//	int chunkY = (int)(key & 0xFFFFFFFF);
-	//	newChunks.emplace(key, Chunk(chunkX, chunkY, m_chunkWidth, m_chunkHeight, m_tileSize, newLayerCount));
-	//}
-
-	//// THIRD PASS: Fill chunks by layer, then by chunk, for better cache locality
-	//for (int LayerIndex = 0; LayerIndex < newLayerCount; ++LayerIndex) {
-	//	const auto& layerTiles = (LayerIndex < (int)map.layers.size()) ? map.layers[LayerIndex].tiles : std::vector<int>();
-
-	//	// Iterate by chunks first... so get their coordinates and base world positions...
-	//	for (auto& [key, chunk] : newChunks) {
-	//		int chunkX = chunk.chunkX;
-	//		int chunkY = chunk.chunkY;
-	//		int baseX = chunkX * m_chunkWidth;
-	//		int baseY = chunkY * m_chunkHeight;
-
-	//		// ...then iterate by local tile coordinates within the selected chunk, and compute the corresponding world coordinates 
-	//		// to fetch the tile value from the layer data.
-
-
-	//		for (int localY = 0; localY < chunk.height; ++localY) { // move across y axis 
-
-	//			std::cout << "/n";
-
-	//			for (int localX = 0; localX < chunk.width; ++localX) { // then move across x axis
-	//			
-	//				// **** Small Note of on how we cacluate world coordinates from chunk and local tile coordinates ****
-	//				// World coordinates = are calculated by getting a base position which is chunkX * chunkWidth and chunkY * chunkHeight,
-	//				// then adding the local tile coordinates (localX, localY) to get the absolute world position.
-
-	//				int worldX = baseX + localX;
-	//				int worldY = baseY + localY;
-
-	//				int val = 0;
-	//				if (!layerTiles.empty()) {
-	//					size_t idx = (size_t)worldY * (size_t)worldWidth + (size_t)worldX;
-	//					if (idx < layerTiles.size())
-	//						val = layerTiles[idx];
-	//				} else if (LayerIndex == 0 && worldX < worldWidth && worldY < worldHeight) {
-	//					val = map.GetTile(worldX, worldY);
-	//				}
-
-	//				chunk.tilesPerLayer[LayerIndex][localY * chunk.width + localX] = val;
-	//				
-	//				// Build world-scale walkability mask from obstacle layer (e.g. LayerIndex == 1)
-	//				if (LayerIndex == 1) // or whatever layer is your obstacle/collision layer
-	//				{
-	//					int wx = baseX + localX; // world tile X
-	//					int wy = baseY + localY; // world tile Y
-
-	//					// Ensure worldMask is sized: worldWidth = W, worldHeight = H
-	//					worldMask[wy * worldWidth + wx] = (val != 0); // 0 = walkable, non-zero = blocked
-
-	//					std::cout << val;
-	//				}
-	//			}
-	//		}
-	//		chunk.dirty[LayerIndex] = 0;
-	//	}
-
-	//	{
-	//		std::lock_guard<std::mutex> lock(m_mutex);
-	//		try {
-	//			EntityManager& entityMan = GameEngine::GetInstance().GetEntityManager();
-	//			for (auto& chunkPair : m_chunks) {
-	//				Chunk& chunk = chunkPair.second;
-	//				for (Entity* genEnity : chunk.generatedEntities)
-	//					if (genEnity)
-	//						entityMan.SafeKillEntity(genEnity);
-	//				chunk.generatedEntities.clear();
-	//			}
-	//		} catch (...) {}
-
-	//		m_numLayers = newLayerCount;
-	//		m_chunks.swap(newChunks);
-	//		m_lruList.clear();
-	//		m_lruIndex.clear();
-	//		m_rebuildQueue.clear();
-	//		m_rebuildSet.clear();
-
-	//		for (auto& chunkPair : m_chunks) {
-	//			const uint64_t key = chunkPair.first;
-	//			m_lruList.push_front(key);
-	//			m_lruIndex[key] = m_lruList.begin();
-	//			m_rebuildQueue.push_back(key);
-	//			m_rebuildSet.insert(key);
-	//		}
-
-	//		if (!map.tilesetKey.empty())
-	//			m_tilesetKey = map.tilesetKey;
-	//	}
-
 		return true;
-	//}
 }
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// RegisterChunkColliders - Registers the collider entities generated for all chunks. This should be called after loading chunks to ensure that the colliders are 
-// present in the game world for physics and collision detection.
+// RegisterChunkColliders - Registers the collider entities generated for all chunks. This should be called after loading chunks to ensure that the colliders are present in the game world for physics and collision detection.
 void ChunkManager::RegisterChunkColliders(EntityManager& em) {}
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// UnregisterChunkColliders - Unregisters the collider entities generated for all chunks. 
-// This should be called when the chunk data changes or when chunks are evicted to ensure that outdated colliders are removed from the game world.
+// UnregisterChunkColliders - Unregisters the collider entities generated for all chunks. This should be called when the chunk data changes or when chunks are evicted to ensure that outdated colliders are removed from the game world.
 void ChunkManager::UnregisterChunkColliders(EntityManager& em) {
 	std::lock_guard<std::mutex> lock(m_mutex); // lock the mutex to ensure thread safety
 	
-	// Iterate through all chunks and safely kill any generated collider entities to remove them from the game world; i'll loop through the tuple
-	// of generated entities for each chunk and call KillEntity on each one, then clear the generatedEntities vector; this should avoid dangling pointers.
+	// Iterate through all chunks and safely kill any generated collider entities to remove them from the game world; i'll loop through the tuple of generated entities for each chunk and call KillEntity on each one, then clear the generatedEntities vector; this should avoid dangling pointers.
 	// of generated entities for each chunk and call KillEntity on each one, then clear the generatedEntities vector; this should avoid dangling pointers.
 	for (auto &chunkPair : m_chunks) {
 		Chunk &chunk = chunkPair.second;

@@ -69,7 +69,6 @@ public:
 	////////////////////////////////
 
 
-
 	std::shared_ptr<sf::Texture> GetTexture() const { return m_texture; }	// Get texture shared pointer (may be null if not loaded)
 	size_t TileCount() const { return m_rects.size(); }						// TileCount - Number of tiles available
 

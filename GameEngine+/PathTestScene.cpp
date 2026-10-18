@@ -552,12 +552,12 @@ void PathTestScene::Render() {
 	// Flush render queue first so world tiles are drawn
 	//m_renderQueue.Flush(m_window);
 
-	m_chunkManager.DrawChunkCallback(
-		worldView, [&](const ChunkRenderData& data) { SFMLChunkRenderer::RenderChunk(data, m_window); });
+	m_chunkManager.DrawChunkCallback(worldView, [&](const ChunkRenderData& data) { SFMLChunkRenderer::RenderChunk(data, m_window); });
 
 
 
 	// Draw debug overlay (paths, markers) in world view
+	m_window.setView(worldView);
 	m_window.setView(worldView);
 	RenderDebugOverlay();
 

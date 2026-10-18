@@ -12,6 +12,7 @@
 #include "Entity.h"
 #include "CTransform.h"
 #include "CCamera.h"
+#include "SFMLChunkRenderer.h"
 #include <iostream>
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
@@ -93,184 +94,161 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 	m_chunkManager.ClearAllLoadedChunks();
 	m_currentLevelName = name;
 	m_levelSelected = !m_currentLevelName.empty();
-	m_haveBounds = false; // no bounds yet - will be computed from saved chunks on disk
-	
-	// Update chunk manager path
-	// Use same APPDATA-based path as RefreshAvailableLevels
-	// Use secure getenv alternative on MSVC
-	fs::path base;
+	m_haveBounds = false;
 
-//	If APPDATA is set, use it; otherwise, fall back to "levels" in the current working directory
+	// Resolve APPDATA/GameEnginePlus/levels
+	fs::path base;
 #ifdef _MSC_VER
 	char* envBuf = nullptr;
 	size_t len = 0;
-	errno_t er = _dupenv_s(&envBuf, &len, "APPDATA");
-
-	// If APPDATA is set, use it; otherwise, fall back to "levels" in the current working directory
-	if (er == 0 && envBuf && envBuf[0] != '\0') base = fs::path(envBuf) / "GameEnginePlus" / "levels";
-	// If APPDATA is not set, use "levels" in the current working directory
-	else base = fs::path("levels");
-
-	// Free the allocated buffer for the environment variable
+	if (_dupenv_s(&envBuf, &len, "APPDATA") == 0 && envBuf && envBuf[0] != '\0')
+		base = fs::path(envBuf) / "GameEnginePlus" / "levels";
+	else
+		base = fs::path("levels");
 	free(envBuf);
 #else
 	const char* appdata = std::getenv("APPDATA");
-
-	// If APPDATA is set, use it; otherwise, fall back to "levels" in the current working directory
-	if (appdata && appdata[0] != '\0') base = fs::path(appdata) / "GameEnginePlus" / "levels";
-	// If APPDATA is not set, use "levels" in the current working directory
-	else base = fs::path("levels");
-
+	if (appdata && appdata[0] != '\0')
+		base = fs::path(appdata) / "GameEnginePlus" / "levels";
+	else
+		base = fs::path("levels");
 #endif
-	// Set chunk manager base path based on whether a level is selected or not
-	if (m_currentLevelName.empty()) {
-		// If no level is selected, use the base path directly for chunks
-		m_chunkManager.SetBasePath((base / "chunks").string());
-	} else { 
-		// If a level is selected, use the level-specific subdirectory for chunks Ensure the level-specific directory exists before setting the base path
-		m_chunkManager.SetBasePath((base / m_currentLevelName / "chunks").string());
-	}
 
+	// Set chunk path
+	fs::path chunkPath = (m_currentLevelName.empty()) ? (base / "chunks") : (base / m_currentLevelName / "chunks");
 
-	// Ensure directory exists
+	m_chunkManager.SetBasePath(chunkPath.string());
 	try {
-		// Create the chunks directory for the selected level (or the base chunks directory if no level is selected)
-		if (m_currentLevelName.empty()) fs::create_directories(base / "chunks");
-		
-		// If a level is selected, create the chunks directory within that level's folder
-		else fs::create_directories(base / m_currentLevelName / "chunks");
-	} catch(...) {} // Catch any exceptions that may occur during directory creation (e.g., permission issues) and continue without crashing
+		fs::create_directories(chunkPath);
+	} catch (...) {}
 
-
-	// Parse meta.txt to determine available layers and tileset
-	std::vector<std::string> parsedLayers = { "background", "main", "upper" };
-	
+	// Parse meta.txt
+	std::vector<std::string> parsedLayers = {"background", "main", "upper"};
 	{
 		auto metaPath = (m_currentLevelName.empty()) ? (base / "meta.txt") : (base / m_currentLevelName / "meta.txt");
-		
-		// Read meta.txt if it exists and parse key-value pairs for layers, tileset, and tilesetPath
-		try {
-			// Open the meta.txt file for reading
-			std::ifstream meta(metaPath.string());
 
-			// If the file is successfully opened, read it line by line and parse key-value pairs
+		try {
+			std::ifstream meta(metaPath.string());
 			if (meta) {
 				std::string line;
-
-				// Read each line from the meta.txt file
 				while (std::getline(meta, line)) {
-					// simple key=value parsing
 					auto eq = line.find('=');
-
-					//	If the line does not contain an '=', skip it and continue to the next line
-					if (eq == std::string::npos) continue;
-
-					// Extract the key and value from the line based on the position of '='
+					if (eq == std::string::npos)
+						continue;
 					std::string key = line.substr(0, eq);
-					std::string val = line.substr(eq+1);
+					std::string val = line.substr(eq + 1);
 
-					//	If the key is "layers", parse the value as a comma-separated list of layer names and store them in parsedLayers
 					if (key == "layers") {
 						parsedLayers.clear();
-						// comma separated
 						size_t start = 0;
-
-						//	Split the value string by commas and add each non-empty token to parsedLayers
 						while (start < val.size()) {
 							auto comma = val.find(',', start);
-							if (comma == std::string::npos) comma = val.size();
+							if (comma == std::string::npos)
+								comma = val.size();
 							std::string token = val.substr(start, comma - start);
-							if (!token.empty()) parsedLayers.push_back(token);
+							if (!token.empty())
+								parsedLayers.push_back(token);
 							start = comma + 1;
 						}
-					}
-					//	If the key is "tileset", copy the value into the UI buffer for displaying the current tileset in the editor
-					else if (key == "tileset") {
-						// copy into UI buffer
+					} else if (key == "tileset") {
 						ImStrncpy(m_tilesetKeyBuf, val.c_str(), sizeof(m_tilesetKeyBuf));
-					}
-					//	If the key is "tilesetPath", store the value in m_currentTilesetPath for later use (e.g., saving or loading the tileset)
-					else if (key == "tilesetPath") {
-						// Restore tileset path for saving later
+					} else if (key == "tilesetPath") {
 						m_currentTilesetPath = val;
 					}
 				}
 			}
-		}
-		// Catch any exceptions that may occur during file reading or parsing (e.g., file not found, permission issues) and continue without crashing
-		catch(...) {}
+		} catch (...) {}
 	}
 
-	// update editor layer names and inform chunk manager of layer count before loading
+	// Apply tileset from metadata so chunk rebuild has the correct atlas
+	{
+		std::string tilesetKey = std::string(m_tilesetKeyBuf);
+		if (!tilesetKey.empty()) {
+			m_chunkManager.SetTilesetKey(tilesetKey);
+			auto& tm = m_gameEngine.GetTextureManager();
+			auto atlasOpt = tm.GetAtlas(tilesetKey);
+			if (!atlasOpt.has_value() || !*atlasOpt) {
+				int tileSize = (int)m_chunkManager.GetTileSize();
+				if (!m_currentTilesetPath.empty() && fs::exists(m_currentTilesetPath)) {
+					tm.LoadAtlas(tilesetKey, m_currentTilesetPath, tileSize, tileSize);
+				} else {
+					std::vector<std::string> searchPaths = {
+						"assets/tilesets/" + tilesetKey + ".png",
+						"assets/tilesets/" + tilesetKey + ".jpg",
+						"assets/" + tilesetKey + ".png",
+						"assets/" + tilesetKey + ".jpg",
+						tilesetKey + ".png",
+						tilesetKey + ".jpg",
+					};
+					for (const auto& path : searchPaths) {
+						if (fs::exists(path)) {
+							tm.LoadAtlas(tilesetKey, path, tileSize, tileSize);
+							break;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Apply layer list
 	if (!parsedLayers.empty()) {
-		m_layerNames = parsedLayers;											// update editor layer names
-		m_activeLayer = std::min(m_activeLayer, (int)m_layerNames.size() - 1);	// ensure active layer is valid
-		m_chunkManager.SetNumLayers((int)m_layerNames.size());					// inform chunk manager of layer count
+		m_layerNames = parsedLayers;
+		m_activeLayer = std::min(m_activeLayer, (int)m_layerNames.size() - 1);
+		m_chunkManager.SetNumLayers((int)m_layerNames.size());
 	}
 
-	// Keep m_currentDir unchanged so tileset browser still points at assets/user folder.
-	fs::path chunkPath = (m_currentLevelName.empty()) ? (base / "chunks") : (base / m_currentLevelName / "chunks");
-	std::cout << "SwitchToLevel: '" << name << "' basePath='" << chunkPath.string() << "'\n";
-	
-	// Count chunk files for diagnostics
-	int fileCount = 0;
-	try {
-		// Iterate through the chunk directory and count the number of chunk files (files starting with "chunk_") for reporting purposes
-		for (auto it = fs::directory_iterator(chunkPath); it != fs::directory_iterator(); ++it) {
-			
-			// Use try-catch to handle any potential filesystem errors (e.g., permission issues) and continue scanning other entries
-			try {
-				auto &e = *it;
-				if (!e.is_regular_file()) continue;
-				std::string fn = e.path().filename().string();
-				if (fn.rfind("chunk_", 0) == 0) ++fileCount;
-			} catch(...) { continue; }
-		}
-	} 
-	catch(...) { fileCount = 0; }
-
-	// Report loading status to the user via m_exportMessage, which can be displayed in the UI to inform the user about the level being loaded and the number of chunk files found
-	m_exportMessage = std::string("Loading level '") + name + "' - found " + std::to_string(fileCount) + " chunk files in " + chunkPath.string();
-	// Load level chunks
+	// Load chunks
 	m_chunkManager.LoadAllSavedChunks();
-	
-	// Shift all chunks so they have positive coordinates (fixes pathfinding issues crossing boundaries)
-	// FIRST: flush background loads
-	for (int i = 0; i < 20; ++i) {
+	for (int i = 0; i < 20; ++i)
 		m_chunkManager.UpdateMainThread_NoLock();
+	m_chunkManager.RebuildAllChunksFromTileset();
+	for (int i = 0; i < 20; ++i)
+		m_chunkManager.UpdateMainThread_NoLock();
+
+	// *** DO NOT SHIFT CHUNKS HERE ***
+	// PathTestScene does not shift; editor should not either.
+
+	// Compute bounds
+	float dMinX, dMinY, dMaxX, dMaxY;
+	if (!m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
+		m_haveBounds = false;
+		return;
 	}
 
-	// THEN: rebuild chunks
-	m_chunkManager.RebuildAllChunksFromTileset();
+	int tileSize = (int)m_chunkManager.GetTileSize();
+	int minTileX = (int)std::floor(dMinX / tileSize);
+	int minTileY = (int)std::floor(dMinY / tileSize);
+	int maxTileX = (int)std::ceil(dMaxX / tileSize);
+	int maxTileY = (int)std::ceil(dMaxY / tileSize);
 
-	// THEN: shift
-	m_chunkManager.ShiftChunksToPositiveCoords();
+	int worldW = maxTileX - minTileX;
+	int worldH = maxTileY - minTileY;
 
-	// flush again
-	m_chunkManager.UpdateMainThread_NoLock();
+	// Use REAL world offset (same as PathTestScene)
+	m_chunkManager.SetWorldOffset(minTileX, minTileY);
+	m_chunkManager.SetWorldSize(worldW, worldH);
 
-	// After loading and shifting, refresh bounds and report
-	RefreshMapBounds();
-	float dMinX, dMinY, dMaxX, dMaxY;
-	if (m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
-		int tileSize = (int)m_chunkManager.GetTileSize();
+	// Store bounds
+	m_mapMin = Vec2(dMinX, dMinY);
+	m_mapMax = Vec2(dMaxX, dMaxY);
+	m_haveBounds = true;
 
-		int minTileX = (int)std::floor(dMinX / tileSize);
-		int minTileY = (int)std::floor(dMinY / tileSize);
-		int maxTileX = (int)std::ceil(dMaxX / tileSize);
-		int maxTileY = (int)std::ceil(dMaxY / tileSize);
-
-		std::cout << "LevelEditorScene::SwitchToLevel: bounds in tiles: minTileX=" << minTileX  << " minTileY=" << minTileY << " maxTileX=" << maxTileX << " maxTileY=" << maxTileY << "\n";
-
-		int worldW = maxTileX - minTileX;
-		int worldH = maxTileY - minTileY;
-
-		//m_chunkManager.SetWorldOffset(minTileX, minTileY); // <-- safe now
-		//m_chunkManager.SetWorldSize(worldW, worldH); // <-- safe now
-		m_chunkManager.SetWorldOffset(0, 0); // <-- safe now
-		m_chunkManager.SetWorldSize(worldW, worldH); // <-- safe now
+	// Center camera on map (same as PathTestScene)
+	if (m_cameraEntity) {
+		if (auto cam = m_cameraEntity->GetComponent<CCamera>()) {
+			if (auto tr = m_cameraEntity->GetComponent<CTransform>()) {
+				Vec2 center = (m_mapMin + m_mapMax) * 0.5f;
+				tr->position = center;
+				cam->position = center;
+			}
+		}
 	}
 }
+/////////////////////////////////
+
+
+
 /////////////////////////////////
 // Destructor - ensures that all chunks are saved to disk when the level editor scene is destroyed, preventing data loss and ensuring that any changes made to the level are preserved
 LevelEditorScene::~LevelEditorScene() 
@@ -300,7 +278,7 @@ void LevelEditorScene::RefreshMapBounds() {
 	if (m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
 		m_mapMin = Vec2(dMinX, dMinY);
 		m_mapMax = Vec2(dMaxX, dMaxY);
-		m_chunkManager.ShiftChunksToPositiveCoords();
+		//m_chunkManager.ShiftChunksToPositiveCoords();
 		m_haveBounds = true;
 	} 
 	// If no saved chunks exist, reset bounds to indicate that there are no defined map boundaries
@@ -566,6 +544,10 @@ void LevelEditorScene::Update(float deltaTime) {
 	// finalize any background-loaded chunks
 	m_chunkManager.UpdateMainThread_NoLock();
 
+	// IMPORTANT: apply world camera view before any mouse-to-world mapping.
+	// Render() resets the window to default view for UI, so Update must restore world view first.
+	ApplyMainCameraView();
+
 	// determine which tile the mouse is over in world coordinates.
 	sf::Vector2i mousePos = sf::Mouse::getPosition(m_window);
 	sf::Vector2f world = m_window.mapPixelToCoords(mousePos, m_window.getView());
@@ -584,7 +566,7 @@ void LevelEditorScene::Update(float deltaTime) {
 
 	// Tile pick: hold D to activate eyedropper mode, then press left mouse button to pick a tile. While D is held, the eyedropper cursor is visible. When LMB is clicked while D is held, the 
 	// tile at the mouse position is selected and becomes the active brush tile.
-	bool dKey = m_gameEngine.GetInputController().IsKeyboardEnabled() && sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
+	bool dKey = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
 	
 	// Switch to eyedropper cursor when D is pressed, revert when released
 	if (dKey && !m_prevDKey) {
@@ -833,7 +815,7 @@ void LevelEditorScene::Update(float deltaTime) {
 
 	ProcessInput();
 
-	// Apply camera view AFTER all panning input has been processed
+	// Keep the view in sync after panning/zoom changes made this frame.
 	ApplyMainCameraView();
 }
 /////////////////////////////////
@@ -848,6 +830,9 @@ void LevelEditorScene::Render() {
 	m_tempRenderShapes.clear();
 	m_tempRenderVertexArrays.clear();
 	m_nextTempId = 0;
+
+	sf::View worldView = m_window.getView();
+
 
 	// ---------------------------------------------------------
 	// 0. APPLY CAMERA → SFML VIEW (zoom‑safe pixel snapping)
@@ -879,11 +864,13 @@ void LevelEditorScene::Render() {
 	// 1. BACKGROUND
 	// ---------------------------------------------------------
 	EnqueueCheckerboardBackground();
+	m_renderQueue.Flush(m_window);
 
 	// ---------------------------------------------------------
 	// 2. CHUNKS (rendered using the snapped camera view)
 	// ---------------------------------------------------------
-	m_chunkManager.EnqueueChunks(m_renderQueue, m_window.getView());
+	//m_chunkManager.EnqueueChunks(m_renderQueue, m_window.getView());
+	m_chunkManager.DrawChunkCallback(m_window.getView(), [&](const ChunkRenderData& data) { SFMLChunkRenderer::RenderChunk(data, m_window); });
 
 	// ---------------------------------------------------------
 	// 3. DEBUG VISUALIZATION

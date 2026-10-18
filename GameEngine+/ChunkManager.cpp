@@ -1096,11 +1096,11 @@ void ChunkManager::CollectVisibleRenderData(const WorldViewBounds& b, std::vecto
 	int tx1 = static_cast<int>(std::ceil(b.maxX / ts));
 	int ty1 = static_cast<int>(std::ceil(b.maxY / ts));
 
-	// Convert tile bounds → chunk bounds
-	int cx0 = tx0 / m_chunkWidth;
-	int cy0 = ty0 / m_chunkHeight;
-	int cx1 = tx1 / m_chunkWidth;
-	int cy1 = ty1 / m_chunkHeight;
+	// Convert tile bounds → chunk bounds (use FloorDiv so negative coordinates map correctly)
+	int cx0 = FloorDiv(tx0, m_chunkWidth);
+	int cy0 = FloorDiv(ty0, m_chunkHeight);
+	int cx1 = FloorDiv(tx1, m_chunkWidth);
+	int cy1 = FloorDiv(ty1, m_chunkHeight);
 
 	if (cx1 < cx0)
 		std::swap(cx0, cx1);
@@ -1125,10 +1125,12 @@ void ChunkManager::CollectVisibleRenderData(const WorldViewBounds& b, std::vecto
 			rd.height = m_chunkHeight;
 			rd.tileSize = m_tileSize;
 			rd.numLayers = m_numLayers;
-			rd.tilesPerLayer = &chunk.tilesPerLayer;
+			rd.tilesPerLayer = chunk.tilesPerLayer;
+			rd.activeLayer = m_activeLayer;
+			rd.unselectedLayerAlpha = m_unselectedLayerAlpha;
 			rd.renderDirty = chunk.renderDirty;
 
-			out.push_back(rd);
+			out.push_back(std::move(rd));
 		}
 	}
 }

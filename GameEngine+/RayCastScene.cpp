@@ -19,6 +19,7 @@
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <Utils.h>
 #include "Vec2.h"
+#include "SFMLChunkRenderer.h"
 #include <SFML/Window/Keyboard.hpp>
 #include <SFML/Window/Event.hpp>
 #include "Entity.h"
@@ -185,6 +186,76 @@ bool RayCastScene::SwitchToLevel(const std::string& name) {
 	m_chunkManager.SetNumLayers(3);
 	m_chunkManager.SetActiveLayer(m_collisionLayer);
 	m_chunkManager.SetBasePath(chunkPath.string());
+
+	// Parse level metadata (tileset/layers) so chunk rendering uses the correct atlas.
+	std::string tilesetKey;
+	std::string tilesetPath;
+	std::vector<std::string> layers = {"background", "main", "upper"};
+	{
+		auto metaPath = base / name / "meta.txt";
+		try {
+			std::ifstream meta(metaPath.string());
+			if (meta) {
+				std::string line;
+				while (std::getline(meta, line)) {
+					auto eq = line.find('=');
+					if (eq == std::string::npos)
+						continue;
+					std::string key = line.substr(0, eq);
+					std::string val = line.substr(eq + 1);
+					if (key == "tileset") {
+						tilesetKey = val;
+					} else if (key == "tilesetPath") {
+						tilesetPath = val;
+					} else if (key == "layers") {
+						layers.clear();
+						size_t start = 0;
+						while (start < val.size()) {
+							auto comma = val.find(',', start);
+							if (comma == std::string::npos)
+								comma = val.size();
+							std::string token = val.substr(start, comma - start);
+							if (!token.empty())
+								layers.push_back(token);
+							start = comma + 1;
+						}
+					}
+				}
+			}
+		} catch (...) {}
+	}
+
+	if (!layers.empty()) {
+		m_chunkManager.SetNumLayers((int)layers.size());
+	}
+
+	if (!tilesetKey.empty()) {
+		m_chunkManager.SetTilesetKey(tilesetKey);
+		auto& tm = GameEngine::GetInstance().GetTextureManager();
+		auto atlasOpt = tm.GetAtlas(tilesetKey);
+		if (!atlasOpt.has_value() || !*atlasOpt) {
+			int tileSize = (int)m_chunkManager.GetTileSize();
+			if (!tilesetPath.empty() && std::filesystem::exists(tilesetPath)) {
+				tm.LoadAtlas(tilesetKey, tilesetPath, tileSize, tileSize);
+			} else {
+				std::vector<std::string> searchPaths = {
+					"assets/tilesets/" + tilesetKey + ".png",
+					"assets/tilesets/" + tilesetKey + ".jpg",
+					"assets/" + tilesetKey + ".png",
+					"assets/" + tilesetKey + ".jpg",
+					tilesetKey + ".png",
+					tilesetKey + ".jpg",
+				};
+				for (const auto& path : searchPaths) {
+					if (std::filesystem::exists(path)) {
+						tm.LoadAtlas(tilesetKey, path, tileSize, tileSize);
+						break;
+					}
+				}
+			}
+		}
+	}
+
 	RefreshMapBounds();
 	m_hasLastViewCenter = false;
 	m_chunkManager.ClearAllLoadedChunks();
@@ -580,7 +651,7 @@ void RayCastScene::Update(float deltaTime) {
 
 /////////////////////////////////
 // Render - draws the tile grid and any debug visualization overlays
-void RayCastScene::Render() {
+void RayCastScene::Render	() {
 
 		//
 		// ────────────────────────────────
@@ -668,7 +739,9 @@ void RayCastScene::DoAction() {}
 /////////////////////////////////
 // Draw the tile grid from chunked map data
 void RayCastScene::DrawTileGrid() {
-	m_chunkManager.EnqueueChunks(GetEngineRenderQueue(), m_window.getView());
+	m_chunkManager.DrawChunkCallback(m_window.getView(), [&](const ChunkRenderData& data) {
+		SFMLChunkRenderer::RenderChunk(data, m_window);
+	});
 }
 /////////////////////////////////
 

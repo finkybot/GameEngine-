@@ -28,10 +28,13 @@ void SFMLChunkRenderer::RenderChunk(const ChunkRenderData& data, sf::RenderWindo
 	if (!texture)
 		return;
 
-	const auto& layers = *data.tilesPerLayer;
+	const auto& layers = data.tilesPerLayer;
 
 	for (int layer = 0; layer < data.numLayers; ++layer) {
 		const auto& tiles = layers[layer];
+		float alphaMul = 1.0f;
+		if (data.activeLayer >= 0 && layer != data.activeLayer)
+			alphaMul = data.unselectedLayerAlpha;
 
 		for (int y = 0; y < data.height; ++y) {
 			for (int x = 0; x < data.width; ++x) {
@@ -43,7 +46,7 @@ void SFMLChunkRenderer::RenderChunk(const ChunkRenderData& data, sf::RenderWindo
 				float worldX = (data.chunkX * data.width + x) * data.tileSize;
 				float worldY = (data.chunkY * data.height + y) * data.tileSize;
 
-				sf::Color c(255, 255, 255);
+				sf::Color c(255, 255, 255, static_cast<uint8_t>(255.0f * alphaMul));
 
 				// --- GET UV RECT (SFML 3.x API) ---
 				auto uvOpt = atlas->GetSfFloatRectForTile(tile - 1);

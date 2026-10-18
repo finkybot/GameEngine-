@@ -95,6 +95,77 @@ void PathTestScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 
 
 /////////////////////////////////
+void PathTestScene::TileCallback(const ChunkRenderData& data, const TextureAtlas& atlas, float worldOriginX,
+								 float worldOriginY, TileRenderSoA& out) {
+	if (!data.atlas) {
+		std::cout << "TileCallback: data.atlas == nullptr for chunk (" << data.chunkX << "," << data.chunkY << ")\n";
+		return;
+	}
+
+	size_t pushed = 0;
+
+	const int cw = data.width;
+	const int ch = data.height;
+	const float tileSz = data.tileSize;
+
+	for (int layer = 0; layer < data.numLayers; ++layer) {
+		const auto& tiles = data.tilesPerLayer[layer];
+		const float alpha = (layer == data.activeLayer) ? 1.0f : data.unselectedLayerAlpha;
+
+		for (int ty = 0; ty < ch; ++ty) {
+			for (int tx = 0; tx < cw; ++tx) {
+
+				int tileVal = tiles[ty * cw + tx];
+
+				// Skip empty tiles
+				if (tileVal <= 0)
+					continue;
+
+				// UV lookup
+				auto uvOpt = atlas.GetGLUVRect(static_cast<size_t>(tileVal - 1));
+				if (!uvOpt) {
+					std::cout << "DEBUG: atlas missing UV for tileVal=" << tileVal << " in chunk(" << data.chunkX << ","
+							  << data.chunkY << "), layer " << layer << " at [" << tx << "," << ty << "]\n";
+					continue;
+				}
+
+				const auto uv = *uvOpt;
+
+				float wx = data.worldOriginX + tx * tileSz;
+				float wy = data.worldOriginY + ty * tileSz;
+
+				out.posX.push_back(wx);
+				out.posY.push_back(wy);
+				out.sizeX.push_back(tileSz);
+				out.sizeY.push_back(tileSz);
+
+				out.u0.push_back(uv.u0);
+				out.v0.push_back(uv.v0);
+				out.u1.push_back(uv.u1);
+				out.v1.push_back(uv.v1);
+
+				out.r.push_back(1.f);
+				out.g.push_back(1.f);
+				out.b.push_back(1.f);
+				out.a.push_back(alpha);
+
+				uint64_t handle = atlas.GetBindlessHandle();
+				out.handleLo.push_back(static_cast<std::uint32_t>(handle & 0xFFFFFFFFu));
+				out.handleHi.push_back(static_cast<std::uint32_t>(handle >> 32));
+
+				++pushed;
+			}
+		}
+	}
+
+	std::cout << "TileCallback: chunk (" << data.chunkX << "," << data.chunkY << ") pushed " << pushed << " tiles\n";
+}
+
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // ScanLevelFiles - Scans the APPDATA/GameEnginePlus/levels directory for available levels, checking for directories that contain a "chunks" subdirectory.
 void PathTestScene::ScanLevelFiles() {
 	m_availableLevels.clear();
@@ -155,21 +226,18 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 	std::cout << "[PathTestScene::SwitchToLevel] CALLED with level: " << name << "\n";
 	m_currentLevelName = name;
 
-	// Determine the base path for levels based on the operating system
 	fs::path base;
 
-	// ==========================
 #ifdef _MSC_VER
 	char* appdata_buf = nullptr;
 	size_t len = 0;
 
-	// Use _dupenv_s to safely retrieve the APPDATA environment variable on Windows
 	if (_dupenv_s(&appdata_buf, &len, "APPDATA") == 0 && appdata_buf) {
 		base = fs::path(appdata_buf) / "GameEnginePlus" / "levels";
 		free(appdata_buf);
 	} else {
 		std::cout << "[SwitchToLevel] ERROR: APPDATA not available, cannot resolve level path\n";
-		return false; // <-- no silent fallback to "levels"
+		return false;
 	}
 #else
 	const char* appdata = std::getenv("APPDATA");
@@ -179,15 +247,12 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		base = fs::path("levels");
 	}
 #endif
-	// ==========================
 
-	// Set the chunk manager's base path to the "chunks" subdirectory of the specified level
 	fs::path chunkPath = base / name / "chunks";
 	std::cout << "[SwitchToLevel] chunkPath = " << chunkPath.string() << "\n";
 	m_chunkManager.SetBasePath(chunkPath.string());
 
-	// *** PARSING META.TXT ***
-	// Parse meta.txt, set tileset, layers, load chunks, build world mask
+	// --- META.TXT ---
 	std::string tilesetKey;
 	std::string tilesetPath;
 	std::vector<std::string> layers = {"background", "main", "upper"};
@@ -225,21 +290,18 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		} catch (...) {}
 	}
 
-	// *** SETTING TILES AND LAYERS ***
+	// --- ATLAS / GL ---
 	if (!tilesetKey.empty()) {
 		m_chunkManager.SetTilesetKey(tilesetKey);
-		if (!tilesetPath.empty()) {
-			auto& textMan = GameEngine::GetInstance().GetTextureManager();
-			auto atlasOpt = textMan.GetAtlas(tilesetKey);
-			if (!atlasOpt.has_value() || !*atlasOpt) {
+		auto& tm = GameEngine::GetInstance().GetTextureManager();
+		auto atlasOpt = tm.GetAtlas(tilesetKey);
+
+		if (!atlasOpt.has_value() || !*atlasOpt) {
+			int tileSize = (int)m_chunkManager.GetTileSize();
+			if (!tilesetPath.empty()) {
 				std::cout << "PathTestScene: Loading tileset '" << tilesetKey << "' from " << tilesetPath << "\n";
-				int tileSize = (int)m_chunkManager.GetTileSize();
-				textMan.LoadAtlas(tilesetKey, tilesetPath, tileSize, tileSize);
-			}
-		} else {
-			auto& tm = GameEngine::GetInstance().GetTextureManager();
-			auto atlasOpt = tm.GetAtlas(tilesetKey);
-			if (!atlasOpt.has_value() || !*atlasOpt) {
+				tm.LoadAtlas(tilesetKey, tilesetPath, tileSize, tileSize);
+			} else {
 				std::vector<std::string> searchPaths = {
 					"assets/tilesets/" + tilesetKey + ".png",
 					"assets/tilesets/" + tilesetKey + ".jpg",
@@ -248,7 +310,6 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 					tilesetKey + ".png",
 					tilesetKey + ".jpg",
 				};
-				int tileSize = (int)m_chunkManager.GetTileSize();
 				for (const auto& searchPath : searchPaths) {
 					if (fs::exists(searchPath)) {
 						std::cout << "PathTestScene: Found tileset at " << searchPath << ", loading...\n";
@@ -257,36 +318,63 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 					}
 				}
 			}
+
+			atlasOpt = tm.GetAtlas(tilesetKey);
+		}
+
+		if (atlasOpt.has_value() && *atlasOpt) {
+			TextureAtlas* atlasPtr = atlasOpt->get();
+			if (!atlasPtr) {
+				std::cout << "[SwitchToLevel] ERROR: atlasOpt->get() returned nullptr\n";
+			} else {
+				if (!atlasPtr->LoadGLTexture()) {
+					std::cout << "[SwitchToLevel] ERROR: LoadGLTexture failed for tileset '" << tilesetKey << "'\n";
+				} else {
+					atlasPtr->BuildGLUVRects();
+					std::cout << "[SwitchToLevel] GL atlas ready. TileCount=" << atlasPtr->TileCount() << "\n";
+				}
+				m_chunkManager.SetGLAtlas(atlasPtr);
+			}
+		} else {
+			std::cout << "[SwitchToLevel] ERROR: Failed to obtain atlas for tilesetKey=" << tilesetKey << "\n";
 		}
 	}
 
-	// *** SETTING LAYERS ***
-	if (!layers.empty()) {
-		m_chunkManager.SetNumLayers((int)layers.size());
+	// --- LAYERS ---
+	int maxLayer = 0;
+	for (auto& p : fs::directory_iterator(chunkPath)) {
+		std::string fname = p.path().filename().string();
+		if (fname.rfind("chunk_", 0) != 0)
+			continue;
+
+		std::string body = fname.substr(6);
+		size_t us1 = body.find('_');
+		if (us1 == std::string::npos)
+			continue;
+
+		int layer = std::stoi(body.substr(0, us1));
+		maxLayer = std::max(maxLayer, layer);
 	}
 
+	m_chunkManager.SetNumLayers(maxLayer + 1);
 	m_chunkManager.SetActiveLayer(std::min(1, (int)layers.size() - 1));
 	m_chunkManager.SetUnselectedLayerAlpha(1.0f);
 
-	// *** LOADING CHUNKS ***
-	for (int i = 0; i < 20; ++i) {
+	// --- LOAD / REBUILD ---
+	for (int i = 0; i < 20; ++i)
 		m_chunkManager.UpdateMainThread_NoLock();
-	}
 
-	// *** CLEARING AND RELOADING CHUNKS ***
 	std::cout << "[PathTestScene::SwitchToLevel] Clearing all loaded chunks before loading new level...\n";
 	m_chunkManager.ClearAllLoadedChunks();
 	std::cout << "[PathTestScene::SwitchToLevel] All loaded chunks cleared.\n";
 	m_chunkManager.LoadAllSavedChunks();
 
-	// *** REBUILDING CHUNKS FROM TILESET ***
-	for (int i = 0; i < 20; ++i) {
+	for (int i = 0; i < 20; ++i)
 		m_chunkManager.UpdateMainThread_NoLock();
-	}
 	m_chunkManager.RebuildAllChunksFromTileset();
 	m_chunkManager.UpdateMainThread_NoLock();
 
-	// *** RETRIEVING MAP BOUNDS ***
+	// --- BOUNDS / CAMERA ---
 	float dMinX, dMinY, dMaxX, dMaxY;
 	bool hasBounds = m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY);
 
@@ -296,8 +384,7 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 	}
 	std::cout << "\n";
 
-	// If bounds are found, calculate the world size and offset based on the tile size and set them in the ChunkManager to ensure proper rendering and chunk management.
-	if (m_chunkManager.GetSavedChunkBounds(dMinX, dMinY, dMaxX, dMaxY)) {
+	if (hasBounds) {
 		int tileSize = (int)m_chunkManager.GetTileSize();
 		int minTileX = (int)std::floor(dMinX / tileSize);
 		int minTileY = (int)std::floor(dMinY / tileSize);
@@ -308,15 +395,11 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		m_chunkManager.SetWorldOffset(minTileX, minTileY);
 		m_chunkManager.SetWorldSize(worldW, worldH);
 		m_chunkManager.BuildWorldMask();
-	}
 
-	// Center the camera on the map bounds if they exist, and reset the movement tester's position to the center as well.
-	if (hasBounds) {
 		m_mapMin = Vec2(dMinX, dMinY);
 		m_mapMax = Vec2(dMaxX, dMaxY);
 		m_haveBounds = true;
 
-		// Center the camera on the map bounds
 		if (m_cameraEntity) {
 			if (auto cam = m_cameraEntity->GetComponent<CCamera>()) {
 				auto tr = m_cameraEntity->GetComponent<CTransform>();
@@ -345,7 +428,6 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 
 	return true;
 }
-
 /////////////////////////////////
 
 
@@ -546,23 +628,44 @@ void PathTestScene::Render() {
 	// Save the world view
 	sf::View worldView = m_window.getView();
 
-	// Enqueue chunks
-	//m_chunkManager.EnqueueChunks(m_renderQueue, worldView);
+	// --- GL TILE RENDERING ---
+	TileRenderSoA soa;
+	soa.Clear();
 
-	// Flush render queue first so world tiles are drawn
-	//m_renderQueue.Flush(m_window);
+	m_chunkManager.DrawChunkCallback(worldView, [&](const ChunkRenderData& data) {
+		if (data.atlas) {
+			TileCallback(data, *data.atlas, data.worldOriginX, data.worldOriginY, soa);
+		}
+	});
 
-	m_chunkManager.DrawChunkCallback(worldView, [&](const ChunkRenderData& data) { SFMLChunkRenderer::RenderChunk(data, m_window); });
+	// RenderSystemGL's tile shader consumes screen-space pixel coordinates, while chunk data is in world space.  SFML's view does not affect raw OpenGL draws, so convert the collected instances to the current view here.
+	// Without this conversion a centered level is submitted at its world coordinates (often negative or well outside the viewport).
+	const sf::Vector2f viewCenter = worldView.getCenter();
+	const sf::Vector2f viewSize = worldView.getSize();
+	const sf::Vector2u windowSize = m_window.getSize();
+	if (viewSize.x > 0.0f && viewSize.y > 0.0f && windowSize.x > 0 && windowSize.y > 0) {
+		const float left = viewCenter.x - viewSize.x * 0.5f;
+		const float top = viewCenter.y - viewSize.y * 0.5f;
+		const float scaleX = static_cast<float>(windowSize.x) / viewSize.x;
+		const float scaleY = static_cast<float>(windowSize.y) / viewSize.y;
 
+		for (size_t i = 0; i < soa.Size(); ++i) {
+			soa.posX[i] = (soa.posX[i] - left) * scaleX;
+			soa.posY[i] = (soa.posY[i] - top) * scaleY;
+			soa.sizeX[i] *= scaleX;
+			soa.sizeY[i] *= scaleY;
+		}
+	}
 
+	m_entityManager.GetRenderSystemGL().RenderTilesInstance(soa);
 
-	// Draw debug overlay (paths, markers) in world view
-	m_window.setView(worldView);
+	// --- DEBUG OVERLAY ---
+	// Raw OpenGL tile rendering changes state cached by SFML. Restore it before
+	// drawing the SFML marker and path overlays.
+	m_window.resetGLStates();
 	m_window.setView(worldView);
 	RenderDebugOverlay();
-
 	// NOTE: Do NOT reset view here - entity shapes need to be rendered in world view too!
-	// The view will be reset by the engine after all rendering is complete
 }
 /////////////////////////////////
 
@@ -652,100 +755,34 @@ void PathTestScene::RenderDebugOverlay() {
 // screen coordinates to world coordinates based on the camera's position and zoom level.
 void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 	if (!event.has_value()) return;
+	const auto* mouseButton = event->getIf<sf::Event::MouseButtonPressed>();
+	if (!mouseButton || (mouseButton->button != sf::Mouse::Button::Left &&
+		mouseButton->button != sf::Mouse::Button::Right))
+		return;
 
 	// Get camera for manual coordinate conversion
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (!camOpt) return;
-	CCamera* cam = *camOpt;
+	// Use the same view that is used for SFML overlay rendering.  The previous
+	// hand-written conversion used viewport * zoom and polled button state while
+	// processing an event, which made clicks inconsistent with the displayed map.
+	sf::Vector2f mouseCoords = m_window.mapPixelToCoords(mouseButton->position, m_window.getView());
+	Vec2 mouseWorld(mouseCoords.x, mouseCoords.y);
 
-	//std::cout << "[PathTestScene::HandleEvent] Processing event\n";
-
-	// Use polling-style input like TileMapScene does
-	sf::Vector2i mousePixelPos = sf::Mouse::getPosition(m_window);
-
-	// Manually convert screen pixel to world coordinates using camera
-	// screen coords are relative to viewport, need to transform through camera view
-	float halfW = cam->viewportWidth * 0.5f * cam->zoom;
-	float halfH = cam->viewportHeight * 0.5f * cam->zoom;
-
-	// Normalize screen coordinates to [-1, 1] range relative to viewport center
-	float normX = (2.0f * mousePixelPos.x / cam->viewportWidth) - 1.0f;
-	float normY = (2.0f * mousePixelPos.y / cam->viewportHeight) - 1.0f;
-
-	// Map to world space using camera position and zoom
-	float worldX = cam->position.x + normX * halfW;
-	float worldY = cam->position.y + normY * halfH;
-	Vec2 mouseWorld(worldX, worldY);
-
-	bool leftMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
-	bool rightMouseDown = sf::Mouse::isButtonPressed(sf::Mouse::Button::Right);
-
-	// Single click detection: track if we just pressed
-	static bool prevLeftDown = false;
-	static bool prevRightDown = false;
-
-	bool leftClicked = leftMouseDown && !prevLeftDown;
-	bool rightClicked = rightMouseDown && !prevRightDown;
-
-	if (leftClicked) {
+	if (mouseButton->button == sf::Mouse::Button::Left) {
 		// Set start point
 		m_manualStart = mouseWorld;
 		m_manualStartSet = true;
-
-	} else if (leftClicked && m_manualStartSet) {
-		// Left click with start already set: Set goal and compute path
-		m_manualGoal = mouseWorld;
-		m_manualGoalSet = true;
-		//std::cout << "[PathTestScene::HandleEvent] Left-click path computation triggered\n";
-
-		float tileSize = m_chunkManager.GetTileSize();
-
-		// Get chunk bounds to determine offset
-		float chunkMinX = m_mapMin.x;
-		float chunkMinY = m_mapMin.y;
-
-		// Convert world coordinates to tile coordinates, accounting for chunk offset
-		// Convert world coordinates to absolute world tile coordinates
-		// Do NOT subtract chunkMin - pathfinder expects absolute world tiles
-
-		//int startX = static_cast<int>(std::floor(m_manualStart.x / tileSize));
-		//int startY = static_cast<int>(std::floor(m_manualStart.y / tileSize));
-		//int goalX = static_cast<int>(std::floor(m_manualGoal.x / tileSize));
-		//int goalY = static_cast<int>(std::floor(m_manualGoal.y / tileSize));
-
-
-		int offX = m_chunkManager.worldOffsetX;
-		int offY = m_chunkManager.worldOffsetY;
-
-		int startX = static_cast<int>(std::floor(m_manualStart.x / tileSize)) - offX;
-		int startY = static_cast<int>(std::floor(m_manualStart.y / tileSize)) - offY;
-
-		int goalX = static_cast<int>(std::floor(m_manualGoal.x / tileSize)) - offX;
-		int goalY = static_cast<int>(std::floor(m_manualGoal.y / tileSize)) - offY;
-
-		m_manualPath = m_pathSystem.FindPathSync(startX, startY, goalX, goalY);
-		m_manualPathComplete = m_manualPath.has_value();
-		//std::cout << "[PathTestScene::HandleEvent] Path computed: complete=" << m_manualPathComplete << " waypoints=" << (m_manualPath.has_value() ? m_manualPath->size() : 0) << "\n";
-	}
-	if (rightClicked && m_manualStartSet) {
+	} else if (m_manualStartSet) {
 		// Set goal and compute path
 		m_manualGoal = mouseWorld;
 		m_manualGoalSet = true;
 
 		float tileSize = m_chunkManager.GetTileSize();
-
-		// Get chunk bounds to determine offset
-		float chunkMinX = m_mapMin.x;
-		float chunkMinY = m_mapMin.y;
-
-		// Convert world coordinates to tile coordinates, accounting for chunk offset
-		// Convert world coordinates to absolute world tile coordinates
-		// Do NOT subtract chunkMin - pathfinder expects absolute world tiles
-
-		int startX	= static_cast<int>(std::floor(m_manualStart.x	/ tileSize));
-		int startY	= static_cast<int>(std::floor(m_manualStart.y	/ tileSize));
-		int goalX	= static_cast<int>(std::floor(m_manualGoal.x	/ tileSize));
-		int goalY	= static_cast<int>(std::floor(m_manualGoal.y	/ tileSize));
+		int startX = static_cast<int>(std::floor(m_manualStart.x / tileSize));
+		int startY = static_cast<int>(std::floor(m_manualStart.y / tileSize));
+		int goalX = static_cast<int>(std::floor(m_manualGoal.x / tileSize));
+		int goalY = static_cast<int>(std::floor(m_manualGoal.y / tileSize));
 
 		m_manualPath = m_pathSystem.FindPathSync(startX, startY, goalX, goalY);
 		m_manualPathComplete = m_manualPath.has_value();
@@ -784,8 +821,6 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 		}
 	}
 
-	prevLeftDown = leftMouseDown;
-	prevRightDown = rightMouseDown;
 }
 /////////////////////////////////
 

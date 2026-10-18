@@ -1,5 +1,5 @@
 /////////////////////////////////
-// TransformSoA.h
+// SoAStructs.h
 /////////////////////////////////
 
 
@@ -8,6 +8,7 @@
 // Includes and forward declarations for the TransformSoA class. This class is used to store and manage the position, velocity, and acceleration of entities in a structure-of-arrays format for efficient processing in the game engine.
 #pragma once
 #include <vector>
+#include <cstdint>
 #include "Entity.h"
 /////////////////////////////////
 
@@ -87,3 +88,49 @@ struct TransformSoA {
 		dirty[idx] = 1; // NEW: mark dirty
 	}
 };
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+//	|	TileRenderSoA struct - defines a structure-of-arrays (SoA) representation for storing the rendering data of tiles in a game engine. This format allows for efficient processing of tile rendering by separating the data into contiguous arrays, which can improve cache locality and performance during rendering.
+//	|_______________________________________________________________________
+struct TileRenderSoA {
+	std::vector<float> posX;  // world X
+	std::vector<float> posY;  // world Y
+	std::vector<float> sizeX; // width
+	std::vector<float> sizeY; // height;
+
+	std::vector<float> u0;
+	std::vector<float> v0;
+	std::vector<float> u1;
+	std::vector<float> v1;
+
+	std::vector<float> r;
+	std::vector<float> g;
+	std::vector<float> b;
+	std::vector<float> a;
+
+	std::vector<std::uint32_t> handleLo;
+	std::vector<std::uint32_t> handleHi;
+
+	void Clear() {
+		posX.clear();
+		posY.clear();
+		sizeX.clear();
+		sizeY.clear();
+		u0.clear();
+		v0.clear();
+		u1.clear();
+		v1.clear();
+		r.clear();
+		g.clear();
+		b.clear();
+		a.clear();
+		handleLo.clear();
+		handleHi.clear();
+	}
+
+	std::size_t Size() const { return posX.size(); }
+};
+/////////////////////////////////

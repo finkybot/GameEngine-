@@ -54,7 +54,7 @@ class Entity;
 #include "SpatialLayerRegistry.h"
 #include "ISpatialIndex.h"
 
-#include "TransformSoA.h"
+#include "SoAStructs.h"
 /////////////////////////////////
 
 

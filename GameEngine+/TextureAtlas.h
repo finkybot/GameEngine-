@@ -103,7 +103,7 @@ public:
 
 	// Accessors for GL renderer
 	GLuint GetGLHandle() const { return m_glHandle; }
-	const UVRect& GetGLUVRect(size_t tileIndex) const { return m_glUVRects[tileIndex]; }
+	std::optional<UVRect> GetGLUVRect(size_t tileIndex) const;
 
 
 

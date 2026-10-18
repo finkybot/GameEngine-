@@ -44,6 +44,8 @@ public:
 	CCamera& GetActiveCamera() override { return *m_cameraEntity->GetComponent<CCamera>(); }
 
 private:
+	void TileCallback(const ChunkRenderData& data, const TextureAtlas& atlas, float worldOriginX, float worldOriginY, TileRenderSoA& out);
+
 	// Member variables for managing the render window, chunk manager, pathfinding system, camera system, render queue, tile size, and nodes processed per frame
 	sf::RenderWindow& m_window;
 	ChunkManager& m_chunkManager;

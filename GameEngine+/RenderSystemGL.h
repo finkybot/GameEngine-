@@ -20,6 +20,7 @@ class EntityManager;
 class CText;
 class CTransform;
 class TextureManager;
+struct TileRenderSoA;
 /////////////////////////////////
 
 
@@ -85,9 +86,11 @@ struct GPUTextGlyphInstance {
 //	|_______________________________________________________________________
 class RenderSystemGL {
 public:
+	using TileCallback = void (*)(const EntityManager& entityManager, RenderSystemGL& renderSystem); // Callback function type for tile rendering, taking an EntityManager reference and a RenderSystemGL reference as parameters.
+	void SetTileCallback(TileCallback callback) { m_tileCallback = callback; }	// Set the tile rendering callback function.
+
 	RenderSystemGL();
 	~RenderSystemGL();
-
 
 	void Initialise();
 	void Shutdown();
@@ -98,11 +101,12 @@ public:
 	void SetFontSystem(Fontsystem* fontSystem) { m_fontSystem = fontSystem; }
 	void SetTextureManager(TextureManager* texManager) { m_textureManager = texManager; }
 	void GetTextureManager(TextureManager*& texManager) { texManager = m_textureManager; }
+	void RenderTilesInstance(const TileRenderSoA& tileRenderSoA);
 
 
+private:
+	TileCallback m_tileCallback = nullptr;
 
-
-private:	
 	// OpenGL resource handles
 	GLuint m_quadVAO = 0;
 	GLuint m_circleVAO = 0;
@@ -164,8 +168,6 @@ private:
 	TextureManager* m_textureManager = nullptr; // Pointer to the TextureManager for accessing texture atlases
 
 
-
-private:
 	// Internal helper methods for shader compilation, buffer creation, and viewport preparation
 	void CreateQuadGeometry();
 
@@ -193,6 +195,7 @@ private:
 	void RenderCircles(const std::vector<GPUCircleInstance>& instances);
 	void RenderText(const std::vector<GPUTextInstance>& instances);
 	void RenderTiles(const EntityManager& entityManager);
+
 
 	GLuint CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc);
 	GLuint CreateShaderProgramFromFiles(const std::string& vertexPath, const std::string& fragmentPath);

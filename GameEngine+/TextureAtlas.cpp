@@ -20,13 +20,20 @@
 
 
 
-/////////////////////////////////
+///////////////////////////////
 // GetQuadTemplate - Retrieves the precomputed quad template for the specified tile index. Each quad template contains vertex positions and texture 
 // coordinates for rendering the corresponding tile from the texture atlas. This allows for efficient rendering of tiles without recalculating vertex data each time.
 const QuadTemplate& TextureAtlas::GetQuadTemplate(size_t tileIndex) const {
 	return quadTemplates[tileIndex];
 }
-/////////////////////////////////
+
+std::optional<TextureAtlas::UVRect> TextureAtlas::GetGLUVRect(size_t tileIndex) const {
+	if (tileIndex >= m_glUVRects.size())
+		return std::nullopt;
+
+	return m_glUVRects[tileIndex];
+}
+///////////////////////////////
 
 
 

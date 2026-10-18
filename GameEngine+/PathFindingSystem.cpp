@@ -70,10 +70,8 @@ std::optional<std::vector<Vec2>> PathFindingSystem::FindPathSync(int startTx, in
 /////////////////////////////////
 // EnqueueRequests - scan entities and push path jobs to worker queue
 void PathFindingSystem::EnqueueRequests() {
-	// Get tile size and world offsets for converting world coordinates to tile coordinates
+	// FindPath accepts absolute world tile coordinates and applies the mask offset.
 	float ts = m_chunks.GetTileSize();
-	int offX = m_chunks.worldOffsetX;
-	int offY = m_chunks.worldOffsetY;
 
 	// Iterate through all entities and enqueue pathfinding requests for those that have a CPathRequest component
 	for (auto& u : m_entities.GetEntities()) {
@@ -92,13 +90,13 @@ void PathFindingSystem::EnqueueRequests() {
 		// Calculate the start tile coordinates based on the entity's transform position
 		int startTx = 0, startTy = 0;
 		if (auto t = e->GetComponent<CTransform>()) {
-			startTx = static_cast<int>(std::floor(t->position.x / ts)) - offX;
-			startTy = static_cast<int>(std::floor(t->position.y / ts)) - offY;
+			startTx = static_cast<int>(std::floor(t->position.x / ts));
+			startTy = static_cast<int>(std::floor(t->position.y / ts));
 		}
 		
 		// Calculate the goal tile coordinates based on the request's target world position
-		int goalTx = static_cast<int>(std::floor(req->targetWorld.x / ts)) - offX;
-		int goalTy = static_cast<int>(std::floor(req->targetWorld.y / ts)) - offY;
+		int goalTx = static_cast<int>(std::floor(req->targetWorld.x / ts));
+		int goalTy = static_cast<int>(std::floor(req->targetWorld.y / ts));
 
 		// Create a PathJob struct to hold the pathfinding job information
 		PathJob job;

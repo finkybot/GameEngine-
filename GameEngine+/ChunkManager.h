@@ -170,7 +170,7 @@ public:
 
 	void EvictIfNeeded(); // Check if the number of loaded chunks exceeds the maximum allowed, and evict least recently used chunks if necessary to free up memory.
 
-	void UpdateMainThread();			// Called from the main thread to process any chunks that have finished loading in the background.
+	void UpdateMainThread(); // Called from the main thread to process any chunks that have finished loading in the background.
 	void UpdateMainThread_NoLock();		// version that assumes caller holds m_mutex
 
 	void SaveAllChunks();									// Save all dirty chunks to disk in the specified directory. Each chunk will be saved as a separate file named "chunk_X_Y.dat" where X and Y are the chunk coordinates.
@@ -183,6 +183,10 @@ public:
 		worldOffsetY = offsetY;
 	}
 	
+
+	void SetGLAtlas(TextureAtlas* atlas) { m_atlas = atlas; }
+	TextureAtlas* GetGLAtlas() const { return m_atlas; }
+
 
 	void SetWorldSize(int width, int height);	// Set the size of the world in pixels. This is used to
 	void BuildWorldMask();						// Build the world mask for collision/pathfinding
@@ -259,6 +263,8 @@ private:
 
 	static void BuildChunkVertexArray(Chunk& chunk, const std::shared_ptr<TextureAtlas>& atlas);	// Build the vertex array for a chunk based on its tile data and the provided texture atlas. This method generates the vertex positions and texture coordinates for rendering the chunk's tiles.
 	static constexpr int kMaxChunkSpan = 256;														// Safety: maximum number of chunks to attempt to load in a single EnsureChunksInTileRect call (span in each axis)
+
+	TextureAtlas* m_atlas = nullptr;
 
 	int m_chunkWidth;	// Width of each chunk in tiles
 	int m_chunkHeight;	// Height of each chunk in tiles

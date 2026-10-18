@@ -1130,6 +1130,16 @@ void ChunkManager::CollectVisibleRenderData(const WorldViewBounds& b, std::vecto
 			rd.unselectedLayerAlpha = m_unselectedLayerAlpha;
 			rd.renderDirty = chunk.renderDirty;
 
+			// World origin in pixels
+			rd.worldOriginX = cx * m_chunkWidth * m_tileSize;
+			rd.worldOriginY = cy * m_chunkHeight * m_tileSize;
+
+			// Atlas pointer
+			rd.atlas = m_atlas;
+			// or: rd.atlas = m_textureManager->GetAtlas(chunk.tilesetKey);
+
+			//std::cout << "Visible chunk: (" << cx << "," << cy << ")\n";
+
 			out.push_back(std::move(rd));
 		}
 	}
@@ -1389,19 +1399,8 @@ void ChunkManager::EnsureChunksInTileRect(int tileX0, int tileY0, int tileX1, in
 		cY1 = mid + ChunkManager::kMaxChunkSpan / 2;
 	}
 
-	// === FIX: clamp chunk coords to world bounds ===
-	const int minChunkX = 0;
-	const int maxChunkX = 1;
-	const int minChunkY = 0;
-	const int maxChunkY = 13;
-	// ===============================================
-
 	for (int cy = cY0; cy <= cY1; ++cy) {
 		for (int cx = cX0; cx <= cX1; ++cx) {
-
-			// FIX: skip invalid chunk coords
-			if (cx < minChunkX || cx > maxChunkX || cy < minChunkY || cy > maxChunkY)
-				continue;
 
 			const uint64_t key = GetChunkKey(cx, cy);
 			bool needLoad = false;

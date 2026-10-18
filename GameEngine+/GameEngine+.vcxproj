@@ -332,7 +332,7 @@
     <ClInclude Include="TileMap.h" />
     <ClInclude Include="TileMapEditorScene.h" />
     <ClInclude Include="RayCastScene.h" />
-    <ClInclude Include="TransformSoA.h" />
+    <ClInclude Include="SoAStructs.h" />
     <ClInclude Include="Utils.h" />
     <ClInclude Include="Utils\FPSCounter.h" />
     <ClInclude Include="Vec2.h" />

@@ -325,6 +325,57 @@ RenderSystemGL::~RenderSystemGL() {
 
 
 /////////////////////////////////
+// RenderTilesInstance - Renders a batch of tile instances using instanced rendering. This method takes a TileRenderSoA structure containing the instance data for tiles, prepares the GPU buffer, and issues the draw call.
+void RenderSystemGL::RenderTilesInstance(const TileRenderSoA& tileRenderSoA) {
+	// Ensure the rendering system is initialised before proceeding
+	std::cout << "RenderTilesInstance: Size() = " << tileRenderSoA.Size() << "\n";
+	if (tileRenderSoA.Size() == 0)	return;
+
+	// Ensure the tile instance buffer has enough capacity for the number of instances to render
+	EnsureTileBufferCapacity(tileRenderSoA.Size());
+
+	// Prepare a vector of GPUTileInstance structures to hold the instance data for rendering
+	std::vector<GPUTileInstance> gpuTileInstances(tileRenderSoA.Size());
+
+	for (std::size_t i = 0; i < tileRenderSoA.Size(); ++i) {
+		auto& inst = gpuTileInstances[i];
+
+		inst.x = tileRenderSoA.posX[i];
+		inst.y = tileRenderSoA.posY[i];
+		inst.w = tileRenderSoA.sizeX[i];
+		inst.h = tileRenderSoA.sizeY[i];
+
+		inst.u0 = tileRenderSoA.u0[i];
+		inst.v0 = tileRenderSoA.v0[i];
+		inst.u1 = tileRenderSoA.u1[i];
+		inst.v1 = tileRenderSoA.v1[i];
+
+		inst.r = tileRenderSoA.r[i];
+		inst.g = tileRenderSoA.g[i];
+		inst.b = tileRenderSoA.b[i];
+		inst.a = tileRenderSoA.a[i];
+
+		inst.handleLo = (i < tileRenderSoA.handleLo.size()) ? tileRenderSoA.handleLo[i] : 0u;
+		inst.handleHi = (i < tileRenderSoA.handleHi.size()) ? tileRenderSoA.handleHi[i] : 0u;
+	}
+
+	glBindBuffer(GL_ARRAY_BUFFER, m_tileInstanceVBO);
+	glBufferData(GL_ARRAY_BUFFER, gpuTileInstances.size() * sizeof(GPUTileInstance), gpuTileInstances.data(), GL_DYNAMIC_DRAW);
+
+	glUseProgram(m_tileShaderProgram);
+	glUniform2f(m_tileViewportUniformLocation, (float)m_viewportWidth, (float)m_viewportHeight);
+
+	glBindVertexArray(m_tileVAO);
+	glDrawArraysInstanced(GL_TRIANGLES, 0, 6, (GLsizei)gpuTileInstances.size());
+
+	glBindVertexArray(0);
+	glUseProgram(0);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // Initialise - Sets up OpenGL resources, shaders, and buffers for rendering. This method should be called once after the OpenGL context is initialized.
 void RenderSystemGL::Initialise() {
 	// Check if already initialised, get out if so
@@ -985,6 +1036,13 @@ void RenderSystemGL::EnsureTileBufferCapacity(std::size_t requiredInstances) {
 	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, stride, (void*)offsetof(GPUTileInstance, x));
 	glVertexAttribDivisor(3, 1);
 
+	// Bindless texture handle → attrib 4 (two uint32s)
+	glEnableVertexAttribArray(4);
+	glVertexAttribIPointer(4,
+		2, // uvec2
+		GL_UNSIGNED_INT, stride, (void*)offsetof(GPUTileInstance, handleLo));
+	glVertexAttribDivisor(4, 1);
+
 	glBindVertexArray(0);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
@@ -1011,7 +1069,11 @@ void RenderSystemGL::RenderTiles(const EntityManager& entityManager) {
 		std::shared_ptr<TextureAtlas> atlas = atlasOpt.value();
 
 		// Use precomputed GL UV rects
-		const TextureAtlas::UVRect& uv = atlas->GetGLUVRect(tile->tileIndex);
+		const auto uvOpt = atlas->GetGLUVRect(tile->tileIndex);
+		if (!uvOpt)
+			continue;
+
+		const auto uv = *uvOpt;
 
 		GPUTileInstance inst;
 		inst.u0 = uv.u0;

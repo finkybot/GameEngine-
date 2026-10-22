@@ -95,23 +95,13 @@ void TestScene::Update(float dt) {
 		// Ray goes straight down a few pixels
 		raycast->direction = Vec2(0.0f, -1.0f);
 
-		// Only check a small distance
-		raycast->maxDistance = 2.0f;
+		// Use a long ray to exercise the grid raycast over multiple cells.
+		raycast->maxDistance = 5000.0f;
 	}
 
 
 	//std::cout << "Ray origin: " << raycast->worldPos.x << "," << raycast->worldPos.y << " dir: " << raycast->direction.x << "," << raycast->direction.y << "\n";
 
-
-	//
-	// Debug hit output
-	//
-	if (raycast->lastHit.hit) {
-		std::cout << "Mouse worldPos: " << ms->worldPos.x << ", " << ms->worldPos.y << "\n";
-
-		std::cout << "Raycast HIT entity ID: " << raycast->lastHit.entity->GetId() << " at ("
-				  << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n";
-	}
 
 	m_dt = dt;
 	UpdateFPS(dt);
@@ -163,6 +153,12 @@ void TestScene::Update(float dt) {
 
 
 	m_raycastSystem->Update(dt);
+
+	if (raycast->lastHit.hit) {
+		std::cout << "Mouse worldPos: " << raycast->worldPos.x << ", " << raycast->worldPos.y << "\n";
+		std::cout << "Raycast HIT entity ID: " << raycast->lastHit.entity->GetId() << " at ("
+				  << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n";
+	}
 
 	//m_entityManager.GetBVH().ReportBVHSize();
 	// --- Camera movement + view ---

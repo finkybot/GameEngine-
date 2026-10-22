@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <algorithm>
+#include <cmath>
+#include <limits>
 /////////////////////////////////
 
 
@@ -121,6 +123,54 @@ public:
 
 	SpatialHashGrid(float cellSize = 100.0f) : m_cellSize(cellSize) {}
 	~SpatialHashGrid() { Clear(); }
+
+	float GetCellSize() const noexcept { return m_cellSize; }
+
+	void QueryRay(std::vector<T*>& outFound, const Vec2& origin, const Vec2& direction,
+				 float maxDistance, float padding) const noexcept {
+		outFound.clear();
+		if (maxDistance <= 0.0f || direction.Mag2() <= 1e-12f)
+			return;
+
+		std::unordered_set<T*> seen;
+		const int cellPadding = static_cast<int>(padding / m_cellSize) + 1;
+		int cellX = static_cast<int>(origin.x / m_cellSize);
+		int cellY = static_cast<int>(origin.y / m_cellSize);
+		const int stepX = direction.x >= 0.0f ? 1 : -1;
+		const int stepY = direction.y >= 0.0f ? 1 : -1;
+		const float inf = std::numeric_limits<float>::infinity();
+		const float nextX = direction.x == 0.0f ? inf :
+			((direction.x > 0.0f ? (cellX + 1) : cellX) * m_cellSize - origin.x) / direction.x;
+		const float nextY = direction.y == 0.0f ? inf :
+			((direction.y > 0.0f ? (cellY + 1) : cellY) * m_cellSize - origin.y) / direction.y;
+		float tMaxX = nextX;
+		float tMaxY = nextY;
+		const float tDeltaX = direction.x == 0.0f ? inf : m_cellSize / std::abs(direction.x);
+		const float tDeltaY = direction.y == 0.0f ? inf : m_cellSize / std::abs(direction.y);
+
+		while (true) {
+			for (int x = cellX - cellPadding; x <= cellX + cellPadding; ++x) {
+				for (int y = cellY - cellPadding; y <= cellY + cellPadding; ++y) {
+					auto bucket = m_grid.find(GetCellHashFromCell(x, y));
+					if (bucket == m_grid.end())
+						continue;
+					for (T* object : bucket->second)
+						if (object && seen.insert(object).second)
+							outFound.push_back(object);
+				}
+			}
+
+			if (std::min(tMaxX, tMaxY) > maxDistance)
+				break;
+			if (tMaxX < tMaxY) {
+				cellX += stepX;
+				tMaxX += tDeltaX;
+			} else {
+				cellY += stepY;
+				tMaxY += tDeltaY;
+			}
+		}
+	}
 
 
 

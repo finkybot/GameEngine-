@@ -1634,11 +1634,10 @@ void ChunkManager::UpdateMainThread_NoLock() {
 			chunk.readyForRendering[L] = 1;
 	}
 
-	// === 4. Rebuild per‑chunk BVH trees ===
-	// (Caller already holds m_mutex, so this is safe)
+	// === 4. Per-chunk BVH rebuilds are disabled ===
+	// The active raycast path uses the world-mask DDA and unified spatial index.
 	for (auto& [key, chunk] : m_chunks) {
 		if (chunk.bvhDirty) {
-			chunk.dynamicBVH.Rebuild(chunk.dynamicEntities);
 			chunk.bvhDirty = false;
 		}
 	}

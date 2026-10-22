@@ -28,6 +28,47 @@ BVHSystem::~BVHSystem() {
 
 
 /////////////////////////////////
+void BVHSystem::Refit() {
+	if (!m_root)
+		return;
+
+	RefitRecursive(m_root);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void BVHSystem::RefitRecursive(BVHNode* node) {
+	if (!node)
+		return;
+
+	if (node->IsLeaf()) {
+		if (!node->leafEntities.empty()) {
+			node->bounds = ComputeBounds(node->leafEntities.front());
+			for (size_t i = 1; i < node->leafEntities.size(); ++i)
+				node->bounds.expand(ComputeBounds(node->leafEntities[i]));
+		}
+		return;
+	}
+
+	RefitRecursive(node->left);
+	RefitRecursive(node->right);
+
+	if (node->left && node->right) {
+		node->bounds = node->left->bounds;
+		node->bounds.expand(node->right->bounds);
+	} else if (node->left) {
+		node->bounds = node->left->bounds;
+	} else if (node->right) {
+		node->bounds = node->right->bounds;
+	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // Utility functions
 // UnionBounds - returns the union of two sf::FloatRect bounding boxes. This function calculates the minimum and maximum coordinates of the two rectangles and constructs a new rectangle that encompasses both.
 static sf::FloatRect UnionBounds(const sf::FloatRect& a, const sf::FloatRect& b) {

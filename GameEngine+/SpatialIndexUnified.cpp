@@ -4,7 +4,10 @@
 #include "Entity.h"
 #include "EntityManager.h"
 #include "CStatic.h"
+#include "CShape.h"
+#include "CTransform.h"
 #include <algorithm>
+#include <cmath>
 #include <unordered_set>
 //////////////////////////////////
 
@@ -14,10 +17,14 @@
 void SpatialIndexUnified::Insert(Entity* e) {
 	if (!m_entityManager || !e || !e->IsAlive())
 		return;
-	if (e->HasComponent<CStatic>())
+	if (e->HasComponent<CStatic>() || !e->GetShape())
 		return;
-	if (std::find(m_dynamicEntities.begin(), m_dynamicEntities.end(), e) == m_dynamicEntities.end())
+	const auto bounds = e->GetShape()->GetShape().getGlobalBounds();
+	m_dynamicQueryPadding = std::max(m_dynamicQueryPadding, std::max(bounds.size.x, bounds.size.y));
+	if (std::find(m_dynamicEntities.begin(), m_dynamicEntities.end(), e) == m_dynamicEntities.end()) {
 		m_dynamicEntities.push_back(e);
+		m_topologyDirty = true;
+	}
 
 	size_t idx = e->transformIndex;
 	if (idx == SIZE_MAX)
@@ -28,7 +35,6 @@ void SpatialIndexUnified::Insert(Entity* e) {
 	float y = T.posY[idx];
 
 	m_dynamicGrid.InsertFromSoA(e, x, y);
-	m_bvh.Insert(e);
 }
 //////////////////////////////////
 
@@ -39,13 +45,13 @@ void SpatialIndexUnified::Remove(Entity* e) {
 	if (!e)
 		return;
 
-	std::erase(m_dynamicEntities, e);
+	const auto removedCount = std::erase(m_dynamicEntities, e);
+	if (removedCount > 0)
+		m_topologyDirty = true;
 
 	// Remove from dynamic grid
 	m_dynamicGrid.Remove(e);
 
-	// Remove from BVH
-	m_bvh.Remove(e);
 }
 //////////////////////////////////
 
@@ -56,12 +62,12 @@ void SpatialIndexUnified::Reset() {
 	m_dynamicEntities.clear(); // <-- important: drop all entity pointers
 
 	m_dynamicGrid.Clear();
-	m_bvh = BVHSystem{};
 	m_worldMask.clear();
 	m_worldWidth = 0;
 	m_worldHeight = 0;
 	m_worldOffsetX = 0;
 	m_worldOffsetY = 0;
+	m_dynamicQueryPadding = 0.0f;
 	m_worldMaskDirty = false;
 	m_lastWorldRevision = 0;
 	m_topologyDirty = false;
@@ -74,8 +80,17 @@ void SpatialIndexUnified::Reset() {
 // Incremental build of the dynamic spatial index from a list of dynamic entities. This method clears the existing dynamic grid and inserts all alive dynamic entities into it based on their current positions. It uses the TransformSoA structure to efficiently access the position data of each entity.
 // This method is intended to be called when the dynamic entities in the scene have changed significantly (topology), such as when loading a new level or resetting the scene. NOT EVERY FRAME. For per-frame updates, use Refit() or UpdateEntity() instead.
 void SpatialIndexUnified::Build(const std::vector<Entity*>& dynamicEntities) {
-	// Store the dynamic entities list internally
-	m_dynamicEntities = dynamicEntities;
+	// Only shape-bearing dynamic entities can participate in grid or raycast queries.
+	m_dynamicEntities.clear();
+	m_dynamicEntities.reserve(dynamicEntities.size());
+	m_dynamicQueryPadding = 0.0f;
+	for (Entity* e : dynamicEntities) {
+		if (e && e->IsAlive() && !e->HasComponent<CStatic>() && e->GetShape()) {
+			m_dynamicEntities.push_back(e);
+			const auto bounds = e->GetShape()->GetShape().getGlobalBounds();
+			m_dynamicQueryPadding = std::max(m_dynamicQueryPadding, std::max(bounds.size.x, bounds.size.y));
+		}
+	}
 
 	// Clear the grid entirely
 	m_dynamicGrid.Clear();
@@ -106,8 +121,7 @@ void SpatialIndexUnified::Build(const std::vector<Entity*>& dynamicEntities) {
 		m_dynamicGrid.InsertFromSoA(e, x, y);
 	}
 
-	m_bvh.Rebuild(dynamicEntities);		// Rebuild the BVH tree based on the current dynamic entities
-	//m_bvh.ReportBVHSize();			// Optional: report the size of the BVH tree for debugging or performance analysis
+	m_topologyDirty = false;
 }
 //////////////////////////////////
 
@@ -146,10 +160,9 @@ void SpatialIndexUnified::Refit() {
 		float y = T.posY[idx];
 
 		m_dynamicGrid.UpdateFromSoA(e, x, y);
-		m_bvh.Update(e);
-
 		T.ClearDirty(idx); // NEW: clear dirty flag
 	}
+
 }
 //////////////////////////////////
 
@@ -162,7 +175,6 @@ void SpatialIndexUnified::UpdateEntity(Entity* e) {
 
 	// Static or shapeless entities only live in BVH (or nowhere)
 	if (!e->GetShape() || e->HasComponent<CStatic>()) {
-		m_bvh.Update(e);
 		return;
 	}
 
@@ -180,8 +192,6 @@ void SpatialIndexUnified::UpdateEntity(Entity* e) {
 	// Dynamic grid update from SoA
 	m_dynamicGrid.UpdateFromSoA(e, x, y);
 
-	// BVH refit for this single entity
-	m_bvh.Update(e);
 }
 //////////////////////////////////
 
@@ -199,8 +209,59 @@ void SpatialIndexUnified::QueryEntities(std::vector<Entity*>& outFound, const Ve
 //////////////////////////////////
 bool SpatialIndexUnified::RaycastEntities(const Vec2& origin, const Vec2& dirN, float maxDist, RaycastHit& outHit,
 										  Entity*& outEntity) const {
-	BVHDebugTraversal dbg;
-	return m_bvh.Raycast(origin, dirN, maxDist, outHit, outEntity, &dbg);
+	std::vector<Entity*> candidates;
+	m_dynamicGrid.QueryRay(candidates, origin, dirN, maxDist, m_dynamicQueryPadding);
+
+	float nearest = maxDist;
+	bool hitAny = false;
+	outHit = RaycastHit{};
+	outEntity = nullptr;
+
+	for (Entity* entity : candidates) {
+		if (!entity || !entity->IsAlive())
+			continue;
+
+		auto* transform = entity->GetComponent<CTransform>();
+		auto* shape = entity->GetComponent<CShape>();
+		
+		if (!transform || !shape) continue;
+
+		const sf::Vector2f originOffset = shape->GetShape().getOrigin();
+		const float minX = transform->position.x - originOffset.x;
+		const float minY = transform->position.y - originOffset.y;
+		const float maxX = minX + shape->GetWidth();
+		const float maxY = minY + shape->GetHeight();
+		const float tx1 = (minX - origin.x) / dirN.x;
+		const float tx2 = (maxX - origin.x) / dirN.x;
+		const float ty1 = (minY - origin.y) / dirN.y;
+		const float ty2 = (maxY - origin.y) / dirN.y;
+		const float entry = std::max(std::min(tx1, tx2), std::min(ty1, ty2));
+		const float exit = std::min(std::max(tx1, tx2), std::max(ty1, ty2));
+		
+		if (exit < 0.0f || entry > exit || entry > nearest)	continue;
+
+		const float distance = std::max(0.0f, entry);
+		nearest = distance;
+		
+		outEntity = entity;
+		outHit.hit = true;
+		outHit.distance = distance;
+		outHit.position = origin + dirN * distance;
+		
+		const Vec2 center((minX + maxX) * 0.5f, (minY + maxY) * 0.5f);
+		const Vec2 delta = outHit.position - center;
+		const float halfW = (maxX - minX) * 0.5f;
+		const float halfH = (maxY - minY) * 0.5f;
+		const float nx = halfW > 0.0f ? delta.x / halfW : 0.0f;
+		const float ny = halfH > 0.0f ? delta.y / halfH : 0.0f;
+		
+		outHit.normal = std::fabs(nx) > std::fabs(ny)
+			? Vec2(nx > 0.0f ? 1.0f : -1.0f, 0.0f)
+			: Vec2(0.0f, ny > 0.0f ? 1.0f : -1.0f);
+		hitAny = true;
+	}
+
+	return hitAny;
 }
 //////////////////////////////////
 

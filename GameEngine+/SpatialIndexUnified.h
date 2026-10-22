@@ -82,6 +82,7 @@ private:
 	// Spatial structures
 	SpatialHashGrid<Entity> m_dynamicGrid;
 	BVHSystem m_bvh;
+	float m_dynamicQueryPadding = 0.0f;
 
 	// Engine reference
 	EntityManager* m_entityManager = nullptr;

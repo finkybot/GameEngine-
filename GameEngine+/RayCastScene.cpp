@@ -1044,10 +1044,6 @@ void RayCastScene::OnEnter() {
 		std::cout << "WARNING: m_cameraEntity is null!\n";
 	}
 
-	auto dyn = m_entityManager.GetDynamicEntities();
-	//m_entityManager.GetBVH().Rebuild(dyn);
-
-	m_entityManager.GetSpatialIndex()->Build(m_entityManager.GetDynamicEntities());
 	std::cout << "Task completed for " << m_entityManager.GetDynamicEntities().size() << " entities.\n";
 
 

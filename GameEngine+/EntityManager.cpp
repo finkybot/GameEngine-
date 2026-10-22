@@ -591,11 +591,7 @@ void EntityManager::Update(float deltaTime) {
 	RemoveDeadEntities();
 	AddPendingEntities();
 
-	// 2. Music system
-	if (m_musicSystem)
-		m_musicSystem->Process();
-
-	// 3. Sound system
+	// 2. Sound system
 	if (m_soundSystem) {
 		// Process all CSoundEffect components, handle spatial audio, and update sound states (fade, distance, etc.)
 		m_soundSystem->Process(*this, deltaTime);
@@ -615,22 +611,27 @@ void EntityManager::Update(float deltaTime) {
 		// After processing tile maps, we may have added new tile entities to the manager. We need to ensure that these new entities are integrated into the EntityManager's data structures before proceeding with other systems.
 		AddPendingEntities();
 		
-		// After adding pending entities, we should also update the spatial index to include the new tile entities. This ensures that any subsequent collision detection or spatial queries will correctly account for the newly added tile entities.
-		if (m_musicSystem)
-			m_musicSystem->Process();
 	}
 
-	// 5. Spatial index incremental update
-	if (m_spatialIndex)
-		m_spatialIndex->Refit();
+	// 5. Music system
+	// Process once after tile-map work so music entities created during tile
+	// processing are visible in the same frame.
+	if (m_musicSystem)
+		m_musicSystem->Process();
 
-	// 5b. Batched topology rebuild
-	if (m_spatialIndex && m_spatialIndex->IsTopologyDirty()) {
-		m_spatialIndex->Build(m_dynamicEntities);
-		m_spatialIndex->ClearTopologyDirty();
+	// 6. Spatial index update
+	// A topology rebuild replaces the entire index, so do not perform an
+	// incremental refit immediately before it in the same frame.
+	if (m_spatialIndex) {
+		if (m_spatialIndex->IsTopologyDirty()) {
+			m_spatialIndex->Build(m_dynamicEntities);
+			m_spatialIndex->ClearTopologyDirty();
+		} else {
+			m_spatialIndex->Refit();
+		}
 	}
 
-	// 6. Rendering / spatial layers
+	// 7. Rendering / spatial layers
 	UpdateSpatialHashAndRender();
 }
 /////////////////////////////////

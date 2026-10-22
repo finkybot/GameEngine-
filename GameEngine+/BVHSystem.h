@@ -67,6 +67,7 @@ public:
 	void Remove(Entity* e);
 	void Clear();
 	void Update(Entity* e);
+	void Refit();
 
 	void ReportBVHSize() const;
 
@@ -84,6 +85,7 @@ private:
 
 	// Ray-AABB intersection test. Returns true if the ray intersects the AABB, and sets outDistance to the distance along the ray to the intersection point.
 	void DestroyRecursive(BVHNode* node);
+	void RefitRecursive(BVHNode* node);
 
 	// RaycastNode - performs a raycast against the BVH tree starting from the given node. This method recursively traverses the tree, testing the ray against the bounding boxes of each node and checking for intersections with the entities contained in leaf nodes.
 	bool RaycastNode(BVHNode* node, const Vec2& origin, const Vec2& dirN, float maxDistance, RaycastHit& outHit,Entity*& outEntity, BVHDebugTraversal* debug) const;

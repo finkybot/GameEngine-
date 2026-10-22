@@ -400,7 +400,7 @@ void GameEngine::Update(float deltaTime) {
 
 			movementSystem->Update(currentScene->GetEntityManager().GetEntities(), deltaTime);
 
-			currentScene->GetEntityManager().Update(deltaTime);
+			currentScene->GetEntityManager().Update(deltaTime);	
 			currentScene->GetEntityManager().RenderAll(gpuRenderSystem, RenderSystem::RenderMode::ShapesOnly /* or whatever */, currentScene->GetActiveCamera());
 
 			soundSystem->Process(currentScene->GetEntityManager(), deltaTime);

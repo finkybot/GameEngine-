@@ -326,10 +326,30 @@ RenderSystemGL::~RenderSystemGL() {
 
 /////////////////////////////////
 // RenderTilesInstance - Renders a batch of tile instances using instanced rendering. This method takes a TileRenderSoA structure containing the instance data for tiles, prepares the GPU buffer, and issues the draw call.
-void RenderSystemGL::RenderTilesInstance(const TileRenderSoA& tileRenderSoA) {
+void RenderSystemGL::RenderTilesInstance(TileRenderSoA& tileRenderSoA, const sf::View& view, const sf::Vector2u& windowSize) {
 	// Ensure the rendering system is initialised before proceeding
 	std::cout << "RenderTilesInstance: Size() = " << tileRenderSoA.Size() << "\n";
 	if (tileRenderSoA.Size() == 0)	return;
+
+	
+    // --- WORLD → SCREEN TRANSFORM ---
+	const sf::Vector2f viewCenter = view.getCenter();
+	const sf::Vector2f viewSize = view.getSize();
+
+	if (viewSize.x > 0.0f && viewSize.y > 0.0f && windowSize.x > 0 && windowSize.y > 0) {
+		const float left = viewCenter.x - viewSize.x * 0.5f;
+		const float top = viewCenter.y - viewSize.y * 0.5f;
+		const float scaleX = static_cast<float>(windowSize.x) / viewSize.x;
+		const float scaleY = static_cast<float>(windowSize.y) / viewSize.y;
+
+		for (size_t i = 0; i < tileRenderSoA.Size(); ++i) {
+			tileRenderSoA.posX[i] = (tileRenderSoA.posX[i] - left) * scaleX;
+			tileRenderSoA.posY[i] = (tileRenderSoA.posY[i] - top) * scaleY;
+			tileRenderSoA.sizeX[i] *= scaleX;
+			tileRenderSoA.sizeY[i] *= scaleY;
+		}
+	}
+
 
 	// Ensure the tile instance buffer has enough capacity for the number of instances to render
 	EnsureTileBufferCapacity(tileRenderSoA.Size());

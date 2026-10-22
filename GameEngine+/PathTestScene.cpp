@@ -638,26 +638,26 @@ void PathTestScene::Render() {
 		}
 	});
 
-	// RenderSystemGL's tile shader consumes screen-space pixel coordinates, while chunk data is in world space.  SFML's view does not affect raw OpenGL draws, so convert the collected instances to the current view here.
-	// Without this conversion a centered level is submitted at its world coordinates (often negative or well outside the viewport).
-	const sf::Vector2f viewCenter = worldView.getCenter();
-	const sf::Vector2f viewSize = worldView.getSize();
-	const sf::Vector2u windowSize = m_window.getSize();
-	if (viewSize.x > 0.0f && viewSize.y > 0.0f && windowSize.x > 0 && windowSize.y > 0) {
-		const float left = viewCenter.x - viewSize.x * 0.5f;
-		const float top = viewCenter.y - viewSize.y * 0.5f;
-		const float scaleX = static_cast<float>(windowSize.x) / viewSize.x;
-		const float scaleY = static_cast<float>(windowSize.y) / viewSize.y;
+	//// RenderSystemGL's tile shader consumes screen-space pixel coordinates, while chunk data is in world space.  SFML's view does not affect raw OpenGL draws, so convert the collected instances to the current view here.
+	//// Without this conversion a centered level is submitted at its world coordinates (often negative or well outside the viewport).
+	//const sf::Vector2f viewCenter = worldView.getCenter();
+	//const sf::Vector2f viewSize = worldView.getSize();
+	//const sf::Vector2u windowSize = m_window.getSize();
+	//if (viewSize.x > 0.0f && viewSize.y > 0.0f && windowSize.x > 0 && windowSize.y > 0) {
+	//	const float left = viewCenter.x - viewSize.x * 0.5f;
+	//	const float top = viewCenter.y - viewSize.y * 0.5f;
+	//	const float scaleX = static_cast<float>(windowSize.x) / viewSize.x;
+	//	const float scaleY = static_cast<float>(windowSize.y) / viewSize.y;
 
-		for (size_t i = 0; i < soa.Size(); ++i) {
-			soa.posX[i] = (soa.posX[i] - left) * scaleX;
-			soa.posY[i] = (soa.posY[i] - top) * scaleY;
-			soa.sizeX[i] *= scaleX;
-			soa.sizeY[i] *= scaleY;
-		}
-	}
+	//	for (size_t i = 0; i < soa.Size(); ++i) {
+	//		soa.posX[i] = (soa.posX[i] - left) * scaleX;
+	//		soa.posY[i] = (soa.posY[i] - top) * scaleY;
+	//		soa.sizeX[i] *= scaleX;
+	//		soa.sizeY[i] *= scaleY;
+	//	}
+	//}
 
-	m_entityManager.GetRenderSystemGL().RenderTilesInstance(soa);
+	m_entityManager.GetRenderSystemGL().RenderTilesInstance(soa, worldView, m_window.getSize());
 
 	// --- DEBUG OVERLAY ---
 	// Raw OpenGL tile rendering changes state cached by SFML. Restore it before

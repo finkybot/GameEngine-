@@ -77,6 +77,10 @@ EntityManager::~EntityManager() {
 /////////////////////////////////
 // ClearAll - immediately removes every entity from the EntityManager without going through the normal kill/process cycle. Call this when switching scenes so the previous scene's entities do not bleed into the next one.
 void EntityManager::ClearAll() {
+	// Remove all raw Entity* references from the BVH before destroying entity
+	// storage. The BVH owns nodes, not entities, so it must be cleared first.
+	m_bvh.Clear();
+
 	// Hard-reset spatial structures before destroying entity storage.
 	if (m_spatialIndex) {
 		m_spatialIndex->Reset();
@@ -200,6 +204,9 @@ void EntityManager::RemoveDeadEntities() {
 
 	// Topology + spatial index removal
 	for (Entity* d : deadEntities) {
+		// BVH leaf nodes contain raw Entity* values. Remove them before the
+		// unique_ptrs below erase and destroy the entities.
+		m_bvh.Remove(d);
 		OnEntityRemoved(d); // updates m_dynamicEntities/m_staticEntities + Build()
 		if (m_spatialIndex)
 			m_spatialIndex->Remove(d); // optional if Build() fully clears/rebuilds internally
@@ -292,6 +299,8 @@ void EntityManager::SetEntityLayer(Entity* e, Entity::Layer layer) {
 void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem, const CCamera& camera) {
 	std::vector<GPUShapeInstance> circleInstances;
 	std::vector<GPUInstanceData> explosionInstances;
+	circleInstances.reserve(m_dynamicEntities.size());
+	explosionInstances.reserve(m_dynamicEntities.size());
 
 	auto now = std::chrono::high_resolution_clock::now();
 
@@ -449,9 +458,8 @@ void EntityManager::OnEntityAdded(Entity* e) {
 	else
 		m_dynamicEntities.push_back(e);
 
-	// Mark topology dirty so spatial index can rebuild if necessary
 	if (m_spatialIndex)
-		m_spatialIndex->MarkTopologyDirty();
+		m_spatialIndex->Insert(e);
 
 	//std::cout << "[Topology] Added entity id=" << e->GetId() << " type=" << EntityTypeToString(e->GetType()) << " hasStatic=" << e->HasComponent<CStatic>() << "\n";
 }
@@ -468,9 +476,8 @@ void EntityManager::OnEntityRemoved(Entity* e) {
 	std::erase(m_dynamicEntities, e);
 	std::erase(m_staticEntities, e);
 
-	// Mark topology dirty so spatial index can rebuild if necessary
 	if (m_spatialIndex)
-		m_spatialIndex->MarkTopologyDirty();
+		m_spatialIndex->Remove(e);
 }
 /////////////////////////////////
 
@@ -490,9 +497,11 @@ void EntityManager::OnStaticStateChanged(Entity* e, bool nowStatic) {
 	else
 		m_dynamicEntities.push_back(e);
 
-	// Mark topology dirty so spatial index can rebuild if necessary
-	if (m_spatialIndex)
-		m_spatialIndex->MarkTopologyDirty(); 
+	if (m_spatialIndex) {
+		m_spatialIndex->Remove(e);
+		if (!nowStatic)
+			m_spatialIndex->Insert(e);
+	}
 }
 /////////////////////////////////
 

@@ -4,6 +4,7 @@
 #include "Entity.h"
 #include "EntityManager.h"
 #include "CStatic.h"
+#include <algorithm>
 #include <unordered_set>
 //////////////////////////////////
 
@@ -13,6 +14,10 @@
 void SpatialIndexUnified::Insert(Entity* e) {
 	if (!m_entityManager || !e || !e->IsAlive())
 		return;
+	if (e->HasComponent<CStatic>())
+		return;
+	if (std::find(m_dynamicEntities.begin(), m_dynamicEntities.end(), e) == m_dynamicEntities.end())
+		m_dynamicEntities.push_back(e);
 
 	size_t idx = e->transformIndex;
 	if (idx == SIZE_MAX)
@@ -33,6 +38,8 @@ void SpatialIndexUnified::Insert(Entity* e) {
 void SpatialIndexUnified::Remove(Entity* e) {
 	if (!e)
 		return;
+
+	std::erase(m_dynamicEntities, e);
 
 	// Remove from dynamic grid
 	m_dynamicGrid.Remove(e);

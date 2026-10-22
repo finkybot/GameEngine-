@@ -147,16 +147,6 @@ void TestScene::Update(float dt) {
 
 	UpdateExplosions();
 
-	// --- Incremental spatial index update (main thread only) ---
-	if (auto* spatialIndex = m_entityManager.GetSpatialIndex()) {
-		for (auto& uptr : entities) {
-			Entity* e = uptr.get();
-			if (!e->IsAlive())
-				continue;
-			spatialIndex->UpdateEntity(e);
-		}
-	}
-
 	// --- Broad‑phase collision (optional / throttled) ---
 	if (m_spatialCollisionEnabled && m_entityManager.GetSpatialIndex()) {
 		m_entityManager.GetCollisionSystem().DetectAndResolveSpatial(entities, m_entityManager.GetSpatialIndex(), dt);

@@ -30,6 +30,13 @@ private:
 
 	// The grid itself, implemented as an unordered_map where the key is a hash representing the cell coordinates and the value is a vector of pointers to objects that occupy that cell. This allows for efficient storage and retrieval of objects based on their spatial location.
 	std::unordered_map<size_t, std::vector<T*>> m_grid;
+	struct BucketMetadata {
+		size_t hash;
+		size_t index;
+		int cellX;
+		int cellY;
+	};
+	std::unordered_map<T*, BucketMetadata> m_bucketMetadata;
 
 	// Static variables for tracking query performance metrics. These variables are incremented during query operations to allow developers to analyze the efficiency of the spatial hash grid and optimize it if necessary. They can be reset at the beginning of each 
 	// frame or query session to track metrics for specific time periods.
@@ -46,6 +53,47 @@ private:
 		int cellX = static_cast<int>(x / cellSize);
 		int cellY = static_cast<int>(y / cellSize);
 		return GetCellHashFromCell(cellX, cellY);
+	}
+
+	void AppendToBucket(T* object, size_t hash, int cellX, int cellY) noexcept {
+		auto& bucket = m_grid[hash];
+		m_bucketMetadata[object] = BucketMetadata{hash, bucket.size(), cellX, cellY};
+		bucket.push_back(object);
+		object->currentCellX = cellX;
+		object->currentCellY = cellY;
+	}
+
+	bool RemoveFromTrackedBucket(T* object) noexcept {
+		if (!object)
+			return false;
+
+		auto metadataIt = m_bucketMetadata.find(object);
+		if (metadataIt == m_bucketMetadata.end())
+			return false;
+		const BucketMetadata metadata = metadataIt->second;
+		const size_t hash = metadata.hash;
+		auto it = m_grid.find(hash);
+		if (it == m_grid.end())
+			return false;
+
+		auto& bucket = it->second;
+		const size_t index = metadata.index;
+		if (index >= bucket.size() || bucket[index] != object)
+			return false;
+
+		T* moved = bucket.back();
+		bucket[index] = moved;
+		auto movedMetadata = m_bucketMetadata.find(moved);
+		if (movedMetadata != m_bucketMetadata.end())
+			movedMetadata->second.index = index;
+		bucket.pop_back();
+		if (bucket.empty())
+			m_grid.erase(it);
+
+		object->currentCellX = INT_MIN;
+		object->currentCellY = INT_MIN;
+		m_bucketMetadata.erase(metadataIt);
+		return true;
 	}
 
 
@@ -85,20 +133,13 @@ public:
 		int cellX = static_cast<int>(x / m_cellSize);
 		int cellY = static_cast<int>(y / m_cellSize);
 
-		// If already tracked in a different cell, remove stale membership first.
-		if (object->currentCellX != INT_MIN && object->currentCellY != INT_MIN &&
-			(object->currentCellX != cellX || object->currentCellY != cellY)) {
-			Remove(object);
-		}
+		auto metadataIt = m_bucketMetadata.find(object);
+		if (metadataIt != m_bucketMetadata.end() && metadataIt->second.cellX == cellX && metadataIt->second.cellY == cellY)
+			return;
+		RemoveFromTrackedBucket(object);
 
 		size_t hash = GetCellHashFromCell(cellX, cellY);
-		auto& vec = m_grid[hash];
-
-		if (std::find(vec.begin(), vec.end(), object) == vec.end())
-			vec.push_back(object);
-
-		object->currentCellX = cellX;
-		object->currentCellY = cellY;
+		AppendToBucket(object, hash, cellX, cellY);
 	}
 
 
@@ -109,64 +150,22 @@ public:
 		int newX = static_cast<int>(x / m_cellSize);
 		int newY = static_cast<int>(y / m_cellSize);
 
-		int oldX = object->currentCellX;
-		int oldY = object->currentCellY;
+		auto metadataIt = m_bucketMetadata.find(object);
 
-		// First-time insert
-		if (oldX == INT_MIN || oldY == INT_MIN) {
-			size_t hash = GetCellHashFromCell(newX, newY);
-			m_grid[hash].push_back(object);
-			object->currentCellX = newX;
-			object->currentCellY = newY;
+		if (metadataIt == m_bucketMetadata.end()) {
+			AppendToBucket(object, GetCellHashFromCell(newX, newY), newX, newY);
 			return;
 		}
 
 		// Same cell → nothing to do
-		if (newX == oldX && newY == oldY)
+		if (newX == metadataIt->second.cellX && newY == metadataIt->second.cellY)
 			return;
 
-		// Remove from old cell
-		size_t oldHash = GetCellHashFromCell(oldX, oldY);
-		auto it = m_grid.find(oldHash);
-		if (it != m_grid.end()) {
-			auto& vec = it->second;
-			vec.erase(std::remove(vec.begin(), vec.end(), object), vec.end());
-			if (vec.empty())
-				m_grid.erase(it);
-		}
-
-		// Remove skipped cells (same logic as your existing Update)
-		int dx = newX - oldX;
-		int dy = newY - oldY;
-
-		if (std::abs(dx) > 1 || std::abs(dy) > 1) {
-			int stepX = (dx > 0 ? 1 : -1);
-			int stepY = (dy > 0 ? 1 : -1);
-
-			int cx = oldX;
-			int cy = oldY;
-
-			while (cx != newX || cy != newY) {
-				cx += (cx != newX ? stepX : 0);
-				cy += (cy != newY ? stepY : 0);
-
-				size_t skipHash = GetCellHashFromCell(cx, cy);
-				auto it2 = m_grid.find(skipHash);
-				if (it2 != m_grid.end()) {
-					auto& vec2 = it2->second;
-					vec2.erase(std::remove(vec2.begin(), vec2.end(), object), vec2.end());
-					if (vec2.empty())
-						m_grid.erase(it2);
-				}
-			}
-		}
+		RemoveFromTrackedBucket(object);
 
 		// Insert into new cell
 		size_t newHash = GetCellHashFromCell(newX, newY);
-		m_grid[newHash].push_back(object);
-
-		object->currentCellX = newX;
-		object->currentCellY = newY;
+		AppendToBucket(object, newHash, newX, newY);
 	}
 
 
@@ -175,37 +174,7 @@ public:
 	void Remove(T* object) noexcept {
 		if (!object)
 			return;
-
-		bool removed = false;
-
-		// Fast path: remove from tracked cell if available.
-		if (object->currentCellX != INT_MIN && object->currentCellY != INT_MIN) {
-			size_t hash = GetCellHashFromCell(object->currentCellX, object->currentCellY);
-			auto it = m_grid.find(hash);
-			if (it != m_grid.end()) {
-				auto& vec = it->second;
-				auto before = vec.size();
-				vec.erase(std::remove(vec.begin(), vec.end(), object), vec.end());
-				removed = (vec.size() != before);
-				if (vec.empty())
-					m_grid.erase(it);
-			}
-		}
-
-		// Fallback: if cell tracking drifted, scan all buckets and remove by pointer identity.
-		if (!removed) {
-			for (auto it = m_grid.begin(); it != m_grid.end();) {
-				auto& vec = it->second;
-				vec.erase(std::remove(vec.begin(), vec.end(), object), vec.end());
-				if (vec.empty()) {
-					it = m_grid.erase(it);
-				} else {
-					++it;
-				}
-			}
-		}
-
-		// Mark as no longer in any tracked cell regardless of where we found it.
+		RemoveFromTrackedBucket(object);
 		object->currentCellX = INT_MIN;
 		object->currentCellY = INT_MIN;
 	}
@@ -216,73 +185,15 @@ public:
 	// any intermediate cells to ensure accurate spatial partitioning.
 	void Update(T* object) noexcept {
 		const Vec2& pos = object->GetCentrePoint();
-
-		int newX = static_cast<int>(pos.x / m_cellSize);
-		int newY = static_cast<int>(pos.y / m_cellSize);
-
-		int oldX = object->currentCellX;
-		int oldY = object->currentCellY;
-
-		// First-time insert
-		if (oldX == INT_MIN || oldY == INT_MIN) {
-			size_t hash = GetCellHashFromCell(newX, newY);
-			m_grid[hash].push_back(object);
-			object->currentCellX = newX;
-			object->currentCellY = newY;
-			return;
-		}
-
-		// Same cell → nothing to do
-		if (newX == oldX && newY == oldY)
-			return;
-
-		// Remove from old cell
-		size_t oldHash = GetCellHashFromCell(oldX, oldY);
-		auto it = m_grid.find(oldHash);
-		if (it != m_grid.end()) {
-			auto& vec = it->second;
-			vec.erase(std::remove(vec.begin(), vec.end(), object), vec.end());
-			if (vec.empty())
-				m_grid.erase(it);
-		}
-
-		// If movement skipped cells, remove from all intermediate cells
-		int dx = newX - oldX;
-		int dy = newY - oldY;
-
-		if (std::abs(dx) > 1 || std::abs(dy) > 1) {
-			int stepX = (dx > 0 ? 1 : -1);
-			int stepY = (dy > 0 ? 1 : -1);
-
-			int cx = oldX;
-			int cy = oldY;
-
-			while (cx != newX || cy != newY) {
-				cx += (cx != newX ? stepX : 0);
-				cy += (cy != newY ? stepY : 0);
-
-				size_t skipHash = GetCellHashFromCell(cx, cy);
-				auto it2 = m_grid.find(skipHash);
-				if (it2 != m_grid.end()) {
-					auto& vec2 = it2->second;
-					vec2.erase(std::remove(vec2.begin(), vec2.end(), object), vec2.end());
-					if (vec2.empty())
-						m_grid.erase(it2);
-				}
-			}
-		}
-
-		// Insert into new cell
-		size_t newHash = GetCellHashFromCell(newX, newY);
-		m_grid[newHash].push_back(object);
-
-		object->currentCellX = newX;
-		object->currentCellY = newY;
+		UpdateFromSoA(object, pos.x, pos.y);
 	}
 
 
 	// Clear - Clears all objects from the spatial grid.
-	void Clear() noexcept { m_grid.clear(); }
+	void Clear() noexcept {
+		m_grid.clear();
+		m_bucketMetadata.clear();
+	}
 
 
 	// ContainsPointer - checks if a pointer is currently present in any grid bucket using pointer identity only.
@@ -303,13 +214,21 @@ public:
 	void PruneToActiveSet(const std::unordered_set<T*>& activeSet) noexcept {
 		for (auto it = m_grid.begin(); it != m_grid.end();) {
 			auto& vec = it->second;
-			vec.erase(std::remove_if(vec.begin(), vec.end(), [&activeSet](T* ptr) {
-				return ptr == nullptr || activeSet.find(ptr) == activeSet.end();
+			vec.erase(std::remove_if(vec.begin(), vec.end(), [&activeSet, this](T* ptr) {
+				const bool remove = ptr == nullptr || activeSet.find(ptr) == activeSet.end();
+				if (remove && ptr)
+					m_bucketMetadata.erase(ptr);
+				return remove;
 			}), vec.end());
 
 			if (vec.empty()) {
 				it = m_grid.erase(it);
 			} else {
+				for (size_t index = 0; index < vec.size(); ++index) {
+					auto metadata = m_bucketMetadata.find(vec[index]);
+					if (metadata != m_bucketMetadata.end())
+						metadata->second.index = index;
+				}
 				++it;
 			}
 		}
@@ -322,24 +241,7 @@ public:
 			return;
 
 		const Vec2& pos = object->GetCentrePoint();
-
-		int cellX = static_cast<int>(pos.x / m_cellSize);
-		int cellY = static_cast<int>(pos.y / m_cellSize);
-
-		// If already tracked in a different cell, remove stale membership first.
-		if (object->currentCellX != INT_MIN && object->currentCellY != INT_MIN &&
-			(object->currentCellX != cellX || object->currentCellY != cellY)) {
-			Remove(object);
-		}
-
-		size_t hash = GetCellHashFromCell(cellX, cellY);
-		auto& vec = m_grid[hash];
-		if (std::find(vec.begin(), vec.end(), object) == vec.end()) {
-			vec.push_back(object);
-		}
-
-		object->currentCellX = cellX;
-		object->currentCellY = cellY;
+		InsertFromSoA(object, pos.x, pos.y);
 	}
 
 

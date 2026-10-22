@@ -65,6 +65,7 @@ public:
 
 	void Insert(Entity* e);
 	void Remove(Entity* e);
+	void Clear();
 	void Update(Entity* e);
 
 	void ReportBVHSize() const;

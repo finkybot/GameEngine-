@@ -8,6 +8,7 @@
 // Includes
 #pragma once
 #include <glad/glad.h>
+#include <SFML/Graphics.hpp>
 #include <vector>
 #include "Fontsystem.h"
 /////////////////////////////////
@@ -101,7 +102,7 @@ public:
 	void SetFontSystem(Fontsystem* fontSystem) { m_fontSystem = fontSystem; }
 	void SetTextureManager(TextureManager* texManager) { m_textureManager = texManager; }
 	void GetTextureManager(TextureManager*& texManager) { texManager = m_textureManager; }
-	void RenderTilesInstance(const TileRenderSoA& tileRenderSoA);
+	void RenderTilesInstance(TileRenderSoA& tileRenderSoA, const sf::View& view, const sf::Vector2u& windowSize);
 
 
 private:

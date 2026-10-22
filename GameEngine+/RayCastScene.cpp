@@ -236,7 +236,7 @@ bool RayCastScene::SwitchToLevel(const std::string& name) {
 		if (!atlasOpt.has_value() || !*atlasOpt) {
 			int tileSize = (int)m_chunkManager.GetTileSize();
 			if (!tilesetPath.empty() && std::filesystem::exists(tilesetPath)) {
-				tm.LoadAtlas(tilesetKey, tilesetPath, tileSize, tileSize);
+				tm.LoadAtlas(tilesetKey, tilesetPath, tileSize, tileSize); 
 			} else {
 				std::vector<std::string> searchPaths = {
 					"assets/tilesets/" + tilesetKey + ".png",

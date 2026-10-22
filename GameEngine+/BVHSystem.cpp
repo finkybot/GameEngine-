@@ -60,6 +60,7 @@ static sf::FloatRect GetEntityBounds(Entity* e) {
 void BVHSystem::Rebuild(const std::vector<Entity*>& entities) {
     DestroyRecursive(m_root);
     m_root = nullptr;
+	m_entityLeaf.clear();
 
     //if (entities.empty()) {
     //    std::cout << "[BVH] No entities — BVH empty\n";
@@ -336,13 +337,44 @@ void BVHSystem::Insert(Entity* e) {
 
 /////////////////////////////////
 void BVHSystem::Remove(Entity* e) {
-	auto it = std::find(m_dynamicEntities.begin(), m_dynamicEntities.end(), e);
-	if (it != m_dynamicEntities.end())
-		m_dynamicEntities.erase(it);
+	if (!e)
+		return;
+
+	// Remove every occurrence because callers may have inserted an entity more
+	// than once while the BVH was being rebuilt or updated.
+	m_dynamicEntities.erase(
+		std::remove(m_dynamicEntities.begin(), m_dynamicEntities.end(), e),
+		m_dynamicEntities.end());
+
+	// The BVH stores raw Entity* values in leaf nodes. Remove the pointer from
+	// its leaf before EntityManager destroys the Entity object. Do not call any
+	// Entity method here: this function must also be safe during teardown.
+	auto leafIt = m_entityLeaf.find(e);
+	if (leafIt != m_entityLeaf.end()) {
+		BVHNode* leaf = leafIt->second;
+		if (leaf) {
+			leaf->leafEntities.erase(
+				std::remove(leaf->leafEntities.begin(), leaf->leafEntities.end(), e),
+				leaf->leafEntities.end());
+		}
+		m_entityLeaf.erase(leafIt);
+	}
 
 	m_dirty = true;
 }
 /////////////////////////////////
+
+
+
+///////////////////////////////
+void BVHSystem::Clear() {
+	DestroyRecursive(m_root);
+	m_root = nullptr;
+	m_dynamicEntities.clear();
+	m_entityLeaf.clear();
+	m_dirty = false;
+}
+///////////////////////////////
 
 
 

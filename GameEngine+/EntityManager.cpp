@@ -62,6 +62,28 @@ EntityManager::EntityManager(sf::RenderWindow& window, float cellSize): m_window
 
 
 /////////////////////////////////
+// IsManagedEntity - verifies that an entity pointer still belongs to this manager.
+// Pointer identity is checked without dereferencing entity, so stale cached pointers
+// remain safe to validate after ClearAll() has destroyed the entity.
+bool EntityManager::IsManagedEntity(const Entity* entity) const {
+	if (!entity)
+		return false;
+
+	for (const auto& up : m_entities)
+		if (up.get() == entity)
+			return true;
+
+	for (const auto& up : m_toAdd)
+		if (up.get() == entity)
+			return true;
+
+	return false;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // Destructor for the EntityManager class. Ensures proper destruction order for forward-declared types by resetting the unique pointers to the main systems (TileSystem, MusicSystem, and SoundSystem) before the EntityManager itself is destroyed. This prevents potential issues with dangling pointers or incomplete 
 // types during destruction.
 EntityManager::~EntityManager() {

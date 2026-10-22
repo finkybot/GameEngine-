@@ -257,6 +257,9 @@ public:
 		auto transform = GetComponent<CTransform>();
 		if (transform)
 			return transform->position;
+
+		static const Vec2 zero = Vec2::Zero;
+		return zero;
 	}
 
 	// Get the radius from the CShape component, or return 0 if the component does not exist.

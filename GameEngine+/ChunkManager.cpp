@@ -1093,8 +1093,11 @@ void ChunkManager::CollectVisibleRenderData(const WorldViewBounds& b, std::vecto
 	// Convert world bounds → tile bounds
 	int tx0 = static_cast<int>(std::floor(b.minX / ts));
 	int ty0 = static_cast<int>(std::floor(b.minY / ts));
-	int tx1 = static_cast<int>(std::ceil(b.maxX / ts));
-	int ty1 = static_cast<int>(std::ceil(b.maxY / ts));
+	// maxX/maxY are the exclusive far edge of the view.  Converting them to
+	// an inclusive tile index without subtracting one includes a whole extra
+	// chunk whenever the edge lies on a tile boundary.
+	int tx1 = static_cast<int>(std::ceil(b.maxX / ts)) - 1;
+	int ty1 = static_cast<int>(std::ceil(b.maxY / ts)) - 1;
 
 	// Convert tile bounds → chunk bounds (use FloorDiv so negative coordinates map correctly)
 	int cx0 = FloorDiv(tx0, m_chunkWidth);

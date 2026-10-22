@@ -54,6 +54,21 @@ private:
 	RenderQueue m_renderQueue;
 	float m_tileSize = 16.0f;
 	int m_nodesPerFrame = 300;
+	
+	// Middle-mouse panning state
+	bool m_panning = false;
+	bool m_prevMiddleDown = false;
+	sf::Vector2i m_panStart = sf::Vector2i(0, 0);
+	Vec2 m_camPanStart = Vec2::Zero;
+
+	// Pathfinding: click-based tests (left=start, right=goal)
+	Vec2 m_manualStart{0, 0};
+	Vec2 m_manualGoal{0, 0};
+	bool m_manualStartSet = false;
+	bool m_manualGoalSet = false;
+	std::optional<std::vector<Vec2>> m_manualPath;
+	bool m_manualPathComplete = false;
+	Entity* m_manualEntity = nullptr;
 
 	// Camera entity (like LevelEditor, I've basically nicked it from there)
 	Entity* m_cameraEntity = nullptr;
@@ -62,6 +77,7 @@ private:
 	Vec2 m_mapMin{0, 0};
 	Vec2 m_mapMax{0, 0};
 	bool m_haveBounds = false; // true if m_mapMin/m_mapMax are valid and should be used to clamp camera position
+	uint64_t m_lastWorldRevision = 0;
 
 	// Level management (from LevelEditor design)
 	std::string m_currentLevelName;
@@ -75,20 +91,6 @@ private:
 	void ApplyMainCameraView();
 	void EnsureVisibleChunks(); // Ensure all chunks that intersect the current camera view are loaded and ready for rendering.
 
-	// Middle-mouse panning state
-	bool m_panning = false;
-	bool m_prevMiddleDown = false;
-	sf::Vector2i m_panStart = sf::Vector2i(0,0);
-	Vec2 m_camPanStart = Vec2::Zero;
-
-	// Pathfinding: click-based tests (left=start, right=goal)
-	Vec2 m_manualStart{0, 0};
-	Vec2 m_manualGoal{0, 0};
-	bool m_manualStartSet = false;
-	bool m_manualGoalSet = false;
-	std::optional<std::vector<Vec2>> m_manualPath;
-	bool m_manualPathComplete = false;
-	Entity* m_manualEntity = nullptr;
 
 	// Rendering
 	void RenderDebugOverlay();

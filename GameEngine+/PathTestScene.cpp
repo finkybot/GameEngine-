@@ -55,8 +55,6 @@ PathTestScene::~PathTestScene() = default;
 /////////////////////////////////
 // InitializeGame - Initializes the game scene, setting up the camera entity, map bounds, and scanning for available levels.
 void PathTestScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
-	SwitchToLevel(m_currentLevelName);
-
 	// Initialize map bounds
 	m_mapMin = Vec2(-512, -512);
 	m_mapMax = Vec2(512, 512);
@@ -64,6 +62,17 @@ void PathTestScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 
 	// Scan available levels
 	ScanLevelFiles();
+
+	// Select a real level before configuring the chunk manager.  Previously the
+	// empty level name was switched first and the chunk path was then
+	// unconditionally overwritten with the fallback "levels/chunks" directory.
+	// That caused streaming reloads after eviction to read placeholder chunks
+	// from the wrong directory.
+	if (m_currentLevelName.empty() && !m_availableLevels.empty())
+		m_currentLevelName = m_availableLevels.front();
+
+	if (!m_currentLevelName.empty())
+		SwitchToLevel(m_currentLevelName);
 
 	// Create movement test entity (small red square for path following demonstration)
 	m_movementTester = GetEntityManager().AddEntity(EntityType::Default);
@@ -85,8 +94,10 @@ void PathTestScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 		std::cout << "[PathTestScene::InitializeGame] FAILED to create movement tester entity!" << std::endl;
 	}
 
-	// Set initial base path (will be overridden when level is loaded)
-	m_chunkManager.SetBasePath("levels/chunks");
+	// Keep the fallback only when no saved level is available.  Never overwrite
+	// the selected level's absolute chunk directory after SwitchToLevel().
+	if (m_currentLevelName.empty())
+		m_chunkManager.SetBasePath("levels/chunks");
 
 	m_chunkManager.SetMaxLoadedChunks(256);
 }
@@ -224,6 +235,14 @@ void PathTestScene::ScanLevelFiles() {
 bool PathTestScene::SwitchToLevel(const std::string& name) {
 	std::cout << "[PathTestScene::SwitchToLevel] CALLED with level: " << name << "\n";
 	m_currentLevelName = name;
+
+	// Scene entities are owned by EntityManager.  A level switch can occur after
+	// the manager has cleared the previous scene, leaving cached raw pointers
+	// non-null but dangling.  Validate them before any component lookup.
+	if (!GetEntityManager().IsManagedEntity(m_cameraEntity))
+		m_cameraEntity = nullptr;
+	if (!GetEntityManager().IsManagedEntity(m_movementTester))
+		m_movementTester = nullptr;
 
 	fs::path base;
 
@@ -394,20 +413,22 @@ bool PathTestScene::SwitchToLevel(const std::string& name) {
 		m_chunkManager.SetWorldOffset(minTileX, minTileY);
 		m_chunkManager.SetWorldSize(worldW, worldH);
 		m_chunkManager.BuildWorldMask();
+		m_lastWorldRevision = m_chunkManager.GetWorldRevision();
 
 		m_mapMin = Vec2(dMinX, dMinY);
 		m_mapMax = Vec2(dMaxX, dMaxY);
 		m_haveBounds = true;
 
-		if (m_cameraEntity) {
+		if (GetEntityManager().IsManagedEntity(m_cameraEntity)) {
 			if (auto cam = m_cameraEntity->GetComponent<CCamera>()) {
 				auto tr = m_cameraEntity->GetComponent<CTransform>();
 				Vec2 center = (m_mapMin + m_mapMax) * 0.5f;
-				tr->position = center;
+				if (tr)
+					tr->position = center;
 				cam->position = center;
 				std::cout << "  Camera centered at (" << center.x << "," << center.y << ")\n";
 
-				if (m_movementTester) {
+				if (GetEntityManager().IsManagedEntity(m_movementTester)) {
 					if (auto testTransform = m_movementTester->GetComponent<CTransform>()) {
 						testTransform->position = center;
 						if (auto follower = m_movementTester->GetComponent<CPathFollower>()) {
@@ -439,6 +460,7 @@ void PathTestScene::EnsureVisibleChunks() {
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (!camOpt) return;
 	CCamera* cam = *camOpt;
+	const float tileSize = m_chunkManager.GetTileSize();
 
 	// Convert viewport size to world-space size
 	float worldW = cam->viewportWidth / cam->zoom;
@@ -450,10 +472,24 @@ void PathTestScene::EnsureVisibleChunks() {
 	float halfH = worldH * 0.5f;
 
 
-	int tx0 = (int)std::floor((cam->position.x - halfW) / m_tileSize);
-	int ty0 = (int)std::floor((cam->position.y - halfH) / m_tileSize);
-	int tx1 = (int)std::ceil((cam->position.x + halfW) / m_tileSize);
-	int ty1 = (int)std::ceil((cam->position.y + halfH) / m_tileSize);
+	int tx0 = (int)std::floor((cam->position.x - halfW) / tileSize);
+	int ty0 = (int)std::floor((cam->position.y - halfH) / tileSize);
+	// The far edge is exclusive.  Treating it as an inclusive tile coordinate
+	// adds an unnecessary row/column (and, with the LRU limit, can evict tiles
+	// that are still visible).
+	int tx1 = (int)std::ceil((cam->position.x + halfW) / tileSize) - 1;
+	int ty1 = (int)std::ceil((cam->position.y + halfH) / tileSize) - 1;
+
+	// The visible set must fit in the cache.  Otherwise EvictIfNeeded can evict
+	// an on-screen chunk immediately after this call, causing a blank frame and
+	// an asynchronous reload when the camera returns to it.
+	const int cx0 = ChunkManager::FloorDiv(tx0, m_chunkManager.GetChunkWidth()) - 2;
+	const int cy0 = ChunkManager::FloorDiv(ty0, m_chunkManager.GetChunkHeight()) - 2;
+	const int cx1 = ChunkManager::FloorDiv(tx1, m_chunkManager.GetChunkWidth()) + 2;
+	const int cy1 = ChunkManager::FloorDiv(ty1, m_chunkManager.GetChunkHeight()) + 2;
+	const size_t requiredChunks = static_cast<size_t>(std::max(0, cx1 - cx0 + 1)) *
+								  static_cast<size_t>(std::max(0, cy1 - cy0 + 1));
+	m_chunkManager.SetMaxLoadedChunks(std::max<size_t>(256, requiredChunks));
 	m_chunkManager.EnsureChunksInTileRect(tx0, ty0, tx1, ty1, 2);
 	
 	// 3. Evict chunks outside radius
@@ -516,8 +552,10 @@ void PathTestScene::ApplyMainCameraView() {
 // Update - Updates the scene state, including camera movement, chunk loading, and pathfinding. This method is called every frame with the elapsed time since the last update.
 void PathTestScene::Update(float deltaTime) {
 	// Update camera
-	if (m_cameraEntity) {
+	if (GetEntityManager().IsManagedEntity(m_cameraEntity)) {
 		m_cameraSystem.Update(deltaTime, GetEntityManager());
+	} else {
+		m_cameraEntity = nullptr;
 	}
 
 
@@ -526,6 +564,12 @@ void PathTestScene::Update(float deltaTime) {
 	//m_chunkManager.UpdateStreaming(m_cameraEntity);
 	m_chunkManager.UpdateMainThread_NoLock();
 	m_chunkManager.EvictIfNeeded(); // <-- move eviction here
+
+	const uint64_t worldRevision = m_chunkManager.GetWorldRevision();
+	if (worldRevision != m_lastWorldRevision) {
+		m_chunkManager.BuildWorldMask();
+		m_lastWorldRevision = worldRevision;
+	}
 
 	float fps = m_gameEngine.GetFPSCounter().GetFPS();
 
@@ -833,6 +877,11 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 // OnEnter - Called when the scene becomes active. Resets camera, chunk manager, render queue, and input states to ensure a clean start for the scene.
 void PathTestScene::OnEnter()
 {
+	// Never retain pointers to entities from a previous scene activation.
+	m_cameraEntity = nullptr;
+	m_manualEntity = nullptr;
+	m_movementTestActive = false;
+
     // Reset camera system
     m_cameraSystem.ClearMainCamera(GetEntityManager());
 
@@ -846,6 +895,15 @@ void PathTestScene::OnEnter()
     camera->viewportWidth = (float)m_window.getSize().x;
     camera->viewportHeight = (float)m_window.getSize().y;
     camera->smoothness = 0.0f;
+
+	// RenderSystemGL does not derive its pixel viewport from the SFML view.  It
+	// must be initialized explicitly for the tile shader's uViewportSize and
+	// for glViewport; otherwise PathTestScene can inherit a zero/stale GL
+	// viewport from the previously active scene and tiles are clipped or
+	// projected with the wrong scale.
+	m_entityManager.GetRenderSystemGL().OnResize(
+		static_cast<int>(m_window.getSize().x),
+		static_cast<int>(m_window.getSize().y));
 
     // Commit the camera entity
     GetEntityManager().ProcessPending();
@@ -873,7 +931,14 @@ void PathTestScene::OnExit() {
 	// Unload resources when exiting the scene
 	UnloadResources();
 	std::cout << "[PathTestScene] OnExit called, resources unloaded." << std::endl;
-	m_cameraEntity->GetComponent<CTransform>()->position = Vec2::Zero;
+	if (GetEntityManager().IsManagedEntity(m_cameraEntity)) {
+		if (auto transform = m_cameraEntity->GetComponent<CTransform>())
+			transform->position = Vec2::Zero;
+	}
+	m_cameraEntity = nullptr;
+	m_movementTester = nullptr;
+	m_manualEntity = nullptr;
+	m_movementTestActive = false;
 }
 /////////////////////////////////
 
@@ -882,10 +947,18 @@ void PathTestScene::OnExit() {
 /////////////////////////////////
 // OnWindowResized - Adjusts the SFML view when the window is resized to maintain proper
 void PathTestScene::OnWindowResized(sf::Vector2u newSize) {
-	sf::View view;
-	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
-	view.setSize(sf::Vector2f(newSize.x, newSize.y));
-	m_window.setView(view);
+	if (auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager())) {
+		(*camOpt)->viewportWidth = static_cast<float>(newSize.x);
+		(*camOpt)->viewportHeight = static_cast<float>(newSize.y);
+	}
+
+	// Keep the raw OpenGL tile pass in sync with the SFML window.  SFML's view
+	// only affects SFML draw calls and cannot update this renderer's uniforms or
+	// GL viewport.
+	m_entityManager.GetRenderSystemGL().OnResize(
+		static_cast<int>(newSize.x), static_cast<int>(newSize.y));
+
+	ApplyMainCameraView();
 }
 /////////////////////////////////
  

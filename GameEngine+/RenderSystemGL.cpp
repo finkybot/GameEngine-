@@ -18,6 +18,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdint>
+#include <cstring>
 #include "CTileSprite.h"
 #include "TextureAtlas.h"
 #include "TextureManager.h"
@@ -414,25 +415,33 @@ void RenderSystemGL::Initialise() {
 		return;
 	}
 
-	// Check for bindless texture extension (ARB_bindless_texture)
-	const GLubyte* extensions = glGetString(GL_EXTENSIONS);
-	if (extensions) {
-		std::string extStr((const char*)extensions);
-		if (extStr.find("GL_ARB_bindless_texture") != std::string::npos) {
-			std::cout << "[RenderSystemGL] ARB_bindless_texture extension supported" << std::endl;
-			// Load bindless texture functions using wglGetProcAddress on Windows
-			#ifdef _WIN32
-			glGetTextureHandleARB_impl = (PFN_GET_TEXTURE_HANDLE)wglGetProcAddress("glGetTextureHandleARB");
-			glMakeTextureHandleResidentARB_impl = (PFN_MAKE_TEXTURE_HANDLE_RESIDENT)wglGetProcAddress("glMakeTextureHandleResidentARB");
-			#endif
-			if (glGetTextureHandleARB_impl && glMakeTextureHandleResidentARB_impl) {
-				std::cout << "[RenderSystemGL] Bindless texture functions loaded successfully" << std::endl;
-			} else {
-				std::cerr << "[RenderSystemGL] WARNING: Failed to load bindless texture functions" << std::endl;
-			}
-		} else {
-			std::cerr << "[RenderSystemGL] WARNING: ARB_bindless_texture not supported - tile textures may not render correctly" << std::endl;
+	// Check for bindless texture extension (ARB_bindless_texture).  In a core
+	// profile glGetString(GL_EXTENSIONS) is invalid; use glGetStringi instead.
+	bool bindlessSupported = false;
+	GLint extensionCount = 0;
+	glGetIntegerv(GL_NUM_EXTENSIONS, &extensionCount);
+	for (GLint i = 0; i < extensionCount; ++i) {
+		const auto* extension = glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i));
+		if (extension && std::strcmp(reinterpret_cast<const char*>(extension), "GL_ARB_bindless_texture") == 0) {
+			bindlessSupported = true;
+			break;
 		}
+	}
+
+	if (bindlessSupported) {
+		std::cout << "[RenderSystemGL] ARB_bindless_texture extension supported" << std::endl;
+		// Load bindless texture functions using wglGetProcAddress on Windows.
+		#ifdef _WIN32
+		glGetTextureHandleARB_impl = (PFN_GET_TEXTURE_HANDLE)wglGetProcAddress("glGetTextureHandleARB");
+		glMakeTextureHandleResidentARB_impl = (PFN_MAKE_TEXTURE_HANDLE_RESIDENT)wglGetProcAddress("glMakeTextureHandleResidentARB");
+		#endif
+		if (glGetTextureHandleARB_impl && glMakeTextureHandleResidentARB_impl) {
+			std::cout << "[RenderSystemGL] Bindless texture functions loaded successfully" << std::endl;
+		} else {
+			std::cerr << "[RenderSystemGL] WARNING: Failed to load bindless texture functions" << std::endl;
+		}
+	} else {
+		std::cerr << "[RenderSystemGL] WARNING: ARB_bindless_texture not supported - tile textures may not render correctly" << std::endl;
 	}
 
 	// Set clear color to black

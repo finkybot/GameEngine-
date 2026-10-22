@@ -90,6 +90,9 @@ public:
 	
 	// Safely kill an entity pointer only if it is currently managed by this EntityManager. This checks internal containers by pointer identity before calling KillEntity so callers can avoid dereferencing pointers that may have been freed elsewhere.
 	void SafeKillEntity(Entity* entity);
+	// Checks ownership by pointer identity without dereferencing the candidate pointer.
+	// This is safe to use with cached pointers that may have become stale after ClearAll().
+	bool IsManagedEntity(const Entity* entity) const;
 	
 	// Remove all entities immediately (call when switching scenes)
 	void ClearAll();

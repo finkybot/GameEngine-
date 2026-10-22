@@ -166,106 +166,183 @@ void RayCastScene::RefreshAvailableLevels() {
 // SwitchToLevel - configure chunk base path for selected level and rebuild scene data.
 bool RayCastScene::SwitchToLevel(const std::string& name) {
 	std::filesystem::path base;
+
 #ifdef _MSC_VER
 	char* envBuf = nullptr;
 	size_t len = 0;
+
 	errno_t er = _dupenv_s(&envBuf, &len, "APPDATA");
-	if (er == 0 && envBuf && envBuf[0] != '\0') base = std::filesystem::path(envBuf) / "GameEnginePlus" / "levels";
-	else base = std::filesystem::path("levels");
+
+	if (er == 0 && envBuf && envBuf[0] != '\0')
+		base = std::filesystem::path(envBuf) / "GameEnginePlus" / "levels";
+	else
+		base = "levels";
+
 	free(envBuf);
 #else
 	const char* appdata = std::getenv("APPDATA");
-	if (appdata && appdata[0] != '\0') base = std::filesystem::path(appdata) / "GameEnginePlus" / "levels";
-	else base = std::filesystem::path("levels");
+
+	if (appdata && appdata[0] != '\0')
+		base = std::filesystem::path(appdata) / "GameEnginePlus" / "levels";
+	else
+		base = "levels";
 #endif
 
-	std::filesystem::path chunkPath = name.empty() ? (base / "chunks") : (base / name / "chunks");
-	if (!std::filesystem::exists(chunkPath)) return false;
+	const auto levelRoot = name.empty() ? base : base / name;
 
-	m_currentLevelName = name;
-	m_chunkManager.SetNumLayers(3);
-	m_chunkManager.SetActiveLayer(m_collisionLayer);
-	m_chunkManager.SetBasePath(chunkPath.string());
+	const auto chunkPath = levelRoot / "chunks";
 
-	// Parse level metadata (tileset/layers) so chunk rendering uses the correct atlas.
+	const auto metaPath = levelRoot / "meta.txt";
+
+	if (!std::filesystem::exists(chunkPath))
+		return false;
+
+	//--------------------------------------------------
+	// Metadata defaults
+	//--------------------------------------------------
+
 	std::string tilesetKey;
 	std::string tilesetPath;
+
 	std::vector<std::string> layers = {"background", "main", "upper"};
-	{
-		auto metaPath = base / name / "meta.txt";
-		try {
-			std::ifstream meta(metaPath.string());
-			if (meta) {
-				std::string line;
-				while (std::getline(meta, line)) {
-					auto eq = line.find('=');
-					if (eq == std::string::npos)
-						continue;
-					std::string key = line.substr(0, eq);
-					std::string val = line.substr(eq + 1);
-					if (key == "tileset") {
-						tilesetKey = val;
-					} else if (key == "tilesetPath") {
-						tilesetPath = val;
-					} else if (key == "layers") {
-						layers.clear();
-						size_t start = 0;
-						while (start < val.size()) {
-							auto comma = val.find(',', start);
-							if (comma == std::string::npos)
-								comma = val.size();
-							std::string token = val.substr(start, comma - start);
-							if (!token.empty())
-								layers.push_back(token);
-							start = comma + 1;
-						}
-					}
-				}
-			}
-		} catch (...) {}
-	}
 
-	if (!layers.empty()) {
-		m_chunkManager.SetNumLayers((int)layers.size());
-	}
+	//--------------------------------------------------
+	// Parse level metadata
+	//--------------------------------------------------
 
-	if (!tilesetKey.empty()) {
-		m_chunkManager.SetTilesetKey(tilesetKey);
-		auto& tm = GameEngine::GetInstance().GetTextureManager();
-		auto atlasOpt = tm.GetAtlas(tilesetKey);
-		if (!atlasOpt.has_value() || !*atlasOpt) {
-			int tileSize = (int)m_chunkManager.GetTileSize();
-			if (!tilesetPath.empty() && std::filesystem::exists(tilesetPath)) {
-				tm.LoadAtlas(tilesetKey, tilesetPath, tileSize, tileSize); 
-			} else {
-				std::vector<std::string> searchPaths = {
-					"assets/tilesets/" + tilesetKey + ".png",
-					"assets/tilesets/" + tilesetKey + ".jpg",
-					"assets/" + tilesetKey + ".png",
-					"assets/" + tilesetKey + ".jpg",
-					tilesetKey + ".png",
-					tilesetKey + ".jpg",
-				};
-				for (const auto& path : searchPaths) {
-					if (std::filesystem::exists(path)) {
-						tm.LoadAtlas(tilesetKey, path, tileSize, tileSize);
-						break;
-					}
+	try {
+		std::ifstream meta(metaPath);
+
+		std::string line;
+
+		while (std::getline(meta, line)) {
+			auto eq = line.find('=');
+
+			if (eq == std::string::npos)
+				continue;
+
+			std::string key = line.substr(0, eq);
+			std::string val = line.substr(eq + 1);
+
+			if (key == "tileset") {
+				tilesetKey = val;
+			} else if (key == "tilesetPath") {
+				tilesetPath = val;
+			} else if (key == "layers") {
+				layers.clear();
+
+				std::stringstream ss(val);
+				std::string token;
+
+				while (std::getline(ss, token, ',')) {
+					if (!token.empty())
+						layers.push_back(token);
 				}
 			}
 		}
+	} catch (...) {}
+
+	//--------------------------------------------------
+	// Configure chunk manager
+	//--------------------------------------------------
+
+	m_currentLevelName = name;
+
+	m_chunkManager.SetNumLayers(static_cast<int>(layers.size()));
+
+	m_chunkManager.SetActiveLayer(m_collisionLayer);
+
+	m_chunkManager.SetBasePath(chunkPath.string());
+
+	//--------------------------------------------------
+	// Load atlas if required
+	//--------------------------------------------------
+
+	if (!tilesetKey.empty()) {
+		m_chunkManager.SetTilesetKey(tilesetKey);
+
+		auto& tm = GameEngine::GetInstance().GetTextureManager();
+
+		auto atlasOpt = tm.GetAtlas(tilesetKey);
+
+		if (!atlasOpt.has_value() || !*atlasOpt) {
+			const int tileSize = static_cast<int>(m_chunkManager.GetTileSize());
+
+			if (!tilesetPath.empty() && std::filesystem::exists(tilesetPath)) {
+				tm.LoadAtlas(tilesetKey, tilesetPath, tileSize, tileSize);
+			} else {
+				std::vector<std::string> searchPaths = {"assets/tilesets/" + tilesetKey + ".png",
+														"assets/tilesets/" + tilesetKey + ".jpg",
+														"assets/" + tilesetKey + ".png",
+														"assets/" + tilesetKey + ".jpg",
+														tilesetKey + ".png",
+														tilesetKey + ".jpg"};
+
+				for (const auto& path : searchPaths) {
+					if (!std::filesystem::exists(path))
+						continue;
+
+					tm.LoadAtlas(tilesetKey, path, tileSize, tileSize);
+
+					break;
+				}
+			}
+		}
+
+		//--------------------------------------------------
+		// OPENGL ATLAS SETUP
+		//--------------------------------------------------
+
+		atlasOpt = tm.GetAtlas(tilesetKey);
+
+		if (atlasOpt.has_value() && *atlasOpt) {
+			auto atlasPtr = *atlasOpt;
+
+			// Upload texture to GPU
+			atlasPtr->LoadGLTexture();
+
+			// Build UV lookup table
+			atlasPtr->BuildGLUVRects();
+
+			// Give ChunkManager access
+			m_chunkManager.SetGLAtlas(atlasPtr.get());
+		}
 	}
 
-	RefreshMapBounds();
+	//--------------------------------------------------
+	// Load chunks
+	//--------------------------------------------------
+
 	m_hasLastViewCenter = false;
+
 	m_chunkManager.ClearAllLoadedChunks();
+
 	m_chunkManager.LoadAllSavedChunks();
-	for (int i = 0; i < 10; ++i) m_chunkManager.UpdateMainThread_NoLock();
+
+	for (int i = 0; i < 10; ++i) {
+		m_chunkManager.UpdateMainThread_NoLock();
+	}
+
+	//--------------------------------------------------
+	// Build GL chunk meshes
+	//--------------------------------------------------
+
 	m_chunkManager.RebuildAllChunksFromTileset();
+
 	m_chunkManager.UpdateMainThread_NoLock();
+
+	//--------------------------------------------------
+	// World data
+	//--------------------------------------------------
+
 	m_chunkManager.RefreshWorldBoundsFromLoadedChunks();
+
 	m_chunkManager.BuildWorldMask();
+
+	RefreshMapBounds();
+
 	m_lastSeenWorldRevision = m_chunkManager.GetWorldRevision();
+
 	return true;
 }
 /////////////////////////////////
@@ -681,21 +758,37 @@ void RayCastScene::Render	() {
 		DrawHighlightedEntity(m_window);
 
 		// BVH debug
-		if (m_visualDebug) {
-			for (auto& [key, chunk] : m_chunkManager.GetChunks()) {
-				if (chunk.dynamicBVH.GetRoot())
-					DrawBVHNode(m_window, chunk.dynamicBVH.GetRoot());
-			}
+		//if (m_visualDebug) {
+		//	for (auto& [key, chunk] : m_chunkManager.GetChunks()) {
+		//		if (chunk.dynamicBVH.GetRoot())
+		//			DrawBVHNode(m_window, chunk.dynamicBVH.GetRoot());
+		//	}
 
-			for (const auto& traversal : m_debugTraversals)
-				DrawBVHTraversal(traversal);
+		//	for (const auto& traversal : m_debugTraversals)
+		//		DrawBVHTraversal(traversal);
 
-			for (const auto& p : m_dynamicHitPoints)
-				DrawBVHHitPoint(p);
-		}
+		//	for (const auto& p : m_dynamicHitPoints)
+		//		DrawBVHHitPoint(p);
+		//}
 
 		// Tile grid
-		DrawTileGrid();
+		//DrawTileGrid();
+		
+		TileRenderSoA soa;
+		soa.Clear();
+
+		m_chunkManager.DrawChunkCallback(m_window.getView(), [&](const ChunkRenderData& data) {
+			if (data.atlas) {
+				TileCallback(data, *data.atlas, data.worldOriginX, data.worldOriginY, soa);
+			}
+		});
+
+		// Now render via GL
+		m_entityManager.GetRenderSystemGL().RenderTilesInstance(soa, m_window.getView(), m_window.getSize());
+
+		// Restore SFML state before drawing overlays
+		m_window.resetGLStates();
+		m_window.setView(m_worldView);
 
 		// Flush world-space queue
 		GetEngineRenderQueue().Flush(m_window);
@@ -908,6 +1001,76 @@ void RayCastScene::DrawBVHTraversal(const BVHDebugTraversal& traversal) {
 	if (traversal.hitLeaf) {
 		DrawBVHNodeColored(traversal.hitLeaf, sf::Color::Green);
 	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// TileCallback - currently empty, but could be used for custom tile rendering logic when drawing chunks. This function is called for each tile in a chunk during rendering.
+void RayCastScene::TileCallback(const ChunkRenderData& data, const TextureAtlas& atlas, float worldOriginX,	float worldOriginY, TileRenderSoA& out) {
+	if (!data.atlas) {
+		std::cout << "TileCallback: data.atlas == nullptr for chunk (" << data.chunkX << "," << data.chunkY << ")\n";
+		return;
+	}
+
+	size_t pushed = 0;
+
+	const int cw = data.width;
+	const int ch = data.height;
+	const float tileSz = data.tileSize;
+
+	for (int layer = 0; layer < data.numLayers; ++layer) {
+		const auto& tiles = data.tilesPerLayer[layer];
+		const float alpha = (layer == data.activeLayer) ? 1.0f : data.unselectedLayerAlpha;
+
+		for (int ty = 0; ty < ch; ++ty) {
+			for (int tx = 0; tx < cw; ++tx) {
+
+				int tileVal = tiles[ty * cw + tx];
+
+				// Skip empty tiles
+				if (tileVal <= 0)
+					continue;
+
+				// UV lookup
+				auto uvOpt = atlas.GetGLUVRect(static_cast<size_t>(tileVal - 1));
+				if (!uvOpt) {
+					std::cout << "DEBUG: atlas missing UV for tileVal=" << tileVal << " in chunk(" << data.chunkX << ","
+							  << data.chunkY << "), layer " << layer << " at [" << tx << "," << ty << "]\n";
+					continue;
+				}
+
+				const auto uv = *uvOpt;
+
+				float wx = data.worldOriginX + tx * tileSz;
+				float wy = data.worldOriginY + ty * tileSz;
+
+				out.posX.push_back(wx);
+				out.posY.push_back(wy);
+				out.sizeX.push_back(tileSz);
+				out.sizeY.push_back(tileSz);
+
+				out.u0.push_back(uv.u0);
+				out.v0.push_back(uv.v0);
+				out.u1.push_back(uv.u1);
+				out.v1.push_back(uv.v1);
+
+				out.r.push_back(1.f);
+				out.g.push_back(1.f);
+				out.b.push_back(1.f);
+				out.a.push_back(alpha);
+
+				uint64_t handle = atlas.GetBindlessHandle();
+				out.handleLo.push_back(static_cast<std::uint32_t>(handle & 0xFFFFFFFFu));
+				out.handleHi.push_back(static_cast<std::uint32_t>(handle >> 32));
+
+				++pushed;
+			}
+		}
+	}
+
+	std::cout << "TileCallback: chunk (" << data.chunkX << "," << data.chunkY << ") pushed " << pushed << " tiles\n";
 }
 /////////////////////////////////
 

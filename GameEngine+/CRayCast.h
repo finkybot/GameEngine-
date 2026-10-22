@@ -41,7 +41,7 @@ struct CRaycast : public Component {
 	Vec2 screenPos; // raw screen-space (mouse)
 	Vec2 worldPos;	// converted world-space origin
 	Vec2 direction; // world-space direction
-	float maxDistance = 1000.f;
+	float maxDistance = 10.f;
 
 	// Output
 	RaycastResult lastHit;			 // nearest hit

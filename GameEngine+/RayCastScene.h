@@ -65,6 +65,8 @@ private:
 	void DrawBVHNodeColored(BVHNode* node, const sf::Color& color);
 	void DrawBVHTraversal(const BVHDebugTraversal& traversal);
 
+	void TileCallback(const ChunkRenderData& data, const TextureAtlas& atlas, float worldOriginX, float worldOriginY, TileRenderSoA& out);
+
 	// Input processing helpers for handling specific key presses (e.g., Left Ctrl for toggling preview mode, a debug toggle key, Escape for closing the window, and a save key for saving the tilemap). These methods will be called from the HandleEvent method to process user input and update the scene state accordingly.
 	void ProcessDebugToggle(bool keyDown);
 	void ProcessEscapeKey(bool keyDown) const;

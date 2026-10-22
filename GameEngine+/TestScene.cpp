@@ -92,11 +92,11 @@ void TestScene::Update(float dt) {
 		// Ray starts at the mouse world position
 		raycast->worldPos = ms->worldPos;
 
-		// Ray goes straight down a few pixels
-		raycast->direction = Vec2(0.0f, -1.0f);
+		// Ray goes straight up a few pixels
+		raycast->direction = Vec2(0.0f, 1.0f);
 
 		// Use a long ray to exercise the grid raycast over multiple cells.
-		raycast->maxDistance = 5000.0f;
+		raycast->maxDistance = 20.0f;
 	}
 
 

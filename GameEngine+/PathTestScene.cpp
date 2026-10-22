@@ -95,8 +95,7 @@ void PathTestScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 
 
 /////////////////////////////////
-void PathTestScene::TileCallback(const ChunkRenderData& data, const TextureAtlas& atlas, float worldOriginX,
-								 float worldOriginY, TileRenderSoA& out) {
+void PathTestScene::TileCallback(const ChunkRenderData& data, const TextureAtlas& atlas, float worldOriginX, float worldOriginY, TileRenderSoA& out) {
 	if (!data.atlas) {
 		std::cout << "TileCallback: data.atlas == nullptr for chunk (" << data.chunkX << "," << data.chunkY << ")\n";
 		return;
@@ -715,9 +714,8 @@ void PathTestScene::RenderDebugOverlay() {
 		}
 	}
 
-	// Draw start/goal markers with outlines // Marked for deprecation: This rendering logic is duplicated in LevelEditorScene. 
-	// Consider refactoring into a shared utility function or class for rendering markers to avoid code duplication and improve maintainability.
-	// Also we are goig to move to a sprite based rendering for start/goal markers in the future, so this will be replaced with sprite rendering logic.
+
+	// Draw start and goal markers
 	if (m_manualStartSet) {
 		sf::CircleShape startOutline(outerRadius);
 		startOutline.setFillColor(sf::Color::Black);
@@ -725,6 +723,8 @@ void PathTestScene::RenderDebugOverlay() {
 		startOutline.setPosition(sf::Vector2f(m_manualStart.x, m_manualStart.y));
 		m_window.draw(startOutline);
 
+
+		// Draw inner circle for start marker
 		sf::CircleShape startCore(innerRadius);
 		startCore.setFillColor(sf::Color::Blue);
 		startCore.setOrigin(sf::Vector2f(innerRadius, innerRadius));
@@ -732,6 +732,8 @@ void PathTestScene::RenderDebugOverlay() {
 		m_window.draw(startCore);
 	}
 
+	
+	// Draw goal marker
 	if (m_manualGoalSet) {
 		sf::CircleShape goalOutline(outerRadius);
 		goalOutline.setFillColor(sf::Color::Black);
@@ -739,6 +741,7 @@ void PathTestScene::RenderDebugOverlay() {
 		goalOutline.setPosition(sf::Vector2f(m_manualGoal.x, m_manualGoal.y));
 		m_window.draw(goalOutline);
 
+		// Draw inner circle for goal marker
 		sf::CircleShape goalCore(innerRadius);
 		goalCore.setFillColor(sf::Color::Magenta);
 		goalCore.setOrigin(sf::Vector2f(innerRadius, innerRadius));

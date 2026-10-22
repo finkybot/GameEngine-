@@ -49,7 +49,7 @@ private:
 
 
 private:
-	// GetCellHash function to convert 2D coordinates to a unique hash for the corresponding cell. It calculates the cell coordinates by dividing the position by the cell size and then uses a pairing function (Cantor pairing) to combine the cell coordinates into a single hash value. This ensures that objects in the 
+	// GetCellHash - Convert 2D coordinates to a unique hash for the corresponding cell. It calculates the cell coordinates by dividing the position by the cell size and then uses a pairing function (Cantor pairing) to combine the cell coordinates into a single hash value. This ensures that objects in the 
 	// same cell will have the same hash, allowing for efficient storage and retrieval in the grid.
 	static size_t GetCellHash(float x, float y, float cellSize) noexcept {
 		int cellX = static_cast<int>(x / cellSize);
@@ -57,6 +57,9 @@ private:
 		return GetCellHashFromCell(cellX, cellY);
 	}
 
+
+
+	// AppendToBucket - Add an object to a specific cell in the grid. It takes the object pointer, the hash of the cell, and the cell coordinates as parameters. The function retrieves the corresponding bucket (vector) for the cell from the grid, adds the object to that bucket, and updates the metadata for the object to track its current cell and index within the bucket.
 	void AppendToBucket(T* object, size_t hash, int cellX, int cellY) noexcept {
 		auto& bucket = m_grid[hash];
 		m_bucketMetadata[object] = BucketMetadata{hash, bucket.size(), cellX, cellY};
@@ -65,6 +68,10 @@ private:
 		object->currentCellY = cellY;
 	}
 
+
+
+	// RemoveFromTrackedBucket - Remove an object from its current cell in the grid. It first checks if the object is valid and if it is currently tracked in the grid. If so, it retrieves the metadata for the object, finds the corresponding bucket in the grid, and removes the object from that bucket. 
+	// It also updates the metadata for any moved object in the bucket to ensure that their indices are correct. Finally, it resets the object's current cell coordinates and removes its metadata from the tracking map.
 	bool RemoveFromTrackedBucket(T* object) noexcept {
 		if (!object)
 			return false;
@@ -101,10 +108,18 @@ private:
 
 
 public:
+	// Constructor and destructor for the SpatialHashGrid class. The constructor initializes the cell size, which determines how objects are hashed into cells based on their positions. The destructor clears the grid to free up memory when the object is destroyed.
+	SpatialHashGrid(float cellSize = 100.0f) : m_cellSize(cellSize) {}
+	~SpatialHashGrid() { Clear(); }
+
+
+
+	// GetGrid - Returns a const reference to the internal grid data structure, allowing external code to access the grid's contents without modifying it. This can be useful for debugging or analyzing the state of the grid at a specific point in time.
 	const std::unordered_map<size_t, std::vector<T*>>& GetGrid() const noexcept { return m_grid; }
 
 
-	// Signed-int-safe cell hash helper. Maps signed cell coordinates to unsigned space first, then applies Cantor pairing so negative cell coords do not alias unexpectedly.
+
+	// GetCellHashFromCell - Signed-int-safe cell hash helper. Maps signed cell coordinates to unsigned space first, then applies Cantor pairing so negative cell coords do not alias unexpectedly.
 	static size_t GetCellHashFromCell(int cellX, int cellY) noexcept {
 		auto toUnsigned = [](int v) -> unsigned long long {
 			long long lv = static_cast<long long>(v);
@@ -121,33 +136,51 @@ public:
 
 
 
-	SpatialHashGrid(float cellSize = 100.0f) : m_cellSize(cellSize) {}
-	~SpatialHashGrid() { Clear(); }
-
+	// GetCellSize - Returns the size of each cell in the grid. This value is used to determine how objects are hashed into cells based on their positions and can be useful for understanding the spatial partitioning of the grid.
 	float GetCellSize() const noexcept { return m_cellSize; }
 
-	void QueryRay(std::vector<T*>& outFound, const Vec2& origin, const Vec2& direction,
-				 float maxDistance, float padding) const noexcept {
-		outFound.clear();
-		if (maxDistance <= 0.0f || direction.Mag2() <= 1e-12f)
-			return;
 
+
+	// QueryRay - Queries the spatial grid for objects along a ray defined by an origin point and a direction vector, up to a specified maximum distance. The method uses a DDA-like algorithm to traverse the grid cells intersected by the ray, collecting objects from each cell while avoiding duplicates using a set. 
+	// The results are stored in the outFound vector, which is cleared at the start of the query. The padding parameter allows for expanding the search area around each cell to account for object sizes or other considerations.
+	void QueryRay(std::vector<T*>& outFound, const Vec2& origin, const Vec2& direction, float maxDistance, float padding) const noexcept {
+		// Clear the output vector to ensure it starts empty for this query.
+		outFound.clear();
+
+		// Early exit if the maximum distance is non-positive or the direction vector is effectively zero (to avoid division by zero and unnecessary processing).
+		if (maxDistance <= 0.0f || direction.Mag2() <= 1e-12f)	return;
+
+		// Use an unordered_set to track seen objects and avoid duplicates in the results.
 		std::unordered_set<T*> seen;
+
+		// Calculate the number of cells to pad around the ray's path based on the provided padding value and the cell size. This ensures that objects near the ray's path are also considered in the query.
 		const int cellPadding = static_cast<int>(padding / m_cellSize) + 1;
+
+		// Calculate the starting cell coordinates based on the origin point and the cell size. This determines which cell the ray starts in.
 		int cellX = static_cast<int>(origin.x / m_cellSize);
 		int cellY = static_cast<int>(origin.y / m_cellSize);
+
+
+		// Calculate the step direction for traversing the grid cells based on the direction vector. The stepX and stepY values will be either 1 or -1, indicating whether to move to the next cell in the positive or negative direction along each axis.
 		const int stepX = direction.x >= 0.0f ? 1 : -1;
 		const int stepY = direction.y >= 0.0f ? 1 : -1;
+
+		// Calculate the distance to the next cell boundary along each axis. If the direction component is zero, set the distance to infinity to avoid division by zero. This allows for proper traversal of the grid cells along the ray's path.
 		const float inf = std::numeric_limits<float>::infinity();
-		const float nextX = direction.x == 0.0f ? inf :
-			((direction.x > 0.0f ? (cellX + 1) : cellX) * m_cellSize - origin.x) / direction.x;
-		const float nextY = direction.y == 0.0f ? inf :
-			((direction.y > 0.0f ? (cellY + 1) : cellY) * m_cellSize - origin.y) / direction.y;
+
+		// Calculate the distance to the next cell boundary along each axis. If the direction component is zero, set the distance to infinity to avoid division by zero. This allows for proper traversal of the grid cells along the ray's path.
+		const float nextX = direction.x == 0.0f ? inf :	((direction.x > 0.0f ? (cellX + 1) : cellX) * m_cellSize - origin.x) / direction.x;
+		const float nextY = direction.y == 0.0f ? inf :	((direction.y > 0.0f ? (cellY + 1) : cellY) * m_cellSize - origin.y) / direction.y;
+
+		// Initialize the maximum distances along each axis to the calculated next cell boundary distances. These values will be used to determine when to step to the next cell during the traversal of the grid.
 		float tMaxX = nextX;
 		float tMaxY = nextY;
+
+		// Calculate the distance to traverse one cell along each axis based on the direction vector. If the direction component is zero, set the distance to infinity to avoid division by zero. This allows for proper traversal of the grid cells along the ray's path.
 		const float tDeltaX = direction.x == 0.0f ? inf : m_cellSize / std::abs(direction.x);
 		const float tDeltaY = direction.y == 0.0f ? inf : m_cellSize / std::abs(direction.y);
 
+		// Loop through the grid cells along the ray's path until the maximum distance is exceeded. For each cell, check for objects in the cell and its padded neighbors, adding them to the output vector if they haven't been seen before. The traversal continues until the ray has traveled beyond the specified maximum distance.
 		while (true) {
 			for (int x = cellX - cellPadding; x <= cellX + cellPadding; ++x) {
 				for (int y = cellY - cellPadding; y <= cellY + cellPadding; ++y) {
@@ -159,7 +192,8 @@ public:
 							outFound.push_back(object);
 				}
 			}
-
+			
+			// Check if the minimum of the maximum distances along each axis exceeds the maximum distance. If so, break the loop as the ray has traveled beyond the specified maximum distance.
 			if (std::min(tMaxX, tMaxY) > maxDistance)
 				break;
 			if (tMaxX < tMaxY) {
@@ -239,11 +273,13 @@ public:
 	}
 
 
+
 	// Clear - Clears all objects from the spatial grid.
 	void Clear() noexcept {
 		m_grid.clear();
 		m_bucketMetadata.clear();
 	}
+
 
 
 	// ContainsPointer - checks if a pointer is currently present in any grid bucket using pointer identity only.
@@ -258,6 +294,7 @@ public:
 		}
 		return false;
 	}
+
 
 
 	// PruneToActiveSet - removes any pointer not present in the provided active set. Uses pointer identity only (never dereferences pointed objects).
@@ -285,6 +322,7 @@ public:
 	}
 
 
+
 	// Insert - Inserts an object into the spatial grid based on its center point position.
 	void Insert(T* object) noexcept {
 		if (!object)
@@ -293,6 +331,7 @@ public:
 		const Vec2& pos = object->GetCentrePoint();
 		InsertFromSoA(object, pos.x, pos.y);
 	}
+
 
 
 	// Query - Queries the spatial grid for objects within a specified radius of a given position, excluding a specific object if provided. The results are stored in the outFound vector, which is cleared at the start of the query. The method uses a set to track seen objects to avoid duplicates 
@@ -341,6 +380,7 @@ public:
 	}
 	 
 	 
+
 	// ResetQueryStats - Static query statistics method for performance monitoring. Resets the query statistics counters (this should be called at the start of each frame to track per-frame query performance).
 	static void ResetQueryStats() noexcept {
 		s_totalQueriesThisFrame = 0;
@@ -349,12 +389,15 @@ public:
 	}
 
 
+
 	// GetQueryCount - Static query statistics method for performance monitoring. Gets the total number of queries performed in the current frame.
 	static size_t GetQueryCount() noexcept { return s_queryCount; }
 
 
+
 	// GetTotalObjectsQueried - Static query statistics method for performance monitoring. Gets the total number of objects queried across all queries.
 	static size_t GetTotalObjectsQueried() noexcept { return s_totalObjectsQueried; }
+
 
 
 	// GetAverageObjectsPerQuery - Static query statistics method for performance monitoring. Gets the average number of objects returned per query, calculated as total objects queried divided by total queries, with a check to avoid division by zero.
@@ -363,8 +406,10 @@ public:
 	}
 
 
+
 	// GetCellCount - Gets the total number of cells currently stored in the grid (debugging/monitoring method).
 	size_t GetCellCount() const noexcept { return m_grid.size(); }
+
 
 
 	// GetTotalObjectCount - Gets the total number of objects stored across all grid cells. (debugging/monitoring method).

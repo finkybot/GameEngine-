@@ -169,6 +169,8 @@ void SpatialIndexUnified::Refit() {
 
 
 //////////////////////////////////
+// UpdateEntity - Update the position of a single entity in the dynamic spatial index. This method checks if the entity is alive and has a valid transform index, then retrieves its current position from the TransformSoA structure and updates its position in the dynamic grid. This is useful for
+// updating individual entities that have moved without needing to refit the entire spatial index.
 void SpatialIndexUnified::UpdateEntity(Entity* e) {
 	if (!e || !e->IsAlive())
 		return;
@@ -198,6 +200,7 @@ void SpatialIndexUnified::UpdateEntity(Entity* e) {
 
 
 //////////////////////////////////
+// QueryEntities - Perform a spatial query to find dynamic entities within a specified radius of a given position. This method queries the dynamic grid for potential candidates and populates the outFound vector with pointers to the found entities, excluding the specified entity if provided.
 void SpatialIndexUnified::QueryEntities(std::vector<Entity*>& outFound, const Vec2& position, float radius,
 										const Entity* exclude) const {
 	m_dynamicGrid.Query(outFound, position, radius, static_cast<Entity*>(const_cast<Entity*>(exclude)));
@@ -207,6 +210,7 @@ void SpatialIndexUnified::QueryEntities(std::vector<Entity*>& outFound, const Ve
 
 
 //////////////////////////////////
+// RaycastEntities - Perform a raycast against dynamic entities in the spatial index. This method queries the dynamic grid for potential candidates along the ray's path and checks for intersections with their bounding boxes. It returns the nearest hit entity and hit information if any intersection occurs.
 bool SpatialIndexUnified::RaycastEntities(const Vec2& origin, const Vec2& dirN, float maxDist, RaycastHit& outHit,
 										  Entity*& outEntity) const {
 	std::vector<Entity*> candidates;

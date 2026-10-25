@@ -54,6 +54,10 @@ private:
 	RenderQueue m_renderQueue;
 	float m_tileSize = 16.0f;
 	int m_nodesPerFrame = 300;
+
+	uint32_t m_nextRequestId = 1;
+	uint32_t m_pendingManualRequestId = 0;
+	bool m_waitingForManualPath = false;
 	
 	// Middle-mouse panning state
 	bool m_panning = false;

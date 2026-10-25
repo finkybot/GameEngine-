@@ -19,7 +19,8 @@
 // Constructor - Initializes the PathFindingSystem with references to the ChunkManager and EntityManager, and creates a Pathfinder 
 // instance for pathfinding operations.
 PathFindingSystem::PathFindingSystem(ChunkManager& cm, EntityManager& em): m_chunks(cm), m_entities(em), m_pathfinder(cm) {
-	const unsigned int threadCount = std::max(1u, std::thread::hardware_concurrency());
+	const unsigned int availableThreads = std::max(1u, std::thread::hardware_concurrency());
+	const unsigned int threadCount = std::min(2u, availableThreads);
 	for (unsigned int i = 0; i < threadCount; ++i) {
 		m_workers.emplace_back(&PathFindingSystem::WorkerThreadMain, this);
 	}
@@ -128,6 +129,8 @@ void PathFindingSystem::EnqueueRequests() {
 /////////////////////////////////
 // WorkerThreadMain - worker loop that consumes jobs and computes paths
 void PathFindingSystem::WorkerThreadMain() {
+	constexpr int kNodesPerSlice = 128;
+
 	// Infinite loop to continuously process pathfinding jobs until shutdown is signaled
 	for (;;) {
 		// Wait for a job to be available in the pending jobs queue or for shutdown to be signaled

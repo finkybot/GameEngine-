@@ -31,6 +31,7 @@ struct PathJob {
 	int goalTx, goalTy;
 	uint32_t requestId;
 	bool allowPartial;
+	std::shared_ptr<Pathfinder::SearchState> searchState;
 };
 /////////////////////////////////
 

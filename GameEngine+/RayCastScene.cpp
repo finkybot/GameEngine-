@@ -747,7 +747,7 @@ void RayCastScene::Render	() {
 		//
 
 		// Dynamic + static entity shapes
-		GetEntityManager().RenderShapes();
+		GetEntityManager().RenderShapesSFML();
 
 		// Raycast debug
 		DrawDebugLines();
@@ -805,7 +805,7 @@ void RayCastScene::Render	() {
 		// 4. UI SPACE RENDERING
 		// ────────────────────────────────
 		//
-		GetEntityManager().RenderText();
+		GetEntityManager().RenderTextSFML();
 
 		//
 		// ────────────────────────────────

@@ -286,136 +286,118 @@ std::vector<Vec2> Pathfinder::Funnel(const std::vector<Vec2>& path) {
 // an optional Path, which is a vector of Vec2 points representing the path in world coordinates. If no path is 
 // found, it returns std::nullopt.
 std::optional<Path> Pathfinder::FindPath(int startTileX, int startTileY, int goalTileX, int goalTileY) {
-	// Convert world tile coords → mask coords
-	int offX = m_chunkManager.worldOffsetX;
-	int offY = m_chunkManager.worldOffsetY;
+	SearchState state;
+	SearchStatus status = StartSearch(state, startTileX, startTileY, goalTileX, goalTileY);
+	while (status == SearchStatus::Running)
+		status = AdvanceSearch(state, 100000);
+	if (status == SearchStatus::Succeeded)
+		return std::move(state.result);
+	return std::nullopt;
+}
+/////////////////////////////////
 
-	int sx = startTileX - offX;
-	int sy = startTileY - offY;
-	int gx = goalTileX - offX;
-	int gy = goalTileY - offY;
+Pathfinder::SearchStatus Pathfinder::StartSearch(SearchState& state, int startTileX, int startTileY, int goalTileX, int goalTileY) {
+	state = SearchState{};
+	state.offsetX = m_chunkManager.worldOffsetX;
+	state.offsetY = m_chunkManager.worldOffsetY;
+	state.goalX = goalTileX - state.offsetX;
+	state.goalY = goalTileY - state.offsetY;
 
-	if (!InBounds(sx, sy) || !InBounds(gx, gy))
-		return std::nullopt;
+	const int sx = startTileX - state.offsetX;
+	const int sy = startTileY - state.offsetY;
 
-	if (IsBlocked(sx, sy) || IsBlocked(gx, gy))
-		return std::nullopt;
+	if (!InBounds(sx, sy) || !InBounds(state.goalX, state.goalY))
+		return SearchStatus::Failed;
+	if (IsBlocked(sx, sy) || IsBlocked(state.goalX, state.goalY))
+		return SearchStatus::Failed;
 
-	using PQItem = std::pair<float, NodeKey>;
+	PathNodeKey startKey{sx, sy};
+	PathNode startNode{sx, sy, 0.0f, Heuristic(sx, sy, state.goalX, state.goalY), -1, -1};
+	state.nodes[startKey] = startNode;
+	state.open.push({startNode.f, startKey});
+	state.initialized = true;
+	return SearchStatus::Running;
+}
 
-	struct PQCompare {
-		bool operator()(const PQItem& a, const PQItem& b) const {
-			return a.first > b.first; // smaller f-cost = higher priority
-		}
-	};
+Pathfinder::SearchStatus Pathfinder::AdvanceSearch(SearchState& state, int nodeBudget) {
+	if (!state.initialized)
+		return SearchStatus::Failed;
 
-	std::priority_queue<PQItem, std::vector<PQItem>, PQCompare> open;
+	const int dirs8[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}};
 
-	struct Node {
-		int x, y;
-		float g;
-		float f;
-		int parentX, parentY;
-	};
+	for (int expanded = 0; expanded < std::max(1, nodeBudget); ++expanded) {
+		if (state.open.empty())
+			return SearchStatus::Failed;
 
-	std::unordered_map<NodeKey, Node, NodeKeyHash> nodes;
-	std::unordered_map<NodeKey, bool, NodeKeyHash> closed;
+		auto top = state.open.top();
+		state.open.pop();
+		PathNodeKey curKey = top.second;
 
-	NodeKey startKey{sx, sy};
-	Node startNode{sx, sy, 0.0f, Heuristic(sx, sy, gx, gy), -1, -1};
-	nodes[startKey] = startNode;
-	open.push({startNode.f, startKey});
-
-	//const int dirs4[4][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}}; // non -diagonal movement
-
-	const int dirs8[8][2] = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}, {1, 1}, {1, -1}, {-1, 1}, {-1, -1}}; // diagonal movement
-
-	while (!open.empty()) {
-		auto top = open.top();
-		open.pop();
-		NodeKey curKey = top.second;
-
-		if (closed[curKey])
+		if (state.closed[curKey])
 			continue;
-		closed[curKey] = true;
+		state.closed[curKey] = true;
 
-		Node cur = nodes[curKey];
-		if (cur.x == gx && cur.y == gy) {
-			// reconstruct tile path
-			std::vector<Node> tileNodes;
-			NodeKey k = curKey;
-
+		PathNode cur = state.nodes[curKey];
+		if (cur.x == state.goalX && cur.y == state.goalY) {
+			std::vector<PathNode> tileNodes;
+			PathNode k = cur;
 			while (true) {
-				auto it = nodes.find(k);
-				if (it == nodes.end())
+				tileNodes.push_back(k);
+				if (k.parentX == -1 && k.parentY == -1)
 					break;
-				tileNodes.push_back(it->second);
-				if (it->second.parentX == -1 && it->second.parentY == -1)
+				PathNodeKey pk{k.parentX, k.parentY};
+				auto it = state.nodes.find(pk);
+				if (it == state.nodes.end())
 					break;
-				k = NodeKey{it->second.parentX, it->second.parentY};
+				k = it->second;
 			}
 
 			std::reverse(tileNodes.begin(), tileNodes.end());
 
-			// convert tile coords → world coords
 			Path path;
 			float ts = m_chunkManager.GetTileSize();
-
 			for (auto& n : tileNodes) {
-				float wx = (float(n.x + offX) + 0.5f) * ts;
-				float wy = (float(n.y + offY) + 0.5f) * ts;
+				float wx = (float(n.x + state.offsetX) + 0.5f) * ts;
+				float wy = (float(n.y + state.offsetY) + 0.5f) * ts;
 				path.emplace_back(wx, wy);
 			}
 
-			// Apply smoothing and funneling
-			
-			
 			path = SmoothCollinear(path);
 			path = SmoothLineOfSight(path);
-			//path = Funnel(path);
-			return path;
-			
+			state.result = std::move(path);
+			return SearchStatus::Succeeded;
 		}
 
-		// Explore neighbours
 		for (auto& d : dirs8) {
 			int nx = cur.x + d[0];
 			int ny = cur.y + d[1];
 
-			// Check bounds and if the neighbour is blocked
 			if (!InBounds(nx, ny) || IsBlocked(nx, ny))
 				continue;
 
-			// Prevent diagonal corner cutting
 			if (d[0] != 0 && d[1] != 0) {
-				// If either orthogonal neighbour is blocked, diagonal is illegal
 				if (IsBlocked(cur.x + d[0], cur.y) || IsBlocked(cur.x, cur.y + d[1])) {
 					continue;
 				}
 			}
 
-			// Calculate g-cost for neighbour
-			float ng = cur.g + ((d[0] == 0 || d[1] == 0) ? 1.0f : 1.41421356f); // diagonal movement cost
-			
-			// Check if this neighbor has been visited or if we found a better path
-			NodeKey nk{nx, ny};
-			auto nit = nodes.find(nk);
+			float ng = cur.g + ((d[0] == 0 || d[1] == 0) ? 1.0f : 1.41421356f);
+			PathNodeKey nk{nx, ny};
+			auto nit = state.nodes.find(nk);
 
-			// If the neighbour is not in the nodes map or we found a better g-cost, update it
-			if (nit == nodes.end() || ng < nit->second.g) {
-				Node n;
+			if (nit == state.nodes.end() || ng < nit->second.g) {
+				PathNode n;
 				n.x = nx;
 				n.y = ny;
 				n.g = ng;
-				n.f = ng + Heuristic(nx, ny, gx, gy);
+				n.f = ng + Heuristic(nx, ny, state.goalX, state.goalY);
 				n.parentX = cur.x;
 				n.parentY = cur.y;
-				nodes[nk] = n;
-				open.push({n.f, nk});
+				state.nodes[nk] = n;
+				state.open.push({n.f, nk});
 			}
 		}
 	}
 
-	return std::nullopt;
+	return SearchStatus::Running;
 }
-/////////////////////////////////

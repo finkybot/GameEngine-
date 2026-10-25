@@ -531,11 +531,8 @@ void EntityManager::OnStaticStateChanged(Entity* e, bool nowStatic) {
 
 /////////////////////////////////
 // RenderShapes - renders the shapes of all entities in the EntityManager using the RenderSystem. Direct rendering to window (not queued).
-void EntityManager::RenderShapes() {
-	//std::cout << "RenderShapes called for " << m_entities.size() << " entities" << std::endl;
-
+void EntityManager::RenderShapesSFML() {
 	if (m_sfmlRenderingEnabled) {
-		//std::cout << "Rendering " << m_entities.size() << " entities" << std::endl;
 		m_renderSystem.RenderShapes(m_entities, m_window);
 	}
 
@@ -566,10 +563,11 @@ void EntityManager::ValidateIntegrity() const {
 
 /////////////////////////////////
 // RenderText - renders the text components of all entities using the RenderSystem in screen space (UI coordinates). We switch to the default view before rendering text so it appears in screen space, then restore the previous view.
-void EntityManager::RenderText() {
-	// disable rendering if SFML is not enabled (e.g., we using OpenGL directly for rendering)
-	if (!m_sfmlRenderingEnabled)
-		return;
+void EntityManager::RenderTextSFML() {
+	// Guard: disable rendering if SFML is not enabled (e.g., we using OpenGL directly for rendering)
+	if (!m_sfmlRenderingEnabled) return;
+
+	// Save the current view, switch to the default view for screen-space rendering, render text, and then restore the previous view.
 	sf::View prevView = m_window.getView();
 	m_window.setView(m_window.getDefaultView());
 	m_renderSystem.RenderText(m_entities, m_window);
@@ -580,20 +578,25 @@ void EntityManager::RenderText() {
 
 
 /////////////////////////////////
-// RenderAll - a convenience method that renders all entities in the EntityManager using the RenderSystem. The mode parameter allows the caller to specify whether to render only shapes or shapes followed by text.
+// RenderAll - a convenience method that renders all entities in the EntityManager using the RenderSystem. The mode parameter allows the caller to specify whether to render only shapes or shapes followed by text. It is split into two parts: first, it renders SFML shapes and text if enabled, and then it renders 
+// GPU shapes (circles, explosions, bars) if OpenGL rendering is enabled. The method takes a reference to the GPURenderSystem and the camera for proper rendering of GPU shapes.
 void EntityManager::RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::RenderMode mode, const CCamera& camera) {
-	// 1. SFML shapes/text
+	// 1. SFML shapes and text
 	if (m_sfmlRenderingEnabled) {
+		std::cout << "Rendering SFML shapes and text in mode: " << static_cast<int>(mode) << std::endl;
 		if (mode == RenderSystem::RenderMode::ShapesOnly) {
-			RenderShapes();
+			RenderShapesSFML();
 		} else if (mode == RenderSystem::RenderMode::ShapesThenText) {
-			RenderShapes();
-			RenderText();
+			std::cout << "Rendering SFML shapes and text in mode: ShapesThenText" << std::endl;
+			RenderShapesSFML();
+			RenderTextSFML();
 		} else // ShapesThenTextAfterOverlays
 		{
-			RenderShapes();
+			std::cout << "Rendering SFML shapes and text in mode: ShapesThenTextAfterOverlays" << std::endl;
+			RenderShapesSFML();
 		}
 	}
+
 	// 2. GPU shapes (circles, explosions, bars)
 	if (m_GLRenderingEnabled) {
 		RenderGLShapes(gpuRenderSystem, camera);

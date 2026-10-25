@@ -418,9 +418,9 @@ void GameEngine::Update(float deltaTime) {
 
 			// *** ENGINE RENDER PASS ORDERING *** 
 			currentScene->Render();
-			currentScene->GetEntityManager().RenderShapes();
+			currentScene->GetEntityManager().RenderShapesSFML();
 			m_renderQueue.Flush(window);
-			currentScene->GetEntityManager().RenderText();
+			currentScene->GetEntityManager().RenderTextSFML();
 			m_cursorSystem->Render();
 		}
 

@@ -577,6 +577,29 @@ void PathTestScene::Update(float deltaTime) {
 	//m_pathSystem.SetNodesPerFrame(m_nodesPerFrame);
 	m_pathSystem.Update(deltaTime);
 
+	// Apply the result of the latest manual path request once the worker has
+	// completed it. PathFindingSystem writes completed requests to CPath on the
+	// main thread, so movement activation remains ECS/main-thread safe.
+	if (m_waitingForManualPath && m_movementTester) {
+		if (auto* path = m_movementTester->GetComponent<CPath>();
+			path && path->requestId == m_pendingManualRequestId) {
+			m_waitingForManualPath = false;
+			m_manualPathComplete = path->complete && !path->points.empty();
+
+			if (m_manualPathComplete) {
+				m_manualPath = path->points;
+				if (auto* follower = m_movementTester->GetComponent<CPathFollower>()) {
+					follower->currentWaypointIndex = 0;
+					follower->isActive = true;
+					m_movementTestActive = true;
+				}
+			} else {
+				m_manualPath.reset();
+				m_movementTestActive = false;
+			}
+		}
+	}
+
 	// ImGui UI for level selection
 	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(400, 300), ImGuiCond_FirstUseEver);
@@ -801,18 +824,20 @@ void PathTestScene::RenderDebugOverlay() {
 // HandleEvent - Handles input events for the scene, including mouse clicks to set start and goal points for pathfinding. This method converts 
 // screen coordinates to world coordinates based on the camera's position and zoom level.
 void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
+	// Handle mouse button events for setting start and goal pointsq
 	if (!event.has_value()) return;
+
+	// Only handle mouse button pressed events
 	const auto* mouseButton = event->getIf<sf::Event::MouseButtonPressed>();
 	if (!mouseButton || (mouseButton->button != sf::Mouse::Button::Left &&
 		mouseButton->button != sf::Mouse::Button::Right))
 		return;
 
+
 	// Get camera for manual coordinate conversion
 	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
 	if (!camOpt) return;
-	// Use the same view that is used for SFML overlay rendering.  The previous
-	// hand-written conversion used viewport * zoom and polled button state while
-	// processing an event, which made clicks inconsistent with the displayed map.
+	// Use the same view that is used for SFML overlay rendering.  The previous hand-written conversion used viewport * zoom and polled button state while processing an event, which made clicks inconsistent with the displayed map.
 	sf::Vector2f mouseCoords = m_window.mapPixelToCoords(mouseButton->position, m_window.getView());
 	Vec2 mouseWorld(mouseCoords.x, mouseCoords.y);
 
@@ -830,6 +855,7 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 		int startY = static_cast<int>(std::floor(m_manualStart.y / tileSize));
 		int goalX = static_cast<int>(std::floor(m_manualGoal.x / tileSize));
 		int goalY = static_cast<int>(std::floor(m_manualGoal.y / tileSize));
+
 
 		m_manualPath = m_pathSystem.FindPathSync(startX, startY, goalX, goalY);
 		m_manualPathComplete = m_manualPath.has_value();
@@ -867,7 +893,6 @@ void PathTestScene::HandleEvent(const std::optional<sf::Event>& event) {
 			}
 		}
 	}
-
 }
 /////////////////////////////////
 
@@ -896,11 +921,7 @@ void PathTestScene::OnEnter()
     camera->viewportHeight = (float)m_window.getSize().y;
     camera->smoothness = 0.0f;
 
-	// RenderSystemGL does not derive its pixel viewport from the SFML view.  It
-	// must be initialized explicitly for the tile shader's uViewportSize and
-	// for glViewport; otherwise PathTestScene can inherit a zero/stale GL
-	// viewport from the previously active scene and tiles are clipped or
-	// projected with the wrong scale.
+	// RenderSystemGL does not derive its pixel viewport from the SFML view.  It must be initialized explicitly for the tile shader's uViewportSize and for glViewport; otherwise PathTestScene can inherit a zero/stale GL viewport from the previously active scene and tiles are clipped or projected with the wrong scale.
 	m_entityManager.GetRenderSystemGL().OnResize(
 		static_cast<int>(m_window.getSize().x),
 		static_cast<int>(m_window.getSize().y));

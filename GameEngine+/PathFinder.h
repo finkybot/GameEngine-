@@ -11,6 +11,8 @@
 #include <vector>
 #include <queue>
 #include <unordered_map>
+#include <cstdint>
+#include <utility>
 #include "Vec2.h"
 #include "ChunkManager.h"
 /////////////////////////////////
@@ -33,6 +35,24 @@ struct Portal {
 };
 /////////////////////////////////
 
+struct PathNodeKey {
+	int x, y;
+	bool operator==(const PathNodeKey& other) const { return x == other.x && y == other.y; }
+};
+
+struct PathNodeKeyHash {
+	size_t operator()(const PathNodeKey& key) const {
+		return (static_cast<size_t>(key.x) << 32) ^ static_cast<size_t>(key.y);
+	}
+};
+
+struct PathNode {
+	int x, y;
+	float g, f;
+	int parentX, parentY;
+};
+///////////////////////////////
+
 
 
 
@@ -41,9 +61,28 @@ struct Portal {
 //	|_______________________________________________________________________
 class Pathfinder {
 public:
+	enum class SearchStatus { Running, Succeeded, Failed };
+
+	struct SearchState {
+		using QueueItem = std::pair<float, PathNodeKey>;
+		struct QueueCompare {
+			bool operator()(const QueueItem& a, const QueueItem& b) const { return a.first > b.first; }
+		};
+
+		std::priority_queue<QueueItem, std::vector<QueueItem>, QueueCompare> open;
+		std::unordered_map<PathNodeKey, PathNode, PathNodeKeyHash> nodes;
+		std::unordered_map<PathNodeKey, bool, PathNodeKeyHash> closed;
+		int goalX = 0, goalY = 0;
+		int offsetX = 0, offsetY = 0;
+		bool initialized = false;
+		Path result;
+	};
+
 	explicit Pathfinder(ChunkManager& cm);
 
 	std::optional<Path> FindPath(int startTileX, int startTileY, int goalTileX, int goalTileY);
+	SearchStatus StartSearch(SearchState& state, int startTileX, int startTileY, int goalTileX, int goalTileY);
+	SearchStatus AdvanceSearch(SearchState& state, int nodeBudget);
 
 private:
 	ChunkManager& m_chunkManager;

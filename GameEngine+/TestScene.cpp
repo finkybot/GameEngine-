@@ -43,7 +43,6 @@
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 using Clock = std::chrono::high_resolution_clock;
-
 /////////////////////////////////
 
 
@@ -156,8 +155,8 @@ void TestScene::Update(float dt) {
 
 	if (raycast->lastHit.hit) {
 		std::cout << "Mouse worldPos: " << raycast->worldPos.x << ", " << raycast->worldPos.y << "\n";
-		std::cout << "Raycast HIT entity ID: " << raycast->lastHit.entity->GetId() << " at ("
-				  << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n";
+		std::cout << "\x1b[36mRaycast HIT entity ID: " << raycast->lastHit.entity->GetId() << " at ("
+				  << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n\x1b[0m";
 	}
 
 	//m_entityManager.GetBVH().ReportBVHSize();
@@ -270,7 +269,7 @@ void TestScene::OnEnter() {
 	camera->worldHeight = m_mapMax.y - m_mapMin.y;
 
 	// Mouse entity
-	Entity* mouseEntity = m_entityManager.AddEntity(EntityType::Mouse);
+	Entity* mouseEntity = m_entityManager.AddEntity(EntityType::Mouse, EntityClass::Utility);
 	mouseEntity->AddComponent<CMouseState>();
 	mouseEntity->AddComponent<CRaycast>();
 
@@ -283,9 +282,27 @@ void TestScene::OnEnter() {
 	SpawnInitialPopulation();
 	m_entityManager.ProcessPending();
 
+
 	// Build spatial index ONCE
 	auto& entities = m_entityManager.GetEntities();
 	m_entityManager.GetSpatialIndex()->Build(m_entityManager.GetDynamicEntities());
+
+	
+	m_testBucket = m_entityManager.CreateEntityBucket("DynamicEntities", 0);
+
+	// Lets test our bucket structures *this is a very early test, and will be expanded later*
+	for (size_t i = 0; i < 10 && i < entities.size(); ++i) {
+		m_entityManager.AddEntityToBucket(m_testBucket, entities[i]->GetId());
+	}
+
+	auto* bucket = m_entityManager.GetEntityBucket(m_testBucket);
+
+	// Debug: print bucket contents
+	if (bucket)
+	{
+		std::cout << "Bucket: " << bucket->name << " contains " << bucket->entities.size() << " entities.\n";
+		std::cout << "Contains " << bucket->entities.size() << " entities:\n";
+	}
 
 	// Build BVH once after initial spawn (not needed as we build the bvh in the spatial index build)
 	//auto dyn = m_entityManager.GetDynamicEntities();
@@ -312,7 +329,15 @@ void TestScene::OnEnter() {
 
 /////////////////////////////////
 // OnExit - called when the scene is no longer active, allowing for any necessary cleanup or state management that should occur each time the scene is exited. This can include stopping timers, saving state, or releasing resources specific to this scene.
-void TestScene::OnExit() { /* cleanup when scene exits */ }
+void TestScene::OnExit() { /* cleanup when scene exits */ 
+	std::cout << "Exiting TestScene...\n";
+	
+	if (m_testBucket != INVALID_BUCKET) {
+		bool removed = m_entityManager.DeleteEntityBucket(m_testBucket);
+
+		std::cout << "Bucket deleted: " << removed << "\n";
+	}
+}
 /////////////////////////////////
 
 
@@ -395,7 +420,7 @@ void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 colo
 	EntityType type = (teamType < 5) ? teamTypes[teamType] : EntityType::TeamMonkey;
 
 	// Create a new entity of the specified type and add it to the EntityManager
-	Entity* en = m_entityManager.AddEntity(type);
+	Entity* en = m_entityManager.AddEntity(type, EntityClass::Dynamic);
 
 	//en->AddComponent<CTransform>(position, velocity); // already added in by the Entity Manager's AddEntity() call, so we don't need to add it again here
 	en->AddComponent<CName>();
@@ -437,9 +462,8 @@ void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 colo
 
 
 /////////////////////////////////
-// RenderGameInfoWindow - Renders the ImGui window displaying game information and performance metrics. It takes the current entity count, death count for the current frame, and active explosion count as parameters to display in the UI.
-// The window is positioned at (10, 10) and sized to (450, 280) on first use, and it includes sections for entity statistics and spatial hash collision detection performance metrics. As I have move to a 'full screen' window with no borders or title bar,
-// I have decided to add the fps to the ImGui window to help track performance over time.... lots of words, why am I writing this much in the comment, I should just write better code and make it self explanatory.....dumbass
+// RenderGameInfoWindow - Renders the ImGui window displaying game information and performance metrics. It takes the current entity count, death count for the current frame, and active explosion count as parameters to display in the UI. The window is positioned at (10, 10) and sized to (450, 280) on first use, 
+// and it includes sections for entity statistics and spatial hash collision detection performance metrics.
 void TestScene::RenderGameInfoWindow(size_t entityCount, int deathCount, int explosionCount) {
 	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(450, 280), ImGuiCond_FirstUseEver);
@@ -709,7 +733,7 @@ void TestScene::SpawnReplacementEntities(int count) {
 // SpawnExplosion - Spawns an explosion entity at the specified position with the given radius. It creates a new entity of type Explosion, sets up its transform and explosion components, and adds it to the scene's registry of active explosions for tracking and updating.
 void TestScene::SpawnExplosion(const Vec2& pos, float radius) {
 	// Create explosion entity through ECS
-	Entity* e = m_entityManager.AddEntity(EntityType::Explosion);
+	Entity* e = m_entityManager.AddEntity(EntityType::Explosion, EntityClass::Dynamic);
 
 	// Transform setup
 	auto* transform = e->GetComponent<CTransform>();
@@ -830,7 +854,7 @@ void TestScene::UpdateExplosions() {
 
 	for (auto& entity : m_entityManager.GetEntities()) { // Iterate over all entities to find explosions and update their state based on elapsed time since creation
 		if (entity->GetType() == EntityType::Explosion) {
-			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->m_creationTime);
+			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->GetCreationTime());
 
 			// Check if the sound effect is still playing
 	/*		CSoundEffect* soundEffect = entity->GetComponent<CSoundEffect>();

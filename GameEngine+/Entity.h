@@ -24,6 +24,7 @@
 #include "Vec2.h"
 #include "EntityType.h"
 #include "ComponentTypeId.h"
+#include "IDTypes.h"
 /////////////////////////////////
 
 
@@ -33,32 +34,31 @@
 //	|	components, as well as handling entity state such as position, rendering layer, and ownership.
 //	|___________________________________________________________________________________
 class Entity {
-
-private:
-	friend class EntityManager;					// Only EntityManager can create and manage entities so we will make the constructor private 
-	const size_t m_id = 0;						// Unique identifier for the entity, assigned by the EntityManager
-	EntityType m_type = EntityType::Default;
-	bool m_alive = true;
-	std::map<std::type_index, std::unique_ptr<Component>> m_components;
-	Vec2 m_previousPosition = Vec2::Zero;
-
-	size_t m_ownerId =	0;						// Optional owner ID for the entity, can be used to track ownership or relationships between entities
-	Entity(	EntityType type, size_t	id);		// Private constructor for the Entity class, only accessible by the EntityManager. Initializes the entity with a specific type and unique ID.
-
-
-
 public:
+	// Public member variables for the current cell coordinates in the spatial hash grid. These coordinates are used for efficient spatial partitioning and collision detection, allowing the entity to be quickly located within the grid.
+	int currentCellX; // Current cell X coordinate in the spatial hash grid, used for efficient spatial partitioning and collision detection.
+	int currentCellY; // Current cell Y coordinate in the spatial hash grid, used for efficient spatial partitioning and collision detection.
+
+
+
+	// SoA convenience indices for fast access to components in the EntityManager's SoA storage. These indices are initialized to SIZE_MAX to indicate that the component is not present in the SoA storage.
+	size_t transformIndex = SIZE_MAX;
+	size_t renderIndex = SIZE_MAX;
+	size_t collisionIndex = SIZE_MAX;
+	size_t explosionIndex = SIZE_MAX;
+
+
+
 	// Rendering layer enumeration for the entity, used to determine the order of rendering in the game. Entities in lower layers are rendered first, while entities in higher layers are rendered on top.
-	enum class Layer {
-		Background = 0,
-		Mid = 1,
-		Foreground = 2,
-		Overlay = 3	
-	}; 
+	enum class Layer { Background = 0, Mid = 1, Foreground = 2, Overlay = 3 }; 
+
+
 
 	// Getter and Setter for the owner ID of the entity. This can be used to track ownership or relationships between entities, such as a projectile being owned by a player entity.
 	size_t GetOwnerId() const { return m_ownerId; }
 	void SetOwnerId(size_t ownerId) { m_ownerId = ownerId; }
+
+
 
 	// Get the rendering layer for the entity. If a CLayer component exists, its layer will be returned; otherwise, the layer stored at the entity level will be returned for backward compatibility.
 	Layer GetLayer() const {
@@ -68,6 +68,8 @@ public:
 		return m_layer;
 	}
 
+
+
 	// Set the rendering layer for the entity. If a CLayer component exists, it will be updated; otherwise, the layer will be stored at the entity level for backward compatibility.
 	void SetLayer(Layer layer) {
 		if (auto cl = GetComponent<CLayer>()) {
@@ -76,24 +78,25 @@ public:
 		m_layer = layer;
 	}
 
-	// Public member variable to track the creation time of the entity, used for time-based logic such as explosion lifespan
-	std::chrono::high_resolution_clock::time_point m_creationTime;
+
+
+	// Get the type of the entity, which is an enumeration value representing the specific type of entity (e.g., player, enemy, projectile).
+	std::chrono::high_resolution_clock::time_point GetCreationTime() const { return m_creationTime; }
 	size_t GetId() const { return m_id; }
 
-	int currentCellX; // Current cell X coordinate in the spatial hash grid, used for efficient spatial partitioning and collision detection.
-	int currentCellY; // Current cell Y coordinate in the spatial hash grid, used for efficient spatial partitioning and collision detection.
-
-	// SoA convenience indices for fast access to components in the EntityManager's SoA storage. These indices are initialized to SIZE_MAX to indicate that the component is not present in the SoA storage.
-	size_t transformIndex	=	SIZE_MAX;
-	size_t renderIndex		=	SIZE_MAX;
-	size_t collisionIndex	=	SIZE_MAX;
-	size_t explosionIndex	=	SIZE_MAX;
 
 
+	// Check if the entity is alive. An entity is considered alive if it has not been destroyed or marked for removal.
 	bool HasComponent(std::type_index type) const { return m_components.find(type) != m_components.end(); }
 
+
+
+	// Get the type of the entity, which is an enumeration value representing the specific type of entity (e.g., player, enemy, projectile).
+	EntityClass GetClass() const { return m_class; }
+	void SetClass(EntityClass entityClass) { m_class = entityClass; }
 	
-	
+
+
 	// ---------------------------------
 	// Template Methods for Component Management
 	// ---------------------------------
@@ -204,6 +207,8 @@ public:
 		}
 	}
 
+	
+	
 	// Template method to remove a component of type T from the entity. If the component does not exist, this method does nothing.
 	template <typename T> void RemoveComponent() {
 		//	Ensure that T is derived from Component to maintain type safety in the ECS architecture. This static assertion will cause a compile-time error if T does not inherit from Component.
@@ -213,16 +218,21 @@ public:
 		m_components.erase(std::type_index(typeid(T)));
 	}
 
+	
+	
 	// Helper methods to get specific components commonly used in the game. These methods return nullptr if the component does not exist on the entity.
 	CShape* GetShape() { return GetComponent<CShape>(); }				// Get the CShape component of the entity
 	CTransform* GetTransform() { return GetComponent<CTransform>(); }	// Get the CTransform component of the entity
 	CName* GetName() { return GetComponent<CName>(); }					// Get the CName component of the entity
 
 
+
+	// Get the creation time of the entity, which is the time point when the entity was created. This can be used for timing-related logic or debugging purposes.
 	EntityType GetType() const;											// Get the type of the entity
 	void SetType(EntityType type) { m_type = type; }					// Set the type of the entity
 	bool IsAlive() const;												// Check if the entity is alive (not marked for destruction)
 	void Destroy();														// Mark the entity for destruction
+
 
 
 	// Convenience methods to get properties from the CTransform component first, since transform is the source of truth for motion and collision.
@@ -234,11 +244,15 @@ public:
 		return shape ? shape->GetCentrePoint() : Vec2::Zero;
 	}
 
+
+
 	// Get the mid-length property from the CShape component, which is used for collision detection and quadtree inclusion (I dont use the quadtree anymore).
 	inline float GetMidLength() const {
 		auto shape = GetComponent<CShape>();
 		return shape ? shape->GetMidLength() : 0.0f;
 	}
+
+
 
 	// Get the width of the bounding box from the CShape component, or return 0 if the component does not exist.
 	inline float GetWidth() const {
@@ -246,11 +260,15 @@ public:
 		return shape ? shape->GetWidth() : 0.0f;
 	}
 
+
+
 	// Get the height of the bounding box from the CShape component, or return 0 if the component does not exist.
 	inline float GetHeight() const {
 		auto shape = GetComponent<CShape>();
 		return shape ? shape->GetHeight() : 0.0f;
 	}
+
+
 
 	// Get the position from the CTransform component, or return a reference to a default zero vector if the component does not exist.
 	inline const Vec2& GetPosition() const noexcept {
@@ -262,14 +280,20 @@ public:
 		return zero;
 	}
 
+
+
 	// Get the radius from the CShape component, or return 0 if the component does not exist.
 	inline float GetRadius() const {
 		auto shape = GetComponent<CShape>();
 		return shape ? shape->GetRadius() : 0.0f;
 	}
 
+
+
 	// Get the center point of the shape from the CShape component, or return a zero vector if the component does not exist.
 	static inline Vec2 GetCentre(Entity& e) { return e.GetCentrePoint(); }
+
+	
 
 	// Set the mid-length property on the CShape component if it exists
 	void SetMidLength(float length) {
@@ -278,23 +302,49 @@ public:
 			shape->SetMidLength(length);
 	}
 
+
+
 	// GetBucketId - Get the bucket ID for the entity, which indicates which layer bucket it belongs to for rendering optimization. Returns -1 if the entity is not currently in a bucket.
 	int GetBucketId() const { return m_bucketId; }
+
+
 
 	// GetBucketPos - Get the bucket position for the entity, which indicates its position within its layer bucket for rendering optimization. Returns -1 if the entity is not currently in a bucket.
 	int GetBucketPos() const { return m_bucketPos; }
 
+
+
 	// SetBucketInfo - Set the bucket information for the entity, indicating which layer bucket it belongs to and its position within that bucket. This is used for incremental rendering maintenance to optimize drawing performance.
 	void SetBucketInfo(int bucketId, int bucketPos) { m_bucketId = bucketId; m_bucketPos = bucketPos; }
+
+
 
 	bool IsActive() const { return m_active; }
 	void SetActive(bool active) { m_active = active; }
 
-	// Private member variables and methods for internal state management. These are not accessible outside of the Entity class and are used to manage the entity's rendering layer and bucket metadata for rendering optimization.
-private:
+
+
+	private:
+	friend class EntityManager;	// Only EntityManager can create and manage entities so we will make the constructor private
+	const size_t m_id = 0; // Unique identifier for the entity, assigned by the EntityManager
+
+	EntityType m_type = EntityType::Default;
+	EntityClass m_class = EntityClass::Static;
+	bool m_alive = true;
+
+	// private member variable for holding the creation time of of the entity.
+	std::chrono::high_resolution_clock::time_point m_creationTime;
+
+	std::map<std::type_index, std::unique_ptr<Component>> m_components;
+	Vec2 m_previousPosition = Vec2::Zero;
+
+	size_t m_ownerId = 0; // Optional owner ID for the entity, can be used to track ownership or relationships between entities
+	Entity(EntityType type, size_t id, EntityClass entityClass); // Private constructor for the Entity class, only accessible by the EntityManager. Initializes the entity with a specified type, ID, and class.
+
 	// Backing field for render layer (default Mid)
 	Layer m_layer = Layer::Mid;
-    // per-entity bucket metadata for EntityManager layer buckets
+	
+	// per-entity bucket metadata for EntityManager layer buckets
 	int m_bucketId = -1;
 	int m_bucketPos = -1;
 	bool m_active = true;

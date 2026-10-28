@@ -12,8 +12,8 @@
 
 
 /////////////////////////////////
-// Constructor for the Entity class. Initializes the entity with a specified type and ID, setting the alive status to true by default. This constructor is private and can only be called by the EntityManager class, which is declared as a friend of Entity.
-Entity::Entity(EntityType type, size_t id) : m_type(type), m_id(id) {
+// Constructor for the Entity class. Initializes the entity with a specified type, ID, and class, setting the alive status to true by default. This constructor is private and can only be called by the EntityManager class, which is declared as a friend of Entity.
+Entity::Entity(EntityType type, size_t id, EntityClass entityClass) : m_type(type), m_id(id), m_class(entityClass) {
 	currentCellX = INT_MIN; // Initialize current cell X coordinate to an invalid value
 	currentCellY = INT_MIN; // Initialize current cell Y coordinate to an invalid value
 }

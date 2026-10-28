@@ -15,6 +15,7 @@
 #include "GameEngine.h"
 #include "RenderQueue.h"
 #include "CCamera.h"
+#include "IDTypes.h"	
 
 class GameEngine;
 class EntityManager;

@@ -109,6 +109,8 @@ private:
 
 	std::vector<Entity*> m_explosions;					// scene‑local explosion registry (currently unused, but will be used for tracking active explosions in the scene at a later date)
 
+	BucketID m_testBucket = INVALID_BUCKET;				// Bucket ID for testing purposes, used to identify a specific bucket in the EntityManager for testing entity management and rendering.
+
 	Entity* m_cameraEntity =	nullptr;				// Pointer to the camera entity in the scene, used for managing camera movement and view transformations.
 	CameraSystem m_cameraSystem;						// Camera system for updating and managing camera entities.
 

@@ -644,6 +644,9 @@
     <ClInclude Include="ChunkRenderData.h">
       <Filter>Header Files\Misc</Filter>
     </ClInclude>
+    <ClInclude Include="IDTypes.h">
+      <Filter>Header Files\Misc</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="GameEngine+.rc">

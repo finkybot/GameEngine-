@@ -74,3 +74,9 @@ inline const char* EntityTypeToString(EntityType type) {
 	}
 }
 /////////////////////////////////
+
+
+
+/////////////////////////////////
+// EntityClass enum defines categories for entities based on their behavior and lifecycle in the game world.
+enum class EntityClass { Static, Dynamic, SemiStatic, Utility, Transient };

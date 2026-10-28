@@ -916,7 +916,7 @@ void TileMapEditorScene::UpdateExplosions() {
 
 	for (auto& entity : m_entityManager.GetEntities()) {
 		if (entity->GetType() == EntityType::Explosion) {
-			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->m_creationTime);
+			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->GetCreationTime());
 			if (elapsed.count() > 1200) {
 				entity->Destroy();
 			} else {

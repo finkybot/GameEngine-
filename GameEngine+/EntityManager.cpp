@@ -345,9 +345,7 @@ void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem, const CCame
 			float ageMs = std::chrono::duration<float, std::milli>(now - entity->m_creationTime).count();
 			float lifetimeMs = 4500.0f;
 
-			explosionInstances.push_back(GPUInstanceData{tform->position.x, tform->position.y, shape->GetRadius(),
-														 ageMs, lifetimeMs, c.r / 255.0f, c.g / 255.0f, c.b / 255.0f,
-														 c.a / 255.0f});
+			explosionInstances.push_back(GPUInstanceData{tform->position.x, tform->position.y, shape->GetRadius(), ageMs, lifetimeMs, c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, c.a / 255.0f});
 
 			continue;
 		}
@@ -356,11 +354,9 @@ void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem, const CCame
 		// Circle path (CRenderInstance)
 		// -------------------------
 		auto* inst = entity->GetComponent<CRenderInstance>();
-		if (!inst)
-			continue;
+		if (!inst) continue;
 
-		circleInstances.push_back(GPUShapeInstance{tform->position.x, tform->position.y, inst->radius, inst->r / 255.0f,
-												   inst->g / 255.0f, inst->b / 255.0f, inst->a / 255.0f});
+		circleInstances.push_back(GPUShapeInstance{tform->position.x, tform->position.y, inst->radius, inst->r / 255.0f, inst->g / 255.0f, inst->b / 255.0f, inst->a / 255.0f});
 	}
 
 	gpuRenderSystem.RenderCircles(circleInstances, camera);
@@ -583,16 +579,16 @@ void EntityManager::RenderTextSFML() {
 void EntityManager::RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::RenderMode mode, const CCamera& camera) {
 	// 1. SFML shapes and text
 	if (m_sfmlRenderingEnabled) {
-		std::cout << "Rendering SFML shapes and text in mode: " << static_cast<int>(mode) << std::endl;
+		//std::cout << "Rendering SFML shapes and text in mode: " << static_cast<int>(mode) << std::endl;
 		if (mode == RenderSystem::RenderMode::ShapesOnly) {
 			RenderShapesSFML();
 		} else if (mode == RenderSystem::RenderMode::ShapesThenText) {
-			std::cout << "Rendering SFML shapes and text in mode: ShapesThenText" << std::endl;
+			//std::cout << "Rendering SFML shapes and text in mode: ShapesThenText" << std::endl;
 			RenderShapesSFML();
 			RenderTextSFML();
 		} else // ShapesThenTextAfterOverlays
 		{
-			std::cout << "Rendering SFML shapes and text in mode: ShapesThenTextAfterOverlays" << std::endl;
+			//std::cout << "Rendering SFML shapes and text in mode: ShapesThenTextAfterOverlays" << std::endl;
 			RenderShapesSFML();
 		}
 	}
@@ -678,8 +674,10 @@ void EntityManager::ProcessPending() {
 
 /////////////////////////////////
 // AddEntity - creates a new entity of the specified type, assigns it a unique ID, and adds it to the list of entities to be processed. The method also adds a default CTransform component to the entity and registers it in the Structure of Arrays (SoA) for efficient access to transform data.
-Entity* EntityManager::AddEntity(EntityType type) {
-	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++));
+Entity* EntityManager::AddEntity(EntityType type, EntityClass entityClass) {
+	
+	// Debug: assert caller thread is owner
+	auto entity = std::unique_ptr<Entity>(new Entity(type, m_totalEntities++, entityClass));
 	entity->m_creationTime = std::chrono::high_resolution_clock::now();
 
 	// Always add a transform
@@ -807,5 +805,66 @@ void EntityManager::UpdateBVH() {
 // GetEntities (overloaded) - returns a reference to the vector of pointers to entities of a specific type. This allows systems and other parts of the code to access entities of a particular type for processing, rendering, or other operations without needing to filter the main entity list.
 std::vector<Entity*>& EntityManager::GetEntities(EntityType type) {
 	return m_entityMap[type];
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// CreateEntityBucket - creates a new entity bucket with the specified name and associates it with a scene. The method generates a unique BucketID for the new bucket, initializes its metadata, and stores it in the EntityManager's collection of entity buckets. This allows for grouping entities 
+// together for organizational or gameplay purposes.
+BucketID EntityManager::CreateEntityBucket(const std::string& name, SceneID sceneId) {
+	BucketID id = m_nextBucketId++;
+
+	EntityBucket bucket;
+	bucket.name = name;
+	bucket.id = id;
+	bucket.ownerScene = sceneId;
+
+	m_entityBuckets.emplace(id, std::move(bucket));
+	return id;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// GetEntityBucket - retrieves a pointer to the entity bucket associated with the specified BucketID. If the bucket does not exist, the method returns nullptr. This allows systems and other parts of the code to access and manipulate groups of entities that are organized into buckets.
+EntityBucket* EntityManager::GetEntityBucket(BucketID bucketId) {
+	auto it = m_entityBuckets.find(bucketId);
+
+	if (it == m_entityBuckets.end()) return nullptr;
+
+	return &it->second;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// DeleteEntityBucket - removes the entity bucket associated with the specified BucketID from the EntityManager's collection of buckets. The method returns true if the bucket was successfully deleted, or false if the bucket did not exist. This allows for dynamic management of entity groups during 
+// gameplay or scene transitions.
+bool EntityManager::DeleteEntityBucket(BucketID bucketId) {
+	return m_entityBuckets.erase(bucketId) > 0;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// AddEntityToBucket - adds an entity to the specified bucket by its BucketID. The method retrieves the bucket and appends the entity's ID to the bucket's list of entities. If the bucket does not exist, the method does nothing to avoid dereferencing a null pointer.
+void EntityManager::AddEntityToBucket(BucketID bucketId, EntityID entityID) {
+	auto* bucket = GetEntityBucket(bucketId);
+	
+	// Guard: if bucket is nullptr, do not proceed to avoid dereferencing a null pointer
+	if (!bucket) return;
+
+	// Check if the entity is already in the bucket to avoid duplicates
+	auto it = std::find(bucket->entities.begin(), bucket->entities.end(), entityID);
+
+	// If the entity is not already in the bucket, add it to the list of entities
+	if (it == bucket->entities.end()) {
+		bucket->entities.push_back(entityID);
+	}
 }
 /////////////////////////////////

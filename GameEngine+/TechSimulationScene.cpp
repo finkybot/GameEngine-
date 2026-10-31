@@ -41,7 +41,7 @@ static ImVec4 GetProgressColor(float t) {
 
 /////////////////////////////////
 // Implementation of the TechSimulationScene class
-TechSimulationScene::TechSimulationScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em) : Scene(engine, em), m_window(win), m_chunkManager(engine.GetChunkManager()), 
+TechSimulationScene::TechSimulationScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& em, World& world) : Scene(name, engine, em, world), m_window(win), m_chunkManager(engine.GetChunkManager()), 
 						m_kpSystem(), m_diffusionSystem(engine.techRegistry, engine.worldDiffusionConfig), m_evolutionSystem(engine.techRegistry), m_unlockSystem(engine.techRegistry) {
 	// Set the diffusion configuration for the evolution system based on the engine's world diffusion configuration
 	m_evolutionSystem.SetDiffusionConfig(&engine.worldDiffusionConfig);

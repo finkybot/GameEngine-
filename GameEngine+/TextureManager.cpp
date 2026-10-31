@@ -13,8 +13,7 @@
 
 
 /////////////////////////////////
-// LoadAtlas - Loads a texture atlas from the specified file path and stores it under the given key. The atlas is sliced into tiles of the specified width and height. 
-// If loading fails, an error message is logged and false is returned. If loading succeeds, any existing atlas for the key is replaced with the new one, and true is returned.
+// LoadAtlas - Loads a texture atlas from the specified file path and stores it under the given key. The atlas is sliced into tiles of the specified width and height. If loading fails, an error message is logged and false is returned. If loading succeeds, any existing atlas for the key is replaced with the new one, and true is returned.
 bool TextureManager::LoadAtlas(const std::string& key, const std::string& filePath, int tileW, int tileH) {
 	// Always attempt to load the atlas from file. If loading succeeds, replace any existing atlas for the key.
 	auto atlas = std::make_shared<TextureAtlas>();

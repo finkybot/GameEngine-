@@ -214,6 +214,7 @@
     <ClCompile Include="RayCastScene.cpp" />
     <ClCompile Include="Utils.cpp" />
     <ClCompile Include="Vec2.cpp" />
+    <ClCompile Include="World.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="AABB.h" />
@@ -338,6 +339,7 @@
     <ClInclude Include="Utils\FPSCounter.h" />
     <ClInclude Include="Vec2.h" />
     <ClInclude Include="CRenderInstance.h" />
+    <ClInclude Include="World.h" />
     <ClInclude Include="WorldDiffusionConfig.h" />
   </ItemGroup>
   <ItemGroup>

@@ -27,6 +27,7 @@
 #include "RenderSystemGL.h"
 #include "GPURenderSystem.h"
 #include "WorldDiffusionConfig.h"
+#include "World.h"
 
 #include <map>
 #include <string>
@@ -59,7 +60,13 @@ private:
 
 
 	// Private member variable/s
-	InputController m_InputController; // Input controller
+	InputController m_InputController;				// Input controller
+	FPSCounter m_fpsCounter;						// FPSCounter instance for tracking and calculating the frames per second (FPS) of the game, providing performance metrics and allowing for optimization and debugging of the game loop
+	TextureManager m_textureManager;				// Texture manager instance for managing textures across the game, allowing for loading, retrieving, and unloading textures in a centralized manner
+	std::unique_ptr<CursorSystem> m_cursorSystem;	// Unique pointer to the CursorSystem owned by the engine, responsible for managing the cursor's appearance and behavior across different scenes and game components
+	RenderQueue	m_renderQueue;						// RenderQueue instance for managing the rendering order of drawables in the game, allowing for efficient rendering of entities and other visual elements based on depth and priority
+	FileManager	m_fileManager;						// FileManager instance for managing file operations, allowing for loading, saving, and organizing game assets and data
+	ChunkManager m_chunkManager;					// ChunkManager instance for managing chunks in the game world, responsible for loading, unloading, and updating chunks as needed
 
 
 public:	
@@ -75,21 +82,21 @@ public:
 		return instance;
 	}
 
-	// AddScene - Adds a new scene to the game engine by its name, allowing for scene management and transitions. The method takes a scene name and a shared pointer to the scene instance, storing it in the scenes map for later retrieval and activation.
-	void AddScene(const std::string& sceneName,	std::shared_ptr<Scene> scene); 
-	
-	// ChangeScene - Changes the current active scene to the specified scene by its name, allowing for scene transitions and updates. The method checks if the specified scene exists in the scenes map and sets it as the current active scene, calling the OnExit 
-	// method of the previous scene and the OnEnter method of the new scene to handle any necessary cleanup and initialization.
-	void ChangeScene(const std::string& sceneName);
+	//// AddScene - Adds a new scene to the game engine by its name, allowing for scene management and transitions. The method takes a scene name and a shared pointer to the scene instance, storing it in the scenes map for later retrieval and activation.
+	//void AddScene(const std::string& sceneName,	std::shared_ptr<Scene> scene); 
+	//
+	//// ChangeScene - Changes the current active scene to the specified scene by its name, allowing for scene transitions and updates. The method checks if the specified scene exists in the scenes map and sets it as the current active scene, calling the OnExit 
+	//// method of the previous scene and the OnEnter method of the new scene to handle any necessary cleanup and initialization.
+	//void ChangeScene(const std::string& sceneName);
 
-	// RemoveScene - Removes a scene from the game engine by its name, allowing for scene management and cleanup. The method checks if the specified scene exists in the scenes map and removes it, freeing any associated resources and ensuring that the scene is no longer accessible or active within the game engine.
-	void RemoveScene(const std::string& sceneName);
+	//// RemoveScene - Removes a scene from the game engine by its name, allowing for scene management and cleanup. The method checks if the specified scene exists in the scenes map and removes it, freeing any associated resources and ensuring that the scene is no longer accessible or active within the game engine.
+	//void RemoveScene(const std::string& sceneName);
 
 	// Run - Starts the main game loop, handling events, updating the current scene, and rendering the game. The method continuously processes input events, updates the game state based on the elapsed time since the last frame, and renders the current scene to the window until the game is exited or closed.
 	void Run();
 
-	// GetSceneNames - Returns a vector of scene names currently managed by the game engine, allowing for easy retrieval and display of available scenes. The method iterates through the scenes map and collects the names of all registered scenes, returning them as a vector of strings for use in menus, debugging, or other purposes.
-	std::vector<std::string> GetSceneNames() const;
+	//// GetSceneNames - Returns a vector of scene names currently managed by the game engine, allowing for easy retrieval and display of available scenes. The method iterates through the scenes map and collects the names of all registered scenes, returning them as a vector of strings for use in menus, debugging, or other purposes.
+	//std::vector<std::string> GetSceneNames() const;
 
 	// GetCursorSystem - Returns a reference to the engine-owned CursorSystem, allowing scenes and systems to access and manage the cursor's appearance and behavior. The method provides centralized control over the cursor, enabling consistent handling of cursor states and interactions across different scenes and game components.
 	CursorSystem& GetCursorSystem() { return *m_cursorSystem; }
@@ -100,7 +107,7 @@ public:
 
 	std::map<std::string, std::shared_ptr<Scene>> scenes;	// Map of scene names to scene instances, allowing for easy scene management and switching
 	sf::RenderWindow window;								// SFML RenderWindow for rendering the game, handling events, and managing the main game window
-	std::shared_ptr<Scene>	currentScene;					// Pointer to the current active scene, used to determine which scene to update and render during the game loop
+	//std::shared_ptr<Scene>	currentScene;					// Pointer to the current active scene, used to determine which scene to update and render during the game loop
 	bool isRunning =	false;								// Flag to indicate whether the game loop is currently running, used to control the main game loop execution
 
 	sf::Clock deltaClock;									// SFML Clock to measure the time elapsed between frames, used for calculating delta time for updates and game logic processing
@@ -111,16 +118,12 @@ public:
 	std::unique_ptr<EntityManager> entityManager;			// Unique pointer to the central EntityManager owned by the engine, responsible for managing game entities and providing access to the entity system throughout the game
 	std::unique_ptr<SoundSystem> soundSystem;				// Unique pointer to the SoundSystem owned by the engine, responsible for managing sound effects and audio playback
 	std::unique_ptr<MovementSystem> movementSystem;			// Unique pointer to the MovementSystem owned by the engine, responsible for moving entities along computed paths
+	std::unique_ptr<World> m_world;							// Unique pointer to the World instance owned by the engine, responsible for managing the game world, including entities, tile maps, and other game state
 
 	GPURenderSystem	gpuRenderSystem;						// GPURenderSystem instance for managing GPU-based rendering of entities and other visual elements in the game, allowing for efficient rendering of large numbers of entities with minimal CPU overhead
 	TechRegistry techRegistry;								// TechRegistry instance for managing technology-related entities and interactions in the game, allowing for simulation of technology diffusion, evolution, and unlocking
 	WorldDiffusionConfig worldDiffusionConfig;				// WorldDiffusionConfig instance for managing configuration related to technology diffusion in the game, allowing for customization of diffusion parameters and behavior
-	FPSCounter m_fpsCounter;								// FPSCounter instance for tracking and calculating the frames per second (FPS) of the game, providing performance metrics and allowing for optimization and debugging of the game loop		
-	TextureManager m_textureManager;						// Texture manager instance for managing textures across the game, allowing for loading, retrieving, and unloading textures in a centralized manner	
-	std::unique_ptr<CursorSystem> m_cursorSystem;			// Unique pointer to the CursorSystem owned by the engine, responsible for managing the cursor's appearance and behavior across different scenes and game components
-	RenderQueue	m_renderQueue;								// RenderQueue instance for managing the rendering order of drawables in the game, allowing for efficient rendering of entities and other visual elements based on depth and priority
-	FileManager m_fileManager;								// FileManager instance for managing file operations, allowing for loading, saving, and organizing game assets and data
-	ChunkManager m_chunkManager;							// ChunkManager instance for managing chunks in the game world, responsible for loading, unloading, and updating chunks as needed
+
 
 
 	FontManager& GetFontManager() { return fontManager; }				// Accessor for shared font manager

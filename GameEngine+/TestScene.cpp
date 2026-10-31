@@ -49,8 +49,8 @@ using Clock = std::chrono::high_resolution_clock;
 
 /////////////////////////////////
 // Constructor - initializes the TestScene with references to the game engine, render window, and entity manager, and sets up ImGui for UI rendering
-TestScene::TestScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
-	: m_window(win), Scene(engine, entityManager) {
+TestScene::TestScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world)
+	: m_window(win), Scene(name, engine, entityManager, world) {
 	// Initialize ImGui with SFML backend
 	if (!ImGui::SFML::Init(engine.window)) {
 		std::cerr << "Failed to initialize ImGui::SFML." << std::endl;

@@ -1603,7 +1603,7 @@ bool MusicVisualiserScene::RefreshDirectoryListing(const std::filesystem::path& 
 /////////////////////////////////
 // MusicVisualizerScene class implementation. This scene allows users to load music files, control playback, and visualize audio-reactive spawns based on the music's spectrum analysis. It includes an ImGui interface for file browsing, playback controls, and spawn system configuration. The scene 
 // manages a music entity with a CMusic component for audio playback and analysis, and a SpawnSystem for handling music-reactive spawns. The Update function processes music levels to trigger spawns and renders the ImGui UI for user interaction.
-MusicVisualiserScene::MusicVisualiserScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager): Scene(engine, entityManager), m_window(win) {
+MusicVisualiserScene::MusicVisualiserScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world): Scene(name, engine, entityManager, world), m_window(win) {
 	m_screenCamera.viewportWidth = m_window.getSize().x;
 	m_screenCamera.viewportHeight = m_window.getSize().y;
 	m_screenCamera.position = Vec2(m_screenCamera.viewportWidth * 0.5f, m_screenCamera.viewportHeight * 0.5f);
@@ -2046,7 +2046,7 @@ void MusicVisualiserScene::DrawGrid() {
 // without needing to interact with the window controls, which can be especially useful if the visualizer is running in fullscreen mode.
 void MusicVisualiserScene::ProcessInput() {
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
-		m_gameEngine.ChangeScene("MainMenu");
+		m_world.ChangeScene("MainMenu");
 	}
 }
 /////////////////////////////////

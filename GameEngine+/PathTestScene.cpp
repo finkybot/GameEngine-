@@ -38,8 +38,8 @@ namespace fs = std::filesystem;
 
 /////////////////////////////////
 // PathTestScene implementation
-PathTestScene::PathTestScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
-	: Scene(engine, entityManager), m_window(win), m_chunkManager(engine.GetChunkManager()), 
+PathTestScene::PathTestScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world)
+	: Scene(name, engine, entityManager, world), m_window(win), m_chunkManager(engine.GetChunkManager()), 
 	  m_pathSystem(m_chunkManager, entityManager) {}
 /////////////////////////////////
 

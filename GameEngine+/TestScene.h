@@ -31,7 +31,7 @@
 class TestScene : public Scene {
 public:
 	// Constructor and destructor for the TestScene class.  Must call base constructor with injected refs
-	TestScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager);
+	TestScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world);
 	~TestScene() override;
 
 
@@ -64,7 +64,7 @@ public:
 	void ProcessEscapeKey(bool keyDown) const {
 		if (keyDown) {
 			// Return to main menu instead of closing the window directly
-			m_gameEngine.ChangeScene("MainMenu");
+			m_world.ChangeScene("MainMenu");
 		}
 	}
 

@@ -37,8 +37,8 @@
 
 /////////////////////////////////
 // Constructor - initializes the ray cast scene with a reference to the game engine and the render window, and sets up the entity manager
-RayCastScene::RayCastScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
-	: Scene(engine, entityManager), m_window(win), m_chunkManager(engine.GetChunkManager()) {
+RayCastScene::RayCastScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world)
+	: Scene(name, engine, entityManager, world), m_window(win), m_chunkManager(engine.GetChunkManager()) {
 	m_debugLines.reserve(256);
 	m_debugLineColors.reserve(256);
 	m_debugPoints.reserve(256);
@@ -588,7 +588,7 @@ void RayCastScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 // ProcessEscapeKey - handles input to close the window when any key is pressed
 void RayCastScene::ProcessEscapeKey(bool keyDown) const {
 	if (keyDown) {
-		m_gameEngine.ChangeScene("MainMenu");
+		m_world.ChangeScene("MainMenu");
 	}
 }
 /////////////////////////////////

@@ -19,6 +19,7 @@
 
 class GameEngine;
 class EntityManager;
+class World;
 /////////////////////////////////
 
 
@@ -51,6 +52,7 @@ public:
 	virtual bool IsImGuiEnabled() { return true; }
 
 	virtual CCamera& GetActiveCamera() = 0;
+	void ClearRenderQueue() { m_renderQueue.Clear(); }
 
 	// Accessors for injected references (scenes do not own these)
 	GameController* GetGameController() { return &m_GameController; }
@@ -71,17 +73,20 @@ public:
 	// Helper to access the engine-wide render queue
 	RenderQueue& GetEngineRenderQueue();
 
-
+	std::string GetName() const { return m_sceneName; }
 
 protected:
 	// Construction contract: derived scenes must initialize these references
-	Scene(GameEngine& gameEngine, EntityManager& entityManager);
+	Scene(const std::string& sceneName, GameEngine& gameEngine, EntityManager& entityManager, World& world);
 
 	GameController m_GameController;
 
 	// injected references (Scene does not own these)
 	GameEngine& m_gameEngine;
+	World& m_world;
 
+
+	std::string m_sceneName; // Name of the scene, used for identification and management within the game engine
 	// scene state
 	int m_frameCount = 0;
 	int m_currentFrame = 0;

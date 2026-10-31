@@ -16,7 +16,7 @@
 //	|___________________________________________________________________________________
 class TestRenderGLScene : public Scene {
 public:
-	TestRenderGLScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em);
+	TestRenderGLScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& em, World& world);
 
     void Update(float dt) override;
 	void Render() override;

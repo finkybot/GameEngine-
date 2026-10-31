@@ -20,8 +20,8 @@ static const std::string kMenuFontName = "default";
 
 /////////////////////////////////
 // Constructor and destructor for the MainMenuScene class. The constructor initializes the scene with references to the game engine, render window, and entity manager, while the destructor handles any necessary cleanup when the scene is destroyed.
-MainMenuScene::MainMenuScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
-	: Scene(engine, entityManager), m_window(win) {
+MainMenuScene::MainMenuScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world)
+	: Scene(name, engine, entityManager, world), m_window(win) {
 }
 
 MainMenuScene::~MainMenuScene() = default;
@@ -33,7 +33,7 @@ MainMenuScene::~MainMenuScene() = default;
 // InitializeGame - Initializes the main menu scene by retrieving the list of available scene names from the game engine, allowing the menu to display options for players to select different scenes to play. This method is called when the scene is 
 // first entered and sets up the necessary state for the main menu.
 void MainMenuScene::InitialiseGame(sf::Vector2u windowSize) {
-	m_sceneNames = m_gameEngine.GetSceneNames();
+	m_sceneNames = m_world.GetSceneNames();
 	// Remove the MainMenu entry itself so we don't show an option for the current scene
 	m_sceneNames.erase(std::remove(m_sceneNames.begin(), m_sceneNames.end(), std::string("MainMenu")), m_sceneNames.end());
 	if (m_selectedIndex >= (int)m_sceneNames.size()) m_selectedIndex = 0;
@@ -66,6 +66,9 @@ void MainMenuScene::OnEnter() {
 	m_screenCamera.zoom = 1.0f;
 	m_screenCamera.viewportWidth = m_window.getSize().x;
 	m_screenCamera.viewportHeight = m_window.getSize().y;
+	m_screenCamera.isMainCamera = true;
+	m_screenCamera.isActive = true;
+	m_window.setView(m_window.getDefaultView());
 
 
 }
@@ -125,7 +128,7 @@ void MainMenuScene::Update(float deltaTime) {
 	});
 	handleKey(sf::Keyboard::Key::Enter, enterTimer, [&]() {
 		if (m_selectedIndex >= 0 && m_selectedIndex < (int)m_sceneNames.size()) {
-			m_gameEngine.ChangeScene(m_sceneNames[m_selectedIndex]);
+			m_world.ChangeScene(m_sceneNames[m_selectedIndex]);
 		}
 	});
 	// Escape-to-close: only fires once the key has been fully released after entering
@@ -158,7 +161,7 @@ void MainMenuScene::Render() {
 			bool selected = (int)i == m_selectedIndex;
 			if (ImGui::Selectable(m_sceneNames[i].c_str(), selected)) {
 				m_selectedIndex = (int)i;
-				m_gameEngine.ChangeScene(m_sceneNames[i]);
+				m_world.ChangeScene(m_sceneNames[i]);
 			}
 		}
 		ImGui::End();
@@ -207,7 +210,7 @@ void MainMenuScene::HandleEvent(const std::optional<sf::Event>& event) {
 				if (my < (int)y) return;
 				int idx = (my - (int)y) / (int)lineHeight;
 				if (idx >= 0 && idx < (int)m_sceneNames.size()) {
-					m_gameEngine.ChangeScene(m_sceneNames[idx]);
+					m_world.ChangeScene(m_sceneNames[idx]);
 				}
 			}
 		}

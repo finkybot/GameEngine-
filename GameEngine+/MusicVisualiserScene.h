@@ -38,7 +38,7 @@ class MusicVisualiserScene : public Scene {
 
 public:
 	// Constructor and destructor
-	MusicVisualiserScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager);
+	MusicVisualiserScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world);
 	~MusicVisualiserScene() override;
 
 

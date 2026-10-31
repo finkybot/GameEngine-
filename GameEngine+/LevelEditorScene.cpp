@@ -29,7 +29,7 @@ namespace fs = std::filesystem;
 /////////////////////////////////
 // Constructor - initializes the level editor scene with references to the game engine, render window, and entity manager, and sets up the 
 // chunk manager with specified chunk dimensions and tile size
-LevelEditorScene::LevelEditorScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em) : Scene(engine, em), m_window(win), m_chunkManager(engine.GetChunkManager()) {}
+LevelEditorScene::LevelEditorScene(std::string name,GameEngine& engine, sf::RenderWindow& win, EntityManager& em, World& world) : Scene(name, engine, em, world), m_window(win), m_chunkManager(engine.GetChunkManager()) {}
 /////////////////////////////////
 
 
@@ -1852,7 +1852,7 @@ void LevelEditorScene::ApplyMainCameraView() {
 // additional input for camera movement, zooming, or other editing actions.
 void LevelEditorScene::ProcessInput() {
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
-		m_gameEngine.ChangeScene("MainMenu");
+		m_world.ChangeScene("MainMenu");
 	}
 }
 

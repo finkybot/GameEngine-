@@ -33,8 +33,8 @@
 
 /////////////////////////////////
 // Constructor - Initializes the tile map editor scene with references to the game engine, render window, and entity manager
-TileMapEditorScene::TileMapEditorScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager)
-	: Scene(engine, entityManager), m_window(win) {}
+TileMapEditorScene::TileMapEditorScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world)
+	: Scene(name, engine, entityManager, world), m_window(win) {}
 /////////////////////////////////
 
 
@@ -817,7 +817,7 @@ void TileMapEditorScene::ProcessInput() {
 	m_prevCtrlS = ctrlS;
 
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
-		m_gameEngine.ChangeScene("MainMenu");
+		m_world.ChangeScene("MainMenu");
 	}
 
 	// show save dialog on Ctrl+Shift+S (for interactive save-as)

@@ -11,6 +11,7 @@
 #include "FontManager.h"
 #include "SoundSystem.h"
 #include "Vec2.h"
+
 #include <SFML/System/Vector2.hpp>
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Window/Event.hpp>
@@ -19,6 +20,7 @@
 #include <string>
 #include <direct.h>
 #include <iostream>
+
 #include "Scene.h"
 #include "TestScene.h"
 #include "RayCastScene.h"
@@ -30,6 +32,9 @@
 #include "MainMenuScene.h"
 #include "PathTestScene.h"
 #include "CPathRequest.h"
+#include "World.h"
+
+
 #include <imgui/imgui.h>
 #include <imgui/backends/imgui-SFML.h>
 #include "MainThreadTasks.h"
@@ -85,6 +90,11 @@ GameEngine::GameEngine() {
 	// *** ENTITY MANAGER *** Create a single engine-wide EntityManager and bind shared resources
 	entityManager = std::make_unique<EntityManager>(window);
 	entityManager->GetRenderSystem().SetFontManager(&fontManager);
+
+	// *** WORLD *** Create the world after the shared EntityManager exists.
+	m_world = std::make_unique<World>(*entityManager, m_chunkManager);
+	m_world->SetWindowSize(windowSize);
+	m_world->SetRenderWindow(window);
 
 	// Debug: Print current working directory
 	char cwd[260];
@@ -200,73 +210,73 @@ GameEngine::~GameEngine() {
 /////////////////////////////////
 // AddScene - Adds a new scene to the game engine with the given name and scene instance, allowing for dynamic scene management. The scene is stored in a map of scene names to scene instances, enabling 
 // easy retrieval and switching between scenes during the game loop.
-void GameEngine::AddScene(const std::string& sceneName, std::shared_ptr<Scene> scene) {
-	scenes[sceneName] = scene;
-}
+//void GameEngine::AddScene(const std::string& sceneName, std::shared_ptr<Scene> scene) {
+//	scenes[sceneName] = scene;
+//}
 /////////////////////////////////
 
 
 
 /////////////////////////////////
 // GetSceneNames - Return a list of registered scene names (useful for UI like a main menu)
-std::vector<std::string> GameEngine::GetSceneNames() const {
-	std::vector<std::string> names;
-	for (auto const& p : scenes) names.push_back(p.first);
-	return names;
-}
+//std::vector<std::string> GameEngine::GetSceneNames() const {
+//	std::vector<std::string> names;
+//	for (auto const& p : scenes) names.push_back(p.first);
+//	return names;
+//}
 /////////////////////////////////
 
 
 
 /////////////////////////////////
 // ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions
-void GameEngine::ChangeScene(const std::string& sceneName) {
-	JobSystem::WaitIdle();
-
-	// Clear any pending main thread tasks to avoid executing tasks from the previous scene after switching
-	auto it = scenes.find(sceneName);
-	if (it != scenes.end()) {
-		// notify previous scene it's exiting
-		if (currentScene) {
-			try { currentScene->OnExit(); } catch (...) {}
-			// Allow the scene to release any loaded resources (textures, atlases, large buffers)
-			try { currentScene->UnloadResources(); } catch (...) {}
-		}
-
-		// Clear all entities from the previous scene before activating the new one
-		if (entityManager) entityManager->ClearAll();
-
-		// Reset the view to default before switching scenes to avoid any leftover zoom or pan from the previous scene
-		window.setView(window.getDefaultView());
-
-		// Set the new scene as the current active scene
-		currentScene = it->second;
-
-		// initialize the new scene so it has window size, input controller, and resources set up
-		if (currentScene) {
-			try {
-				currentScene->InitialiseGame(windowSize);
-			} catch (...) {}
-			// update input controller to use the new scene's game controller
-			try { m_InputController.SetGameController(currentScene->GetGameController()); } catch (...) {}
-			try { currentScene->OnEnter(); } catch (...) {}
-		}
-	} else {
-		std::cerr << "Scene '" << sceneName << "' not found!" << std::endl;
-	}
-}
+//void GameEngine::ChangeScene(const std::string& sceneName) {
+//	JobSystem::WaitIdle();
+//
+//	// Clear any pending main thread tasks to avoid executing tasks from the previous scene after switching
+//	auto it = scenes.find(sceneName);
+//	if (it != scenes.end()) {
+//		// notify previous scene it's exiting
+//		if (currentScene) {
+//			try { currentScene->OnExit(); } catch (...) {}
+//			// Allow the scene to release any loaded resources (textures, atlases, large buffers)
+//			try { currentScene->UnloadResources(); } catch (...) {}
+//		}
+//
+//		// Clear all entities from the previous scene before activating the new one
+//		if (entityManager) entityManager->ClearAll();
+//
+//		// Reset the view to default before switching scenes to avoid any leftover zoom or pan from the previous scene
+//		window.setView(window.getDefaultView());
+//
+//		// Set the new scene as the current active scene
+//		currentScene = it->second;
+//
+//		// initialize the new scene so it has window size, input controller, and resources set up
+//		if (currentScene) {
+//			try {
+//				currentScene->InitialiseGame(windowSize);
+//			} catch (...) {}
+//			// update input controller to use the new scene's game controller
+//			try { m_InputController.SetGameController(currentScene->GetGameController()); } catch (...) {}
+//			try { currentScene->OnEnter(); } catch (...) {}
+//		}
+//	} else {
+//		std::cerr << "Scene '" << sceneName << "' not found!" << std::endl;
+//	}
+//}
 /////////////////////////////////
 
 
 
 /////////////////////////////////
 // RemoveScene - Removes a scene from the game engine by its name, allowing for dynamic scene management.
-void GameEngine::RemoveScene(const std::string& sceneName) {
-	auto it = scenes.find(sceneName);
-	if (it != scenes.end()) {
-		scenes.erase(it);
-	}
-}
+//void GameEngine::RemoveScene(const std::string& sceneName) {
+//	auto it = scenes.find(sceneName);
+//	if (it != scenes.end()) {
+//		scenes.erase(it);
+//	}
+//}
 /////////////////////////////////
 
 
@@ -279,25 +289,36 @@ void GameEngine::Run() {
 	// Setup Event Handler.
 	bool running = true; // Create a Boolean variable to manage the engine running state
 
+	
+	m_world->AddScene("MainMenu", std::make_shared<MainMenuScene>("MainMenu", *this, window, *entityManager, *m_world));									// Adding MainMenuScene
+	m_world->AddScene("TestScene", std::make_shared<TestScene>("TestScene", *this, window, *entityManager, *m_world));									// Adding TestScene
+	m_world->AddScene("RayCastScene", std::make_shared<RayCastScene>("RayCastScene", *this, window, *entityManager, *m_world));							// Adding RayCastScene
+	m_world->AddScene("MusicVisualizer", std::make_shared<MusicVisualiserScene>("MusicVisualizer", *this, window, *entityManager, *m_world));			// Adding MusicVisualizer
+	m_world->AddScene("LevelEditor", std::make_shared<LevelEditorScene>("LevelEditor", *this, window, *entityManager, *m_world));						// Adding LevelEditor
+	m_world->AddScene("PathTestScene", std::make_shared<PathTestScene>("PathTestScene", *this, window, *entityManager, *m_world));						// Adding PathTestScene
+	m_world->AddScene("TechSimulationScene", std::make_shared<TechSimulationScene>("TechSimulationScene", *this, window, *entityManager, *m_world));		// Adding TechSimulationScene
+	m_world->AddScene("TestRenderGLScene", std::make_shared<TestRenderGLScene>("TestRenderGLScene", *this, window, *entityManager, *m_world));			// Adding TestRenderGLScene
+
+	m_world->ChangeScene("MainMenu");
+
+
 	// Going to run a test scene for now, will add a main menu and other scenes later once the scene management system is more fleshed out.
-	AddScene("MainMenu", std::make_shared<MainMenuScene>(*this, window, *entityManager));					// Adding MainMenuScene
-	AddScene("TestScene", std::make_shared<TestScene>(*this, window, *entityManager));						// Adding TestScene
-	AddScene("RayCastScene", std::make_shared<RayCastScene>(*this, window, *entityManager));				// Adding TileMapScene, old tilemap (deprecated)
-	//AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, window, *entityManager));		// Adding TileMapEditor, will need to revisit this later to implement new tilemap editor with new tilemap system
-	AddScene("MusicVisualizer", std::make_shared<MusicVisualiserScene>(*this, window, *entityManager));		// Adding MusicVisualizer	
-	AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, window, *entityManager));				// Adding LevelEditor
-	AddScene("PathTestScene", std::make_shared<PathTestScene>(*this, window, *entityManager));				// Adding PathTestScene
-	AddScene("TechSimulationScene", std::make_shared<TechSimulationScene>(*this, window, *entityManager));	// Adding TechSimulationScene
-	AddScene("TestRenderGLScene", std::make_shared<TestRenderGLScene>(*this, window, *entityManager));		// Adding TestRenderGLScene
+	//AddScene("MainMenu", std::make_shared<MainMenuScene>(*this, window, *entityManager));					// Adding MainMenuScene
+	//AddScene("TestScene", std::make_shared<TestScene>(*this, window, *entityManager));						// Adding TestScene
+	//AddScene("RayCastScene", std::make_shared<RayCastScene>(*this, window, *entityManager));				// Adding TileMapScene, old tilemap (deprecated)
+	////AddScene("TileMapEditor", std::make_shared<TileMapEditorScene>(*this, window, *entityManager));		// Adding TileMapEditor, will need to revisit this later to implement new tilemap editor with new tilemap system
+	//AddScene("MusicVisualizer", std::make_shared<MusicVisualiserScene>(*this, window, *entityManager));		// Adding MusicVisualizer	
+	//AddScene("LevelEditor", std::make_shared<LevelEditorScene>(*this, window, *entityManager));				// Adding LevelEditor
+	//AddScene("PathTestScene", std::make_shared<PathTestScene>(*this, window, *entityManager));				// Adding PathTestScene
+	//AddScene("TechSimulationScene", std::make_shared<TechSimulationScene>(*this, window, *entityManager));	// Adding TechSimulationScene
+	//AddScene("TestRenderGLScene", std::make_shared<TestRenderGLScene>(*this, window, *entityManager));		// Adding TestRenderGLScene
 
-	ChangeScene("MainMenu");
+	/*ChangeScene("MainMenu");*/
 
-	// Initialize the chosen scene if it was found. ChangeScene() logs a warning when the scene name is not found; guard against a null current scene to avoid dereferencing a nullptr.
-	if (currentScene) {
-		currentScene->InitialiseGame(windowSize);
-
+	// ChangeScene initializes and enters the selected scene through World.
+	if (m_world->GetActiveScene()) {
 		// FontManager already bound to engine-owned EntityManager in constructor
-		m_InputController.SetGameController(currentScene->GetGameController());
+		m_InputController.SetGameController(m_world->GetActiveScene()->GetGameController());
 
 		m_InputController.Init(
 			[&running](uint32_t deltaT, InputState state) {
@@ -352,8 +373,9 @@ void GameEngine::Update(float deltaTime) {
 
 			// Detect if the window is resized and update the current scene's view accordingly
 			if (eventOpt->is<sf::Event::Resized>()) {
-				if (currentScene) {
-					currentScene->OnWindowResized({resizeEvent->size.x, resizeEvent->size.y});
+				if (m_world->GetActiveScene()) {
+					m_world->SetWindowSize({resizeEvent->size.x, resizeEvent->size.y});
+					m_world->GetActiveScene()->OnWindowResized({resizeEvent->size.x, resizeEvent->size.y});
 					windowSize = {resizeEvent->size.x, resizeEvent->size.y}; // set the new window size in GameEngine.
 				}
 			}
@@ -362,19 +384,28 @@ void GameEngine::Update(float deltaTime) {
 			if (eventOpt->is<sf::Event::KeyPressed>()) {
 				if (auto kp = eventOpt->getIf<sf::Event::KeyPressed>()) {
 					if (static_cast<sf::Keyboard::Key>(kp->code) == sf::Keyboard::Key::Escape) {
-						auto it = scenes.find("MainMenu");
-						if (it != scenes.end() && currentScene && currentScene != it->second) {
-							ChangeScene("MainMenu");
-							// consume the event (do not forward to the current scene)
-							continue;
+						//auto it = scenes.find("MainMenu");
+						//if (it != scenes.end() && currentScene && currentScene != it->second) {
+						//	ChangeScene("MainMenu");
+						//	// consume the event (do not forward to the current scene)
+						//	continue;
+						//}
+
+						auto it = m_world->GetSceneNames();
+						if (std::find(it.begin(), it.end(), "MainMenu") != it.end() && m_world->GetActiveScene() && m_world->GetActiveScene()->GetName() != "MainMenu") {
+							m_world->ChangeScene("MainMenu");
+							// Reset input controller to new scene controller
+							m_InputController.SetGameController(m_world->GetActiveScene()->GetGameController());
+							// Skip running the previous scene's Update this frame
+							//continue;
 						}
 					}
 				}
 			}
 
 			// Forward the event to the current scene for handling (if any)
-			if (currentScene)
-				currentScene->HandleEvent(eventOpt);
+			if (m_world->GetActiveScene())
+				m_world->GetActiveScene()->HandleEvent(eventOpt);
 			if (eventOpt->is<sf::Event::Closed>())
 				window.close();
 		}
@@ -384,26 +415,26 @@ void GameEngine::Update(float deltaTime) {
 
 
 		if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape)) {
-			auto it = scenes.find("MainMenu");
-			if (it != scenes.end() && currentScene && currentScene != it->second) {
-				ChangeScene("MainMenu");
+			auto it = m_world->GetSceneNames();
+			if (std::find(it.begin(), it.end(), "MainMenu") != it.end() && m_world->GetActiveScene() && m_world->GetActiveScene()->GetName() != "MainMenu") {
+				m_world->ChangeScene("MainMenu");
 				// Reset input controller to new scene controller
-				m_InputController.SetGameController(currentScene->GetGameController());
+				m_InputController.SetGameController(m_world->GetActiveScene()->GetGameController());
 				// Skip running the previous scene's Update this frame
 				//continue;
 			}
 		}
 
 		// Scene update and rendering
-		if (currentScene) {
-			currentScene->Update(frameTime.asSeconds());
+		if (m_world->GetActiveScene()) {
+			m_world->GetActiveScene()->Update(frameTime.asSeconds());
 
-			movementSystem->Update(currentScene->GetEntityManager().GetEntities(), deltaTime);
+			movementSystem->Update(m_world->GetActiveScene()->GetEntityManager().GetEntities(), deltaTime);
 
-			currentScene->GetEntityManager().Update(deltaTime);	
-			currentScene->GetEntityManager().RenderAll(gpuRenderSystem, RenderSystem::RenderMode::ShapesOnly /* or whatever */, currentScene->GetActiveCamera());
+			m_world->GetActiveScene()->GetEntityManager().Update(deltaTime);	
+			m_world->GetActiveScene()->GetEntityManager().RenderAll(gpuRenderSystem, RenderSystem::RenderMode::ShapesOnly /* or whatever */, m_world->GetActiveScene()->GetActiveCamera());
 
-			soundSystem->Process(currentScene->GetEntityManager(), deltaTime);
+			soundSystem->Process(m_world->GetActiveScene()->GetEntityManager(), deltaTime);
 			soundSystem->Update(deltaTime);
 
 			m_cursorSystem->Update(deltaTime);
@@ -417,17 +448,17 @@ void GameEngine::Update(float deltaTime) {
 			}
 
 			// *** ENGINE RENDER PASS ORDERING *** 
-			currentScene->Render();
-			currentScene->GetEntityManager().RenderShapesSFML();
+			m_world->GetActiveScene()->Render();
+			m_world->GetActiveScene()->GetEntityManager().RenderShapesSFML();
 			m_renderQueue.Flush(window);
-			currentScene->GetEntityManager().RenderTextSFML();
+			m_world->GetActiveScene()->GetEntityManager().RenderTextSFML();
 			m_cursorSystem->Render();
 		}
 
 		m_renderQueue.Flush(window);
 
 // *** IMGUI RENDERING *** (Should be done last) Render ImGui on top of everything
-		if (ImGui::GetCurrentContext() && (currentScene == nullptr || currentScene->IsImGuiEnabled())) {
+		if (ImGui::GetCurrentContext() && (m_world->GetActiveScene() == nullptr || m_world->GetActiveScene()->IsImGuiEnabled())) {
 			glBindVertexArray(0);
 			glUseProgram(0);
 			glBindBuffer(GL_ARRAY_BUFFER, 0);

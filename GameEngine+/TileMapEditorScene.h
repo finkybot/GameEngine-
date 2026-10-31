@@ -25,7 +25,7 @@
 class TileMapEditorScene : public Scene {
 public:
 	// Constructor and destructor for the TileMapEditorScene class. The constructor initializes the tile map editor scene with references to the game engine, render window, and entity manager, while the destructor is defaulted since we don't have any special cleanup logic, but we could add it if needed in the future.
-	TileMapEditorScene(	GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager);
+	TileMapEditorScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world);
 	~TileMapEditorScene() override;
 
 	// Override virtual methods from Scene base class

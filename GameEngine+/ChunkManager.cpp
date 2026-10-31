@@ -56,7 +56,6 @@ ChunkManager::ChunkManager(int chunkWidth, int chunkHeight, float tileSize, int 
 			m_basePath.clear(); // Clear the base path to indicate it's invalid
 			}
 		}
-
 }
 /////////////////////////////////
 

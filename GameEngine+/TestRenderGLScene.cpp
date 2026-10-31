@@ -8,8 +8,8 @@
 
 
 /////////////////////////////////
-TestRenderGLScene::TestRenderGLScene(GameEngine& engine, sf::RenderWindow& win, EntityManager& em)
-	: m_window(win), Scene(engine, em) {
+TestRenderGLScene::TestRenderGLScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& em, World& world)
+	: m_window(win), Scene(name, engine, em, world) {
 	// Initialise GL renderer AFTER SFML window exists
 	//m_renderGL.Initialise();
 

@@ -11,6 +11,8 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
 #include "Fontsystem.h"
+#include "GPUInstanceStructs.h"
+#include "CCamera.h"
 /////////////////////////////////
 
 
@@ -97,7 +99,15 @@ public:
 	void Shutdown();
 
 	void Render(const EntityManager& entityManager);
+	void Render(const EntityManager& entityManager, const CCamera& camera);
 	void OnResize(int width, int height);
+	bool IsInitialized() const { return m_initialised; }
+	bool IsVisible(const CCamera& camera, const Vec2& position, float halfWidth = 0.0f, float halfHeight = 0.0f) const;
+
+	void RenderShapes(const std::vector<GPUShapeInstance>& instances, const CCamera& camera);
+	void RenderGpuCircles(const std::vector<GPUShapeInstance>& instances, const CCamera& camera);
+	void RenderExplosions(const std::vector<GPUInstanceData>& instances, const CCamera& camera);
+	void RenderEqualizerBars(const std::vector<GPUBarInstanceData>& instances);
 
 	void SetFontSystem(Fontsystem* fontSystem) { m_fontSystem = fontSystem; }
 	void SetTextureManager(TextureManager* texManager) { m_textureManager = texManager; }
@@ -191,6 +201,17 @@ private:
 	void LoadTextShader();
 	void LoadTileShader();
 
+	GLuint CreateGpuShaderProgram(const char* vertexSrc, const char* fragmentSrc);
+	void CreateGpuEffectBuffers();
+	void CreateGpuEffectQuadGeometry();
+	void CreateExplosionResources();
+	void CreateEqualizerResources();
+	void CreateGpuCircleResources();
+	bool PrepareGpuViewport(int viewport[4]) const;
+	void EnsureExplosionBufferCapacity(std::size_t requiredInstances);
+	void EnsureEqualizerBufferCapacity(std::size_t requiredInstances);
+	void EnsureGpuCircleBufferCapacity(std::size_t requiredInstances);
+
 
 	void RenderSprites(const std::vector<GPUSpriteInstance>& instances);
 	void RenderCircles(const std::vector<GPUCircleInstance>& instances);
@@ -200,7 +221,31 @@ private:
 
 	GLuint CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc);
 	GLuint CreateShaderProgramFromFiles(const std::string& vertexPath, const std::string& fragmentPath);
+	struct Frustum2D {
+		float left = 0.0f;
+		float right = 0.0f;
+		float top = 0.0f;
+		float bottom = 0.0f;
+	};
+	Frustum2D BuildFrustum(const CCamera& camera) const;
 
 	Fontsystem* m_fontSystem = nullptr; // Pointer to the FontSystem for accessing font assets
+
+	GLuint m_gpuQuadVBO = 0;
+	GLuint m_gpuCircleVAO = 0;
+	GLuint m_gpuCircleInstanceVBO = 0;
+	GLuint m_gpuCircleShaderProgram = 0;
+	GLint m_gpuCircleViewportUniformLocation = -1;
+	GLuint m_explosionVAO = 0;
+	GLuint m_explosionInstanceVBO = 0;
+	GLuint m_explosionShaderProgram = 0;
+	GLint m_explosionViewportUniformLocation = -1;
+	GLuint m_equalizerVAO = 0;
+	GLuint m_equalizerInstanceVBO = 0;
+	GLuint m_equalizerShaderProgram = 0;
+	GLint m_equalizerViewportUniformLocation = -1;
+	std::size_t m_gpuCircleBufferCapacity = 0;
+	std::size_t m_explosionBufferCapacity = 0;
+	std::size_t m_equalizerBufferCapacity = 0;
 };
 /////////////////////////////////

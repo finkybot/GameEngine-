@@ -25,7 +25,6 @@
 #include "TechRegistry.h"
 #include "Fontsystem.h"
 #include "RenderSystemGL.h"
-#include "GPURenderSystem.h"
 #include "WorldDiffusionConfig.h"
 #include "World.h"
 
@@ -120,7 +119,6 @@ public:
 	std::unique_ptr<MovementSystem> movementSystem;			// Unique pointer to the MovementSystem owned by the engine, responsible for moving entities along computed paths
 	std::unique_ptr<World> m_world;							// Unique pointer to the World instance owned by the engine, responsible for managing the game world, including entities, tile maps, and other game state
 
-	GPURenderSystem	gpuRenderSystem;						// GPURenderSystem instance for managing GPU-based rendering of entities and other visual elements in the game, allowing for efficient rendering of large numbers of entities with minimal CPU overhead
 	TechRegistry techRegistry;								// TechRegistry instance for managing technology-related entities and interactions in the game, allowing for simulation of technology diffusion, evolution, and unlocking
 	WorldDiffusionConfig worldDiffusionConfig;				// WorldDiffusionConfig instance for managing configuration related to technology diffusion in the game, allowing for customization of diffusion parameters and behavior
 

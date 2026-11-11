@@ -12,7 +12,6 @@
 #include <random>
 #include "GPUInstanceStructs.h"
 #include "RenderSystemGL.h"
-#include "GPURenderSystem.h"
 #include <SFML/Graphics.hpp>
 #include "ShapeTemplateRegistry.h"
 #include "CCamera.h"

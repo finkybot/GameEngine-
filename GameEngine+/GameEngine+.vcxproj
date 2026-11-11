@@ -162,7 +162,7 @@
     <ClCompile Include="GameController.cpp" />
     <ClCompile Include="GameEngine.cpp" />
     <ClCompile Include="glad.c" />
-    <ClCompile Include="GPURenderSystem.cpp" />
+    <ClCompile Include="RenderSystemGLGpuEffects.cpp" />
     <ClCompile Include="ImageManagementSystem.cpp" />
     <ClCompile Include="imgui\backends\imgui_impl_dx9.cpp" />
     <ClCompile Include="imgui\backends\imgui-SFML.cpp" />
@@ -263,7 +263,6 @@
     <ClInclude Include="GameController.h" />
     <ClInclude Include="GameEngine+\MovementSystem.h" />
     <ClInclude Include="GameEngine.h" />
-    <ClInclude Include="GPURenderSystem.h" />
     <ClInclude Include="GPUInstanceStructs.h" />
     <ClInclude Include="IDTypes.h" />
     <ClInclude Include="ImageManagementSystem.h" />

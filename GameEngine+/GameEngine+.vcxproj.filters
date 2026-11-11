@@ -246,7 +246,7 @@
     <ClCompile Include="glad.c">
       <Filter>Source Files\Misc</Filter>
     </ClCompile>
-    <ClCompile Include="GPURenderSystem.cpp">
+    <ClCompile Include="RenderSystemGLGpuEffects.cpp">
       <Filter>Source Files\Systems</Filter>
     </ClCompile>
     <ClCompile Include="TestRenderGLScene.cpp">
@@ -586,11 +586,7 @@
     </ClInclude>
     <ClInclude Include="SpatialIndexUnified.h">
       <Filter>Header Files\Systems</Filter>
-    </ClInclude>
-    <ClInclude Include="GPURenderSystem.h">
-      <Filter>Header Files\Systems</Filter>
-    </ClInclude>
-    <ClInclude Include="TestRenderGLScene.h">
+    </ClInclude>`r`n    <ClInclude Include="TestRenderGLScene.h">
       <Filter>Header Files\Scenes</Filter>
     </ClInclude>
     <ClInclude Include="RenderSystemGL.h">

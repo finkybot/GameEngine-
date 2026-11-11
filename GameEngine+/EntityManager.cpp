@@ -317,8 +317,8 @@ void EntityManager::SetEntityLayer(Entity* e, Entity::Layer layer) {
 
 
 /////////////////////////////////
-// RenderGLShapes - prepares GPU instances for circles and explosions, then hands them to GPURenderSystem.
-void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem, const CCamera& camera) {
+// RenderGLShapes - prepares GPU instances for circles and explosions, then hands them to RenderSystemGL.
+void EntityManager::RenderGLShapes(RenderSystemGL& renderSystemGL, const CCamera& camera) {
 	std::vector<GPUShapeInstance> circleInstances;
 	std::vector<GPUInstanceData> explosionInstances;
 	circleInstances.reserve(m_dynamicEntities.size());
@@ -345,7 +345,9 @@ void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem, const CCame
 			float ageMs = std::chrono::duration<float, std::milli>(now - entity->m_creationTime).count();
 			float lifetimeMs = 4500.0f;
 
-			explosionInstances.push_back(GPUInstanceData{tform->position.x, tform->position.y, shape->GetRadius(), ageMs, lifetimeMs, c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, c.a / 255.0f});
+			if (renderSystemGL.IsVisible(camera, tform->position, shape->GetRadius(), shape->GetRadius())) {
+				explosionInstances.push_back(GPUInstanceData{tform->position.x, tform->position.y, shape->GetRadius(), ageMs, lifetimeMs, c.r / 255.0f, c.g / 255.0f, c.b / 255.0f, c.a / 255.0f});
+			}
 
 			continue;
 		}
@@ -356,11 +358,13 @@ void EntityManager::RenderGLShapes(GPURenderSystem& gpuRenderSystem, const CCame
 		auto* inst = entity->GetComponent<CRenderInstance>();
 		if (!inst) continue;
 
-		circleInstances.push_back(GPUShapeInstance{tform->position.x, tform->position.y, inst->radius, inst->r / 255.0f, inst->g / 255.0f, inst->b / 255.0f, inst->a / 255.0f});
+		if (renderSystemGL.IsVisible(camera, tform->position, inst->radius, inst->radius)) {
+			circleInstances.push_back(GPUShapeInstance{tform->position.x, tform->position.y, inst->radius, inst->r / 255.0f, inst->g / 255.0f, inst->b / 255.0f, inst->a / 255.0f});
+		}
 	}
 
-	gpuRenderSystem.RenderCircles(circleInstances, camera);
-	gpuRenderSystem.RenderExplosions(explosionInstances, camera);
+	renderSystemGL.RenderGpuCircles(circleInstances, camera);
+	renderSystemGL.RenderExplosions(explosionInstances, camera);
 }
 /////////////////////////////////
 
@@ -456,7 +460,7 @@ void EntityManager::UpdateSpatialHashAndRender() {
 	}
 
 	if (m_GLRenderingEnabled) {
-		//RenderGLShapes(m_gpuRenderSystem); // or pass from GameEngine
+	// RenderGLShapes is invoked by the unified RenderSystemGL path.
 	}
 }
 /////////////////////////////////
@@ -539,8 +543,8 @@ void EntityManager::RenderShapesSFML() {
 
 /////////////////////////////////
 // Calls GL Rendering cleanly
-void EntityManager::RenderGL(GPURenderSystem& gpuRenderSystem, const CCamera& camera) {
-	RenderGLShapes(gpuRenderSystem, camera);
+void EntityManager::RenderGL(RenderSystemGL& renderSystemGL, const CCamera& camera) {
+	RenderGLShapes(renderSystemGL, camera);
 }
 /////////////////////////////////
 
@@ -575,8 +579,8 @@ void EntityManager::RenderTextSFML() {
 
 /////////////////////////////////
 // RenderAll - a convenience method that renders all entities in the EntityManager using the RenderSystem. The mode parameter allows the caller to specify whether to render only shapes or shapes followed by text. It is split into two parts: first, it renders SFML shapes and text if enabled, and then it renders 
-// GPU shapes (circles, explosions, bars) if OpenGL rendering is enabled. The method takes a reference to the GPURenderSystem and the camera for proper rendering of GPU shapes.
-void EntityManager::RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::RenderMode mode, const CCamera& camera) {
+// GPU shapes (circles, explosions, bars) if OpenGL rendering is enabled. The method takes a reference to RenderSystemGL and the camera for proper rendering of GPU shapes.
+void EntityManager::RenderAll(RenderSystemGL& renderSystemGL, RenderSystem::RenderMode mode, const CCamera& camera) {
 	// 1. SFML shapes and text
 	if (m_sfmlRenderingEnabled) {
 		//std::cout << "Rendering SFML shapes and text in mode: " << static_cast<int>(mode) << std::endl;
@@ -595,7 +599,7 @@ void EntityManager::RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::Re
 
 	// 2. GPU shapes (circles, explosions, bars)
 	if (m_GLRenderingEnabled) {
-		RenderGLShapes(gpuRenderSystem, camera);
+		RenderGLShapes(renderSystemGL, camera);
 	}
 }
 /////////////////////////////////

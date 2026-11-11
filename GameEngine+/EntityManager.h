@@ -50,7 +50,6 @@ class Entity;
 #include "Systems/CollisionSystem.h"
 #include "Systems/RenderSystem.h"
 #include "RenderSystemGL.h"
-#include "GPURenderSystem.h"
 #include "CTileMap.h"
 #include "SpatialLayerRegistry.h"
 #include "ISpatialIndex.h"
@@ -100,9 +99,9 @@ public:
 	// Public methods for updating and rendering entities, as well as adding and removing entities from the manager. The Update method will handle updating all systems and processing pending entities, while the Render methods will handle drawing entities.
 	void Update(float deltaTime = 1.0f / 60.0f);
 	void RenderShapesSFML(); // Direct rendering (not queued)
-	void RenderGL(GPURenderSystem& gpuRenderSystem, const CCamera& camera);
+	void RenderGL(RenderSystemGL& renderSystemGL, const CCamera& camera);
 	void RenderTextSFML(); // Direct render (no queue)
-	void RenderAll(GPURenderSystem& gpuRenderSystem, RenderSystem::RenderMode mode, const CCamera& camera);
+	void RenderAll(RenderSystemGL& renderSystemGL, RenderSystem::RenderMode mode, const CCamera& camera);
 
 	
 	
@@ -165,7 +164,7 @@ public:
 
 	
 	
-	void RenderGLShapes(GPURenderSystem& gpuRenderSystem, const CCamera& camera);
+	void RenderGLShapes(RenderSystemGL& renderSystemGL, const CCamera& camera);
 
 	
 	

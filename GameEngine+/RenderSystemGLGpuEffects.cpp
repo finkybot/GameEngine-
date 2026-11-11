@@ -1,125 +1,12 @@
-/////////////////////////////////
-// Implementation of GPURenderSystem
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// Includes
-#include "GPURenderSystem.h"
+#include "RenderSystemGL.h"
 #include "ShutdownGuard.h"
 #include <iostream>
-/////////////////////////////////
 
-
-
-/////////////////////////////////
-GPURenderSystem::GPURenderSystem() {}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-GPURenderSystem::~GPURenderSystem() {
-	if (!ShutdownGuard::IsShuttingDown()) Shutdown();
-}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// Shutdown releases all OpenGL resources. It should be called while a valid OpenGL context is active.
-void GPURenderSystem::Shutdown() {
-	// Release OpenGL resources VAOs, VBOs, and shader programs
-	if (m_quadVBO) {
-		glDeleteBuffers(1, &m_quadVBO);
-		m_quadVBO = 0;
-	}
-
-	if (m_explosionInstanceVBO) {
-		glDeleteBuffers(1, &m_explosionInstanceVBO);
-		m_explosionInstanceVBO = 0;
-	}
-
-	if (m_explosionVAO) {
-		glDeleteVertexArrays(1, &m_explosionVAO);
-		m_explosionVAO = 0;
-	}
-
-	if (m_explosionShaderProgram) {
-		glDeleteProgram(m_explosionShaderProgram);
-		m_explosionShaderProgram = 0;
-	}
-
-	if (m_equalizerInstanceVBO) {
-		glDeleteBuffers(1, &m_equalizerInstanceVBO);
-		m_equalizerInstanceVBO = 0;
-	}
-
-	if (m_equalizerVAO) {
-		glDeleteVertexArrays(1, &m_equalizerVAO);
-		m_equalizerVAO = 0;
-	}
-
-	if (m_equalizerShaderProgram) {
-		glDeleteProgram(m_equalizerShaderProgram);
-		m_equalizerShaderProgram = 0;
-	}
-
-	m_explosionViewportUniformLocation = -1;
-	m_equalizerViewportUniformLocation = -1;
-	m_explosionBufferCapacity = 0;
-	m_equalizerBufferCapacity = 0;
-	m_initialized = false;
-}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// Initialise sets up OpenGL resources. It should be called once after GLAD is initialized and a valid OpenGL context is active.
-void GPURenderSystem::Initialise() {
-	// Check if already initialized, get out if so
-	if (m_initialized) return;
-
-	// Check for OpenGL context and required functions
-	const GLubyte* version = glGetString(GL_VERSION);
-	if (!version) {
-		std::cerr << "[GPURenderSystem] No active OpenGL context during Initialise()" << std::endl;
-		return;
-	}
-
-	// Check for required OpenGL functions for instancing
-	if (!glGenVertexArrays || !glBindVertexArray || !glVertexAttribDivisor || !glDrawArraysInstanced) {
-		std::cerr << "[GPURenderSystem] Required OpenGL instancing functions are unavailable on this context" << std::endl;
-		return;
-	}
-
-	// Everything looks good, lets create resources
-	CreateBuffers();
-	CreateQuadGeometry();
-	CreateExplosionResources();
-	CreateEqualizerResources();
-	CreateCircleResources();
-
-	if (!m_quadVBO || !m_explosionVAO || !m_explosionInstanceVBO || !m_explosionShaderProgram || !m_equalizerVAO ||	!m_equalizerInstanceVBO || !m_equalizerShaderProgram || m_equalizerViewportUniformLocation < 0) /* equalizer still needs viewport */ {
-		Shutdown();
-		return;
-	}
-
-
-	m_initialized = true;
-}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-void GPURenderSystem::CreateBuffers() {
+void RenderSystemGL::CreateGpuEffectBuffers() {
 	// Create shared quad buffer
-	glGenBuffers(1, &m_quadVBO);
-	if (!m_quadVBO) {
-		std::cerr << "[GPURenderSystem] Failed to create shared quad buffer" << std::endl;
+	glGenBuffers(1, &m_gpuQuadVBO);
+	if (!m_gpuQuadVBO) {
+		std::cerr << "[RenderSystemGL] Failed to create shared quad buffer" << std::endl;
 	}
 }
 /////////////////////////////////
@@ -127,15 +14,15 @@ void GPURenderSystem::CreateBuffers() {
 
 
 /////////////////////////////////
-// CreateQuadGeometry creates a simple quad geometry in normalized device coordinates (NDC) for instanced rendering.
-void GPURenderSystem::CreateQuadGeometry() {
+// CreateGpuEffectQuadGeometry creates a simple quad geometry in normalized device coordinates (NDC) for instanced rendering.
+void RenderSystemGL::CreateGpuEffectQuadGeometry() {
 	// Quad vertices in Normalised Device Coordinates (NDC) space (x, y), we cover the full range (screen) of [-1, 1] in both axes. 
 	// The vertex shader will scale and translate these based on instance data.
 	const float quadVerts[] = {-1.f, -1.f, 1.f, -1.f, -1.f, 1.f, 1.f, 1.f};
 	//const float quadVerts[] = {-0.5f, -0.5f, 0.5f, -0.5f, -0.5f, 0.5f, 0.5f, 0.5f};
 
 	// Upload quad vertices to the shared quad VBO
-	glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, m_gpuQuadVBO);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(quadVerts), quadVerts, GL_STATIC_DRAW);
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 }
@@ -145,7 +32,7 @@ void GPURenderSystem::CreateQuadGeometry() {
 
 /////////////////////////////////
 // CreateExplosionResources creates the OpenGL resources needed for rendering explosion effects, including shaders, VAO, and instance VBO.
-void GPURenderSystem::CreateExplosionResources() {
+void RenderSystemGL::CreateExplosionResources() {
 	// Vertex shader vs
 	const char* vs = R"(
 
@@ -224,13 +111,13 @@ void GPURenderSystem::CreateExplosionResources() {
 	)";
 
 	// Create shader program and check for errors
-	m_explosionShaderProgram = CreateShaderProgram(vs, fs);
+	m_explosionShaderProgram = CreateGpuShaderProgram(vs, fs);
 	if (!m_explosionShaderProgram) return;
 
 	// Get uniform location for viewport size and check for errors
 	m_explosionViewportUniformLocation = glGetUniformLocation(m_explosionShaderProgram, "uViewportSize");
 	//if (m_explosionViewportUniformLocation < 0) {
-	//	std::cerr << "[GPURenderSystem] Failed to locate explosion viewport uniform" << std::endl;
+	//	std::cerr << "[RenderSystemGL] Failed to locate explosion viewport uniform" << std::endl;
 	//	return;
 	//}
 
@@ -238,7 +125,7 @@ void GPURenderSystem::CreateExplosionResources() {
 	glGenVertexArrays(1, &m_explosionVAO);
 	glGenBuffers(1, &m_explosionInstanceVBO);
 	if (!m_explosionVAO || !m_explosionInstanceVBO) {
-		std::cerr << "[GPURenderSystem] Failed to create explosion GL resources" << std::endl;
+		std::cerr << "[RenderSystemGL] Failed to create explosion GL resources" << std::endl;
 		return;
 	}
 
@@ -246,7 +133,7 @@ void GPURenderSystem::CreateExplosionResources() {
 	glBindVertexArray(m_explosionVAO);
 
 	// Bind the shared quad VBO and set up vertex attribute for quad positions
-	glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, m_gpuQuadVBO);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, (void*)0);
 
@@ -280,7 +167,7 @@ void GPURenderSystem::CreateExplosionResources() {
 
 /////////////////////////////////
 // CreateEqualizerResources creates the OpenGL resources needed for rendering equalizer bars, including shaders, VAO, and instance VBO.
-void GPURenderSystem::CreateEqualizerResources() {
+void RenderSystemGL::CreateEqualizerResources() {
 	const char* vs = R"(
 		#version 330 core
 
@@ -319,13 +206,13 @@ void GPURenderSystem::CreateEqualizerResources() {
 	)";
 
 	// Create shader program for equalizer bars and check for errors
-	m_equalizerShaderProgram = CreateShaderProgram(vs, fs);
+	m_equalizerShaderProgram = CreateGpuShaderProgram(vs, fs);
 	if (!m_equalizerShaderProgram) return;
 
 	// Get uniform location for viewport size and check for errors
 	m_equalizerViewportUniformLocation = glGetUniformLocation(m_equalizerShaderProgram, "uViewportSize");
 	if (m_equalizerViewportUniformLocation < 0) {
-		std::cerr << "[GPURenderSystem] Failed to locate equalizer viewport uniform" << std::endl;
+		std::cerr << "[RenderSystemGL] Failed to locate equalizer viewport uniform" << std::endl;
 		return;
 	}
 
@@ -333,7 +220,7 @@ void GPURenderSystem::CreateEqualizerResources() {
 	glGenVertexArrays(1, &m_equalizerVAO);
 	glGenBuffers(1, &m_equalizerInstanceVBO);
 	if (!m_equalizerVAO || !m_equalizerInstanceVBO) {
-		std::cerr << "[GPURenderSystem] Failed to create equalizer GL resources" << std::endl;
+		std::cerr << "[RenderSystemGL] Failed to create equalizer GL resources" << std::endl;
 		return;
 	}
 
@@ -341,7 +228,7 @@ void GPURenderSystem::CreateEqualizerResources() {
 	glBindVertexArray(m_equalizerVAO);
 
 	// Bind the shared quad VBO and set up vertex attribute for quad positions
-	glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, m_gpuQuadVBO);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, (void*)0);
 
@@ -368,7 +255,7 @@ void GPURenderSystem::CreateEqualizerResources() {
 
 
 //////////////////////////////////
-void GPURenderSystem::CreateCircleResources() {
+void RenderSystemGL::CreateGpuCircleResources() {
 	// --- Circle Vertex Shader ---
 	const char* vs = R"(
 		#version 330 core
@@ -437,34 +324,34 @@ void GPURenderSystem::CreateCircleResources() {
     )";
 	// ... same shaders ...
 
-	m_circleShaderProgram = CreateShaderProgram(vs, fs);
-	if (!m_circleShaderProgram)
+	m_gpuCircleShaderProgram = CreateGpuShaderProgram(vs, fs);
+	if (!m_gpuCircleShaderProgram)
 		return;
 
-	m_circleViewportUniformLocation = glGetUniformLocation(m_circleShaderProgram, "uViewportSize");
-	//if (m_circleViewportUniformLocation < 0) {
-	//	std::cerr << "[GPURenderSystem] Failed to locate circle viewport uniform\n";
+	m_gpuCircleViewportUniformLocation = glGetUniformLocation(m_gpuCircleShaderProgram, "uViewportSize");
+	//if (m_gpuCircleViewportUniformLocation < 0) {
+	//	std::cerr << "[RenderSystemGL] Failed to locate circle viewport uniform\n";
 	//	return;
 	//}
 
-	glGenVertexArrays(1, &m_circleVAO);
-	glGenBuffers(1, &m_circleInstanceVBO);
-	if (!m_circleVAO || !m_circleInstanceVBO) {
-		std::cerr << "[GPURenderSystem] Failed to create circle GL resources\n";
+	glGenVertexArrays(1, &m_gpuCircleVAO);
+	glGenBuffers(1, &m_gpuCircleInstanceVBO);
+	if (!m_gpuCircleVAO || !m_gpuCircleInstanceVBO) {
+		std::cerr << "[RenderSystemGL] Failed to create circle GL resources\n";
 		return;
 	}
 
-	glBindVertexArray(m_circleVAO);
+	glBindVertexArray(m_gpuCircleVAO);
 
 	// shared quad
-	glBindBuffer(GL_ARRAY_BUFFER, m_quadVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, m_gpuQuadVBO);
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, sizeof(float) * 2, (void*)0);
 
 	// instance buffer uses GPUShapeInstance
-	glBindBuffer(GL_ARRAY_BUFFER, m_circleInstanceVBO);
+	glBindBuffer(GL_ARRAY_BUFFER, m_gpuCircleInstanceVBO);
 	glBufferData(GL_ARRAY_BUFFER, sizeof(GPUShapeInstance), nullptr, GL_DYNAMIC_DRAW);
-	m_circleBufferCapacity = 1;
+	m_gpuCircleBufferCapacity = 1;
 
 	// posRad: x, y, radius, unused
 	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(GPUShapeInstance), (void*)0);
@@ -483,11 +370,11 @@ void GPURenderSystem::CreateCircleResources() {
 
 
 /////////////////////////////////
-// PrepareViewport retrieves the current OpenGL viewport dimensions and ensures they are valid. If the viewport dimensions are invalid, it falls back to cached values.
-bool GPURenderSystem::PrepareViewport(int viewport[4]) const {
+// PrepareGpuViewport retrieves the current OpenGL viewport dimensions and ensures they are valid. If the viewport dimensions are invalid, it falls back to cached values.
+bool RenderSystemGL::PrepareGpuViewport(int viewport[4]) const {
 	// Check for active OpenGL context
 	if (!glGetString(GL_VERSION)) {
-		std::cerr << "[GPURenderSystem] No active OpenGL context during Render()" << std::endl;
+		std::cerr << "[RenderSystemGL] No active OpenGL context during Render()" << std::endl;
 		return false;
 	}
 
@@ -500,7 +387,7 @@ bool GPURenderSystem::PrepareViewport(int viewport[4]) const {
 
 	// Validate the viewport dimensions
 	if (viewport[2] <= 0 || viewport[3] <= 0) {
-		std::cerr << "[GPURenderSystem] Invalid viewport dimensions during Render()" << std::endl;
+		std::cerr << "[RenderSystemGL] Invalid viewport dimensions during Render()" << std::endl;
 		return false;
 	}
 
@@ -513,7 +400,7 @@ bool GPURenderSystem::PrepareViewport(int viewport[4]) const {
 
 /////////////////////////////////
 // EnsureExplosionBufferCapacity checks if the current explosion instance buffer has enough capacity for the required number of instances. If not, it reallocates the buffer with the new capacity.
-void GPURenderSystem::EnsureExplosionBufferCapacity(std::size_t requiredInstances) {
+void RenderSystemGL::EnsureExplosionBufferCapacity(std::size_t requiredInstances) {
 	// If the required number of instances is less than or equal to the current buffer capacity, no action is needed.
 	if (requiredInstances <= m_explosionBufferCapacity)	return;
 
@@ -531,7 +418,7 @@ void GPURenderSystem::EnsureExplosionBufferCapacity(std::size_t requiredInstance
 
 /////////////////////////////////
 // EnsureEqualizerBufferCapacity checks if the current equalizer instance buffer has enough capacity for the required number of instances. If not, it reallocates the buffer with the new capacity.
-void GPURenderSystem::EnsureEqualizerBufferCapacity(std::size_t requiredInstances) {
+void RenderSystemGL::EnsureEqualizerBufferCapacity(std::size_t requiredInstances) {
 	// If the required number of instances is less than or equal to the current buffer capacity, no action is needed.
 	if (requiredInstances <= m_equalizerBufferCapacity)	return;
 
@@ -548,15 +435,15 @@ void GPURenderSystem::EnsureEqualizerBufferCapacity(std::size_t requiredInstance
 
 
 /////////////////////////////////
-// EnsureCircleBufferCapacity checks if the current circle instance buffer has enough capacity for the required number of instances. If not, it reallocates the buffer with the new capacity.
-void GPURenderSystem::EnsureCircleBufferCapacity(std::size_t requiredInstances) {
+// EnsureGpuCircleBufferCapacity checks if the current circle instance buffer has enough capacity for the required number of instances. If not, it reallocates the buffer with the new capacity.
+void RenderSystemGL::EnsureGpuCircleBufferCapacity(std::size_t requiredInstances) {
 	// If the required number of instances is less than or equal to the current buffer capacity, no action is needed.
-	if (requiredInstances <= m_circleBufferCapacity) return;
+	if (requiredInstances <= m_gpuCircleBufferCapacity) return;
 
 	// Update the buffer capacity to the required number of instances
-	m_circleBufferCapacity = requiredInstances;
-	glBindBuffer(GL_ARRAY_BUFFER, m_circleInstanceVBO);
-	glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(m_circleBufferCapacity * sizeof(GPUShapeInstance)), nullptr, GL_DYNAMIC_DRAW);
+	m_gpuCircleBufferCapacity = requiredInstances;
+	glBindBuffer(GL_ARRAY_BUFFER, m_gpuCircleInstanceVBO);
+	glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(m_gpuCircleBufferCapacity * sizeof(GPUShapeInstance)), nullptr, GL_DYNAMIC_DRAW);
 }
 /////////////////////////////////
 
@@ -564,18 +451,27 @@ void GPURenderSystem::EnsureCircleBufferCapacity(std::size_t requiredInstances) 
 
 /////////////////////////////////
 // RenderShapes renders the shape instances using instanced rendering. It takes a vector of GPUShapeInstance representing the shape instances to render.
-void GPURenderSystem::RenderShapes(const std::vector<GPUShapeInstance>& instances, const CCamera& cam) {
+void RenderSystemGL::RenderShapes(const std::vector<GPUShapeInstance>& instances, const CCamera& cam) {
 	// Check if the renderer is initialized and if there are valid instances to render
-	if (!m_initialized || instances.empty())
+	if (!m_initialised || instances.empty())
 		return;
 
-	//std::cout << "[GPURenderSystem] Rendering " << instances.size() << " GPU shape instances" << std::endl;
+	//std::cout << "[RenderSystemGL] Rendering " << instances.size() << " GPU shape instances" << std::endl;
+
+	std::vector<GPUShapeInstance> visibleInstances;
+	visibleInstances.reserve(instances.size());
+	for (const auto& instance : instances) {
+		if (IsVisible(cam, Vec2(instance.x, instance.y), instance.radius, instance.radius))
+			visibleInstances.push_back(instance);
+	}
+	if (visibleInstances.empty())
+		return;
 
 	// Convert GPUShapeInstance → GPUInstanceData
 	std::vector<GPUInstanceData> converted;
-	converted.reserve(instances.size());
+	converted.reserve(visibleInstances.size());
 
-	for (const auto& s : instances) {
+	for (const auto& s : visibleInstances) {
 		converted.push_back(GPUInstanceData{s.x, s.y, s.radius, s.r, s.g, s.b, s.a});
 	}
 
@@ -611,24 +507,33 @@ void GPURenderSystem::RenderShapes(const std::vector<GPUShapeInstance>& instance
 
 
 /////////////////////////////////
-void GPURenderSystem::RenderCircles(const std::vector<GPUShapeInstance>& instances, const CCamera& cam) {
-	if (!m_initialized || instances.empty())
+void RenderSystemGL::RenderGpuCircles(const std::vector<GPUShapeInstance>& instances, const CCamera& cam) {
+	if (!m_initialised || instances.empty())
 		return;
 
-	EnsureCircleBufferCapacity(instances.size());
+	std::vector<GPUShapeInstance> visibleInstances;
+	visibleInstances.reserve(instances.size());
+	for (const auto& instance : instances) {
+		if (IsVisible(cam, Vec2(instance.x, instance.y), instance.radius, instance.radius))
+			visibleInstances.push_back(instance);
+	}
+	if (visibleInstances.empty())
+		return;
 
-	glBindVertexArray(m_circleVAO);
-	glUseProgram(m_circleShaderProgram);
+	EnsureGpuCircleBufferCapacity(visibleInstances.size());
+
+	glBindVertexArray(m_gpuCircleVAO);
+	glUseProgram(m_gpuCircleShaderProgram);
 
 	GLint viewport[4];
 	glGetIntegerv(GL_VIEWPORT, viewport);
-	//glUniform2f(m_circleViewportUniformLocation, static_cast<float>(viewport[2]), static_cast<float>(viewport[3]));
+	//glUniform2f(m_gpuCircleViewportUniformLocation, static_cast<float>(viewport[2]), static_cast<float>(viewport[3]));
 
 	// NEW: camera uniforms
 	// NEW: camera uniforms
-	GLint camPosLoc = glGetUniformLocation(m_circleShaderProgram, "uCameraPos");
-	GLint camZoomLoc = glGetUniformLocation(m_circleShaderProgram, "uCameraZoom");
-	GLint viewWLoc = glGetUniformLocation(m_circleShaderProgram, "uViewportSize");
+	GLint camPosLoc = glGetUniformLocation(m_gpuCircleShaderProgram, "uCameraPos");
+	GLint camZoomLoc = glGetUniformLocation(m_gpuCircleShaderProgram, "uCameraZoom");
+	GLint viewWLoc = glGetUniformLocation(m_gpuCircleShaderProgram, "uViewportSize");
 
 
 
@@ -639,11 +544,11 @@ void GPURenderSystem::RenderCircles(const std::vector<GPUShapeInstance>& instanc
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	glBindBuffer(GL_ARRAY_BUFFER, m_circleInstanceVBO);
-	glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(instances.size() * sizeof(GPUShapeInstance)),
-					instances.data());
+	glBindBuffer(GL_ARRAY_BUFFER, m_gpuCircleInstanceVBO);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(visibleInstances.size() * sizeof(GPUShapeInstance)),
+					visibleInstances.data());
 
-	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, static_cast<GLsizei>(instances.size()));
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, static_cast<GLsizei>(visibleInstances.size()));
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
@@ -655,15 +560,24 @@ void GPURenderSystem::RenderCircles(const std::vector<GPUShapeInstance>& instanc
 
 /////////////////////////////////
 // RenderExplosions renders the explosion effects using instanced rendering. It takes a vector of GPUInstanceData representing the explosion instances to render.
-void GPURenderSystem::RenderExplosions(const std::vector<GPUInstanceData>& instances, const CCamera& cam) {
+void RenderSystemGL::RenderExplosions(const std::vector<GPUInstanceData>& instances, const CCamera& cam) {
 	// Check if the renderer is initialized and if there are valid resources and instances to render
-	if (!m_initialized || !m_explosionVAO || !m_explosionInstanceVBO || !m_explosionShaderProgram || instances.empty())
+	if (!m_initialised || !m_explosionVAO || !m_explosionInstanceVBO || !m_explosionShaderProgram || instances.empty())
 		return;
 
 
+	std::vector<GPUInstanceData> visibleInstances;
+	visibleInstances.reserve(instances.size());
+	for (const auto& instance : instances) {
+		if (IsVisible(cam, Vec2(instance.x, instance.y), instance.radius, instance.radius))
+			visibleInstances.push_back(instance);
+	}
+	if (visibleInstances.empty())
+		return;
+
 	// Prepare the viewport dimensions for rendering
 	GLint viewport[4] = {0, 0, 0, 0};
-	if (!PrepareViewport(viewport))
+	if (!PrepareGpuViewport(viewport))
 		return;
 
 	glEnable(GL_BLEND);
@@ -688,11 +602,11 @@ void GPURenderSystem::RenderExplosions(const std::vector<GPUInstanceData>& insta
 	//glUniform1f(worldWLoc, cam.worldWidth);
 	//glUniform1f(worldHLoc, cam.worldHeight);
 
-	EnsureExplosionBufferCapacity(instances.size());
-	glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(instances.size() * sizeof(GPUInstanceData)),
-					instances.data());
+	EnsureExplosionBufferCapacity(visibleInstances.size());
+	glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(visibleInstances.size() * sizeof(GPUInstanceData)),
+					visibleInstances.data());
 
-	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, static_cast<GLsizei>(instances.size()));
+	glDrawArraysInstanced(GL_TRIANGLE_STRIP, 0, 4, static_cast<GLsizei>(visibleInstances.size()));
 
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
 	glBindVertexArray(0);
@@ -704,16 +618,16 @@ void GPURenderSystem::RenderExplosions(const std::vector<GPUInstanceData>& insta
 
 /////////////////////////////////
 // RenderEqualizerBars renders the equalizer bars using instanced rendering. It takes a vector of GPUBarInstanceData representing the equalizer bar instances to render.
-void GPURenderSystem::RenderEqualizerBars(const std::vector<GPUBarInstanceData>& instances) {
+void RenderSystemGL::RenderEqualizerBars(const std::vector<GPUBarInstanceData>& instances) {
 	// Check if the renderer is initialized and if there are valid resources and instances to render
-	if (!m_initialized || !m_equalizerVAO || !m_equalizerInstanceVBO || !m_equalizerShaderProgram || m_equalizerViewportUniformLocation < 0 || instances.empty())
+	if (!m_initialised || !m_equalizerVAO || !m_equalizerInstanceVBO || !m_equalizerShaderProgram || m_equalizerViewportUniformLocation < 0 || instances.empty())
 		return;
 
 	// Prepare the viewport dimensions for rendering
 	GLint viewport[4] = {0, 0, 0, 0};
 
 	// If the viewport preparation fails, exit early
-	if (!PrepareViewport(viewport))	return;
+	if (!PrepareGpuViewport(viewport))	return;
 
 	// Enable blending for transparency and set the blend function
 	glEnable(GL_BLEND);
@@ -739,18 +653,7 @@ void GPURenderSystem::RenderEqualizerBars(const std::vector<GPUBarInstanceData>&
 
 /////////////////////////////////
 // OnResize updates the cached viewport dimensions when the window is resized. This ensures that the renderer uses the correct dimensions for rendering.
-void GPURenderSystem::OnResize(int width, int height) {
-	// Update cached viewport dimensions
-	m_viewportWidth = width;
-	m_viewportHeight = height;
-}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// CreateShaderProgram compiles and links a vertex and fragment shader into a shader program. It returns the program ID on success or 0 on failure.
-GLuint GPURenderSystem::CreateShaderProgram(const char* vertexSrc, const char* fragmentSrc) {
+GLuint RenderSystemGL::CreateGpuShaderProgram(const char* vertexSrc, const char* fragmentSrc) {
 	// Create vertex shader vs
 	GLuint vs = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vs, 1, &vertexSrc, nullptr);
@@ -764,7 +667,7 @@ GLuint GPURenderSystem::CreateShaderProgram(const char* vertexSrc, const char* f
 	if (compileStatus != GL_TRUE) {
 		GLchar infoLog[1024] = {};
 		glGetShaderInfoLog(vs, sizeof(infoLog), nullptr, infoLog);
-		std::cerr << "[GPURenderSystem] Vertex shader compilation failed: " << infoLog << std::endl;
+		std::cerr << "[RenderSystemGL] Vertex shader compilation failed: " << infoLog << std::endl;
 		glDeleteShader(vs);
 		return 0;
 	}
@@ -781,7 +684,7 @@ GLuint GPURenderSystem::CreateShaderProgram(const char* vertexSrc, const char* f
 	if (compileStatus != GL_TRUE) {
 		GLchar infoLog[1024] = {};
 		glGetShaderInfoLog(fs, sizeof(infoLog), nullptr, infoLog);
-		std::cerr << "[GPURenderSystem] Fragment shader compilation failed: " << infoLog << std::endl;
+		std::cerr << "[RenderSystemGL] Fragment shader compilation failed: " << infoLog << std::endl;
 		glDeleteShader(vs);
 		glDeleteShader(fs);
 		return 0;
@@ -801,7 +704,7 @@ GLuint GPURenderSystem::CreateShaderProgram(const char* vertexSrc, const char* f
 	if (linkStatus != GL_TRUE) {
 		GLchar infoLog[1024] = {};
 		glGetProgramInfoLog(program, sizeof(infoLog), nullptr, infoLog);
-		std::cerr << "[GPURenderSystem] Shader program link failed: " << infoLog << std::endl;
+		std::cerr << "[RenderSystemGL] Shader program link failed: " << infoLog << std::endl;
 		glDeleteProgram(program);
 		glDeleteShader(vs);
 		glDeleteShader(fs);

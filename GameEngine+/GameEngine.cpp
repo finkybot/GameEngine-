@@ -169,7 +169,6 @@ GameEngine::GameEngine() {
 		std::cout << "\x1b[36m[GameEngine]\x1b[0m OpenGL Fontsystem initialised with default font" << std::endl;
 	}
 
-	gpuRenderSystem.Initialise(); // Initialise the GPU render system for advanced OpenGL rendering features
 
 	// --- Bind FontSystem BEFORE Initialise() ---
 	entityManager->GetRenderSystemGL().SetFontSystem(&fontsystem);
@@ -200,7 +199,6 @@ GameEngine::GameEngine() {
 GameEngine::~GameEngine() {
 	// Mark that we're shutting down BEFORE member destruction begins
 	// This prevents destructors from attempting operations on already-destroyed objects
-	gpuRenderSystem.Shutdown();
 	ShutdownGuard::MarkShuttingDown();
 }
 /////////////////////////////////
@@ -432,7 +430,7 @@ void GameEngine::Update(float deltaTime) {
 			movementSystem->Update(m_world->GetActiveScene()->GetEntityManager().GetEntities(), deltaTime);
 
 			m_world->GetActiveScene()->GetEntityManager().Update(deltaTime);	
-			m_world->GetActiveScene()->GetEntityManager().RenderAll(gpuRenderSystem, RenderSystem::RenderMode::ShapesOnly /* or whatever */, m_world->GetActiveScene()->GetActiveCamera());
+			m_world->GetActiveScene()->GetEntityManager().RenderAll(m_world->GetActiveScene()->GetEntityManager().GetRenderSystemGL(), RenderSystem::RenderMode::ShapesOnly /* or whatever */, m_world->GetActiveScene()->GetActiveCamera());
 
 			soundSystem->Process(m_world->GetActiveScene()->GetEntityManager(), deltaTime);
 			soundSystem->Update(deltaTime);

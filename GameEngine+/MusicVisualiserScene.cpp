@@ -1132,7 +1132,7 @@ void MusicVisualiserScene::UpdateExplosionsVA(float deltaTime) {
 
 /////////////////////////////////
 void MusicVisualiserScene::RenderExplosionsVA() {
-	if (m_activeExplosionsVA == 0 || !m_gpuRenderer.IsInitialized())
+	if (m_activeExplosionsVA == 0 || !m_entityManager.GetRenderSystemGL().IsInitialized())
 		return;
 
 	m_explosionInstances.resize(m_activeExplosionsVA);
@@ -1163,7 +1163,7 @@ void MusicVisualiserScene::RenderExplosionsVA() {
 
 	m_window.pushGLStates();
 	m_window.setActive(true);
-	m_gpuRenderer.RenderExplosions(m_explosionInstances, m_screenCamera);
+	m_entityManager.GetRenderSystemGL().RenderExplosions(m_explosionInstances, m_screenCamera);
 	m_window.popGLStates();
 	m_window.resetGLStates();
 }
@@ -1871,14 +1871,14 @@ void MusicVisualiserScene::Update(float deltaTime) {
 // Render - this function is responsible for rendering the equalizer bars to the window. It checks if the equalizer is active and if there are any bars to render, then sets the view
 void MusicVisualiserScene::Render() {
 	// 1. Draw world (ECS)
-	m_entityManager.RenderAll(m_gpuRenderer, RenderSystem::RenderMode::ShapesThenText, GetActiveCamera());
+	m_entityManager.RenderAll(m_entityManager.GetRenderSystemGL(), RenderSystem::RenderMode::ShapesThenText, GetActiveCamera());
 
 	// 2. Draw GPU overlays in screen-space
-	if (m_gpuRenderer.IsInitialized()) {
+	if (m_entityManager.GetRenderSystemGL().IsInitialized()) {
 		m_window.pushGLStates();
 		m_window.setActive(true);
 		if (m_EqualizerActive && !m_equaliserInstances.empty()) {
-			m_gpuRenderer.RenderEqualizerBars(m_equaliserInstances);
+			m_entityManager.GetRenderSystemGL().RenderEqualizerBars(m_equaliserInstances);
 		}
 		m_window.popGLStates();
 		m_window.resetGLStates();
@@ -1939,8 +1939,8 @@ void MusicVisualiserScene::OnEnter() {
 	}
 
 	m_window.setActive(true);
-	m_gpuRenderer.Initialise();
-	m_gpuRenderer.OnResize(static_cast<int>(m_window.getSize().x), static_cast<int>(m_window.getSize().y));
+	m_entityManager.GetRenderSystemGL().Initialise();
+	m_entityManager.GetRenderSystemGL().OnResize(static_cast<int>(m_window.getSize().x), static_cast<int>(m_window.getSize().y));
 }
 /////////////////////////////////
 
@@ -1950,9 +1950,9 @@ void MusicVisualiserScene::OnEnter() {
 // OnExit 
 void MusicVisualiserScene::OnExit() 
 {
-	if (m_gpuRenderer.IsInitialized()) {
+	if (m_entityManager.GetRenderSystemGL().IsInitialized()) {
 		m_window.setActive(true);
-		m_gpuRenderer.Shutdown();
+		m_entityManager.GetRenderSystemGL().Shutdown();
 	}
 
 	if (m_musicEntity) {
@@ -1972,7 +1972,7 @@ void MusicVisualiserScene::OnWindowResized(sf::Vector2u newSize) {
 	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
 	view.setSize(sf::Vector2f(newSize.x, newSize.y));
 	m_window.setView(view);
-	m_gpuRenderer.OnResize(static_cast<int>(newSize.x), static_cast<int>(newSize.y));
+	m_entityManager.GetRenderSystemGL().OnResize(static_cast<int>(newSize.x), static_cast<int>(newSize.y));
 	if (m_eqBarCount > 0) {
 		InitialiseEqualiserBars(m_eqBarCount);
 	}

@@ -14,7 +14,6 @@
 #include <optional>
 #include "FileDialog.h"
 #include <filesystem>
-#include "GPURenderSystem.h"
 /////////////////////////////////
 
 
@@ -295,7 +294,6 @@ private:
 
 	CCamera m_screenCamera;
 
-	GPURenderSystem m_gpuRenderer;
 	std::vector<GPUInstanceData> m_explosionInstances;
 	std::vector<GPUBarInstanceData> m_equaliserInstances;
 };

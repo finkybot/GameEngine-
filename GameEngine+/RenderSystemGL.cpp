@@ -469,6 +469,12 @@ void RenderSystemGL::Initialise() {
 	CreateTileResources();
 	LoadTileShader();
 
+	CreateGpuEffectBuffers();
+	CreateGpuEffectQuadGeometry();
+	CreateExplosionResources();
+	CreateEqualizerResources();
+	CreateGpuCircleResources();
+
 	// Set initialised flag to true after successful setup
 	m_initialised = true;
 	printf("\x1b[36m[RenderSystemGL::Initialise]\x1b[0m Initialization complete\n");
@@ -530,6 +536,20 @@ void RenderSystemGL::Shutdown() {
 		m_whiteTexture = 0;
 	}
 
+	if (m_gpuQuadVBO) { glDeleteBuffers(1, &m_gpuQuadVBO); m_gpuQuadVBO = 0; }
+	if (m_explosionInstanceVBO) { glDeleteBuffers(1, &m_explosionInstanceVBO); m_explosionInstanceVBO = 0; }
+	if (m_explosionVAO) { glDeleteVertexArrays(1, &m_explosionVAO); m_explosionVAO = 0; }
+	if (m_explosionShaderProgram) { glDeleteProgram(m_explosionShaderProgram); m_explosionShaderProgram = 0; }
+	if (m_equalizerInstanceVBO) { glDeleteBuffers(1, &m_equalizerInstanceVBO); m_equalizerInstanceVBO = 0; }
+	if (m_equalizerVAO) { glDeleteVertexArrays(1, &m_equalizerVAO); m_equalizerVAO = 0; }
+	if (m_equalizerShaderProgram) { glDeleteProgram(m_equalizerShaderProgram); m_equalizerShaderProgram = 0; }
+	if (m_gpuCircleInstanceVBO) { glDeleteBuffers(1, &m_gpuCircleInstanceVBO); m_gpuCircleInstanceVBO = 0; }
+	if (m_gpuCircleVAO) { glDeleteVertexArrays(1, &m_gpuCircleVAO); m_gpuCircleVAO = 0; }
+	if (m_gpuCircleShaderProgram) { glDeleteProgram(m_gpuCircleShaderProgram); m_gpuCircleShaderProgram = 0; }
+	m_explosionBufferCapacity = 0;
+	m_equalizerBufferCapacity = 0;
+	m_gpuCircleBufferCapacity = 0;
+
 	// Reset uniform locations
 	m_initialised = false;
 }
@@ -540,6 +560,13 @@ void RenderSystemGL::Shutdown() {
 /////////////////////////////////
 // Render - Main rendering function that takes an EntityManager and renders all entities based on their components. This method should be called every frame to render the current state of the game world.
 void RenderSystemGL::Render(const EntityManager& entityManager) {
+	CCamera camera;
+	camera.viewportWidth = static_cast<float>(m_viewportWidth);
+	camera.viewportHeight = static_cast<float>(m_viewportHeight);
+	Render(entityManager, camera);
+}
+
+void RenderSystemGL::Render(const EntityManager& entityManager, const CCamera& camera) {
 	// Ensure the rendering system is initialised before proceeding
 	if (!m_initialised) {
 		std::cerr << "[RenderSystemGL] Render called before Initialise()" << std::endl;
@@ -557,7 +584,7 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 	std::vector<GPUCircleInstance> circleInstances;	
 	std::vector<GPUTextInstance> textInstances;
 
-	// Iterate through all entities in the EntityManager and collect their renderable components for rendering
+	// Iterate through all entities in the EntityManager and collect visible renderable components for rendering
 	for (auto& entity : entityManager.GetEntities()) {
 
 		// Check if the entity has a CTransform component, which is required for rendering
@@ -568,13 +595,17 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 			// ---------------------------------
 			// Check if the entity has a CTexture component, which is required for sprite rendering
 			if (auto texture = entity->GetComponent<CTexture>()) {
+				const float width = texture->areaW > 0 ? texture->areaW : 32.0f;
+				const float height = texture->areaH > 0 ? texture->areaH : 32.0f;
+				if (!IsVisible(camera, transform->position, width * 0.5f, height * 0.5f))
+					continue;
 
 				GPUSpriteInstance spriteInstance{};
 				spriteInstance.x = transform->position.x;
 				spriteInstance.y = transform->position.y;
 
-				spriteInstance.w = texture->areaW > 0 ? texture->areaW : 32.0f; // Default width if areaW is not set
-				spriteInstance.h = texture->areaH > 0 ? texture->areaH : 32.0f; // Default height if areaH is not set
+				spriteInstance.w = width;
+				spriteInstance.h = height;
 
 				spriteInstance.rotation = texture->rotation;
 				spriteInstance.texIndex = static_cast<float>(texture->gpuIndex);
@@ -593,6 +624,8 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 			// ---------------------------------
 			// Check if the entity has a CCircleGPU component, which is required for circle rendering
 			if (auto circle = entity->GetComponent<CCircleGPU>()) {
+				if (!IsVisible(camera, transform->position, circle->radius, circle->radius))
+					continue;
 				GPUCircleInstance circleInstance{};
 				
 				circleInstance.x = transform->position.x;
@@ -610,6 +643,8 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 
 			// CHECK if the entity has a CText component, which is required for text rendering
 			if (auto text = entity->GetComponent<CText>()) {
+				if (!IsVisible(camera, transform->position))
+					continue;
 				// Retrieve the font asset from the Fontsystem using the font key specified in the CText component
 				const FontAsset* font = m_fontSystem->GetFont(text->fontKey);
 
@@ -646,6 +681,36 @@ void RenderSystemGL::Render(const EntityManager& entityManager) {
 		UploadGlyphInstances();
 		RenderTextGlyphs();
 	}
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+RenderSystemGL::Frustum2D RenderSystemGL::BuildFrustum(const CCamera& camera) const {
+	const float safeZoom = camera.zoom > 0.0f ? camera.zoom : 1.0f;
+	const float halfWidth = (camera.viewportWidth / safeZoom) * 0.5f;
+	const float halfHeight = (camera.viewportHeight / safeZoom) * 0.5f;
+
+	return Frustum2D{
+		camera.position.x - halfWidth,
+		camera.position.x + halfWidth,
+		camera.position.y - halfHeight,
+		camera.position.y + halfHeight
+	};
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+bool RenderSystemGL::IsVisible(const CCamera& camera, const Vec2& position, float halfWidth, float halfHeight) const {
+	const Frustum2D frustum = BuildFrustum(camera);
+
+	return position.x + halfWidth >= frustum.left &&
+		   position.x - halfWidth <= frustum.right &&
+		   position.y + halfHeight >= frustum.top &&
+		   position.y - halfHeight <= frustum.bottom;
 }
 /////////////////////////////////
 

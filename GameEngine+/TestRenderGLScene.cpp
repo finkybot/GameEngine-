@@ -151,7 +151,7 @@ void TestRenderGLScene::Update(float dt) {
 void TestRenderGLScene::Render() {
 	// Draw the GL quad
 	//m_renderGL.Render(m_entityManager);
-	m_entityManager.GetRenderSystemGL().Render(m_entityManager);
+	m_entityManager.GetRenderSystemGL().Render(m_entityManager, GetActiveCamera());
 
 	// DO NOT call SFML rendering here
 	// GameEngine will still call EntityManager.RenderAll() afterwards,

@@ -101,7 +101,7 @@ void PathFindingSystem::EnqueueRequests() {
 
 		// Create a PathJob struct to hold the pathfinding job information
 		PathJob job;
-		job.entityId = e->GetId();
+		job.entityId = e->GetId().index;
 		job.startTx = startTx;
 		job.startTy = startTy;
 		job.goalTx = goalTx;
@@ -276,7 +276,7 @@ void PathFindingSystem::ApplyResults() {
 		for (auto& u : m_entities.GetEntities()) {
 
 			// Check if the entity's ID matches the result's entity ID
-			if (u->GetId() == res.entityId) {
+			if (u->GetId().index == res.entityId) {
 				target = u.get();
 				break;
 			}

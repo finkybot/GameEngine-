@@ -448,7 +448,7 @@ void MusicSystem::Process() {
 	std::unordered_set<size_t> liveIds;
 	for (const auto& entity : m_entityManager.GetEntities()) {
 		if (entity->HasComponent<CMusic>())
-			liveIds.insert(entity->GetId());
+			liveIds.insert(entity->GetId().index);
 	}
 
 	// Erase active music entries that are no longer live
@@ -521,7 +521,7 @@ void MusicSystem::Process() {
 		try { seconds = music->getPlayingOffset().asSeconds(); } catch (...) {}
 		{
 			std::lock_guard<std::mutex> lk(m_playheadMutex);
-			m_playheadSnapshot[entity->GetId()] = seconds;
+			m_playheadSnapshot[entity->GetId().index] = seconds;
 		}
 	}
 }
@@ -805,7 +805,7 @@ sf::Music* MusicSystem::GetOrCreateMusic(Entity& entity) {
 	if (musicComp->m_music)
 		return musicComp->m_music;
 
-	size_t id = entity.GetId();
+	size_t id = entity.GetId().index;
 	auto it = m_activeMusic.find(id);
 	if (it != m_activeMusic.end()) {
 		// Already in map, just set the component pointer and return

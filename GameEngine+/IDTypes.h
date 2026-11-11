@@ -1,11 +1,13 @@
 /////////////////////////////////
-// IDTypes.h - Defines type aliases and constants for entity, scene, and bucket IDs used in the game engine. These types are used to uniquely identify entities, scenes, and buckets within the engine's systems.
+// IDTypes.h
 /////////////////////////////////
 
 
 
 /////////////////////////////////
+// Includes
 #pragma once
+
 #include <cstdint>
 #include <limits>
 /////////////////////////////////
@@ -13,11 +15,35 @@
 
 
 /////////////////////////////////
-using EntityID = uint64_t;
+//	|	EntityID
+//	|_______________________________________________________________________
+struct EntityID {
+	uint32_t index = 0;
+	uint32_t generation = 0;
+
+	constexpr bool operator==(const EntityID& other) const {
+		return index == other.index && generation == other.generation;
+	}
+
+	constexpr bool operator!=(const EntityID& other) const { return !(*this == other); }
+
+	constexpr bool IsValid() const { return index != 0 || generation != 0; }
+};
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// Other ID types
 using SceneID = uint32_t;
 using BucketID = uint32_t;
+/////////////////////////////////
 
-constexpr EntityID INVALID_ENTITY = std::numeric_limits<EntityID>::max();
+
+
+/////////////////////////////////
+// Invalid constants
+constexpr EntityID INVALID_ENTITY{};
 
 constexpr SceneID INVALID_SCENE = std::numeric_limits<SceneID>::max();
 

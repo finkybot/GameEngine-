@@ -155,8 +155,7 @@ void TestScene::Update(float dt) {
 
 	if (raycast->lastHit.hit) {
 		std::cout << "Mouse worldPos: " << raycast->worldPos.x << ", " << raycast->worldPos.y << "\n";
-		std::cout << "\x1b[36mRaycast HIT entity ID: " << raycast->lastHit.entity->GetId() << " at ("
-				  << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n\x1b[0m";
+		std::cout << "\x1b[36mRaycast HIT entity ID: " << raycast->lastHit.entity->GetId().index << " at (" << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n\x1b[0m";
 	}
 
 	//m_entityManager.GetBVH().ReportBVHSize();

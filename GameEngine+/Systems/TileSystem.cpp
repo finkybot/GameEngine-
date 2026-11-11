@@ -48,7 +48,7 @@ void TileSystem::Process() {
 		for (Entity* tileEntity : tileEntities) {
 			
 			// Only remove tile entities that were created by this tilemap entity (using owner ID)
-			if (tileEntity->GetOwnerId() == entity->GetId()) {
+			if (tileEntity->GetOwnerId() == entity->GetId().index) {
 				m_entityManager->KillEntity(tileEntity);
 			}
 		}
@@ -135,7 +135,7 @@ void TileSystem::Process() {
 
 				// Create a new entity of type Tile to represent the merged rectangle of solid tiles
 				Entity* tileEntity = m_entityManager->AddEntity(EntityType::Tile);
-				tileEntity->SetOwnerId(entity->GetId()); // Set owner ID to the tilemap entity for reference
+				tileEntity->SetOwnerId(entity->GetId().index); // Set owner ID to the tilemap entity for reference
 
 				tileEntity->AddComponent<CTransform>(Vec2(posX, posY), Vec2(0.0f, 0.0f));
 				bool textureAttached = false;

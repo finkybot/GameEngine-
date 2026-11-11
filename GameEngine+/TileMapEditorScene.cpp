@@ -506,8 +506,8 @@ void TileMapEditorScene::Update(float deltaTime) {
 			if (auto ms = m_entityManager.GetMusicSystem()) {
 				// Ensure MusicSystem has processed this frame so level is up-to-date for reactive spawning
 				ms->Process();
-				level = ms->GetLevel(m_musicEntity->GetId());
-				hasBuffer = ms->HasAnalysisBuffer(m_musicEntity->GetId());
+				level = ms->GetLevel(m_musicEntity->GetId().index);
+				hasBuffer = ms->HasAnalysisBuffer(m_musicEntity->GetId().index);
 			}
 		}
 		ImGui::Text("Level: %.4f", level);
@@ -556,7 +556,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 
 					// reset timer and let EntityManager add entity on next update
 					// log spawn to console for debugging
-					std::cout << "AudioReactive: Spawned entity id=" << e->GetId() << " size=" << size << " pos=(" << x
+					std::cout << "AudioReactive: Spawned entity id=" << e->GetId().index << " size=" << size << " pos=(" << x
 							  << "," << y << ")" << std::endl;
 					m_spawnTimer = 0.0f;
 				}

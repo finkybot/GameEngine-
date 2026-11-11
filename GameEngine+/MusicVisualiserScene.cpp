@@ -830,8 +830,8 @@ void MusicVisualiserScene::DrawAudioReactiveWindow() {
 	if (m_musicEntity) {
 		if (auto ms = m_entityManager.GetMusicSystem()) {
 			// Avoid calling Process() from UI code; Update() already processes once per frame.
-			level = ms->GetLevel(m_musicEntity->GetId());
-			hasBuffer = ms->HasAnalysisBuffer(m_musicEntity->GetId());
+			level = ms->GetLevel(m_musicEntity->GetId().index);
+			hasBuffer = ms->HasAnalysisBuffer(m_musicEntity->GetId().index);
 		}
 	}
 	ImGui::Text("Level: %.4f", level);
@@ -894,12 +894,12 @@ void MusicVisualiserScene::DrawPlaybackControls() {
 			// Playback control buttons: change the music state and process immediately
 			if (ImGui::Button("Play")) {
 				musicCmp->state = CMusic::State::Playing;
-				std::cout << "[MusicVisualizer] Play pressed for entity "  << (m_musicEntity ? m_musicEntity->GetId() : 0) << std::endl;
+				std::cout << "[MusicVisualizer] Play pressed for entity "  << (m_musicEntity ? m_musicEntity->GetId().index : 0) << std::endl;
 
 				// If the track has ended and looping is disabled, request a restart next update
 				if (auto musicSys = m_entityManager.GetMusicSystem()) {
-					float pos = musicSys->GetPlayingOffset(m_musicEntity->GetId());
-					float dur = musicSys->GetDuration(m_musicEntity->GetId());
+					float pos = musicSys->GetPlayingOffset(m_musicEntity->GetId().index);
+					float dur = musicSys->GetDuration(m_musicEntity->GetId().index);
 					if (dur > 0.0f && pos >= dur - 0.05f) {
 						m_requestRestart = true;
 					}
@@ -964,8 +964,8 @@ void MusicVisualiserScene::DrawPlaybackControls() {
 		if (auto musicCmp = m_musicEntity->GetComponent<CMusic>()) {
 			// Access music through MusicSystem to avoid race conditions
 			if (auto musicSys = m_entityManager.GetMusicSystem()) {
-				m_playhead = musicSys->GetPlayingOffset(m_musicEntity->GetId());
-				m_duration = musicSys->GetDuration(m_musicEntity->GetId());
+				m_playhead = musicSys->GetPlayingOffset(m_musicEntity->GetId().index);
+				m_duration = musicSys->GetDuration(m_musicEntity->GetId().index);
 			}
 			m_loopEnabled = musicCmp->loop;
 		}
@@ -1011,7 +1011,7 @@ void MusicVisualiserScene::DrawPlaybackControls() {
 			if (!sliderActive && m_playheadActive) {
 				if (m_seekPending) {
 					if (auto musicSys = m_entityManager.GetMusicSystem()) {
-						musicSys->Seek(m_musicEntity->GetId(), m_pendingSeekPos);
+						musicSys->Seek(m_musicEntity->GetId().index, m_pendingSeekPos);
 					}
 					m_seekPending = false;
 				}
@@ -1728,11 +1728,11 @@ void MusicVisualiserScene::Update(float deltaTime) {
 				
 				// If UI requested a restart (Play pressed after track end), seek to start before processing
 				if (m_requestRestart) {
-					ms->Seek(m_musicEntity->GetId(), 0.0f);
+					ms->Seek(m_musicEntity->GetId().index, 0.0f);
 					m_requestRestart = false;
 				}
 				ms->Process();
-				levelForSpawn = ms->GetLevel(m_musicEntity->GetId());
+				levelForSpawn = ms->GetLevel(m_musicEntity->GetId().index);
 
 				// Spawn VA explosions using SpawnSystem config semantics (Burst/Continuous/Periodic) but keep visuals VA-only.
 				Spawn::Pattern vaPattern = Spawn::Pattern::Random;
@@ -1815,7 +1815,7 @@ void MusicVisualiserScene::Update(float deltaTime) {
 						bands.assign(poolSize, 0.0f);
 						UpdateEqualiserBars(bands);
 						m_lastSpectrumBands.clear();
-					} else if (ms->GetSpectrum(m_musicEntity->GetId(), bands)) {
+					} else if (ms->GetSpectrum(m_musicEntity->GetId().index, bands)) {
 						// Try to get per-band spectrum data; cache it for continuity across brief analyzer gaps
 						m_lastSpectrumBands = bands;
 						UpdateEqualiserBars(bands);
@@ -1828,7 +1828,7 @@ void MusicVisualiserScene::Update(float deltaTime) {
 						UpdateEqualiserBars(m_lastSpectrumBands);
 					} else {
 						// No per-band spectrum available yet; fall back to overall level so bars still react
-						float lvl = ms->GetLevel(m_musicEntity->GetId());
+						float lvl = ms->GetLevel(m_musicEntity->GetId().index);
 						size_t poolSize = pool.size();
 						if (poolSize == 0) poolSize = ms->GetSpectrumBandCount();
 						if (poolSize == 0) poolSize = 8;
@@ -1842,7 +1842,7 @@ void MusicVisualiserScene::Update(float deltaTime) {
 			}
 		}
 		// Inform spawn system which music entity to use for audio-reactive patterns
-		if (m_musicEntity) m_spawnSystem->SetMusicEntityId(m_musicEntity->GetId());
+		if (m_musicEntity) m_spawnSystem->SetMusicEntityId(m_musicEntity->GetId().index);
 
 		// Apply reactivity controls to spawn system before updating
 		m_spawnSystem->SetReactivitySensitivity(m_reactivitySensitivity);

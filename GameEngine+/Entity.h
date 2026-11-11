@@ -82,7 +82,7 @@ public:
 
 	// Get the type of the entity, which is an enumeration value representing the specific type of entity (e.g., player, enemy, projectile).
 	std::chrono::high_resolution_clock::time_point GetCreationTime() const { return m_creationTime; }
-	size_t GetId() const { return m_id; }
+	EntityID GetId() const { return m_id; }
 
 
 
@@ -326,7 +326,7 @@ public:
 
 	private:
 	friend class EntityManager;	// Only EntityManager can create and manage entities so we will make the constructor private
-	const size_t m_id = 0; // Unique identifier for the entity, assigned by the EntityManager
+	const EntityID m_id = INVALID_ENTITY; // Unique identifier for the entity, assigned by the EntityManager
 
 	EntityType m_type = EntityType::Default;
 	EntityClass m_class = EntityClass::Static;

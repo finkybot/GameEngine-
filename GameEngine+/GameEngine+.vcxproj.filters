@@ -647,11 +647,11 @@
     <ClInclude Include="ChunkRenderData.h">
       <Filter>Header Files\Misc</Filter>
     </ClInclude>
-    <ClInclude Include="IDTypes.h">
-      <Filter>Header Files\Misc</Filter>
-    </ClInclude>
     <ClInclude Include="World.h">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="IDTypes.h">
+      <Filter>Header Files\Entities</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

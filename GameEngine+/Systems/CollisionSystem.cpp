@@ -63,10 +63,10 @@ void CollisionSystem::DetectAndResolve(const std::vector<std::unique_ptr<Entity>
 			if (!entityPtr || !entityPtr->IsAlive())
 				continue;
 
-			if (currentEntity->GetId() >= entityPtr->GetId())
+			if (currentEntity->GetId().index >= entityPtr->GetId().index)
 				continue;
 
-			uint64_t key = (uint64_t(currentEntity->GetId()) << 32) | uint64_t(entityPtr->GetId());
+			uint64_t key = (uint64_t(currentEntity->GetId().index) << 32) | uint64_t(entityPtr->GetId().index);
 
 			if (visitedPairs.count(key))
 				continue;

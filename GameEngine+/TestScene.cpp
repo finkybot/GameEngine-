@@ -11,6 +11,7 @@
 #include <cmath>
 #include <iostream>
 #include <cstdlib>
+#include <limits>
 
 #include "TestScene.h"
 #include "GameEngine.h"
@@ -217,7 +218,14 @@ void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 	// --- Begin panning (right mouse button) ---
 	if (evt.is<sf::Event::MouseButtonPressed>()) {
 		auto* mb = evt.getIf<sf::Event::MouseButtonPressed>();
-		if (mb->button == sf::Mouse::Button::Right) {
+		if (mb->button == sf::Mouse::Button::Left) {
+			const Vec2 mouseWorld = GetMouseWorldPosition(mb->position);
+			m_draggedBall = PickBall(mouseWorld);
+			if (m_draggedBall) {
+				if (auto* transform = m_draggedBall->GetComponent<CTransform>())
+					m_dragOffset = transform->position - mouseWorld;
+			}
+		} else if (mb->button == sf::Mouse::Button::Right) {
 			m_cameraSystem.BeginPan(*cam, sf::Mouse::getPosition(m_window));
 		}
 	}
@@ -232,10 +240,63 @@ void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 	// --- End panning ---
 	if (evt.is<sf::Event::MouseButtonReleased>()) {
 		auto* mb = evt.getIf<sf::Event::MouseButtonReleased>();
-		if (mb->button == sf::Mouse::Button::Right) {
+		if (mb->button == sf::Mouse::Button::Left) {
+			m_draggedBall = nullptr;
+			m_dragOffset = Vec2::Zero;
+		} else if (mb->button == sf::Mouse::Button::Right) {
 			m_cameraSystem.EndPan(*cam);
 		}
 	}
+}
+/////////////////////////////////
+
+
+/////////////////////////////////
+Vec2 TestScene::GetMouseWorldPosition(const sf::Vector2i& mousePosition) const {
+	CCamera* cam = m_cameraEntity ? m_cameraEntity->GetComponent<CCamera>() : nullptr;
+	if (!cam) {
+		return Vec2::Zero;
+	}
+
+	const float safeZoom = (cam->zoom > 0.0001f) ? cam->zoom : 1.0f;
+	sf::View view;
+	view.setCenter(sf::Vector2f(cam->position.x, cam->position.y));
+	view.setSize(sf::Vector2f(cam->viewportWidth / safeZoom, cam->viewportHeight / safeZoom));
+
+	const sf::Vector2f worldPos = m_window.mapPixelToCoords(mousePosition, view);
+	return Vec2(worldPos.x, worldPos.y);
+}
+/////////////////////////////////
+
+
+/////////////////////////////////
+Entity* TestScene::PickBall(const Vec2& worldPosition) const {
+	Entity* closestBall = nullptr;
+	float closestDistanceSquared = std::numeric_limits<float>::max();
+
+	for (const auto& uptr : m_entityManager.GetEntities()) {
+		Entity* entity = uptr.get();
+		if (!entity || !entity->IsAlive())
+			continue;
+		if (!entity->GetComponent<CRenderInstance>())
+			continue;
+
+		const auto* transform = entity->GetComponent<CTransform>();
+		if (!transform)
+			continue;
+
+		const float radius = entity->GetRadius();
+		const float dx = transform->position.x - worldPosition.x;
+		const float dy = transform->position.y - worldPosition.y;
+		const float distanceSquared = dx * dx + dy * dy;
+
+		if (distanceSquared <= (radius * radius) && distanceSquared < closestDistanceSquared) {
+			closestDistanceSquared = distanceSquared;
+			closestBall = entity;
+		}
+	}
+
+	return closestBall;
 }
 /////////////////////////////////
 
@@ -250,7 +311,7 @@ void TestScene::OnEnter() {
 
 	// Expand world bounds
 	m_mapMin = Vec2(0, 0);
-	m_mapMax = Vec2((float)m_window.getSize().x * 2.0f, (float)m_window.getSize().y * 3.0f);
+	m_mapMax = Vec2((float)m_window.getSize().x * 15.0f, (float)m_window.getSize().y * 15.0f);
 	m_hasMapBounds = true;
 
 	// Camera entity
@@ -428,7 +489,8 @@ void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 colo
 	auto* tform = en->GetComponent<CTransform>();
 	
 	// Use CTransform's public members (position / velocity)
-	tform->position = Vec2(position.x + 0.4f, position.y - 0.5f);
+	position = ClampBallToMap(position, radius);
+	tform->position = position;
 	tform->velocity = Vec2(velocity.x, velocity.y);
 
 	// Add a shape component based on the entity type (Explosion or Circle)
@@ -492,27 +554,84 @@ void TestScene::RenderGameInfoWindow(size_t entityCount, int deathCount, int exp
 
 /////////////////////////////////
 void TestScene::UpdateEntity(Entity* e, float dt, float worldW, float worldH) {
-	// 1. Physics (position + velocity)
-	m_entityManager.GetPhysicsSystem().UpdateSingle(e, dt, worldW, worldH);
+	(void)worldW;
+	(void)worldH;
+	CTransform* transform = e->GetComponent<CTransform>();
+	if (!transform || e->transformIndex == SIZE_MAX)
+		return;
 
-// --- CORRECT: Sync SoA → AoS for rendering ---
-	if (auto* t = e->GetComponent<CTransform>()) {
-		auto& T = m_entityManager.GetTransformSoA();
-		size_t idx = e->transformIndex;
-		if (idx != SIZE_MAX) {
-			t->position.x = T.posX[idx];
-			t->position.y = T.posY[idx];
-			//t->velocity.x = T.velX[idx];
-			//t->velocity.y = T.velY[idx];
-		}
+	const size_t transformIndex = e->transformIndex;
+	if (UpdateDraggedBall(e, transformIndex, *transform)) {
+		SyncEntityTransform(e, transformIndex, *transform);
+		return;
 	}
 
-	// 3. Render instance prep (GPU batching)
-	if (auto* inst = e->GetComponent<CRenderInstance>()) {
-		if (auto* t = e->GetComponent<CTransform>()) {
-			inst->x = t->position.x;
-			inst->y = t->position.y;
-		}
+	UpdateBallMovement(e, transformIndex, *transform, dt);
+	SyncEntityTransform(e, transformIndex, *transform);
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+Vec2 TestScene::ClampBallToMap(const Vec2& position, float radius) const {
+	return Vec2(
+		std::clamp(position.x, m_mapMin.x + radius, m_mapMax.x - radius),
+		std::clamp(position.y, m_mapMin.y + radius, m_mapMax.y - radius));
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+bool TestScene::UpdateDraggedBall(Entity* entity, size_t transformIndex, CTransform& transform) {
+	if (entity != m_draggedBall)
+		return false;
+
+	const Vec2 mouseWorld = m_mouseEntity->GetComponent<CMouseState>()->worldPos;
+	const Vec2 position = ClampBallToMap(mouseWorld + m_dragOffset, entity->GetRadius());
+	auto& transforms = m_entityManager.GetTransformSoA();
+	transforms.SetPosition(transformIndex, position.x, position.y);
+	transform.position = position;
+	return true;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void TestScene::UpdateBallMovement(Entity* entity, size_t transformIndex, CTransform& transform, float deltaTime) {
+	constexpr float ballSpeed = 180.0f;
+	auto& transforms = m_entityManager.GetTransformSoA();
+	Vec2 velocity(transforms.velX[transformIndex], transforms.velY[transformIndex]);
+	velocity = velocity.Mag2() <= 0.0001f ? Vec2::RandomDirection() * ballSpeed : velocity.GetUnitVec() * ballSpeed;
+	Vec2 position(transforms.posX[transformIndex], transforms.posY[transformIndex]);
+	position += velocity * deltaTime;
+
+	const Vec2 clampedPosition = ClampBallToMap(position, entity->GetRadius());
+	if (clampedPosition.x != position.x)
+		velocity.x = position.x < clampedPosition.x ? std::abs(velocity.x) : -std::abs(velocity.x);
+	if (clampedPosition.y != position.y)
+		velocity.y = position.y < clampedPosition.y ? std::abs(velocity.y) : -std::abs(velocity.y);
+
+	transforms.SetPosition(transformIndex, clampedPosition.x, clampedPosition.y);
+	transforms.velX[transformIndex] = velocity.x;
+	transforms.velY[transformIndex] = velocity.y;
+	transform.position = clampedPosition;
+	transform.velocity = velocity;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+void TestScene::SyncEntityTransform(Entity* entity, size_t transformIndex, CTransform& transform) {
+	(void)entity;
+	auto& transforms = m_entityManager.GetTransformSoA();
+	transform.position = Vec2(transforms.posX[transformIndex], transforms.posY[transformIndex]);
+	if (auto* instance = entity->GetComponent<CRenderInstance>()) {
+		instance->x = transform.position.x;
+		instance->y = transform.position.y;
 	}
 }
 /////////////////////////////////

@@ -85,6 +85,10 @@ private:
 	void RenderGameInfoWindow(size_t entityCount, int deathCount, int explosionCount);
 
 	void UpdateEntity(Entity* entity, float deltaTime, float worldWidth, float worldHeight);
+	Vec2 ClampBallToMap(const Vec2& position, float radius) const;
+	bool UpdateDraggedBall(Entity* entity, size_t transformIndex, CTransform& transform);
+	void UpdateBallMovement(Entity* entity, size_t transformIndex, CTransform& transform, float deltaTime);
+	void SyncEntityTransform(Entity* entity, size_t transformIndex, CTransform& transform);
 	void UpdateFPS(float deltaTime);
 	void ProcessEvents();
 	void UpdateSceneLogic(float deltaTime);
@@ -97,6 +101,8 @@ private:
 	void SpawnExplosion(const Vec2& position, float radius);
 	void ApplyMainCameraView(float deltaTime);
 	void ApplyCameraMovement(float deltaTime);
+	Vec2 GetMouseWorldPosition(const sf::Vector2i& mousePosition) const;
+	Entity* PickBall(const Vec2& worldPosition) const;
 
 	// Private member variables for the TestScene class. These include references to the GameEngine, EntityManager, and SFML window, as well as random distributions for entity properties and tracking variables for explosions and FPS
 
@@ -158,6 +164,8 @@ private:
 	std::uniform_int_distribution<int> m_alphaVal;			// alpha values for more visible entities
 	std::uniform_real_distribution<float> m_radiusDistro;	// random radius between 1.5 and 2.0 for more visible entities
 	std::uniform_int_distribution<int> m_entityType;		// entity type (0-4) for team assignment
+	Entity* m_draggedBall = nullptr;
+	Vec2 m_dragOffset = Vec2::Zero;
 	std::uniform_int_distribution<int> m_direction;			// direction (0-1) for left or right movement	
 	
 	//std::uniform_int_distribution<int> m_spawnZone;		// spawn zone (0-3) for more even distribution of entities across the screen, preventing clustering in one area (commented out for now, as it may not be necessary with the current spawn logic)

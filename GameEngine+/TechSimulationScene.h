@@ -47,7 +47,7 @@ public:
 	void UnloadResources() override;
 	CCamera& GetActiveCamera() override { return m_screenCamera; }
 
-	void InitialiseGame(sf::Vector2u windowSize) override;
+	void Initialise(sf::Vector2u windowSize) override;
 
 	// InitialiseSpatialLayers - Initializes the spatial layers for the scene. Currently does nothing, but can be used for setting up spatial layers if needed.
 	void InitialiseSpatialLayers();

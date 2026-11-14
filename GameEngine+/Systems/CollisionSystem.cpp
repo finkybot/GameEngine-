@@ -136,8 +136,7 @@ bool CollisionSystem::IsColliding(const Entity* entity1, const Entity* entity2) 
 
 
 /////////////////////////////////
-// ResolveCollision - resolves a collision between two entities based on their types (enemies vs allies). If the entities are enemies (different tags), it spawns an explosion at the collision point, blends their colors for the explosion effect, and destroys both entities.
-int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
+int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) {
 	if (!m_entityManager)
 		return 0;
 
@@ -145,34 +144,22 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 
 	size_t i1 = entity1->transformIndex;
 	size_t i2 = entity2->transformIndex;
+
 	if (i1 == SIZE_MAX || i2 == SIZE_MAX)
 		return 0;
 
-	// Enemies → explosion, allies → bounce
+	// Enemies -> explosion, allies -> bounce
 	if (AreEnemies(entity1, entity2)) {
-		auto shape1 = entity1->GetComponent<CShape>();
-		auto shape2 = entity2->GetComponent<CShape>();
+		auto* shape1 = entity1->GetComponent<CShape>();
+		auto* shape2 = entity2->GetComponent<CShape>();
+
 		if (!shape1 || !shape2)
 			return 0;
 
-		// Explosion velocity from SoA
-		Vec2 currentVel(T.velX[i1], T.velY[i1]);
-		Vec2 otherVel(T.velX[i2], T.velY[i2]);
-
-		float currentSpeed = std::sqrt(currentVel.x * currentVel.x + currentVel.y * currentVel.y);
-		float otherSpeed = std::sqrt(otherVel.x * otherVel.x + otherVel.y * otherVel.y);
-
-		Vec2 explosionVelocity = (currentSpeed >= otherSpeed) ? currentVel : otherVel;
-		Vec2 explosionVelocity2 = (currentSpeed < otherSpeed) ? currentVel : otherVel;
-
-		explosionVelocity *= 0.5f;
-		explosionVelocity2 *= 0.5f;
-
-		// Blinding yellow blend
+		// Blend colours
 		sf::Color col1 = shape1->GetColor();
 		sf::Color col2 = shape2->GetColor();
 
-		// Convert to floats
 		float r1 = col1.r / 255.0f;
 		float g1 = col1.g / 255.0f;
 		float b1 = col1.b / 255.0f;
@@ -181,40 +168,33 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 		float g2 = col2.g / 255.0f;
 		float b2 = col2.b / 255.0f;
 
-		// Compute brightness of each color
 		float brightness1 = (r1 + g1 + b1) / 3.0f;
 		float brightness2 = (r2 + g2 + b2) / 3.0f;
 
-		// Pick the brighter one
 		float brightness = std::max(brightness1, brightness2);
 
-		// Push toward yellow (R+G high, B low)
-		float yellowR = 1.0f;
-		float yellowG = 1.0f;
-		float yellowB = 0.0f;
+		constexpr float yellowR = 1.0f;
+		constexpr float yellowG = 1.0f;
+		constexpr float yellowB = 0.0f;
 
-		// Mix original brightness with yellow
-		float mix = 0.85f; // 0 = original color, 1 = pure yellow
+		constexpr float mix = 0.85f;
+
 		float finalR = (1.0f - mix) * brightness + mix * yellowR;
 		float finalG = (1.0f - mix) * brightness + mix * yellowG;
 		float finalB = (1.0f - mix) * brightness + mix * yellowB;
 
-		// Convert back to 0–255
 		Vec3 blendedColor(finalR * 255.0f, finalG * 255.0f, finalB * 255.0f);
 
 		// Collision point
-		float x1 = T.posX[i1];
-		float y1 = T.posY[i1];
-		float x2 = T.posX[i2];
-		float y2 = T.posY[i2];
+		Vec2 p1(T.posX[i1], T.posY[i1]);
+		Vec2 p2(T.posX[i2], T.posY[i2]);
 
-		Vec2 p1(x1, y1);
-		Vec2 p2(x2, y2);
 
 		Vec2 distanceVec = p2 - p1;
 		float distance = p1.Distance(p2);
 
 		Vec2 collisionPoint;
+
 		if (distance > 0.0f) {
 			Vec2 direction = distanceVec / distance;
 			collisionPoint = p1 + direction * entity1->GetRadius();
@@ -222,60 +202,158 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
 			collisionPoint = (p1 + p2) * 0.5f;
 		}
 
-		const float explosionRadius = 5.0f;
-		Vec2 explosionPosition = collisionPoint - Vec2(explosionRadius, explosionRadius);
+		constexpr float explosionRadius = 5.0f;
 
-		//bool canPlaySound = m_soundSystem ? m_soundSystem->CanPlayNewSound(*m_entityManager) : true;
+		ExplosionRequest request;
+		request.position = collisionPoint;
+		request.colour = blendedColor;
+		request.radius = explosionRadius;
 
-		// Spawn explosion 1 using AddEntity's correct setup
-		Entity* en = m_entityManager->AddEntity(EntityType::Explosion);
-		Entity* en2 = m_entityManager->AddEntity(EntityType::Explosion);
-
-		auto* t = en->GetComponent<CTransform>();
-		t->position = explosionPosition;
-		t->velocity = explosionVelocity;
-
-
-		auto* t2 = en2->GetComponent<CTransform>();
-		t2->position = explosionPosition;
-		t2->velocity = explosionVelocity2;
-
-
-		auto* s1 = en->GetComponent<CShape>();
-		if (s1) {
-			s1->SetColor(blendedColor.x, blendedColor.y, blendedColor.z, 200);
-		}
-		
-		auto* s2 = en2->GetComponent<CShape>();
-		if (s2) {
-			s2->SetColor(blendedColor.x, blendedColor.y, blendedColor.z, 200);
-		}
-
-
-		////std::cout << "Explosion creation time: " << en->m_creationTime.time_since_epoch().count() << std::endl;
-
-
-		//if (canPlaySound) {
-		//	auto soundEffect = en->AddComponent<CSoundEffect>();
-		//	soundEffect->m_Path = "assets/sounds/medium-explosion.ogg";
-		//	soundEffect->m_volume = 75.0f;
-		//	soundEffect->m_loop = false;
-		//	soundEffect->m_priority = SoundPriority::Critical;
-		//	soundEffect->m_is3D = true;
-		//	soundEffect->m_3DMinDistance = 200.0f;
-		//	soundEffect->m_3DMaxDistance = 2000.0f;
-		//	soundEffect->m_shouldPlay = true;
-		//}
+		m_explosionRequests.push_back(request);
 
 		m_entityManager->KillEntity(entity1);
 		m_entityManager->KillEntity(entity2);
+
 		return 2;
 	}
 
-	// Allies → bounce
+	// Allies -> bounce
 	BounceEntities(entity1, entity2);
+
 	return 0;
 }
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// ResolveCollision - resolves a collision between two entities based on their types (enemies vs allies). If the entities are enemies (different tags), it spawns an explosion at the collision point, blends their colors for the explosion effect, and destroys both entities.
+//int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) const {
+//	if (!m_entityManager)
+//		return 0;
+//
+//	auto& T = m_entityManager->GetTransformSoA();
+//
+//	size_t i1 = entity1->transformIndex;
+//	size_t i2 = entity2->transformIndex;
+//	if (i1 == SIZE_MAX || i2 == SIZE_MAX)
+//		return 0;
+//
+//	// Enemies → explosion, allies → bounce
+//	if (AreEnemies(entity1, entity2)) {
+//		auto shape1 = entity1->GetComponent<CShape>();
+//		auto shape2 = entity2->GetComponent<CShape>();
+//		if (!shape1 || !shape2)
+//			return 0;
+//
+//		// Explosion velocity from SoA
+//		Vec2 currentVel(T.velX[i1], T.velY[i1]);
+//		Vec2 otherVel(T.velX[i2], T.velY[i2]);
+//
+//		float currentSpeed = std::sqrt(currentVel.x * currentVel.x + currentVel.y * currentVel.y);
+//		float otherSpeed = std::sqrt(otherVel.x * otherVel.x + otherVel.y * otherVel.y);
+//
+//		Vec2 explosionVelocity = (currentSpeed >= otherSpeed) ? currentVel : otherVel;
+//		Vec2 explosionVelocity2 = (currentSpeed < otherSpeed) ? currentVel : otherVel;
+//
+//		explosionVelocity *= 0.5f;
+//		explosionVelocity2 *= 0.5f;
+//
+//		// Blinding yellow blend
+//		sf::Color col1 = shape1->GetColor();
+//		sf::Color col2 = shape2->GetColor();
+//
+//		// Convert to floats
+//		float r1 = col1.r / 255.0f;
+//		float g1 = col1.g / 255.0f;
+//		float b1 = col1.b / 255.0f;
+//
+//		float r2 = col2.r / 255.0f;
+//		float g2 = col2.g / 255.0f;
+//		float b2 = col2.b / 255.0f;
+//
+//		// Compute brightness of each color
+//		float brightness1 = (r1 + g1 + b1) / 3.0f;
+//		float brightness2 = (r2 + g2 + b2) / 3.0f;
+//
+//		// Pick the brighter one
+//		float brightness = std::max(brightness1, brightness2);
+//
+//		// Push toward yellow (R+G high, B low)
+//		float yellowR = 1.0f;
+//		float yellowG = 1.0f;
+//		float yellowB = 0.0f;
+//
+//		// Mix original brightness with yellow
+//		float mix = 0.85f; // 0 = original color, 1 = pure yellow
+//		float finalR = (1.0f - mix) * brightness + mix * yellowR;
+//		float finalG = (1.0f - mix) * brightness + mix * yellowG;
+//		float finalB = (1.0f - mix) * brightness + mix * yellowB;
+//
+//		// Convert back to 0–255
+//		Vec3 blendedColor(finalR * 255.0f, finalG * 255.0f, finalB * 255.0f);
+//
+//		// Collision point
+//		float x1 = T.posX[i1];
+//		float y1 = T.posY[i1];
+//		float x2 = T.posX[i2];
+//		float y2 = T.posY[i2];
+//
+//		Vec2 p1(x1, y1);
+//		Vec2 p2(x2, y2);
+//
+//		Vec2 distanceVec = p2 - p1;
+//		float distance = p1.Distance(p2);
+//
+//		Vec2 collisionPoint;
+//		if (distance > 0.0f) {
+//			Vec2 direction = distanceVec / distance;
+//			collisionPoint = p1 + direction * entity1->GetRadius();
+//		} else {
+//			collisionPoint = (p1 + p2) * 0.5f;
+//		}
+//
+//		const float explosionRadius = 5.0f;
+//		Vec2 explosionPosition = collisionPoint - Vec2(explosionRadius, explosionRadius);
+//
+//		//bool canPlaySound = m_soundSystem ? m_soundSystem->CanPlayNewSound(*m_entityManager) : true;
+//
+//		// Spawn explosion 1 using AddEntity's correct setup
+//		Entity* en = m_entityManager->AddEntity(EntityType::Explosion);
+//		Entity* en2 = m_entityManager->AddEntity(EntityType::Explosion);
+//
+//		auto* t = en->GetComponent<CTransform>();
+//		t->position = explosionPosition;
+//		t->velocity = explosionVelocity;
+//
+//
+//		auto* t2 = en2->GetComponent<CTransform>();
+//		t2->position = explosionPosition;
+//		t2->velocity = explosionVelocity2;
+//
+//
+//		auto* s1 = en->GetComponent<CShape>();
+//		if (s1) {
+//			s1->SetColor(blendedColor.x, blendedColor.y, blendedColor.z, 200);
+//		}
+//		
+//		auto* s2 = en2->GetComponent<CShape>();
+//		if (s2) {
+//			s2->SetColor(blendedColor.x, blendedColor.y, blendedColor.z, 200);
+//		}
+//
+//
+//		////std::cout << "Explosion creation time: " << en->m_creationTime.time_since_epoch().count() << std::endl;
+//
+//		m_entityManager->KillEntity(entity1);
+//		m_entityManager->KillEntity(entity2);
+//		return 2;
+//	}
+//
+//	// Allies → bounce
+//	BounceEntities(entity1, entity2);
+//	return 0;
+//}
 /////////////////////////////////
 
 

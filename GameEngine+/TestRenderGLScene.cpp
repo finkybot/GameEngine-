@@ -195,7 +195,7 @@ void TestRenderGLScene::LoadResources() {
 	m_isLoaded = true;
 }
 void TestRenderGLScene::UnloadResources() {}
-void TestRenderGLScene::InitialiseGame(sf::Vector2u) {}
+void TestRenderGLScene::Initialise(sf::Vector2u) {}
 /////////////////////////////////
 
 

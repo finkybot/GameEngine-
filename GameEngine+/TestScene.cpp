@@ -104,7 +104,11 @@ void TestScene::Update(float dt) {
 
 
 	m_dt = dt;
+	m_explosionSoundTimer = std::min(1.0f / 12.0f, m_explosionSoundTimer + dt);
 	UpdateFPS(dt);
+
+
+	auto& CollisionSystem = GetWorld().GetEntityManager().GetCollisionSystem();
 
 	// --- Scene growth + spawning (bounded) ---
 	m_growthTimer += dt;
@@ -141,6 +145,39 @@ void TestScene::Update(float dt) {
 	if (m_spatialCollisionEnabled && GetWorld().GetEntityManager().GetSpatialIndex()) {
 		GetWorld().GetEntityManager().GetCollisionSystem().DetectAndResolveSpatial(entities, GetWorld().GetEntityManager().GetSpatialIndex(), dt);
 	}
+
+	const auto& explosionRequests = CollisionSystem.GetExplosionRequests();
+	if (!explosionRequests.empty()) {
+		//std::cout << "[TestScene] Collision explosion requests: " << explosionRequests.size() << ", sound entity ID: " << m_explosionSoundID.index << "\n";
+	}
+
+	bool queuedExplosionSound = false;
+	for (const auto& request : explosionRequests) {
+		SpawnExplosion(request.position, request.radius);
+
+		bool collisionInCameraView = false;
+		if (cam) {
+			float halfViewWidth = cam->viewportWidth / (2.0f * cam->zoom);
+			float halfViewHeight = cam->viewportHeight / (2.0f * cam->zoom);
+			collisionInCameraView =
+				std::abs(request.position.x - cam->position.x) <= halfViewWidth &&
+				std::abs(request.position.y - cam->position.y) <= halfViewHeight;
+		}
+
+		if (collisionInCameraView && !queuedExplosionSound && m_explosionSoundTimer >= 1.0f / 12.0f) {
+			if (auto* SoundSystem = GetWorld().GetEntityManager().GetSoundSystem()) {
+				// Queue the explosion sound effect after collision detection has generated the request.
+				std::cout << "[TestScene] Queueing explosion sound effect\n";
+				SoundSystem->QueueSoundEffect(m_explosionSoundID, request.position);
+				m_explosionSoundTimer = 0.0f;
+				queuedExplosionSound = true;
+			} else {
+				std::cerr << "[TestScene] SoundSystem is unavailable\n";
+			}
+		}
+	}
+
+	CollisionSystem.ClearExplosionRequests();
 
 	// --- Audio listener (camera only) ---
 	if (cam && GetWorld().GetEntityManager().GetSoundSystem()) {
@@ -308,6 +345,21 @@ void TestScene::OnEnter() {
 	GetWorld().GetEntityManager().SetSFMLRenderingEnabled(false);
 	GetWorld().GetEntityManager().SetGLRenderingEnabled(true);
 	GetWorld().GetEntityManager().ClearAll();
+	m_explosionSoundEntity = nullptr;
+	GetWorld().GetEntityManager().GetSoundSystem()->InitialisePool(GetWorld().GetEntityManager(), 64);
+
+	Entity* soundEntity = m_world.CreateEntity(EntityType::Default);
+	m_explosionSoundEntity = soundEntity;
+	auto* soundEffect = soundEntity->AddComponent<CSoundEffect>("Explosion", "assets/sounds/medium-explosion.ogg");
+	m_explosionSoundID = soundEntity->GetId();
+	m_explosionSoundTimer = 1.0f / 12.0f;
+	soundEffect->volume = 100.0f;
+	soundEffect->_3DMinDistance = 1000.0f;
+	soundEffect->_3DMaxDistance = 15000.0f;
+	soundEffect->PlayOnAwake = false;
+	soundEffect->shouldPlay = false;
+	soundEffect->loop = false;
+	soundEffect->is3D = true;
 
 	// Expand world bounds
 	m_mapMin = Vec2(0, 0);
@@ -433,7 +485,7 @@ void TestScene::UnloadResources() { /* unload resources */ }
 
 /////////////////////////////////
 // InitializeGame - responsible for initializing the game state for the scene, including spawning entities with random properties and setting up any necessary game logic or mechanics.
-void TestScene::InitialiseGame(sf::Vector2u windowSize) {
+void TestScene::Initialise(sf::Vector2u windowSize) {
 	InitialiseSpatialLayers();
 
 	// Initialize RNG once
@@ -461,22 +513,14 @@ void TestScene::InitialiseGame(sf::Vector2u windowSize) {
 	m_shapeRegistry.RegisterShapeTemplate(EntityType::TeamRocket, 3.0f, Vec3(255, 255, 200));
 	m_shapeRegistry.RegisterShapeTemplate(EntityType::TeamMonkey, 3.0f, Vec3(255, 200, 255));
 
-	Entity* soundEntity = m_world.CreateEntity(EntityType::Default);
-	auto* soundEffect = soundEntity->AddComponent<CSoundEffect>("Explosion", "assets/sounds/medium-explosion.ogg");
-	m_explosionSoundID = soundEntity->GetId();
-	
-	soundEffect->volume = 0.75f;
-	soundEffect->PlayOnAwake = false;
-	soundEffect->shouldPlay = false;
-
 }
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// SpawnEntityByType - Spawns an entity of the specified team type with random properties and adds it to the EntityManager. It takes the EntityManager reference, team type (0-4), radius, color, position, 
-// velocity, and alpha as parameters. The team type is mapped to a specific EntityType enum value, and the new entity is created and added to the EntityManager using the addEntity method.
+// SpawnEntityByType - Spawns an entity of the specified team type with random properties and adds it to the EntityManager. It takes the EntityManager reference, team type (0-4), radius, color, position, velocity, and alpha as parameters. The team type is mapped to a specific EntityType enum value, and the new 
+// entity is created and added to the EntityManager using the addEntity method.
 void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha) {
 	// Map teamType (0-4) to EntityType enum values
 	const EntityType teamTypes[] = {EntityType::TeamEagle, EntityType::TeamHawk, EntityType::TeamBoogaloo, EntityType::TeamRocket, EntityType::TeamMonkey};
@@ -561,6 +605,9 @@ void TestScene::RenderGameInfoWindow(size_t entityCount, int deathCount, int exp
 void TestScene::UpdateEntity(Entity* e, float dt, float worldW, float worldH) {
 	(void)worldW;
 	(void)worldH;
+	if (e->HasComponent<CSoundEffect>())
+		return;
+
 	CTransform* transform = e->GetComponent<CTransform>();
 	if (!transform || e->transformIndex == SIZE_MAX)
 		return;

@@ -54,7 +54,7 @@ PathTestScene::~PathTestScene() = default;
 
 /////////////////////////////////
 // InitializeGame - Initializes the game scene, setting up the camera entity, map bounds, and scanning for available levels.
-void PathTestScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
+void PathTestScene::Initialise(sf::Vector2u /*windowSize*/) {
 	// Initialize map bounds
 	m_mapMin = Vec2(-512, -512);
 	m_mapMax = Vec2(512, 512);

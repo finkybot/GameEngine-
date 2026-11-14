@@ -75,7 +75,7 @@ void World::ChangeScene(const std::string& sceneName) {
 			m_window->clear(sf::Color::Black);
 
 		m_activeScene = it->second;
-		m_activeScene->InitialiseGame(m_windowSize);
+		m_activeScene->Initialise(m_windowSize);
 		m_activeScene->LoadResources();
 		m_activeScene->OnEnter();
 	} else {

@@ -102,8 +102,8 @@ GameEngine::GameEngine() {
 
 	// *** AUDIO *** Create and initialize the SoundSystem
 	soundSystem = std::make_unique<SoundSystem>();
-	soundSystem->Initialize();  // Check audio device and log diagnostics
-	soundSystem->InitializePool(m_world->GetEntityManager(), 64);  // Initialize sound pool with 64 entities
+	soundSystem->Initialise();  // Check audio device and log diagnostics
+	soundSystem->InitialisePool(m_world->GetEntityManager(), 64);  // Initialize sound pool with 64 entities
 	soundSystem->SetMasterVolume(70.0f);  // Set master volume to 70% (0-100 scale)
 
 

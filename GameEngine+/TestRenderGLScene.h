@@ -27,7 +27,7 @@ public:
 	void OnWindowResized(sf::Vector2u newSize) override;
 	void LoadResources() override;
 	void UnloadResources() override;
-	void InitialiseGame(sf::Vector2u windowSize) override;
+	void Initialise(sf::Vector2u windowSize) override;
 	CCamera& GetActiveCamera() override { return m_screenCamera; }
 
 private:

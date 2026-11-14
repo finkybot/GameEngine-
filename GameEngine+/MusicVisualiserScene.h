@@ -63,7 +63,7 @@ public:
 	// Resource management and initialization (overrides from Scene). LoadResources and UnloadResources will handle loading and freeing any resources needed by the scene, while InitializeGame can be used to set up the initial state of the scene when the game starts.
 	void LoadResources() override;
 	void UnloadResources() override;
-	void InitialiseGame(sf::Vector2u windowSize) override;
+	void Initialise(sf::Vector2u windowSize) override;
 
 
 	// Deprecated equalizer active state management (commented out for now, as equalizer bars are always active when enabled, but this could be reintroduced if we want to allow toggling the equalizer bars on/off separately from the music playback)

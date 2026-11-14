@@ -1314,7 +1314,7 @@ void RayCastScene::UnloadResources() {
 
 ///////////////////////////////
 // InitializeGame - load chunked level data and create a raycast snapshot from collision layer 1.
-void RayCastScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
+void RayCastScene::Initialise(sf::Vector2u /*windowSize*/) {
 	sf::Vector2u windowSize = m_window.getSize();
 
 	m_cameraEntity = m_world.CreateEntity(EntityType::Default);

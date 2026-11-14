@@ -44,7 +44,7 @@ public:
 	// Resource management methods
 	void LoadResources() override;
 	void UnloadResources() override;
-	void InitialiseGame(sf::Vector2u windowSize) override;
+	void Initialise(sf::Vector2u windowSize) override;
 
 
 

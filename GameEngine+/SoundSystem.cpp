@@ -34,8 +34,8 @@ SoundSystem::~SoundSystem() {
 
 
 /////////////////////////////////
-// Initialize - Enumerate SFML 3.1 PlaybackDevice and set the default output device
-void SoundSystem::Initialize() {
+// Initialise - Enumerate SFML 3.1 PlaybackDevice and set the default output device
+void SoundSystem::Initialise() {
 	std::cout << "\x1b[35m[SoundSystem]\x1b[0m Initializing audio system..." << std::endl;
 	std::cout.flush();
 
@@ -73,7 +73,12 @@ void SoundSystem::Initialize() {
 
 /////////////////////////////////
 // InitializePool - Create a pool of pre-allocated sound entities for reuse
-void SoundSystem::InitializePool(EntityManager& em, size_t poolSize) {
+void SoundSystem::InitialisePool(EntityManager& em, size_t poolSize) {
+	m_soundEffectPool.clear();
+	m_activePooledSounds.clear();
+	while (!m_pendingSoundQueue.empty())
+		m_pendingSoundQueue.pop_front();
+
 	m_poolSize = poolSize;
 	m_entityManager = &em;
 
@@ -108,6 +113,7 @@ Entity* SoundSystem::AcquirePooledSoundEntity() {
 
 		// Reset component state for reuse
 		if (auto* sound = entity->GetComponent<CSoundEffect>()) {
+			sound->sound.reset();
 			sound->shouldPlay = false;
 			sound->state = CSoundEffect::State::Stopped;
 			sound->fadeOutDuration = 0.0f;
@@ -133,6 +139,7 @@ void SoundSystem::ReturnSoundToPool(Entity* entity) {
 		if (sound->sound) {
 			sound->sound->stop();
 		}
+		sound->sound.reset();
 		sound->shouldPlay = false;
 		sound->state = CSoundEffect::State::Stopped;
 	}
@@ -146,6 +153,61 @@ void SoundSystem::ReturnSoundToPool(Entity* entity) {
 /////////////////////////////////
 // Process - Iterate all entities with CSoundEffect components and manage playback
 void SoundSystem::Process(EntityManager& em, float deltaTime) {
+	m_entityManager = &em;
+
+	// Process queued sound requests before scanning components so playback can
+	// start during this processing pass rather than waiting for the next frame.
+	while (!m_pendingSoundQueue.empty()) {
+		PendingSoundRequest request = m_pendingSoundQueue.front();
+		m_pendingSoundQueue.pop_front();
+
+		Entity* entity = em.GetEntity(request.entityId);
+		if (!entity)
+			continue;
+
+		CSoundEffect* sound = entity->GetComponent<CSoundEffect>();
+		if (!sound)
+			continue;
+
+		if (request.hasPosition) {
+			if (auto* transform = entity->GetComponent<CTransform>())
+				transform->position = request.position;
+			std::cout << "[SoundSystem] Emitting sound at world position ("
+				<< request.position.x << ", " << request.position.y << ")"
+				<< "; listener at (" << m_listenerPosition.x << ", "
+				<< m_listenerPosition.y << ")\n";
+		}
+
+		if (sound->state == CSoundEffect::State::Playing) {
+			Entity* pooledEntity = AcquirePooledSoundEntity();
+			if (!pooledEntity)
+				continue;
+
+			CSoundEffect* pooledSound = pooledEntity->GetComponent<CSoundEffect>();
+			if (!pooledSound)
+				continue;
+
+			pooledSound->soundFile = sound->soundFile;
+			pooledSound->Path = sound->Path;
+			pooledSound->loop = sound->loop;
+			pooledSound->is3D = sound->is3D;
+			pooledSound->isSpatialized = sound->isSpatialized;
+			pooledSound->volume = sound->volume;
+			pooledSound->pitch = sound->pitch;
+			pooledSound->priority = sound->priority;
+			if (auto* sourceTransform = entity->GetComponent<CTransform>()) {
+				if (auto* pooledTransform = pooledEntity->GetComponent<CTransform>())
+					pooledTransform->position = request.hasPosition ? request.position : sourceTransform->position;
+			}
+			pooledSound->shouldPlay = true;
+			m_activePooledSounds.insert(pooledEntity);
+			continue;
+		}
+
+		sound->shouldPlay = true;
+		//std::cout << "\x1b[35m[SoundSystem]\x1b[0m Queued sound effect for playback: " << sound->Path << std::endl;
+	}
+
 	EntityVector& entities = em.GetEntities();
 
 	static float accumulatedTime = 0.0f;
@@ -175,6 +237,8 @@ void SoundSystem::Process(EntityManager& em, float deltaTime) {
 			}
 
 			sound->sound = std::make_unique<sf::Sound>(*buffer);
+			sound->sound->setLooping(sound->loop);
+			sound->sound->setPitch(sound->pitch);
 			// SFML 3 volume range is 1-100 (not 0-100)
 			// Internal m_volume should be in range 1-100 for proper SFML playback
 			float finalVolume = std::clamp(sound->volume, 1.0f, 100.0f);
@@ -209,6 +273,8 @@ void SoundSystem::Process(EntityManager& em, float deltaTime) {
 			if (actualStatus == sf::Sound::Status::Stopped) {
 				sound->state = CSoundEffect::State::Stopped;
 				sound->shouldPlay = false; // Mark as done
+				if (m_activePooledSounds.erase(entity) > 0)
+					ReturnSoundToPool(entity);
 			}
 		}
 
@@ -258,28 +324,34 @@ void SoundSystem::Process(EntityManager& em, float deltaTime) {
 /////////////////////////////////
 // Update - Update sound states each frame (fade, distance calculations, etc.)
 void SoundSystem::Update(float deltaTime) {
-	if (!m_entityManager) return;
+	if (!m_entityManager)
+		return;
 
 	EntityVector& entities = m_entityManager->GetEntities();
 
 	for (auto& entityPtr : entities) {
 		Entity* entity = entityPtr.get();
+
 		CSoundEffect* sound = entity->GetComponent<CSoundEffect>();
-		if (!sound || !sound->sound) continue;
+
+		if (!sound || !sound->sound)
+			continue;
 
 		// Update fade-out
 		if (sound->fadeOutDuration > 0.0f && sound->state == CSoundEffect::State::Playing) {
 			sound->fadeOutElapsed += deltaTime;
 
 			float progress = sound->fadeOutElapsed / sound->fadeOutDuration;
+
 			if (progress >= 1.0f) {
 				sound->sound->stop();
+
 				sound->state = CSoundEffect::State::Stopped;
 				sound->shouldPlay = false;
 				sound->fadeOutDuration = 0.0f;
 			} else {
-				// Linearly interpolate volume during fade-out (clamp to 1-100 for SFML 3)
 				float fadedVolume = std::max(1.0f, sound->volume * (1.0f - progress));
+
 				sound->sound->setVolume(fadedVolume);
 			}
 		}
@@ -287,6 +359,7 @@ void SoundSystem::Update(float deltaTime) {
 		// Update spatial audio distance
 		if (auto* transform = entity->GetComponent<CTransform>()) {
 			Vec2 delta = transform->position - m_listenerPosition;
+
 			sound->currentDistance = delta.Mag();
 		}
 	}
@@ -475,12 +548,9 @@ void SoundSystem::ApplySpatialAudio(sf::Sound& sound, const CSoundEffect& soundC
 	}
 
 	// Let SFML handle 3D audio positioning and spatialization
-	// The sound position is set relative to the listener (which is at 0,0,0 by default)
-	// so we set the sound position and SFML will apply attenuation and panning automatically
-
-	// Convert 2D position to 3D (z=0)
-	// Relative to listener: if listener is at m_listenerPosition, sound should be offset from that
-	sf::Vector3f soundPos(entityPos.x - m_listenerPosition.x, entityPos.y - m_listenerPosition.y, 0.0f);
+	// Sound and listener positions must use the same world coordinate system.
+	// SFML calculates the relative offset and attenuation from these two positions.
+	sf::Vector3f soundPos(entityPos.x, entityPos.y, 0.0f);
 	sound.setPosition(soundPos);
 
 	// Set distance parameters for attenuation curve

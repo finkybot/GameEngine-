@@ -42,7 +42,7 @@ public:
 	virtual void OnWindowResized(sf::Vector2u newSize) = 0;
 	virtual void LoadResources() = 0;
 	virtual void UnloadResources() = 0;
-	virtual void InitialiseGame(sf::Vector2u windowSize) = 0;
+	virtual void Initialise(sf::Vector2u windowSize) = 0;
 
 	// Optional: draw overlays after ImGui/UI has been rendered (engine calls this after ImGui::SFML::Render)
 	virtual void RenderDebugOverlay() {}

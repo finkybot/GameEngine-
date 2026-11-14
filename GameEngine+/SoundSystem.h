@@ -10,9 +10,12 @@
 #include <vector>
 #include <memory>
 #include <unordered_map>
+#include <unordered_set>
 #include <string>
 #include "Vec2.h"
+#include "IDTypes.h"
 #include <cmath>
+#include <deque>
 
 class Entity;
 class EntityManager;
@@ -43,9 +46,15 @@ private:
 
 	// Sound effect pooling (Entity-based pooling)
 	std::vector<Entity*> m_soundEffectPool;      // Pool of pre-allocated sound entities
+	std::unordered_set<Entity*> m_activePooledSounds;
 	size_t m_poolSize = 64;                      // Default pool size
 	EntityManager* m_entityManager = nullptr;    // Reference to EntityManager for pool creation
-
+	struct PendingSoundRequest {
+		EntityID entityId;
+		Vec2 position = Vec2::Zero;
+		bool hasPosition = false;
+	};
+	std::deque<PendingSoundRequest> m_pendingSoundQueue;	 // Queue of sound effect requests to be processed in the next update
 
 	// Audio configuration
 	float m_masterVolume = 80.0f;  // Master volume (0-100 scale for SFML)
@@ -60,15 +69,22 @@ public:
 	// Constructor and destructor
 	SoundSystem() = default;
 	~SoundSystem();
-	void Initialize();  // Initialize audio device and diagnostics
+	void Initialise();  // Initialise audio device and diagnostics
 
 
 	// Pool management
-	void InitializePool(EntityManager& em, size_t poolSize = 64);
+	void InitialisePool(EntityManager& em, size_t poolSize = 64);
 	Entity* AcquirePooledSoundEntity();
 	void ReturnSoundToPool(Entity* entity);
 	size_t GetPoolAvailableCount() const { return m_soundEffectPool.size(); }
 	size_t GetPoolTotalSize() const { return m_poolSize; }
+
+	void QueueSoundEffect(EntityID entityId) {
+		m_pendingSoundQueue.push_back({ entityId, Vec2::Zero, false });
+	}	// Queue a sound effect for playback (deferred, system-driven)
+	void QueueSoundEffect(EntityID entityId, const Vec2& position) {
+		m_pendingSoundQueue.push_back({ entityId, position, true });
+	}	// Queue a sound effect with a specific world position
 
 
 	// Main processing and update methods

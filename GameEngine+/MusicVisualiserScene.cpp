@@ -1996,7 +1996,7 @@ void MusicVisualiserScene::UnloadResources() {}
 /////////////////////////////////
 // InitializeGame - this function is responsible for initializing the game state for the scene when it is first created. For the MusicVisualizerScene, we will set up a tile map that covers the entire window, which we can use for visual effects or as a background grid. We will calculate the number 
 // of columns and rows needed based on the window size and a defined tile size, and then create a TileMap instance with those dimensions. This will allow us to easily draw a grid overlay in the RenderDebugOverlay function and potentially use the tile map for other visual effects in the future.
-void MusicVisualiserScene::InitialiseGame(sf::Vector2u windowSize) {
+void MusicVisualiserScene::Initialise(sf::Vector2u windowSize) {
 	const float tileSize = 32.0f;
 	int cols = static_cast<int>(windowSize.x / static_cast<unsigned int>(tileSize)) + 2;
 	int rows = static_cast<int>(windowSize.y / static_cast<unsigned int>(tileSize)) + 2;

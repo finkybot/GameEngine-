@@ -46,8 +46,8 @@ EntityManager::EntityManager(sf::RenderWindow& window, float cellSize): m_window
 	
 	// SoundSystem is responsible for managing sound effects based on CSoundEffect components in entities. It requires a reference to the EntityManager to access entities and their components.
 	m_soundSystem = std::make_unique<SoundSystem>();
-	m_soundSystem->Initialize();
-	m_soundSystem->InitializePool(*this, 64);  // Initialize sound effect pool with 64 entities
+	m_soundSystem->Initialise();
+	m_soundSystem->InitialisePool(*this, 64);  // Initialize sound effect pool with 64 entities
 
 	m_physicsSystem = std::make_unique<PhysicsSystem>(this);
 
@@ -817,17 +817,18 @@ std::vector<Entity*>& EntityManager::GetEntities(EntityType type) {
 /////////////////////////////////
 // GetEntity - retrieves a pointer to an entity by its unique EntityID. If the entity does not exist or the ID is invalid, the method returns nullptr. This allows systems and other parts of the code to safely access entities by their IDs without risking dereferencing invalid pointers.
 Entity* EntityManager::GetEntity(EntityID id) {
-	if (m_entityMap.empty())
+	if (m_entities.empty())
 		return nullptr;
 
-	Entity* entity = m_entities[id.index].get();
-
-	if (!entity || entity->GetId() != id) {
-		// Entity ID mismatch or entity is null, return nullptr
-		return nullptr;
+	// Entity IDs are stable identifiers, not indices into the compact entity vector.
+	// The vector can be rebuilt after ClearAll or entity removal, so resolve by the
+	// complete ID instead of indexing directly with id.index.
+	for (const auto& entityPtr : m_entities) {
+		if (entityPtr && entityPtr->GetId() == id)
+			return entityPtr.get();
 	}
 
-	return entity;
+	return nullptr;
 }
 /////////////////////////////////
 

@@ -291,7 +291,7 @@ void LevelEditorScene::RefreshMapBounds() {
 /////////////////////////////////
 // InitializeGame - Initialize the level editor scene by creating a camera entity with a transform and camera component, setting it as the main camera, and configuring the chunk manager with the base path for chunk files and the maximum number of loaded chunks allowed in memory at once. This setup allows the 
 // level editor to manage the camera view and efficiently load and save chunks of the level as needed.
-void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
+void LevelEditorScene::Initialise(sf::Vector2u /*windowSize*/) {
 	// create camera entity
 	m_cameraEntity = m_world.CreateEntity(EntityType::Camera);
 	m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);

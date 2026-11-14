@@ -56,7 +56,7 @@ public:
 
 
 	// InitialiseGame - responsible for initializing the game state for the scene, including spawning entities with random properties and setting up any necessary game logic or mechanics. This method will be called when the scene is entered to set up the initial state of the game.
-	void InitialiseGame(sf::Vector2u windowSize);
+	void Initialise(sf::Vector2u windowSize);
 
 
 	// ProcessEscapeKey - checks if the escape key is pressed and closes the window if it is. This method is called from the HandleEvent method to allow for exiting the game when the escape key is pressed.
@@ -109,14 +109,15 @@ private:
 	int m_targetEntityCount = 10000;
 	sf::RenderWindow& m_window;							// Reference to the SFML render window for rendering the scene
 	int m_explosionCount = 0;							// Number of active explosions currently playing, used for tracking and displaying explosion count in the game info window.
-	int m_deathCount =	0;								// Number of entities that have died, used for tracking and displaying death count in the game info window.
+	int m_deathCount =	0;								// Number of entities that have died, used for tracking and displaying the death count in the game info window.
+	float m_explosionSoundTimer = 1.0f / 12.0f;
 	
-
 	std::vector<Entity*> m_explosions;						// scene‑local explosion registry (currently unused, but will be used for tracking active explosions in the scene at a later date)
 
 	BucketID m_testBucket = INVALID_BUCKET;					// Bucket ID for testing purposes, used to identify a specific bucket in the EntityManager for testing entity management and rendering.
 
 	Entity* m_cameraEntity =	nullptr;					// Pointer to the camera entity in the scene, used for managing camera movement and view transformations.
+	Entity* m_explosionSoundEntity = nullptr;
 	CameraSystem m_cameraSystem;							// Camera system for updating and managing camera entities.
 
 	Vec2 m_mapMin = Vec2::Zero;								// Minimum bounds of the map for clamping camera movement and ensuring the camera stays within the defined area.

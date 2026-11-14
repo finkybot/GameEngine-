@@ -30,7 +30,7 @@
 class TestScene : public Scene {
 public:
 	// Constructor and destructor for the TestScene class.  Must call base constructor with injected refs
-	TestScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world);
+	TestScene(std::string name, sf::RenderWindow& win, World& world);
 	~TestScene() override;
 
 
@@ -112,32 +112,32 @@ private:
 	int m_deathCount =	0;								// Number of entities that have died, used for tracking and displaying death count in the game info window.
 	
 
-	std::vector<Entity*> m_explosions;					// scene‑local explosion registry (currently unused, but will be used for tracking active explosions in the scene at a later date)
+	std::vector<Entity*> m_explosions;						// scene‑local explosion registry (currently unused, but will be used for tracking active explosions in the scene at a later date)
 
-	BucketID m_testBucket = INVALID_BUCKET;				// Bucket ID for testing purposes, used to identify a specific bucket in the EntityManager for testing entity management and rendering.
+	BucketID m_testBucket = INVALID_BUCKET;					// Bucket ID for testing purposes, used to identify a specific bucket in the EntityManager for testing entity management and rendering.
 
-	Entity* m_cameraEntity =	nullptr;				// Pointer to the camera entity in the scene, used for managing camera movement and view transformations.
-	CameraSystem m_cameraSystem;						// Camera system for updating and managing camera entities.
+	Entity* m_cameraEntity =	nullptr;					// Pointer to the camera entity in the scene, used for managing camera movement and view transformations.
+	CameraSystem m_cameraSystem;							// Camera system for updating and managing camera entities.
 
-	Vec2 m_mapMin = Vec2::Zero;							// Minimum bounds of the map for clamping camera movement and ensuring the camera stays within the defined area.
-	Vec2 m_mapMax = Vec2::Zero;							// Maximum bounds of the map for clamping camera movement and ensuring the camera stays within the defined area.
-	bool m_hasMapBounds = false;						// Flag indicating whether the map has defined bounds for camera clamping.
+	Vec2 m_mapMin = Vec2::Zero;								// Minimum bounds of the map for clamping camera movement and ensuring the camera stays within the defined area.
+	Vec2 m_mapMax = Vec2::Zero;								// Maximum bounds of the map for clamping camera movement and ensuring the camera stays within the defined area.
+	bool m_hasMapBounds = false;							// Flag indicating whether the map has defined bounds for camera clamping.
 
-	float m_dt = 0.0f;									// Delta time for the current frame, used for time-based calculations and updates in the scene.
-	float m_fps = 0.0f;									// Current frames per second (FPS).
-	float m_fpsAccumulator = 0.0f;						// Accumulator for calculating FPS over time.
-	float m_fpsSmooth =	0.0f;							// Smoothed FPS value using an exponential moving average to reduce fluctuations in the reported FPS.
-	const double m_alpha = 0.15;						// smoothing factor
+	float m_dt = 0.0f;										// Delta time for the current frame, used for time-based calculations and updates in the scene.
+	float m_fps = 0.0f;										// Current frames per second (FPS).
+	float m_fpsAccumulator = 0.0f;							// Accumulator for calculating FPS over time.
+	float m_fpsSmooth =	0.0f;								// Smoothed FPS value using an exponential moving average to reduce fluctuations in the reported FPS.
+	const double m_alpha = 0.15;							// smoothing factor
 
 
-	float m_growthTimer = 0.0f;							// Timer for controlling the growth of the entity population over time.
-	bool m_spatialCollisionEnabled = true;				// Flag indicating whether spatial collision detection is enabled.
+	float m_growthTimer = 0.0f;								// Timer for controlling the growth of the entity population over time.
+	bool m_spatialCollisionEnabled	=	true;				// Flag indicating whether spatial collision detection is enabled.
 	
-	MouseSystem* m_mouseSystem = nullptr;				// Pointer to the mouse system for updating and managing mouse input.
-	Entity* m_mouseEntity =	nullptr;					// Pointer to the mouse entity in the scene, used for tracking mouse position and interactions with other entities.
-	RaycastSystem* m_raycastSystem = nullptr;			// Raycast system for performing raycasting operations in the scene, allowing for line-of-sight checks and interactions with entities based on mouse input or other criteria.
+	MouseSystem* m_mouseSystem		=	nullptr;			// Pointer to the mouse system for updating and managing mouse input.
+	Entity* m_mouseEntity			=	nullptr;			// Pointer to the mouse entity in the scene, used for tracking mouse position and interactions with other entities.
+	RaycastSystem* m_raycastSystem	=	nullptr;			// Raycast system for performing raycasting operations in the scene, allowing for line-of-sight checks and interactions with entities based on mouse input or other criteria.
 
-
+	EntityID m_explosionSoundID{};
 
 	// SpatialLayerRegistry member variable for managing spatial layers in the TechSimulationScene class. This registry allows for efficient management and retrieval of spatial layers based on their names, enabling the organization of entities into different layers for spatial queries and interactions.
 	SpatialLayerRegistry m_spatialLayers;
@@ -149,14 +149,8 @@ private:
 	// Random distributions for entity properties
 	std::default_random_engine m_rng;
 
-	//std::random_device m_randDevice;						// Random distributions for entity properties (commented out for now, as it may not be necessary with the current random number generation logic)
-	//std::default_random_engine m_generator;				// Random number generator for entity properties (commented out for now, as it may not be necessary with the current random number generation logic)
-
 	std::uniform_int_distribution<int> m_xVelocity;			// x movement speed
 	std::uniform_int_distribution<int> m_yVelocity;			// y movement speed
-
-	//std::uniform_int_distribution<int> m_xDistro;			// Spawn x axis distribution across the entire screen width for more even distribution of entities, preventing clustering at the left or right edges (commented out for now, as it may not be necessary with the current spawn logic)
-	//std::uniform_int_distribution<int> m_yDistro;			// Spawn y axis distribution across the entire screen height for more even distribution of entities, preventing clustering at the top or bottom edges (commented out for now, as it may not be necessary with the current spawn logic)
 
 	std::uniform_int_distribution<int> m_redVal;			// reds
 	std::uniform_int_distribution<int> m_greenVal;			// greens
@@ -167,7 +161,6 @@ private:
 	Entity* m_draggedBall = nullptr;
 	Vec2 m_dragOffset = Vec2::Zero;
 	std::uniform_int_distribution<int> m_direction;			// direction (0-1) for left or right movement	
-	
-	//std::uniform_int_distribution<int> m_spawnZone;		// spawn zone (0-3) for more even distribution of entities across the screen, preventing clustering in one area (commented out for now, as it may not be necessary with the current spawn logic)
 };
 /////////////////////////////////
+

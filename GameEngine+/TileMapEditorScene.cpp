@@ -33,8 +33,8 @@
 
 /////////////////////////////////
 // Constructor - Initializes the tile map editor scene with references to the game engine, render window, and entity manager
-TileMapEditorScene::TileMapEditorScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world)
-	: Scene(name, engine, entityManager, world), m_window(win) {}
+TileMapEditorScene::TileMapEditorScene(std::string name, sf::RenderWindow& win, World& world)
+	: Scene(name, world), m_window(win) {}
 /////////////////////////////////
 
 
@@ -59,7 +59,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 	UpdateExplosions();
 
 	// Update shared FPS counter is handled by the engine; query it here for display
-	m_fps = m_gameEngine.GetFPSCounter().GetFPS();
+	m_fps = GetWorld().GetFPSCounter().GetFPS();
 	
 	// ******
 	// Disabled ImGui update while debugging visuals
@@ -84,7 +84,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 		ImGui::SameLine(0.0f, 10.0f);
 		ImGui::Text("FPS (smoothed): %.1f", m_fps);
 		ImGui::SameLine(0.0f, 10.0f);
-		ImGui::Text("FPS (instant): %.1f", m_gameEngine.GetFPSCounter().GetInstantFPS());
+		ImGui::Text("FPS (instant): %.1f", GetWorld().GetFPSCounter().GetInstantFPS());
 		ImGui::Separator();
 
 
@@ -270,7 +270,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 
 		// Atlas loader UI: try to load adventure.png into engine atlas
 		static std::string s_atlas_status;
-		bool atlasLoaded = m_gameEngine.GetTextureManager().GetAtlas("adventure").has_value();
+		bool atlasLoaded = GetWorld().GetTextureManager().GetAtlas("adventure").has_value();
 		ImGui::Separator();
 		ImGui::Text("Atlas 'adventure': %s", atlasLoaded ? "Loaded" : "Not loaded");
 		if (ImGui::Button("Load adventure.png into atlas")) {
@@ -290,7 +290,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 				s_atlas_status = "adventure.png not found in candidates";
 				std::cerr << s_atlas_status << std::endl;
 			} else {
-				bool ok = m_gameEngine.GetTextureManager().LoadAtlas("adventure", found, 32, 32);
+				bool ok = GetWorld().GetTextureManager().LoadAtlas("adventure", found, 32, 32);
 				s_atlas_status = ok ? (std::string("Loaded: ") + found) : (std::string("Failed to load: ") + found);
 				if (ok)
 					std::cout << "Texture atlas loaded: " << found << std::endl;
@@ -310,9 +310,9 @@ void TileMapEditorScene::Update(float deltaTime) {
 							cmp->map.tilesetTileH = m_tileMap.tilesetTileH;
 							cmp->m_dirty = true;
 							cmp->m_processed = false;
-							m_entityManager.SetHasPendingTileMaps(true);
+							GetWorld().GetEntityManager().SetHasPendingTileMaps(true);
 
-							//m_entityManager.Update(0.0f); // force immediate processing
+							//GetWorld().GetEntityManager().Update(0.0f); // force immediate processing
 						}
 					}
 				}
@@ -325,7 +325,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 		// Tile entities textures panel
 		ImGui::Separator();
 		if (ImGui::CollapsingHeader("Tile Entities (Textures)")) {
-			auto& tileEntities = m_entityManager.GetEntities(EntityType::Tile);
+			auto& tileEntities = m_world.GetEntities(EntityType::Tile);
 			ImGui::BeginChild("tile_textures", ImVec2(0, 200), true);
 			int count = 0;
 			for (Entity* te : tileEntities) {
@@ -335,7 +335,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 				if (!texComp)
 					continue;
 				// Lookup atlas and rect
-				auto atlasOpt = m_gameEngine.GetTextureManager().GetAtlas(texComp->atlasKey);
+				auto atlasOpt = GetWorld().GetTextureManager().GetAtlas(texComp->atlasKey);
 				if (!atlasOpt.has_value())
 					continue;
 				auto atlasPtr = *atlasOpt;
@@ -377,7 +377,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 		// Atlas browser (debug): show all tiles from loaded 'adventure' atlas so user can pick one even if no tile entities exist
 		ImGui::Separator();
 		ImGui::Text("Atlas Browser (adventure)");
-		auto atlasOpt = m_gameEngine.GetTextureManager().GetAtlas("adventure");
+		auto atlasOpt = GetWorld().GetTextureManager().GetAtlas("adventure");
 		if (!atlasOpt.has_value() || !(*atlasOpt)) {
 			ImGui::TextUnformatted("(atlas not loaded)");
 		} else {
@@ -442,7 +442,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 			// otherwise create
 			else {
 				// Create an entity and attach a music component. Constructor: (path, volume, looped, playOnStart) and play....
-				Entity* musicEntity = m_entityManager.AddEntity(EntityType::Default);
+				Entity* musicEntity = m_world.CreateEntity(EntityType::Default);
 				if (musicEntity) {
 					auto* musicComponent = musicEntity->AddComponent<CMusic>(found, 80.f, true, true);
 					musicComponent->state = CMusic::State::Playing;
@@ -451,8 +451,8 @@ void TileMapEditorScene::Update(float deltaTime) {
 					m_musicEntity = musicEntity;
 
 					// Commit the newly-created entity so systems (MusicSystem) can see it immediately
-					m_entityManager.ProcessPending();
-					if (auto ms = m_entityManager.GetMusicSystem()) {
+					GetWorld().GetEntityManager().ProcessPending();
+					if (auto ms = GetWorld().GetEntityManager().GetMusicSystem()) {
 						// Force MusicSystem to process so it opens the file and prepares analysis buffer now
 						ms->Process();
 					}
@@ -474,7 +474,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 
 		// remember last created music entity so reactive spawner can query its level
 		if (!m_musicEntity) {
-			for (auto& up : m_entityManager.GetEntities()) {
+			for (auto& up : m_world.GetEntities()) {
 				if (up && up->HasComponent<CMusic>()) {
 					m_musicEntity = up.get();
 					break;
@@ -503,7 +503,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 		float level = 0.0f;
 		bool hasBuffer = false;
 		if (m_musicEntity) {
-			if (auto ms = m_entityManager.GetMusicSystem()) {
+			if (auto ms = GetWorld().GetEntityManager().GetMusicSystem()) {
 				// Ensure MusicSystem has processed this frame so level is up-to-date for reactive spawning
 				ms->Process();
 				level = ms->GetLevel(m_musicEntity->GetId().index);
@@ -521,7 +521,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 		if (m_audioReactive && level > m_spawnThreshold) {
 			if (m_spawnTimer >= m_spawnCooldown) {
 				// spawn a circle near bottom-right area
-				Entity* e = m_entityManager.AddEntity(EntityType::Explosion);
+				Entity* e = m_world.CreateEntity(EntityType::Explosion);
 				if (e) {
 					// random size
 					float size = 6.0f + static_cast<float>(std::rand() % 36); // 6..41
@@ -552,7 +552,7 @@ void TileMapEditorScene::Update(float deltaTime) {
 					(void)t; // silence unused variable warnings
 
 					// Commit the spawned entity immediately so it will be visible this frame
-					m_entityManager.ProcessPending();
+					GetWorld().GetEntityManager().ProcessPending();
 
 					// reset timer and let EntityManager add entity on next update
 					// log spawn to console for debugging
@@ -717,56 +717,20 @@ void TileMapEditorScene::InitialiseGame(sf::Vector2u windowSize) {
 	m_tileMap = TileMap(cols, rows, tileSize);
 
 	// Create a CTileMap entity so the engine's TileSystem can render map as entities
-	if (m_entityManager.GetEntities().size() >= 0) {
+	if (GetWorld().GetEntityManager().GetEntities().size() >= 0) {
 		if (m_tileMapEntity) {
-			m_entityManager.KillEntity(m_tileMapEntity);
+			GetWorld().GetEntityManager().KillEntity(m_tileMapEntity);
 			m_tileMapEntity = nullptr;
 		}
-		m_tileMapEntity = m_entityManager.CreateTileMapEntity(m_tileMap);
+		m_tileMapEntity = GetWorld().GetEntityManager().CreateTileMapEntity(m_tileMap);
 	}
-
-	// ensure engine texture manager has default atlas preloaded in GameEngine ctor
-
-	//// Debug: create a few large visible explosions at startup so they are easy to spot
-	//for (int i = 0; i < 3; ++i) {
-	//    float x = static_cast<float>(windowSize.x) * (0.3f + 0.2f * i);
-	//    float y = static_cast<float>(windowSize.y) * 0.5f;
-	//    Entity* e = m_entityManager.addEntity(EntityType::Default);
-	//    if (!e) continue;
-	//    float size = 40.0f + 20.0f * i;
-	//    auto* ex = e->AddComponent<CExplosion>(size);
-	//    if (ex) {
-	//        ex->SetColor(255.0f - 40.0f * i, 80.0f + 40.0f * i, 40.0f, 240);
-	//        ex->SetRadius(size);
-	//        ex->GetShape().setOutlineColor(sf::Color::Black);
-	//        ex->GetShape().setOutlineThickness(3.0f);
-	//    }
-	//    e->AddComponent<CTransform>(Vec2(x, y), Vec2(0.0f, 0.0f));
-	//}
-	// Spread the three debug explosions further apart so they don't overlap the reactive spawn area
-	//if (m_entityManager.getEntities().size() > 0) {
-	//    int placed = 0;
-	//    for (auto& up : m_entityManager.getEntities()) {
-	//        if (!up) continue;
-	//        auto ent = up.get();
-	//        if (ent->HasComponent<CExplosion>()) {
-	//            float nx = static_cast<float>(windowSize.x) * (0.25f + 0.25f * placed);
-	//            float ny = static_cast<float>(windowSize.y) * (0.35f + 0.15f * placed);
-	//            if (auto t = ent->GetComponent<CTransform>()) t->m_position = Vec2(nx, ny);
-	//            ++placed;
-	//            if (placed >= 3) break;
-	//        }
-	//    }
-	//}
-	// m_entityManager.Update(0.0f);
 }
 /////////////////////////////////
 
 
 
 /////////////////////////////////
-// DrawGrid - draws the tile grid for the editor scene, including filled rectangles for solid tiles (if no texture atlas) 
-// and grid lines. This is called in RenderDebugOverlay() to ensure it is drawn on top of entities and aligned with screen 
+// DrawGrid - draws the tile grid for the editor scene, including filled rectangles for solid tiles (if no texture atlas) and grid lines. This is called in RenderDebugOverlay() to ensure it is drawn on top of entities and aligned with screen 
 // pixels for accurate editing.
 void TileMapEditorScene::DrawGrid() {
 	if (m_tileMap.width <= 0 || m_tileMap.height <= 0)
@@ -860,10 +824,10 @@ void TileMapEditorScene::ToggleTileAt(int tx, int ty, bool setSolid) {
 			cmp->SetTile(tx, ty, setSolid ? m_brushTileValue : 0);
 			cmp->m_dirty = true;
 			cmp->m_processed = false;
-			m_entityManager.SetHasPendingTileMaps(true);
+			GetWorld().GetEntityManager().SetHasPendingTileMaps(true);
 			// Process tile system immediately so tile entities appear this frame
-			// m_entityManager.Update(0.0f);
-			std::cout << "Tile entities now: " << m_entityManager.GetEntities(EntityType::Tile).size() << std::endl;
+			// GetWorld().GetEntityManager().Update(0.0f);
+			std::cout << "Tile entities now: " << GetWorld().GetEntityManager().GetEntities(EntityType::Tile).size() << std::endl;
 		}
 	}
 }
@@ -879,10 +843,10 @@ void TileMapEditorScene::LoadTileMapFromPath(const std::string& fullpath) {
 		return;
 
 	// Update FileManager base path to current directory
-	m_gameEngine.GetFileManager().SetBasePath(m_currentDir);
+	GetWorld().GetFileManager().SetBasePath(m_currentDir);
 
 	std::string err;
-	auto maybeMap = m_gameEngine.GetFileManager().LoadTileMap(fullpath, &err);
+	auto maybeMap = GetWorld().GetFileManager().LoadTileMap(fullpath, &err);
 	if (maybeMap) {
 		m_tileMap = *maybeMap;
 		m_currentFilename = fullpath;
@@ -896,7 +860,7 @@ void TileMapEditorScene::LoadTileMapFromPath(const std::string& fullpath) {
 				cmp->map = m_tileMap; // copy whole TileMap including tileset metadata
 				cmp->m_dirty = true;
 				cmp->m_processed = false;
-				m_entityManager.SetHasPendingTileMaps(true);
+				GetWorld().GetEntityManager().SetHasPendingTileMaps(true);
 			}
 		}
 	} else {
@@ -914,7 +878,7 @@ void TileMapEditorScene::UpdateExplosions() {
 	m_explosionCount = 0;
 	auto now = std::chrono::high_resolution_clock::now();
 
-	for (auto& entity : m_entityManager.GetEntities()) {
+	for (auto& entity : GetWorld().GetEntityManager().GetEntities()) {
 		if (entity->GetType() == EntityType::Explosion) {
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->GetCreationTime());
 			if (elapsed.count() > 1200) {
@@ -944,3 +908,5 @@ void TileMapEditorScene::UpdateExplosions() {
 	}
 }
 /////////////////////////////////
+
+

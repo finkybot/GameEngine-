@@ -87,12 +87,9 @@ GameEngine::GameEngine() {
 	// ******************************* \\
 
 
-	// *** ENTITY MANAGER *** Create a single engine-wide EntityManager and bind shared resources
-	entityManager = std::make_unique<EntityManager>(window);
-	entityManager->GetRenderSystem().SetFontManager(&fontManager);
-
-	// *** WORLD *** Create the world after the shared EntityManager exists.
-	m_world = std::make_unique<World>(*entityManager, m_chunkManager);
+	// *** WORLD *** Create the world and its shared EntityManager.
+	m_world = std::make_unique<World>(*this, m_chunkManager, window);
+	m_world->GetEntityManager().GetRenderSystem().SetFontManager(&fontManager);
 	m_world->SetWindowSize(windowSize);
 	m_world->SetRenderWindow(window);
 
@@ -106,13 +103,13 @@ GameEngine::GameEngine() {
 	// *** AUDIO *** Create and initialize the SoundSystem
 	soundSystem = std::make_unique<SoundSystem>();
 	soundSystem->Initialize();  // Check audio device and log diagnostics
-	soundSystem->InitializePool(*entityManager, 64);  // Initialize sound pool with 64 entities
+	soundSystem->InitializePool(m_world->GetEntityManager(), 64);  // Initialize sound pool with 64 entities
 	soundSystem->SetMasterVolume(70.0f);  // Set master volume to 70% (0-100 scale)
 
 
 
 	// Bind the SoundSystem to the CollisionSystem so it can check for concurrent sound limits when playing collision sounds (bit of coupling here, but it's a simple solution for now)
-	entityManager->GetCollisionSystem().SetSoundSystem(soundSystem.get());
+	m_world->GetEntityManager().GetCollisionSystem().SetSoundSystem(soundSystem.get());
 	std::cout << "\x1b[36m[GameEngine]\x1b[0m Audio system initialized (using SFML defaults)"  << std::endl; // Log audio system initialization
 
 
@@ -171,11 +168,11 @@ GameEngine::GameEngine() {
 
 
 	// --- Bind FontSystem BEFORE Initialise() ---
-	entityManager->GetRenderSystemGL().SetFontSystem(&fontsystem);
+	m_world->GetEntityManager().GetRenderSystemGL().SetFontSystem(&fontsystem);
 
-	entityManager->GetRenderSystemGL().SetTextureManager(&m_textureManager);
+	m_world->GetEntityManager().GetRenderSystemGL().SetTextureManager(&m_textureManager);
 	// --- NOW Initialise the OpenGL renderer ---
-	entityManager->GetRenderSystemGL().Initialise();
+	m_world->GetEntityManager().GetRenderSystemGL().Initialise();
 
 
 
@@ -206,80 +203,6 @@ GameEngine::~GameEngine() {
 
 
 /////////////////////////////////
-// AddScene - Adds a new scene to the game engine with the given name and scene instance, allowing for dynamic scene management. The scene is stored in a map of scene names to scene instances, enabling 
-// easy retrieval and switching between scenes during the game loop.
-//void GameEngine::AddScene(const std::string& sceneName, std::shared_ptr<Scene> scene) {
-//	scenes[sceneName] = scene;
-//}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// GetSceneNames - Return a list of registered scene names (useful for UI like a main menu)
-//std::vector<std::string> GameEngine::GetSceneNames() const {
-//	std::vector<std::string> names;
-//	for (auto const& p : scenes) names.push_back(p.first);
-//	return names;
-//}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// ChangeScene - Changes the current scene to the specified scene name, allowing for scene management and transitions
-//void GameEngine::ChangeScene(const std::string& sceneName) {
-//	JobSystem::WaitIdle();
-//
-//	// Clear any pending main thread tasks to avoid executing tasks from the previous scene after switching
-//	auto it = scenes.find(sceneName);
-//	if (it != scenes.end()) {
-//		// notify previous scene it's exiting
-//		if (currentScene) {
-//			try { currentScene->OnExit(); } catch (...) {}
-//			// Allow the scene to release any loaded resources (textures, atlases, large buffers)
-//			try { currentScene->UnloadResources(); } catch (...) {}
-//		}
-//
-//		// Clear all entities from the previous scene before activating the new one
-//		if (entityManager) entityManager->ClearAll();
-//
-//		// Reset the view to default before switching scenes to avoid any leftover zoom or pan from the previous scene
-//		window.setView(window.getDefaultView());
-//
-//		// Set the new scene as the current active scene
-//		currentScene = it->second;
-//
-//		// initialize the new scene so it has window size, input controller, and resources set up
-//		if (currentScene) {
-//			try {
-//				currentScene->InitialiseGame(windowSize);
-//			} catch (...) {}
-//			// update input controller to use the new scene's game controller
-//			try { m_InputController.SetGameController(currentScene->GetGameController()); } catch (...) {}
-//			try { currentScene->OnEnter(); } catch (...) {}
-//		}
-//	} else {
-//		std::cerr << "Scene '" << sceneName << "' not found!" << std::endl;
-//	}
-//}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
-// RemoveScene - Removes a scene from the game engine by its name, allowing for dynamic scene management.
-//void GameEngine::RemoveScene(const std::string& sceneName) {
-//	auto it = scenes.find(sceneName);
-//	if (it != scenes.end()) {
-//		scenes.erase(it);
-//	}
-//}
-/////////////////////////////////
-
-
-
-/////////////////////////////////
 // Run - Main game loop that handles scene management, input processing, and rendering.
 void GameEngine::Run() {
 	JobSystem::Init(4); // Initialize the job system with 4 worker threads (or use std::thread::hardware_concurrency() for dynamic thread count)
@@ -288,14 +211,14 @@ void GameEngine::Run() {
 	bool running = true; // Create a Boolean variable to manage the engine running state
 
 	
-	m_world->AddScene("MainMenu", std::make_shared<MainMenuScene>("MainMenu", *this, window, *entityManager, *m_world));									// Adding MainMenuScene
-	m_world->AddScene("TestScene", std::make_shared<TestScene>("TestScene", *this, window, *entityManager, *m_world));									// Adding TestScene
-	m_world->AddScene("RayCastScene", std::make_shared<RayCastScene>("RayCastScene", *this, window, *entityManager, *m_world));							// Adding RayCastScene
-	m_world->AddScene("MusicVisualizer", std::make_shared<MusicVisualiserScene>("MusicVisualizer", *this, window, *entityManager, *m_world));			// Adding MusicVisualizer
-	m_world->AddScene("LevelEditor", std::make_shared<LevelEditorScene>("LevelEditor", *this, window, *entityManager, *m_world));						// Adding LevelEditor
-	m_world->AddScene("PathTestScene", std::make_shared<PathTestScene>("PathTestScene", *this, window, *entityManager, *m_world));						// Adding PathTestScene
-	m_world->AddScene("TechSimulationScene", std::make_shared<TechSimulationScene>("TechSimulationScene", *this, window, *entityManager, *m_world));		// Adding TechSimulationScene
-	m_world->AddScene("TestRenderGLScene", std::make_shared<TestRenderGLScene>("TestRenderGLScene", *this, window, *entityManager, *m_world));			// Adding TestRenderGLScene
+	m_world->AddScene("MainMenu", std::make_shared<MainMenuScene>("MainMenu", window, *m_world));									// Adding MainMenuScene
+	m_world->AddScene("TestScene", std::make_shared<TestScene>("TestScene", window, *m_world));									// Adding TestScene
+	m_world->AddScene("RayCastScene", std::make_shared<RayCastScene>("RayCastScene", window, *m_world));							// Adding RayCastScene
+	m_world->AddScene("MusicVisualizer", std::make_shared<MusicVisualiserScene>("MusicVisualizer", window, *m_world));			// Adding MusicVisualizer
+	m_world->AddScene("LevelEditor", std::make_shared<LevelEditorScene>("LevelEditor", window, *m_world));						// Adding LevelEditor
+	m_world->AddScene("PathTestScene", std::make_shared<PathTestScene>("PathTestScene", window, *m_world));						// Adding PathTestScene
+	m_world->AddScene("TechSimulationScene", std::make_shared<TechSimulationScene>("TechSimulationScene", window, *m_world));		// Adding TechSimulationScene
+	m_world->AddScene("TestRenderGLScene", std::make_shared<TestRenderGLScene>("TestRenderGLScene", window, *m_world));			// Adding TestRenderGLScene
 
 	m_world->ChangeScene("MainMenu");
 
@@ -427,12 +350,12 @@ void GameEngine::Update(float deltaTime) {
 		if (m_world->GetActiveScene()) {
 			m_world->GetActiveScene()->Update(frameTime.asSeconds());
 
-			movementSystem->Update(m_world->GetActiveScene()->GetEntityManager().GetEntities(), deltaTime);
+			movementSystem->Update(m_world->GetEntityManager().GetEntities(), deltaTime);
 
-			m_world->GetActiveScene()->GetEntityManager().Update(deltaTime);	
-			m_world->GetActiveScene()->GetEntityManager().RenderAll(m_world->GetActiveScene()->GetEntityManager().GetRenderSystemGL(), RenderSystem::RenderMode::ShapesOnly /* or whatever */, m_world->GetActiveScene()->GetActiveCamera());
+			m_world->GetEntityManager().Update(deltaTime);	
+			m_world->GetEntityManager().RenderAll(m_world->GetEntityManager().GetRenderSystemGL(), RenderSystem::RenderMode::ShapesOnly /* or whatever */, m_world->GetActiveScene()->GetActiveCamera());
 
-			soundSystem->Process(m_world->GetActiveScene()->GetEntityManager(), deltaTime);
+			soundSystem->Process(m_world->GetEntityManager(), deltaTime);
 			soundSystem->Update(deltaTime);
 
 			m_cursorSystem->Update(deltaTime);
@@ -447,9 +370,9 @@ void GameEngine::Update(float deltaTime) {
 
 			// *** ENGINE RENDER PASS ORDERING *** 
 			m_world->GetActiveScene()->Render();
-			m_world->GetActiveScene()->GetEntityManager().RenderShapesSFML();
+			m_world->GetEntityManager().RenderShapesSFML();
 			m_renderQueue.Flush(window);
-			m_world->GetActiveScene()->GetEntityManager().RenderTextSFML();
+			m_world->GetEntityManager().RenderTextSFML();
 			m_cursorSystem->Render();
 		}
 
@@ -527,3 +450,5 @@ void MovementSystem::Update(const std::vector<std::unique_ptr<Entity>>& entities
 	}
 }
 /////////////////////////////////
+
+

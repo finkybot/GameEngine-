@@ -20,8 +20,8 @@ static const std::string kMenuFontName = "default";
 
 /////////////////////////////////
 // Constructor and destructor for the MainMenuScene class. The constructor initializes the scene with references to the game engine, render window, and entity manager, while the destructor handles any necessary cleanup when the scene is destroyed.
-MainMenuScene::MainMenuScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world)
-	: Scene(name, engine, entityManager, world), m_window(win) {
+MainMenuScene::MainMenuScene(std::string name, sf::RenderWindow& win, World& world)
+	: Scene(name, world), m_window(win) {
 }
 
 MainMenuScene::~MainMenuScene() = default;
@@ -56,8 +56,8 @@ void MainMenuScene::UnloadResources() {}
 void MainMenuScene::OnEnter() {
 
 	// Disable GL rendering and enable SFML rendering for the main menu scene, ensuring that the menu is rendered using SFML's graphics capabilities rather than OpenGL. This allows for a more straightforward and consistent rendering of the menu items and text.
-	m_entityManager.SetGLRenderingEnabled(false); 
-	m_entityManager.SetSFMLRenderingEnabled(true);
+	GetWorld().GetEntityManager().SetGLRenderingEnabled(false); 
+	GetWorld().GetEntityManager().SetSFMLRenderingEnabled(true);
 	// Disarm Escape-to-close until the key has been physically released after entering
 	m_enterCooldown = 0.3f;
 	m_escapeArmed = false;
@@ -150,7 +150,7 @@ void MainMenuScene::Update(float deltaTime) {
 // that scene using the game engine's ChangeScene method.
 void MainMenuScene::Render() {
 	// Render scene list using the engine FontManager and SFML text so it matches game visuals (not ImGui)
-	auto& fm = m_gameEngine.GetFontManager();
+	auto& fm = GetWorld().GetFontManager();
 	std::shared_ptr<sf::Font> fontPtr;
 	if (auto f = fm.GetFont(kMenuFontName)) fontPtr = *f;
 	if (!fontPtr) {
@@ -217,3 +217,6 @@ void MainMenuScene::HandleEvent(const std::optional<sf::Event>& event) {
 	}
 }
 /////////////////////////////////
+
+
+

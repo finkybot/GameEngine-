@@ -30,7 +30,7 @@
 class TechSimulationScene : public Scene {
 public:
 	// Constructor and destructor for the TechSimulationScene class. The constructor initializes the scene with references to the game engine, render window, and entity manager, while the destructor can be used to clean up any resources if needed.
-	TechSimulationScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& em, World& world);
+	TechSimulationScene(std::string name, sf::RenderWindow& win, World& world);
 	~TechSimulationScene() override;
 
 	// Overridden virtual methods from the Scene base class. These methods handle updating the scene state, rendering the scene, processing input events, and managing the scene lifecycle (entering and exiting).
@@ -102,3 +102,5 @@ private:
 	CCamera m_screenCamera;		  // Dummy camera
 };
 /////////////////////////////////
+
+

@@ -78,7 +78,7 @@ void ChunkManager::ClearAllLoadedChunks() {
 	std::lock_guard<std::mutex> lk(m_mutex);
 	// kill generated colliders safely
 	try {
-		EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+		EntityManager& em = GameEngine::GetInstance().GetWorld().GetEntityManager();
 		for (auto &pr : m_chunks) {
 			Chunk &c = pr.second;
 			for (Entity* ge : c.generatedEntities) if (ge) em.SafeKillEntity(ge);
@@ -987,7 +987,7 @@ void ChunkManager::EvictChunksOutsideRadius(int minCx, int maxCx, int minCy, int
 			
 
 	// Remove chunks safely
-	EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+	EntityManager& em = GameEngine::GetInstance().GetWorld().GetEntityManager();
 
 	for (uint64_t key : toRemove) {
 		Chunk& c = m_chunks[key];
@@ -1886,7 +1886,7 @@ void ChunkManager::RebuildChunkEntities(Chunk& chunk)
 	try 
 	{
 		// Get a reference to the EntityManager from the GameEngine singleton. This allows us to manage entities in the game world.
-		EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+		EntityManager& em = GameEngine::GetInstance().GetWorld().GetEntityManager();
 
 		// Iterate over the list of generated entities for this chunk and safely kill each one. This ensures that any old colliders are removed before we create new ones based on the updated tile data.
 		for (Entity* ge : chunk.generatedEntities) if (ge) em.SafeKillEntity(ge);
@@ -2085,7 +2085,7 @@ void ChunkManager::EvictIfNeeded() {
 
 			// --- Kill generated collider entities ---
 			try {
-				EntityManager& em = GameEngine::GetInstance().GetEntityManager();
+				EntityManager& em = GameEngine::GetInstance().GetWorld().GetEntityManager();
 				for (Entity* ge : chunk.generatedEntities)
 					if (ge)
 						em.SafeKillEntity(ge);

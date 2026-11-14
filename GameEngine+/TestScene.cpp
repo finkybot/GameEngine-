@@ -50,10 +50,10 @@ using Clock = std::chrono::high_resolution_clock;
 
 /////////////////////////////////
 // Constructor - initializes the TestScene with references to the game engine, render window, and entity manager, and sets up ImGui for UI rendering
-TestScene::TestScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world)
-	: m_window(win), Scene(name, engine, entityManager, world) {
+TestScene::TestScene(std::string name, sf::RenderWindow& win, World& world)
+	: m_window(win), Scene(name, world) {
 	// Initialize ImGui with SFML backend
-	if (!ImGui::SFML::Init(engine.window)) {
+	if (!ImGui::SFML::Init(world.GetWindow())) {
 		std::cerr << "Failed to initialize ImGui::SFML." << std::endl;
 		std::exit(EXIT_FAILURE);
 	}
@@ -87,7 +87,7 @@ void TestScene::Update(float dt) {
 	//
 	raycast->screenPos = ms->screenPos;
 
-	auto cCam = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto cCam = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	if (cCam) {
 		// Ray starts at the mouse world position
 		raycast->worldPos = ms->worldPos;
@@ -118,10 +118,10 @@ void TestScene::Update(float dt) {
 	//
 	// --- SINGLE declaration of entities ---
 	//
-	auto& entities = m_entityManager.GetEntities();
+	auto& entities = GetWorld().GetEntityManager().GetEntities();
 
 	// --- Main unified per‑entity pass ---
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	CCamera* cam = camOpt ? *camOpt : nullptr;
 
 	float worldW = cam ? cam->worldWidth : static_cast<float>(m_window.getSize().x);
@@ -138,18 +138,18 @@ void TestScene::Update(float dt) {
 	UpdateExplosions();
 
 	// --- Broad‑phase collision (optional / throttled) ---
-	if (m_spatialCollisionEnabled && m_entityManager.GetSpatialIndex()) {
-		m_entityManager.GetCollisionSystem().DetectAndResolveSpatial(entities, m_entityManager.GetSpatialIndex(), dt);
+	if (m_spatialCollisionEnabled && GetWorld().GetEntityManager().GetSpatialIndex()) {
+		GetWorld().GetEntityManager().GetCollisionSystem().DetectAndResolveSpatial(entities, GetWorld().GetEntityManager().GetSpatialIndex(), dt);
 	}
 
 	// --- Audio listener (camera only) ---
-	if (cam && m_entityManager.GetSoundSystem()) {
+	if (cam && GetWorld().GetEntityManager().GetSoundSystem()) {
 		Vec2 listenerPos(cam->position.x, cam->position.y);
-		m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
+		GetWorld().GetEntityManager().GetSoundSystem()->SetListenerPosition(listenerPos);
 	}
 
 	// --- Commit pending entities ---
-	m_entityManager.ProcessPending();
+	GetWorld().GetEntityManager().ProcessPending();
 
 
 	m_raycastSystem->Update(dt);
@@ -159,10 +159,10 @@ void TestScene::Update(float dt) {
 		std::cout << "\x1b[36mRaycast HIT entity ID: " << raycast->lastHit.entity->GetId().index << " at (" << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n\x1b[0m";
 	}
 
-	//m_entityManager.GetBVH().ReportBVHSize();
+	//GetWorld().GetEntityManager().GetBVH().ReportBVHSize();
 	// --- Camera movement + view ---
 	if (m_cameraEntity) {
-		m_cameraSystem.Update(dt, GetEntityManager());
+		m_cameraSystem.Update(dt, GetWorld().GetEntityManager());
 		ApplyCameraMovement(dt);
 		ApplyMainCameraView(dt);
 	}
@@ -202,7 +202,7 @@ void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 	if (!event) return;
 
 	// Retrieve main camera (if any)
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	CCamera* cam = camOpt ? *camOpt : nullptr;
 	if (!cam) return;
 
@@ -274,7 +274,7 @@ Entity* TestScene::PickBall(const Vec2& worldPosition) const {
 	Entity* closestBall = nullptr;
 	float closestDistanceSquared = std::numeric_limits<float>::max();
 
-	for (const auto& uptr : m_entityManager.GetEntities()) {
+	for (const auto& uptr : GetWorld().GetEntityManager().GetEntities()) {
 		Entity* entity = uptr.get();
 		if (!entity || !entity->IsAlive())
 			continue;
@@ -305,9 +305,9 @@ Entity* TestScene::PickBall(const Vec2& worldPosition) const {
 /////////////////////////////////
 // OnEnter - called when the scene becomes active, allowing for any necessary setup or initialization that should occur each time the scene is entered. This can include resetting game state, starting timers, or preparing resources specific to this scene.
 void TestScene::OnEnter() {
-	m_entityManager.SetSFMLRenderingEnabled(false);
-	m_entityManager.SetGLRenderingEnabled(true);
-	m_entityManager.ClearAll();
+	GetWorld().GetEntityManager().SetSFMLRenderingEnabled(false);
+	GetWorld().GetEntityManager().SetGLRenderingEnabled(true);
+	GetWorld().GetEntityManager().ClearAll();
 
 	// Expand world bounds
 	m_mapMin = Vec2(0, 0);
@@ -315,7 +315,7 @@ void TestScene::OnEnter() {
 	m_hasMapBounds = true;
 
 	// Camera entity
-	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Camera);
+	m_cameraEntity = m_world.CreateEntity(EntityType::Camera);
 
 	Vec2 initialCamPos((m_mapMin.x + m_mapMax.x) * 0.5f, (m_mapMin.y + m_mapMax.y) * 0.5f);
 
@@ -329,33 +329,33 @@ void TestScene::OnEnter() {
 	camera->worldHeight = m_mapMax.y - m_mapMin.y;
 
 	// Mouse entity
-	Entity* mouseEntity = m_entityManager.AddEntity(EntityType::Mouse, EntityClass::Utility);
+	Entity* mouseEntity = m_world.CreateEntity(EntityType::Mouse);
 	mouseEntity->AddComponent<CMouseState>();
 	mouseEntity->AddComponent<CRaycast>();
 
 	m_mouseEntity = mouseEntity;
-	m_mouseSystem = new MouseSystem(&m_entityManager, &m_window);
-	m_raycastSystem = new RaycastSystem(&m_entityManager);
+	m_mouseSystem = new MouseSystem(&GetWorld().GetEntityManager(), &m_window);
+	m_raycastSystem = new RaycastSystem(&GetWorld().GetEntityManager());
 
 
 	// Spawn initial population ONCE
 	SpawnInitialPopulation();
-	m_entityManager.ProcessPending();
+	GetWorld().GetEntityManager().ProcessPending();
 
 
 	// Build spatial index ONCE
-	auto& entities = m_entityManager.GetEntities();
-	m_entityManager.GetSpatialIndex()->Build(m_entityManager.GetDynamicEntities());
+	auto& entities = GetWorld().GetEntityManager().GetEntities();
+	GetWorld().GetEntityManager().GetSpatialIndex()->Build(GetWorld().GetEntityManager().GetDynamicEntities());
 
 	
-	m_testBucket = m_entityManager.CreateEntityBucket("DynamicEntities", 0);
+	m_testBucket = GetWorld().GetEntityManager().CreateEntityBucket("DynamicEntities", 0);
 
 	// Lets test our bucket structures *this is a very early test, and will be expanded later*
 	for (size_t i = 0; i < 10 && i < entities.size(); ++i) {
-		m_entityManager.AddEntityToBucket(m_testBucket, entities[i]->GetId());
+		m_world.AddEntityToBucket(m_testBucket, entities[i]->GetId());
 	}
 
-	auto* bucket = m_entityManager.GetEntityBucket(m_testBucket);
+	auto* bucket = GetWorld().GetEntityManager().GetEntityBucket(m_testBucket);
 
 	// Debug: print bucket contents
 	if (bucket)
@@ -365,11 +365,11 @@ void TestScene::OnEnter() {
 	}
 
 	// Build BVH once after initial spawn (not needed as we build the bvh in the spatial index build)
-	//auto dyn = m_entityManager.GetDynamicEntities();
-	//m_entityManager.GetBVH().Rebuild(dyn);
-	//m_entityManager.GetBVH().ReportBVHSize();
+	//auto dyn = GetWorld().GetEntityManager().GetDynamicEntities();
+	//GetWorld().GetEntityManager().GetBVH().Rebuild(dyn);
+	//GetWorld().GetEntityManager().GetBVH().ReportBVHSize();
 
-	std::cout << "Dynamic entities: " << m_entityManager.GetDynamicEntities().size() << "\n";
+	std::cout << "Dynamic entities: " << GetWorld().GetEntityManager().GetDynamicEntities().size() << "\n";
 
 	// Reset cell markers
 	for (auto& u : entities) {
@@ -381,7 +381,7 @@ void TestScene::OnEnter() {
 	m_mouseSystem->SetUseSFMLCoords(false);
 
 	std::cout << "Initial build of spatial index with " << entities.size() << " entities.\n";
-	std::cout << "Task completed for " << m_entityManager.GetDynamicEntities().size() << " entities.\n";
+	std::cout << "Task completed for " << GetWorld().GetEntityManager().GetDynamicEntities().size() << " entities.\n";
 }
 /////////////////////////////////
 
@@ -393,7 +393,7 @@ void TestScene::OnExit() { /* cleanup when scene exits */
 	std::cout << "Exiting TestScene...\n";
 	
 	if (m_testBucket != INVALID_BUCKET) {
-		bool removed = m_entityManager.DeleteEntityBucket(m_testBucket);
+		bool removed = GetWorld().GetEntityManager().DeleteEntityBucket(m_testBucket);
 
 		std::cout << "Bucket deleted: " << removed << "\n";
 	}
@@ -443,9 +443,6 @@ void TestScene::InitialiseGame(sf::Vector2u windowSize) {
 	m_xVelocity = std::uniform_int_distribution<int>(-8, -4);
 	m_yVelocity = std::uniform_int_distribution<int>(-20, 20);
 
-	//m_xDistro = std::uniform_int_distribution<int>(20, m_gameEngine.windowSize.x - 20); // m_xDistro is no longer used, so this line is commented out (for removal later)
-	//m_yDistro = std::uniform_int_distribution<int>(20, m_gameEngine.windowSize.y - 20); // m_yDistro is no longer used, so this line is commented out (for removal later)
-
 	m_redVal = std::uniform_int_distribution<int>(100, 255);
 	m_greenVal = std::uniform_int_distribution<int>(100, 255);
 	m_blueVal = std::uniform_int_distribution<int>(100, 255);
@@ -456,7 +453,6 @@ void TestScene::InitialiseGame(sf::Vector2u windowSize) {
 	m_entityType = std::uniform_int_distribution<int>(0, 1);
 	m_direction = std::uniform_int_distribution<int>(0, 1);
 
-	//m_spawnZone = std::uniform_int_distribution<int>(0, 1); // m_spawnZone is no longer used, so this line is commented out (for removal later)
 
 	// Register shape templates here
 	m_shapeRegistry.RegisterShapeTemplate(EntityType::TeamEagle, 3.0f, Vec3(255, 200, 200));
@@ -464,6 +460,15 @@ void TestScene::InitialiseGame(sf::Vector2u windowSize) {
 	m_shapeRegistry.RegisterShapeTemplate(EntityType::TeamBoogaloo, 3.0f, Vec3(200, 200, 255));
 	m_shapeRegistry.RegisterShapeTemplate(EntityType::TeamRocket, 3.0f, Vec3(255, 255, 200));
 	m_shapeRegistry.RegisterShapeTemplate(EntityType::TeamMonkey, 3.0f, Vec3(255, 200, 255));
+
+	Entity* soundEntity = m_world.CreateEntity(EntityType::Default);
+	auto* soundEffect = soundEntity->AddComponent<CSoundEffect>("Explosion", "assets/sounds/medium-explosion.ogg");
+	m_explosionSoundID = soundEntity->GetId();
+	
+	soundEffect->volume = 0.75f;
+	soundEffect->PlayOnAwake = false;
+	soundEffect->shouldPlay = false;
+
 }
 /////////////////////////////////
 
@@ -480,7 +485,7 @@ void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 colo
 	EntityType type = (teamType < 5) ? teamTypes[teamType] : EntityType::TeamMonkey;
 
 	// Create a new entity of the specified type and add it to the EntityManager
-	Entity* en = m_entityManager.AddEntity(type, EntityClass::Dynamic);
+	Entity* en = m_world.CreateEntity(type);
 
 	//en->AddComponent<CTransform>(position, velocity); // already added in by the Entity Manager's AddEntity() call, so we don't need to add it again here
 	en->AddComponent<CName>();
@@ -590,7 +595,7 @@ bool TestScene::UpdateDraggedBall(Entity* entity, size_t transformIndex, CTransf
 
 	const Vec2 mouseWorld = m_mouseEntity->GetComponent<CMouseState>()->worldPos;
 	const Vec2 position = ClampBallToMap(mouseWorld + m_dragOffset, entity->GetRadius());
-	auto& transforms = m_entityManager.GetTransformSoA();
+	auto& transforms = GetWorld().GetEntityManager().GetTransformSoA();
 	transforms.SetPosition(transformIndex, position.x, position.y);
 	transform.position = position;
 	return true;
@@ -602,7 +607,7 @@ bool TestScene::UpdateDraggedBall(Entity* entity, size_t transformIndex, CTransf
 /////////////////////////////////
 void TestScene::UpdateBallMovement(Entity* entity, size_t transformIndex, CTransform& transform, float deltaTime) {
 	constexpr float ballSpeed = 180.0f;
-	auto& transforms = m_entityManager.GetTransformSoA();
+	auto& transforms = GetWorld().GetEntityManager().GetTransformSoA();
 	Vec2 velocity(transforms.velX[transformIndex], transforms.velY[transformIndex]);
 	velocity = velocity.Mag2() <= 0.0001f ? Vec2::RandomDirection() * ballSpeed : velocity.GetUnitVec() * ballSpeed;
 	Vec2 position(transforms.posX[transformIndex], transforms.posY[transformIndex]);
@@ -625,10 +630,17 @@ void TestScene::UpdateBallMovement(Entity* entity, size_t transformIndex, CTrans
 
 
 /////////////////////////////////
+// SyncEntityTransform - Synchronizes the entity's transform component with the SoA (Structure of Arrays) data. It updates the position of the entity based on the values stored in the SoA and also updates the CRenderInstance component if it exists, ensuring that the visual representation of the entity is consistent with its logical position in the game world.
 void TestScene::SyncEntityTransform(Entity* entity, size_t transformIndex, CTransform& transform) {
-	(void)entity;
-	auto& transforms = m_entityManager.GetTransformSoA();
+	(void)entity; // unused parameter warning
+
+	// Sync the entity's transform component with the SoA data
+	auto& transforms = GetWorld().GetEntityManager().GetTransformSoA();
+
+	// Update the entity's position based on the SoA data
 	transform.position = Vec2(transforms.posX[transformIndex], transforms.posY[transformIndex]);
+	
+	// Update the CRenderInstance component if it exists, ensuring that the visual representation of the entity is consistent with its logical position in the game world
 	if (auto* instance = entity->GetComponent<CRenderInstance>()) {
 		instance->x = transform.position.x;
 		instance->y = transform.position.y;
@@ -670,18 +682,18 @@ void TestScene::UpdateFPS(float deltaTime) {
 /////////////////////////////////
 void TestScene::ProcessEvents() {
 	// Retrieve main camera (if any)
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	CCamera* cam = camOpt ? *camOpt : nullptr;
 
 	// Poll SFML events
-	while (auto evt = m_gameEngine.window.pollEvent()) {
+	while (auto evt = GetWorld().GetWindow().pollEvent()) {
 
 		// Always forward events to ImGui first
-		ImGui::SFML::ProcessEvent(m_gameEngine.window, *evt);
+		ImGui::SFML::ProcessEvent(GetWorld().GetWindow(), *evt);
 
 		// Window closed
 		if (evt->is<sf::Event::Closed>()) {
-			m_gameEngine.window.close();
+			GetWorld().GetWindow().close();
 			continue;
 		}
 
@@ -745,8 +757,8 @@ void TestScene::UpdateSceneLogic(float dt) {
 /////////////////////////////////
 // RenderUI - Renders the ImGui game information window with current entity count, death count, and explosion count. It calls the RenderGameInfoWindow method to display the relevant information in the UI.
 void TestScene::RenderUI() {
-	m_deathCount += m_entityManager.GetDeathCountThisFrame();
-	RenderGameInfoWindow(m_entityManager.GetEntities().size(), m_deathCount, m_explosionCount);
+	m_deathCount += GetWorld().GetEntityManager().GetDeathCountThisFrame();
+	RenderGameInfoWindow(GetWorld().GetEntityManager().GetEntities().size(), m_deathCount, m_explosionCount);
 }
 /////////////////////////////////
 
@@ -756,7 +768,7 @@ void TestScene::RenderUI() {
 // UpdateSpawning - Updates the spawning of entities in the scene based on the current entity count and the target entity count. If the current entity count is less than the target, it calculates how many entities need to be spawned and calls the SpawnReplacementEntities method to spawn them.
 void TestScene::UpdateSpawning(float deltaTime) {
 	// Check if the current entity count is less than the target entity count
-	size_t current = m_entityManager.GetEntities().size();
+	size_t current = GetWorld().GetEntityManager().GetEntities().size();
 
 	// If the current entity count is less than the target, spawn replacement entities to maintain the target population
 	if (current < m_targetEntityCount) {
@@ -846,12 +858,11 @@ void TestScene::SpawnReplacementEntities(int count) {
 
 
 
-
 /////////////////////////////////
 // SpawnExplosion - Spawns an explosion entity at the specified position with the given radius. It creates a new entity of type Explosion, sets up its transform and explosion components, and adds it to the scene's registry of active explosions for tracking and updating.
 void TestScene::SpawnExplosion(const Vec2& pos, float radius) {
 	// Create explosion entity through ECS
-	Entity* e = m_entityManager.AddEntity(EntityType::Explosion, EntityClass::Dynamic);
+	Entity* e = m_world.CreateEntity(EntityType::Explosion);
 
 	// Transform setup
 	auto* transform = e->GetComponent<CTransform>();
@@ -872,7 +883,7 @@ void TestScene::SpawnExplosion(const Vec2& pos, float radius) {
 
 /////////////////////////////////
 void TestScene::ApplyMainCameraView(float deltaTime) {
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	if (!camOpt)
 		return;
 	CCamera* cam = *camOpt;
@@ -911,8 +922,7 @@ void TestScene::ApplyMainCameraView(float deltaTime) {
 
 	//std::cout << "CAMERA AFTER CLAMP: " << newPos.x << ", " << newPos.y << std::endl;
 
-	// Snap camera to sub-pixel grid based on zoom level to reduce shimmer/jitter when rendering
-	// At zoom levels 2.0x or higher, snap to tile alignment (32 pixels). Otherwise snap to half-pixel.
+	// Snap camera to sub-pixel grid based on zoom level to reduce shimmer/jitter when rendering At zoom levels 2.0x or higher, snap to tile alignment (32 pixels). Otherwise snap to half-pixel.
 	float snapGrid = (cam->zoom >= 2.0f) ? 32.0f : 0.5f; // Snap to tile grid at 2x+ zoom, else half-pixel
 	float snapX = std::round(newPos.x / snapGrid) * snapGrid;
 	float snapY = std::round(newPos.y / snapGrid) * snapGrid;
@@ -926,7 +936,7 @@ void TestScene::ApplyMainCameraView(float deltaTime) {
 
 /////////////////////////////////
 void TestScene::ApplyCameraMovement(float deltaTime) {
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	if (!camOpt)
 		return;
 
@@ -970,7 +980,7 @@ void TestScene::UpdateExplosions() {
 		m_explosions.end()
 	);
 
-	for (auto& entity : m_entityManager.GetEntities()) { // Iterate over all entities to find explosions and update their state based on elapsed time since creation
+	for (auto& entity : GetWorld().GetEntityManager().GetEntities()) { // Iterate over all entities to find explosions and update their state based on elapsed time since creation
 		if (entity->GetType() == EntityType::Explosion) {
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->GetCreationTime());
 
@@ -1014,10 +1024,12 @@ void TestScene::UpdateExplosions() {
 /////////////////////////////////
 void TestScene::InitialiseSpatialLayers() {
 	// Wire this registry into the EntityManager
-	m_entityManager.SetSpatialLayerRegistry(&m_spatialLayers);
+	GetWorld().GetEntityManager().SetSpatialLayerRegistry(&m_spatialLayers);
 
 	// Create a dedicated layer for TestScene entities
 	// Balls are small, so use a small cell size for accurate collisions
 	m_spatialLayers.CreateLayer("TestScene", 96.0f);
 }
 /////////////////////////////////
+
+

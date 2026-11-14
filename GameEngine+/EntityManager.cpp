@@ -815,6 +815,39 @@ std::vector<Entity*>& EntityManager::GetEntities(EntityType type) {
 
 
 /////////////////////////////////
+// GetEntity - retrieves a pointer to an entity by its unique EntityID. If the entity does not exist or the ID is invalid, the method returns nullptr. This allows systems and other parts of the code to safely access entities by their IDs without risking dereferencing invalid pointers.
+Entity* EntityManager::GetEntity(EntityID id) {
+	if (m_entityMap.empty())
+		return nullptr;
+
+	Entity* entity = m_entities[id.index].get();
+
+	if (!entity || entity->GetId() != id) {
+		// Entity ID mismatch or entity is null, return nullptr
+		return nullptr;
+	}
+
+	return entity;
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
+// DestroyEntity - immediately destroys an entity by its ID. This method retrieves the entity using GetEntity and calls its Destroy method, marking it for removal in the next update cycle. It is a convenience method for safely destroying entities without needing to directly access the entity pointer.
+void EntityManager::DestroyEntity(EntityID id) {
+	Entity* entity = GetEntity(id);
+
+	if (!entity)
+		return;
+
+	entity->Destroy();
+}
+/////////////////////////////////
+
+
+
+/////////////////////////////////
 // CreateEntityBucket - creates a new entity bucket with the specified name and associates it with a scene. The method generates a unique BucketID for the new bucket, initializes its metadata, and stores it in the EntityManager's collection of entity buckets. This allows for grouping entities 
 // together for organizational or gameplay purposes.
 BucketID EntityManager::CreateEntityBucket(const std::string& name, SceneID sceneId) {

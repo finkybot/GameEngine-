@@ -27,7 +27,7 @@
 class LevelEditorScene : public Scene {
 public:
 	// Constructor and destructor for the LevelEditorScene class. The constructor initializes the scene with references to the game engine, render window, and entity manager, while the destructor ensures that all chunks are saved to disk when the scene is destroyed.
-	LevelEditorScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& em, World& world);
+	LevelEditorScene(std::string name, sf::RenderWindow& win, World& world);
 	~LevelEditorScene() override;		
 
 	// Overridden virtual methods from the Scene base class. These methods handle updating the scene state, rendering the scene, processing input events, and managing the scene lifecycle (entering and exiting). The Update method will handle logic for ensuring visible chunks are loaded and applying camera view, while the Render 
@@ -162,3 +162,4 @@ private:
 	void SwitchToLevel(const std::string& name);
 };
 /////////////////////////////////
+

@@ -172,12 +172,6 @@
     <ClCompile Include="SFMLChunkRenderer.cpp">
       <Filter>Source\Managers</Filter>
     </ClCompile>
-    <ClCompile Include="RenderSystemGLGpuEffects.cpp">
-      <Filter>Source\Scenes</Filter>
-    </ClCompile>
-    <ClCompile Include="RenderSystemGL.cpp">
-      <Filter>Source\Scenes</Filter>
-    </ClCompile>
     <ClCompile Include="Vec2.cpp">
       <Filter>Source\Utils</Filter>
     </ClCompile>
@@ -207,6 +201,12 @@
     </ClCompile>
     <ClCompile Include="main.cpp">
       <Filter>Source\Managers</Filter>
+    </ClCompile>
+    <ClCompile Include="RenderSystemGL.cpp">
+      <Filter>Source\Systems</Filter>
+    </ClCompile>
+    <ClCompile Include="RenderSystemGLGpuEffects.cpp">
+      <Filter>Source\Systems</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>

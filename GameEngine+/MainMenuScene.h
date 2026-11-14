@@ -21,7 +21,7 @@
 class MainMenuScene : public Scene {
 public:
 	// Constructor and destructor for the MainMenuScene class. The constructor initializes the scene with references to the game engine, render window, and entity manager, while the destructor handles any necessary cleanup when the scene is destroyed.
-	MainMenuScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world);
+	MainMenuScene(std::string name, sf::RenderWindow& win, World& world);
 	~MainMenuScene() override;
 
 	// Override methods from the base Scene class for updating, rendering, handling events, and managing the scene lifecycle. These methods define the specific behavior and content of the main menu scene, allowing players to interact with the menu and select different scenes to play.
@@ -53,3 +53,4 @@ private:
 	CCamera m_screenCamera;
 };
 /////////////////////////////////
+

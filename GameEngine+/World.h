@@ -12,10 +12,24 @@
 #include <string>
 #include <vector>
 #include <SFML/Graphics.hpp>
+#include "IDTypes.h"
+#include "EntityType.h"
+#include "EntityManager.h"
+#include "WorldDiffusionConfig.h"
+#include "TechRegistry.h"
 
-class EntityManager;
+
 class ChunkManager;
+class GameEngine;
+class InputController;
+class CursorSystem;
+class TextureManager;
+class FontManager;
+class FPSCounter;
+class FileManager;
+class RenderQueue;
 
+class Entity;
 class Scene;
 /////////////////////////////////
 
@@ -24,6 +38,7 @@ class Scene;
 /////////////////////////////////
 using ScenePtr = std::shared_ptr<Scene>;
 using SceneMap = std::unordered_map<std::string, ScenePtr>;
+using EntityVector = std::vector<std::unique_ptr<Entity>>;
 /////////////////////////////////
 
 
@@ -35,14 +50,27 @@ class World {
 public:
 
 	// Constructor and destructor for the World class. The constructor takes references to the EntityManager and ChunkManager, which are used to manage entities and tile-based chunks in the game world.
-	World(EntityManager& entityManager, ChunkManager& chunkManager);
+	World(GameEngine& gameEngine, ChunkManager& chunkManager, sf::RenderWindow& window);
 	~World() = default;
+
+	EntityManager& GetEntityManager();
+	const EntityManager& GetEntityManager() const;
+	GameEngine& GetGameEngine();
+	sf::RenderWindow& GetWindow() { return *m_window; }
+	sf::Vector2u GetWindowSize() const { return m_windowSize; }
+	InputController& GetInputController();
+	CursorSystem& GetCursorSystem();
+	TextureManager& GetTextureManager();
+	FontManager& GetFontManager();
+	FPSCounter& GetFPSCounter();
+	FileManager& GetFileManager();
+	RenderQueue& GetRenderQueue();
+	TechRegistry& GetTechRegistry();
+	WorldDiffusionConfig& GetWorldDiffusionConfig();
 
 	void Update(float deltaTime); // Update the world state, including entities and tile maps, based on the elapsed time since the last update.
 	void SetWindowSize(sf::Vector2u windowSize) { m_windowSize = windowSize; }
 	void SetRenderWindow(sf::RenderWindow& window) { m_window = &window; }
-
-	EntityManager& GetEntityManager() {	return m_entityManager; } // Accessor for the EntityManager, allowing other parts of the code to interact with entities in the world.
 
 	ChunkManager& GetChunkManager() { return m_chunkManager; } // Accessor for the ChunkManager, allowing other parts of the code to interact with tile-based chunks in the world.
 
@@ -55,9 +83,19 @@ public:
 
 	std::vector<std::string> GetSceneNames() const; // Get a list of all scene names in the world, allowing for scene management and UI display.
 
+	Entity* CreateEntity(EntityType type);
+	Entity* GetEntity(EntityID id);
+	void DestroyEntity(EntityID id);
+	EntityVector& GetEntities();
+	std::vector<Entity*>& GetEntities(EntityType type);
+	void AddEntityToBucket(BucketID bucket, EntityID id);
+	EntityBucket* GetEntityBucket(BucketID bucketId);
+	void ClearAllEntities(); // Clear all entities from the world, allowing for scene resets or cleanup.
+
 private:
-	EntityManager& m_entityManager;
 	ChunkManager& m_chunkManager;
+	GameEngine* m_gameEngine;
+	std::unique_ptr<EntityManager> m_entityManager;
 
 
 	SceneMap m_scenes; // Map of scene names to scene instances, allowing for easy management and switching between different scenes in the game world.

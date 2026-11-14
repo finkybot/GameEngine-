@@ -41,10 +41,10 @@ static ImVec4 GetProgressColor(float t) {
 
 /////////////////////////////////
 // Implementation of the TechSimulationScene class
-TechSimulationScene::TechSimulationScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& em, World& world) : Scene(name, engine, em, world), m_window(win), m_chunkManager(engine.GetChunkManager()), 
-						m_kpSystem(), m_diffusionSystem(engine.techRegistry, engine.worldDiffusionConfig), m_evolutionSystem(engine.techRegistry), m_unlockSystem(engine.techRegistry) {
+TechSimulationScene::TechSimulationScene(std::string name, sf::RenderWindow& win, World& world) : Scene(name, world), m_window(win), m_chunkManager(world.GetChunkManager()), 
+						m_kpSystem(), m_diffusionSystem(world.GetTechRegistry(), world.GetWorldDiffusionConfig()), m_evolutionSystem(world.GetTechRegistry()), m_unlockSystem(world.GetTechRegistry()) {
 	// Set the diffusion configuration for the evolution system based on the engine's world diffusion configuration
-	m_evolutionSystem.SetDiffusionConfig(&engine.worldDiffusionConfig);
+	m_evolutionSystem.SetDiffusionConfig(&world.GetWorldDiffusionConfig());
 
 	m_screenCamera.position = Vec2(0, 0);
 	m_screenCamera.zoom = 1.0f;
@@ -52,7 +52,7 @@ TechSimulationScene::TechSimulationScene(std::string name, GameEngine& engine, s
 	m_screenCamera.viewportHeight = m_window.getSize().y;
 
 
-	ImGui::SFML::Init(engine.window);
+	ImGui::SFML::Init(world.GetWindow());
 }
 /////////////////////////////////
 
@@ -74,8 +74,8 @@ void TechSimulationScene::OnEnter() {
 	m_jobGeneration.fetch_add(1, std::memory_order_acq_rel);
 	m_isActive.store(true, std::memory_order_release);
 	JobSystem::WaitIdle(); // ensure all jobs finish before continuing
-	m_entityManager.ClearAll();  
-	InitialiseGame(m_gameEngine.windowSize);
+	GetWorld().GetEntityManager().ClearAll();  
+	InitialiseGame(GetWorld().GetWindowSize());
 
 	// Reset timers for diffusion and evolution systems
 	m_sceneStartTime = std::chrono::steady_clock::now();
@@ -118,10 +118,10 @@ void TechSimulationScene::InitialiseGame(sf::Vector2u windowSize) {
 	InitialiseSpatialLayers();
 
 	// Wire registry into EntityManager
-	m_entityManager.SetSpatialLayerRegistry(&m_spatialLayers);
+	GetWorld().GetEntityManager().SetSpatialLayerRegistry(&m_spatialLayers);
 
 	// Ensure pending entities are added BEFORE civ creation
-	m_entityManager.ProcessPending();
+	GetWorld().GetEntityManager().ProcessPending();
 
 	CreateTechTestWorld();
 }
@@ -163,8 +163,8 @@ void TechSimulationScene::CreateTechTestWorld() {
 	// -------------------------------
 	const int civCount = 345;
 
-	float worldW = m_gameEngine.worldDiffusionConfig.worldWidth;
-	float worldH = m_gameEngine.worldDiffusionConfig.worldHeight;
+	float worldW = GetWorld().GetWorldDiffusionConfig().worldWidth;
+	float worldH = GetWorld().GetWorldDiffusionConfig().worldHeight;
 
 	float worldArea = worldW * worldH;
 
@@ -173,7 +173,7 @@ void TechSimulationScene::CreateTechTestWorld() {
 
 	m_civCellSize =	avgSpacing * 1.5f; // Set the spatial hash cell size for the entity manager to optimize spatial queries for civilizations and particles
 
-	auto& cfg = m_gameEngine.worldDiffusionConfig;
+	auto& cfg = GetWorld().GetWorldDiffusionConfig();
 
 	// Civ‑to‑civ proximity radius scales with spacing
 	cfg.maxProximityDistance = avgSpacing * 2.5f;
@@ -192,16 +192,16 @@ void TechSimulationScene::CreateTechTestWorld() {
 	// -------------------------------
 	
 	// Set the spatial hash cell size for the entity manager to optimize spatial queries for civilizations and particles
-	//m_entityManager.SetSpatialHashCellSize(m_civCellSize);
-	//m_entityManager.GetSpatialIndex()->SetCellSize(m_civCellSize);
-	//m_entityManager.GetSpatialIndex()->Rebuild(m_entityManager.GetEntities(), m_entityManager.GetChunkManager());
+	//GetWorld().GetEntityManager().SetSpatialHashCellSize(m_civCellSize);
+	//GetWorld().GetEntityManager().GetSpatialIndex()->SetCellSize(m_civCellSize);
+	//GetWorld().GetEntityManager().GetSpatialIndex()->Rebuild(GetWorld().GetEntityManager().GetEntities(), GetWorld().GetEntityManager().GetChunkManager());
 
-	auto* si = m_entityManager.GetSpatialIndex();
-	si->Build(m_entityManager.GetDynamicEntities());
+	auto* si = GetWorld().GetEntityManager().GetSpatialIndex();
+	si->Build(GetWorld().GetEntityManager().GetDynamicEntities());
 
 
 	for (int i = 0; i < civCount; i++) {
-		Entity* civ = m_entityManager.AddEntity(EntityType::Civilisation);
+		Entity* civ = m_world.CreateEntity(EntityType::Civilisation);
 
 		auto* t = civ->AddComponent<CTransform>();
 		t->position = Vec2(rand() % (int)cfg.worldWidth, rand() % (int)cfg.worldHeight);
@@ -224,7 +224,7 @@ void TechSimulationScene::CreateTechTestWorld() {
 	const int particleCount = 22;
 
 	for (int i = 0; i < particleCount; i++) {
-		Entity* p = m_entityManager.AddEntity(EntityType::KnowledgeParticle);
+		Entity* p = m_world.CreateEntity(EntityType::KnowledgeParticle);
 
 		auto* kp = p->AddComponent<CKnowledgeParticle>();
 		kp->techId = "agriculture.basic";
@@ -240,7 +240,7 @@ void TechSimulationScene::CreateTechTestWorld() {
 	}
 
 	// Commit all created entities to EntityManager
-	m_entityManager.ProcessPending();
+	GetWorld().GetEntityManager().ProcessPending();
 }
 /////////////////////////////////
 
@@ -276,16 +276,16 @@ void TechSimulationScene::Update(float dt) {
 	
 
 	// --- DIFFUSION SYSTEM (runs at configured interval) ---
-	if (m_diffusionTimer >= m_gameEngine.worldDiffusionConfig.diffusionInterval) {
+	if (m_diffusionTimer >= GetWorld().GetWorldDiffusionConfig().diffusionInterval) {
 		// Run diffusion jobs for all civs at the configured interval
-		m_diffusionTimer -= m_gameEngine.worldDiffusionConfig.diffusionInterval;
+		m_diffusionTimer -= GetWorld().GetWorldDiffusionConfig().diffusionInterval;
 
 		// Rebuild or refit the particle BVH if there are particles present
 		if (!m_particleBVH.particles.empty()) {
 			// Rebuild or refit the particle BVH if there are particles present
 			if (!m_particleBVH.root) {
 				// If the BVH root is null, build the BVH from scratch
-				m_particleBVH.Build(m_entityManager);
+				m_particleBVH.Build(GetWorld().GetEntityManager());
 			} else {
 				// else refit the existing BVH to account for particle movement
 				m_particleBVH.Refit();
@@ -297,7 +297,7 @@ void TechSimulationScene::Update(float dt) {
 		m_diffusionSystem.SetBVHSystem(&m_particleBVH);
 
 		// Schedule diffusion jobs for all civilizations based on the configured diffusion interval
-		ScheduleTechDiffusionJobs(m_gameEngine.worldDiffusionConfig.diffusionInterval);
+		ScheduleTechDiffusionJobs(GetWorld().GetWorldDiffusionConfig().diffusionInterval);
 	}
 
 	// Wait for all scheduled jobs to complete before proceeding to the next frame. This ensures that all technology systems have finished processing before the next update cycle begins.
@@ -311,8 +311,8 @@ void TechSimulationScene::Update(float dt) {
 	}
 
 	// --- SERIAL SYSTEMS (must stay on main thread) ---
-	m_kpSystem.Update(dt, m_entityManager);		// movement → mutates transforms
-	m_unlockSystem.Update(dt, m_entityManager); // unlocks → triggers events
+	m_kpSystem.Update(dt, GetWorld().GetEntityManager());		// movement → mutates transforms
+	m_unlockSystem.Update(dt, GetWorld().GetEntityManager()); // unlocks → triggers events
 
 	// --- DEBUG UI ---
 	RenderTechDebugWindow();
@@ -338,7 +338,7 @@ void TechSimulationScene::DoAction() {}
 /////////////////////////////////
 // HandleEvent - Handles input events for the scene, passing them to ImGui for processing.
 void TechSimulationScene::HandleEvent(const std::optional<sf::Event>& event) {
-	ImGui::SFML::ProcessEvent(m_gameEngine.window, *event);
+	ImGui::SFML::ProcessEvent(GetWorld().GetWindow(), *event);
 }
 /////////////////////////////////
 
@@ -372,7 +372,7 @@ void TechSimulationScene::RenderTechDebugWindow() {
 	// ---------------------------
 	ImGui::BeginChild("CivList", ImVec2(0, 0), true, ImGuiWindowFlags_AlwaysVerticalScrollbar);
 
-	auto& entities = m_entityManager.GetEntities();
+	auto& entities = GetWorld().GetEntityManager().GetEntities();
 
 	for (auto& e : entities) {
 		Entity* ent = e.get();
@@ -395,7 +395,7 @@ void TechSimulationScene::RenderTechDebugWindow() {
 		const bool isActive = (activeIt != tech->activeResearch.end());
 		const float activeProgress = isActive ? activeIt->second : 0.0f;
 
-		const CTechNode* node = m_gameEngine.techRegistry.GetTechNode("agriculture.basic");
+		const CTechNode* node = GetWorld().GetTechRegistry().GetTechNode("agriculture.basic");
 		const float requiredKnowledge = node ? node->requiredKnowledge : 0.0f;
 
 		// Known progress bar (0–1)
@@ -463,7 +463,7 @@ void TechSimulationScene::RenderTechDebugWindow() {
 	ImGui::PlotLines("FPS", fpsHistory, 120, 0, nullptr, 0.0f, 200.0f, ImVec2(250, 80));
 
 	size_t civsWithCompletedTech = 0;
-	for (Entity* civ : m_entityManager.GetEntities(EntityType::Civilisation)) {
+	for (Entity* civ : GetWorld().GetEntityManager().GetEntities(EntityType::Civilisation)) {
 		if (!civ || !civ->IsAlive()) continue;
 		auto* tech = civ->GetComponent<CCivilisationTech>();
 		if (!tech) continue;
@@ -489,7 +489,7 @@ void TechSimulationScene::RenderTechDebugWindow() {
 // ScheduleTechEvolutionJobs - Schedules technology evolution jobs based on the elapsed time (dt). Currently does nothing, but can be used for scheduling evolution tasks if needed.
 void TechSimulationScene::ScheduleTechEvolutionJobs(float dt) {
 	// Get the list of entities from the entity manager
-	auto& entities = m_entityManager.GetEntities();
+	auto& entities = GetWorld().GetEntityManager().GetEntities();
 
 	// Define the chunk size for processing entities in parallel. This determines how many entities will be processed in each job.
 	const size_t chunkSize = 128;
@@ -519,7 +519,7 @@ void TechSimulationScene::ScheduleTechEvolutionJobs(float dt) {
 			if (!m_isActive.load(std::memory_order_acquire) || generation != m_jobGeneration.load(std::memory_order_acquire)) return; 
 
 			// Get the list of entities from the entity manager
-			auto& ents = m_entityManager.GetEntities();
+			auto& ents = GetWorld().GetEntityManager().GetEntities();
 
 			// Process each entity in the assigned chunk for technology evolution
 			for (size_t j = begin; j < end; ++j) {
@@ -535,7 +535,7 @@ void TechSimulationScene::ScheduleTechEvolutionJobs(float dt) {
 				if (!tech) continue;
 
 				// Process technology evolution for the civilization using the TechEvolutionSystem
-				m_evolutionSystem.ProcessCivilisationTech(e, tech, m_entityManager, dt);
+				m_evolutionSystem.ProcessCivilisationTech(e, tech, GetWorld().GetEntityManager(), dt);
 			}
 		});
 	}
@@ -548,7 +548,7 @@ void TechSimulationScene::ScheduleTechEvolutionJobs(float dt) {
 // ScheduleTechDiffusionJobs - Schedules technology diffusion jobs based on the elapsed time (dt). Currently does nothing, but can be used for scheduling diffusion tasks if needed.
 void TechSimulationScene::ScheduleTechDiffusionJobs(float dt) {
 	// Get the list of entities from the entity manager
-	auto& entities = m_entityManager.GetEntities();
+	auto& entities = GetWorld().GetEntityManager().GetEntities();
 
 	// Define the chunk size for processing entities in parallel. This determines how many entities will be processed in each job.
 	const size_t chunkSize = 128;
@@ -577,7 +577,7 @@ void TechSimulationScene::ScheduleTechDiffusionJobs(float dt) {
 			if (!m_isActive.load(std::memory_order_acquire) || generation != m_jobGeneration.load(std::memory_order_acquire)) return;
 
 			// Get the list of entities from the entity manager
-			auto& ents = m_entityManager.GetEntities();
+			auto& ents = GetWorld().GetEntityManager().GetEntities();
 			
 			// Process each entity in the assigned chunk for technology diffusion
 			for (size_t j = begin; j < end; ++j) {
@@ -597,8 +597,8 @@ void TechSimulationScene::ScheduleTechDiffusionJobs(float dt) {
 				if (!civTech) continue;
 
 				// Process technology diffusion for the civilization using the TechDiffusionSystem
-				m_diffusionSystem.ProcessCivToCivDiffusion(civ, civTech, m_entityManager, dt);
-				m_diffusionSystem.ProcessParticleDiffusionForCivilisation(civ, civTech, m_entityManager, dt);
+				m_diffusionSystem.ProcessCivToCivDiffusion(civ, civTech, GetWorld().GetEntityManager(), dt);
+				m_diffusionSystem.ProcessParticleDiffusionForCivilisation(civ, civTech, GetWorld().GetEntityManager(), dt);
 
 			}
 		});
@@ -614,7 +614,7 @@ void TechSimulationScene::ScheduleTechDiffusionJobs(float dt) {
 
 /////////////////////////////////
 void TechSimulationScene::RunFullTechTick() {
-	auto& civs = m_entityManager.GetEntities(EntityType::Civilisation);
+	auto& civs = GetWorld().GetEntityManager().GetEntities(EntityType::Civilisation);
 
 	for (Entity* civ : civs) {
 		if (!civ || !civ->IsAlive())
@@ -625,7 +625,9 @@ void TechSimulationScene::RunFullTechTick() {
 			continue;
 
 		// One second of tech progress
-		m_evolutionSystem.ProcessCivilisationTech(civ, tech, m_entityManager, 1.0f);
+		m_evolutionSystem.ProcessCivilisationTech(civ, tech, GetWorld().GetEntityManager(), 1.0f);
 	}
 }
 /////////////////////////////////
+
+

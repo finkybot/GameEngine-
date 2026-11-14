@@ -12,7 +12,6 @@
 #include <SFML/Graphics.hpp>
 #include <memory>
 //#include "Scene.h"
-#include "EntityManager.h"
 #include "InputController.h"
 #include "FontManager.h"
 #include "TextureManager.h"
@@ -114,7 +113,6 @@ public:
 
 	FontManager	fontManager;								// Font manager instance for managing fonts across the game, allowing for loading, retrieving, and unloading fonts in a centralized manner
 	Fontsystem	fontsystem;									// Fontsystem instance for managing font rendering and text display in the game, providing functionality for rendering text with various fonts and styles
-	std::unique_ptr<EntityManager> entityManager;			// Unique pointer to the central EntityManager owned by the engine, responsible for managing game entities and providing access to the entity system throughout the game
 	std::unique_ptr<SoundSystem> soundSystem;				// Unique pointer to the SoundSystem owned by the engine, responsible for managing sound effects and audio playback
 	std::unique_ptr<MovementSystem> movementSystem;			// Unique pointer to the MovementSystem owned by the engine, responsible for moving entities along computed paths
 	std::unique_ptr<World> m_world;							// Unique pointer to the World instance owned by the engine, responsible for managing the game world, including entities, tile maps, and other game state
@@ -128,11 +126,13 @@ public:
 	FPSCounter& GetFPSCounter() { return m_fpsCounter; }				// Accessor for shared FPS counter
 	
 	TextureManager& GetTextureManager() { return m_textureManager; }	// Accessor for shared texture manager
-	EntityManager& GetEntityManager() const { return *entityManager; }	// Accessor for engine-owned shared EntityManager
 	SoundSystem& GetSoundSystem() const { return *soundSystem; }		// Accessor for engine-owned shared SoundSystem
 	MovementSystem& GetMovementSystem() { return *movementSystem; }		// Accessor for engine-owned shared MovementSystem
 	RenderQueue& GetRenderQueue() { return m_renderQueue; }				// Accessor for engine-owned shared RenderQueue
 	FileManager& GetFileManager() { return m_fileManager; }
 	ChunkManager& GetChunkManager() { return m_chunkManager; }	
+	World& GetWorld() { return *m_world; }
+	TechRegistry& GetTechRegistry() { return techRegistry; }
+	WorldDiffusionConfig& GetWorldDiffusionConfig() { return worldDiffusionConfig; }
 };
 /////////////////////////////////

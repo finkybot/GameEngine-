@@ -27,7 +27,7 @@
 class PathTestScene : public Scene {
 public:
 	// Constructor and destructor for the PathTestScene class. Initializes the scene with references to the game engine, render window, and entity manager.
-	PathTestScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world);
+	PathTestScene(std::string name, sf::RenderWindow& win, World& world);
 	~PathTestScene() override;
 
 	// Overridden methods from the Scene base class for updating, rendering, handling events, entering/exiting the scene, and managing resources. These methods implement the specific behavior of the PathTestScene.
@@ -104,3 +104,4 @@ private:
 	bool m_movementTestActive = false;				// Whether movement testing is currently active
 };
 /////////////////////////////////
+

@@ -29,7 +29,7 @@ namespace fs = std::filesystem;
 /////////////////////////////////
 // Constructor - initializes the level editor scene with references to the game engine, render window, and entity manager, and sets up the 
 // chunk manager with specified chunk dimensions and tile size
-LevelEditorScene::LevelEditorScene(std::string name,GameEngine& engine, sf::RenderWindow& win, EntityManager& em, World& world) : Scene(name, engine, em, world), m_window(win), m_chunkManager(engine.GetChunkManager()) {}
+LevelEditorScene::LevelEditorScene(std::string name,sf::RenderWindow& win, World& world) : Scene(name, world), m_window(win), m_chunkManager(world.GetChunkManager()) {}
 /////////////////////////////////
 
 
@@ -165,7 +165,7 @@ void LevelEditorScene::SwitchToLevel(const std::string& name) {
 		std::string tilesetKey = std::string(m_tilesetKeyBuf);
 		if (!tilesetKey.empty()) {
 			m_chunkManager.SetTilesetKey(tilesetKey);
-			auto& tm = m_gameEngine.GetTextureManager();
+			auto& tm = GetWorld().GetTextureManager();
 			auto atlasOpt = tm.GetAtlas(tilesetKey);
 			if (!atlasOpt.has_value() || !*atlasOpt) {
 				int tileSize = (int)m_chunkManager.GetTileSize();
@@ -293,7 +293,7 @@ void LevelEditorScene::RefreshMapBounds() {
 // level editor to manage the camera view and efficiently load and save chunks of the level as needed.
 void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	// create camera entity
-	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Default);
+	m_cameraEntity = m_world.CreateEntity(EntityType::Camera);
 	m_cameraEntity->AddComponent<CTransform>(Vec2(0, 0), Vec2::Zero);
 	auto cam = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
 	cam->isMainCamera = true;
@@ -303,25 +303,15 @@ void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	cam->smoothness = 0.0f; // Disable smoothing - editor controls camera directly via panning and clamping
 
 	// CRITICAL: Commit the camera entity to the EntityManager so it's available immediately
-	GetEntityManager().ProcessPending();
+	GetWorld().GetEntityManager().ProcessPending();
 
 	// Reset shared chunk state when entering editor so previous scenes cannot leak loaded maps.
 	m_chunkManager.ClearAllLoadedChunks();
 	m_chunkManager.SetNumLayers((int)m_layerNames.size());
 
-	// Ensure initial world area is larger than the screen so the user can pan around. Make the logical map area 3x the screen size centered on the camera.
-	//{
-	//	float mapPxW = cam->viewportWidth * 3.0f;
-	//	float mapPxH = cam->viewportHeight * 3.0f;
-
-	//	// store world bounds so camera panning can be clamped
-	//	m_mapMin = Vec2(cam->position.x - mapPxW * 0.5f, cam->position.y - mapPxH * 0.5f);
-	//	m_mapMax = Vec2(cam->position.x + mapPxW * 0.5f, cam->position.y + mapPxH * 0.5f);
-	//}
 	m_haveBounds = false; // no bounds yet - will be computed from saved chunks on disk
 
-	// Set persistence path for chunks
-	// Default path points inside the current level folder. If no level selected, keep editor empty.
+	// Set persistence path for chunks; default path points inside the current level folder. If no level selected, keep editor empty.
 	if (!m_levelSelected) {	m_chunkManager.SetBasePath("");	}
 	// If a level is selected, set the base path to the "chunks" subdirectory within that level's folder
 	else {	
@@ -376,9 +366,8 @@ void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	// Rebuild any already-loaded chunks so they use the tileset (if available)
 	m_chunkManager.RebuildAllChunksFromTileset();
 
-	// Reset all input/selection state so stale drag positions from a previous session don't cause a huge area fill on the very first click after re-entering the scene. 
-	// Seed prevLmb/prevRmb from the CURRENT hardware state so that a button which is already physically held when the scene initialises (e.g. the LMB used to click 
-	// the "Level Editor" main-menu button) is never treated as a fresh press edge.
+	// Reset all input/selection state so stale drag positions from a previous session don't cause a huge area fill on the very first click after re-entering the scene. Seed prevLmb/prevRmb from the CURRENT hardware state so that a button which is already physically held when the scene initialises 
+	// (e.g. the LMB used to click the "Level Editor" main-menu button) is never treated as a fresh press edge.
 	m_prevLmb        = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
 	m_prevRmb        = sf::Mouse::isButtonPressed(sf::Mouse::Button::Right);
 	m_prevDKey       = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
@@ -394,6 +383,7 @@ void LevelEditorScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	m_selectRmbStartPx = curMouse;
 	m_selectRmbEndPx   = curMouse;
 	m_panStart         = curMouse;
+	
 	// Block painting until all buttons are physically released after scene entry.
 	m_inputReady = false;
 }
@@ -411,7 +401,7 @@ void LevelEditorScene::OnEnter() {
 	m_renderQueue.Clear();
 
 	// Reset cursor
-	m_gameEngine.GetCursorSystem().SetMode(CursorSystem::Mode::Default);
+	GetWorld().GetCursorSystem().SetMode(CursorSystem::Mode::Default);
 
 	// Reset input edges from live hardware state to avoid stale press-edge behavior after scene switches.
 	m_prevLmb = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
@@ -443,7 +433,7 @@ void LevelEditorScene::OnExit()
 { 
 	// Unregister any chunk-generated collider entities before the global EntityManager is cleared by the engine.
 	try {
-		m_chunkManager.UnregisterChunkColliders(GetEntityManager());
+		m_chunkManager.UnregisterChunkColliders(GetWorld().GetEntityManager());
 	} catch (...) {}
 
 	// Save all chunks to disk to ensure that any changes made in the level editor are persisted before exiting the scene.
@@ -472,7 +462,7 @@ void LevelEditorScene::OnWindowResized(sf::Vector2u newSize) {
 void LevelEditorScene::UnloadResources() {
 	try {
 		// Ensure any collider entities are unregistered
-		m_chunkManager.UnregisterChunkColliders(GetEntityManager());
+		m_chunkManager.UnregisterChunkColliders(GetWorld().GetEntityManager());
 	} 
 	catch (...) {}
 
@@ -496,7 +486,7 @@ void LevelEditorScene::UnloadResources() {
 
 		// Unload the tileset atlas from the texture manager to free memory and resources associated with the tileset used in the level editor scene.
 		if (!key.empty()) {
-			m_gameEngine.GetTextureManager().UnloadAtlas(key);
+			GetWorld().GetTextureManager().UnloadAtlas(key);
 		}
 	} catch (...) {}
 }
@@ -505,14 +495,13 @@ void LevelEditorScene::UnloadResources() {
 
 
 /////////////////////////////////
-// HandleEvent  - currently empty (not anymore), as we will poll input in the Update method instead of relying on event callbacks. This allows for smoother and more responsive input handling 
-// in the level editor, especially for continuous actions like dragging to paint tiles.
+// HandleEvent  - currently empty (not anymore), as we will poll input in the Update method instead of relying on event callbacks. This allows for smoother and more responsive input handling in the level editor, especially for continuous actions like dragging to paint tiles.
 void LevelEditorScene::HandleEvent(const std::optional<sf::Event>& event) {
 	if (!event) return;
 	// If ImGui is capturing the mouse (e.g., user is over a UI window), don't change camera zoom
 	if (ImGui::GetCurrentContext() && ImGui::GetIO().WantCaptureMouse) return;
 	if (const auto* scroll = event->getIf<sf::Event::MouseWheelScrolled>()) {
-		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+		auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 		if (!camOpt) return;
 		CCamera* cam = *camOpt;
 		constexpr int kMaxIndex = static_cast<int>(std::size(k_zoomSteps)) - 1;
@@ -531,8 +520,7 @@ void LevelEditorScene::HandleEvent(const std::optional<sf::Event>& event) {
 
 
 /////////////////////////////////
-// Update - Main update loop for the level editor scene. This will be called every frame by the game engine. In this function, we will handle camera updates, ensure the necessary chunks are loaded 
-// based on the camera's position, and process user input for editing the level.
+// Update - Main update loop for the level editor scene. This will be called every frame by the game engine. In this function, we will handle camera updates, ensure the necessary chunks are loaded based on the camera's position, and process user input for editing the level.
 void LevelEditorScene::Update(float deltaTime) {
 	// Editor camera is controlled directly by panning/zoom logic in this scene.
 	// Skip CameraSystem::Update here to avoid generic clamping forcing the camera back.
@@ -555,8 +543,8 @@ void LevelEditorScene::Update(float deltaTime) {
 	int tileY = (int)std::floor(world.y / m_tileSize);
 
 	// Check and record mouse buttons and keyboard state (engine-wide policy)
-	bool lmb = m_gameEngine.GetInputController().IsMouseButtonDown(sf::Mouse::Button::Left);
-	bool rmb = m_gameEngine.GetInputController().IsMouseButtonDown(sf::Mouse::Button::Right);
+	bool lmb = GetWorld().GetInputController().IsMouseButtonDown(sf::Mouse::Button::Left);
+	bool rmb = GetWorld().GetInputController().IsMouseButtonDown(sf::Mouse::Button::Right);
 
 	// If ImGui is capturing the mouse or UI is hovered/active, do not modify the map, allows us to interact with the UI without accidentally editing level or moving the camera.
 	bool uiCapturing = ImGui::GetIO().WantCaptureMouse	|| ImGui::IsAnyItemActive() 
@@ -564,17 +552,16 @@ void LevelEditorScene::Update(float deltaTime) {
 														|| ImGui::IsWindowHovered(ImGuiHoveredFlags_AnyWindow) 
 														|| ImGui::IsWindowFocused(ImGuiFocusedFlags_AnyWindow);
 
-	// Tile pick: hold D to activate eyedropper mode, then press left mouse button to pick a tile. While D is held, the eyedropper cursor is visible. When LMB is clicked while D is held, the 
-	// tile at the mouse position is selected and becomes the active brush tile.
+	// Tile pick: hold D to activate eyedropper mode, then press left mouse button to pick a tile. While D is held, the eyedropper cursor is visible. When LMB is clicked while D is held, the tile at the mouse position is selected and becomes the active brush tile.
 	bool dKey = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
 	
 	// Switch to eyedropper cursor when D is pressed, revert when released
 	if (dKey && !m_prevDKey) {
 		// D key pressed (edge): switch to eyedropper mode
-		m_gameEngine.GetCursorSystem().SetMode(CursorSystem::Mode::Pointer);
+		GetWorld().GetCursorSystem().SetMode(CursorSystem::Mode::Pointer);
 	} else if (!dKey && m_prevDKey) {
 		// D key released (edge): switch back to default mode
-		m_gameEngine.GetCursorSystem().SetMode(CursorSystem::Mode::Default);
+		GetWorld().GetCursorSystem().SetMode(CursorSystem::Mode::Default);
 	}
 
 	// Pick tile on LMB press while D is held (eyedropper mode)
@@ -599,7 +586,7 @@ void LevelEditorScene::Update(float deltaTime) {
 
 	// Camera panning with the middle mouse button; if we press the middle mouse button and it wasn't pressed in the previous frame, then start the panning process. Begin by recording the initial 
 	// mouse 'start' position and camera position. When the middle mouse button is released, end the panning process.
-	bool isMiddleDown = m_gameEngine.GetInputController().IsMouseButtonDown(sf::Mouse::Button::Middle);
+	bool isMiddleDown = GetWorld().GetInputController().IsMouseButtonDown(sf::Mouse::Button::Middle);
 	m_prevMiddleDown = isMiddleDown;
 	bool wasPanning = m_panning;
 
@@ -610,7 +597,7 @@ void LevelEditorScene::Update(float deltaTime) {
 			m_panning = true;
 			m_panStart = mousePos;
 			// record current camera position
-			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+			auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 
 			// If a main camera is found, record its current position as the starting point for panning. This allows us to calculate the new camera position based on the mouse drag delta.
 			if (camOpt) {
@@ -623,7 +610,7 @@ void LevelEditorScene::Update(float deltaTime) {
 		// If we were previously panning and the middle mouse button is now released, end the panning process. This allows us to stop moving the camera when the user releases the middle mouse button.
 		if (m_panning && !isMiddleDown) {
 			// panning ended; record the final camera position after panning for debugging purposes. This can help verify that the camera has moved to the expected location based on the user's input.
-			auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+			auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 
 			// If a main camera is found, we can log its final position after panning. This is useful for debugging and ensuring that the camera has moved to the expected location based on the user's input.
 			if (camOpt) {
@@ -645,7 +632,7 @@ void LevelEditorScene::Update(float deltaTime) {
 		sf::Vector2i delta = mousePos - m_panStart;
 
 		// move camera opposite to mouse drag for natural panning
-		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+		auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 
 		// If a main camera is found, calculate the new camera position based on the initial camera position and the mouse drag delta. We move the camera in the opposite direction of the mouse drag for a natural panning feel.
 		if (camOpt) {
@@ -837,7 +824,7 @@ void LevelEditorScene::Render() {
 	// ---------------------------------------------------------
 	// 0. APPLY CAMERA → SFML VIEW (zoom‑safe pixel snapping)
 	// ---------------------------------------------------------
-	if (auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager())) {
+	if (auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager())) {
 		CCamera* cam = *camOpt;
 
 		sf::View view = m_window.getDefaultView();
@@ -924,7 +911,7 @@ void LevelEditorScene::Render() {
 
 	// Camera info
 	{
-		auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+		auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 		if (camOpt) 
 		{
 			CCamera* cam = *camOpt;
@@ -936,7 +923,7 @@ void LevelEditorScene::Render() {
 
 	ImGui::Separator();
 
-	auto atlasOpt = m_gameEngine.GetTextureManager().GetAtlas(std::string(m_tilesetKeyBuf));
+	auto atlasOpt = GetWorld().GetTextureManager().GetAtlas(std::string(m_tilesetKeyBuf));
 	SelectedBrushWindow(atlasOpt);
 
 	CameraZoomWindow();
@@ -1134,7 +1121,7 @@ void LevelEditorScene::AtlasBrowserWindow() {
 					}
 					
 					// Load atlas asynchronously to avoid blocking UI
-					if (m_gameEngine.GetTextureManager().LoadAtlas(key, s_selected_file, m_tilesetTileW, m_tilesetTileH)) {
+					if (GetWorld().GetTextureManager().LoadAtlas(key, s_selected_file, m_tilesetTileW, m_tilesetTileH)) {
 						m_chunkManager.SetTilesetKey(key);
 						m_chunkManager.RebuildAllChunksFromTileset();
 						SaveLevelMetadata();  // Save tileset to meta.txt
@@ -1273,8 +1260,8 @@ void LevelEditorScene::TilePreviewWindow(std::optional<std::shared_ptr<TextureAt
 /////////////////////////////////
 // CameraZoomWindow - Renders ImGui controls for zooming the camera in and out, as well as resetting the zoom level. The zoom levels are defined in a fixed array of
 void LevelEditorScene::CameraZoomWindow() {
-	float fps = m_gameEngine.GetFPSCounter().GetFPS();
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	float fps = GetWorld().GetFPSCounter().GetFPS();
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	if (camOpt) {
 		CCamera* cam = *camOpt;
 		ImGui::Text("FPS: %.1f  Camera: (%.1f, %.1f)  Zoom: %.2fx", fps, cam->position.x, cam->position.y, cam->zoom);
@@ -1382,7 +1369,7 @@ void LevelEditorScene::EnqueueCheckerboardBackground() {
 // camera clamping logic has the correct values to work with. It also includes a checkbox to toggle additional chunk diagnostics rendering.
 void LevelEditorScene::BoundsInfoWindow(float x, float y, float alpha) {
 	// Debug: show computed bounds and camera info to help diagnose missing bounds rectangle
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	int chunkCount = 0;
 	{
 		std::lock_guard<std::mutex> lg(m_chunkManager.GetMutex());
@@ -1517,7 +1504,7 @@ void LevelEditorScene::EnqueueMapBounds() {
 	//		  << ") width=" << width << " height=" << height << std::endl;
 
 	// Get outline thickness based on zoom
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	float outlineThickness = 2.0f;
 	
 	// If we have a main camera, adjust the outline thickness based on the zoom level to keep it visually consistent regardless of zoom.
@@ -1768,7 +1755,7 @@ void LevelEditorScene::LevelManagerWindow(float x, float y, float alpha) {
 // EnsureVisibleChunks - Ensures that all chunks that intersect the current camera view are loaded and visible. This function calculates the tile coordinates of the camera's view bounds
 void LevelEditorScene::EnsureVisibleChunks() {
 	// compute view bounds in world coords from active camera
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	if (!camOpt) return;
 	CCamera* cam = *camOpt;
 	float halfW = cam->viewportWidth * 0.5f * cam->zoom;
@@ -1787,7 +1774,7 @@ void LevelEditorScene::EnsureVisibleChunks() {
 // AtlasLoadWorker - Worker function to load a texture atlas in a separate thread. This function attempts to load the atlas using the provided key, path, width, and height.
 // We can ignore unlock warnings here because the mutex is only used to protect the shared state variables (m_atlasLoadSuccess, m_atlasLoadFinished, m_atlasLoadMessage) that are updated after the loading attempt.
 void LevelEditorScene::AtlasLoadWorker(std::string key, std::string path, int w, int h) {
-	bool ok = m_gameEngine.GetTextureManager().LoadAtlas(key, path, w, h);
+	bool ok = GetWorld().GetTextureManager().LoadAtlas(key, path, w, h);
 	{
 		std::lock_guard<std::mutex> threadLock(m_atlasLoadMutex);
 		m_atlasLoadSuccess = ok;
@@ -1806,7 +1793,7 @@ void LevelEditorScene::AtlasLoadWorker(std::string key, std::string path, int w,
 /////////////////////////////////
 // ApplyMainCameraView - Applies the main camera's position and zoom to the SFML window's view. This function calculates the appropriate view size based on the camera's
 void LevelEditorScene::ApplyMainCameraView() {
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	if (!camOpt) return;
 	CCamera* cam = *camOpt;
 	sf::View v;
@@ -1900,3 +1887,5 @@ void LevelEditorScene::SaveLevelMetadata() {
 	}
 }
 /////////////////////////////////
+
+

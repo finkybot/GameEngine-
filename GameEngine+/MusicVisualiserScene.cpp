@@ -575,9 +575,9 @@ void MusicVisualiserScene::DrawAudioReactiveWindow() {
 	if (ImGui::Checkbox("Equalizer Active", &m_EqualizerActive)) /* Toggle equalizer overlay */ {
 		//if (m_EqualizerActive) {
 		//	if (m_musicEntity) /* Ensure equalizer pool exists */ {
-		//		if (auto ms = m_entityManager.GetMusicSystem()) {
+		//		if (auto ms = GetWorld().GetEntityManager().GetMusicSystem()) {
 		//			// Commented out ECS version of equalizer bar initialization in favor of vertex array rendering for performance reasons.
-		//			//auto& pool = m_entityManager.GetEntities(EntityType::Equalizer);
+		//			//auto& pool = GetWorld().GetEntityManager().GetEntities(EntityType::Equalizer);
 		//			//if (pool.empty()) {
 		//			//	size_t bands = ms->GetSpectrumBandCount();
 		//			//	if (bands == 0) bands = 8;
@@ -692,7 +692,7 @@ void MusicVisualiserScene::DrawAudioReactiveWindow() {
 	   ImGui::Text("Spawners: %d", (int)m_spawnSystem->GetConfigs().size());
 
         // Equalizer visual controls: visual bar count is independent from spectrum band count
-		if (auto ms = m_entityManager.GetMusicSystem()) {
+		if (auto ms = GetWorld().GetEntityManager().GetMusicSystem()) {
 			// show current spectrum band count (read-only informational)
 			int spectrumBands = static_cast<int>(ms->GetSpectrumBandCount());
 			ImGui::Text("Spectrum Bands: %d", spectrumBands);
@@ -710,7 +710,7 @@ void MusicVisualiserScene::DrawAudioReactiveWindow() {
 			}
 
 			// Show how many equalizer bar entities are currently active, old ECS version commented out in favor of vertex array rendering for performance reasons.
-			//auto& pool = m_entityManager.GetEntities(EntityType::Equalizer);
+			//auto& pool = GetWorld().GetEntityManager().GetEntities(EntityType::Equalizer);
 			//ImGui::Text("Active Equalizer Bars: %d", (int)pool.size());
 
 			// Show how many equalizer bars are currently active in the vertex array.
@@ -752,7 +752,7 @@ void MusicVisualiserScene::DrawAudioReactiveWindow() {
 		}
 
         // Spectrum / EQ settings (if music system present)
-		if (auto ms = m_entityManager.GetMusicSystem()) {
+		if (auto ms = GetWorld().GetEntityManager().GetMusicSystem()) {
 			// FFT enable/disable
 			bool useFFT = ms->GetUseFFT();
 			if (ImGui::Checkbox("Use FFT Analysis", &useFFT)) {
@@ -828,7 +828,7 @@ void MusicVisualiserScene::DrawAudioReactiveWindow() {
 	float level = 0.0f;
 	bool hasBuffer = false;
 	if (m_musicEntity) {
-		if (auto ms = m_entityManager.GetMusicSystem()) {
+		if (auto ms = GetWorld().GetEntityManager().GetMusicSystem()) {
 			// Avoid calling Process() from UI code; Update() already processes once per frame.
 			level = ms->GetLevel(m_musicEntity->GetId().index);
 			hasBuffer = ms->HasAnalysisBuffer(m_musicEntity->GetId().index);
@@ -897,7 +897,7 @@ void MusicVisualiserScene::DrawPlaybackControls() {
 				std::cout << "[MusicVisualizer] Play pressed for entity "  << (m_musicEntity ? m_musicEntity->GetId().index : 0) << std::endl;
 
 				// If the track has ended and looping is disabled, request a restart next update
-				if (auto musicSys = m_entityManager.GetMusicSystem()) {
+				if (auto musicSys = GetWorld().GetEntityManager().GetMusicSystem()) {
 					float pos = musicSys->GetPlayingOffset(m_musicEntity->GetId().index);
 					float dur = musicSys->GetDuration(m_musicEntity->GetId().index);
 					if (dur > 0.0f && pos >= dur - 0.05f) {
@@ -910,14 +910,14 @@ void MusicVisualiserScene::DrawPlaybackControls() {
 			ImGui::SameLine();
 			if (ImGui::Button("Pause")) {
 				musicCmp->state = CMusic::State::Paused;
-				if (auto musicSys = m_entityManager.GetMusicSystem())
+				if (auto musicSys = GetWorld().GetEntityManager().GetMusicSystem())
 					musicSys->Process();
 			} // Pause music
 			
 			ImGui::SameLine();
 			if (ImGui::Button("Stop")) {
 				musicCmp->state = CMusic::State::Stopped;
-				if (auto musicSys = m_entityManager.GetMusicSystem())
+				if (auto musicSys = GetWorld().GetEntityManager().GetMusicSystem())
 					musicSys->Process();
 			} // Stop music
 
@@ -925,7 +925,7 @@ void MusicVisualiserScene::DrawPlaybackControls() {
 			float vol = musicCmp->volume;
 			if (ImGui::SliderFloat("Volume", &vol, 0.0f, 100.0f, "%.0f")) {
 				musicCmp->volume = vol;
-				if (auto musicSys = m_entityManager.GetMusicSystem())
+				if (auto musicSys = GetWorld().GetEntityManager().GetMusicSystem())
 					musicSys->Process();
 			} // Adjust volume
 
@@ -963,7 +963,7 @@ void MusicVisualiserScene::DrawPlaybackControls() {
 	if (m_musicEntity) {
 		if (auto musicCmp = m_musicEntity->GetComponent<CMusic>()) {
 			// Access music through MusicSystem to avoid race conditions
-			if (auto musicSys = m_entityManager.GetMusicSystem()) {
+			if (auto musicSys = GetWorld().GetEntityManager().GetMusicSystem()) {
 				m_playhead = musicSys->GetPlayingOffset(m_musicEntity->GetId().index);
 				m_duration = musicSys->GetDuration(m_musicEntity->GetId().index);
 			}
@@ -975,7 +975,7 @@ void MusicVisualiserScene::DrawPlaybackControls() {
 			if (auto musicCmp = m_musicEntity->GetComponent<CMusic>()) {
 				musicCmp->loop = m_loopEnabled;
 				// Process immediately to update sf::Music looping state
-				if (auto musicSys = m_entityManager.GetMusicSystem())
+				if (auto musicSys = GetWorld().GetEntityManager().GetMusicSystem())
 					musicSys->Process();
 			}
 		}
@@ -994,7 +994,7 @@ void MusicVisualiserScene::DrawPlaybackControls() {
 					m_wasPlayingBeforeSeek = (cm->state == CMusic::State::Playing);
 					if (m_wasPlayingBeforeSeek) {
 						cm->state = CMusic::State::Paused;
-						if (auto musicSys = m_entityManager.GetMusicSystem())
+						if (auto musicSys = GetWorld().GetEntityManager().GetMusicSystem())
 							musicSys->Process();
 					}
 				}
@@ -1010,7 +1010,7 @@ void MusicVisualiserScene::DrawPlaybackControls() {
 			// On drag end, apply one seek and then resume playback if needed.
 			if (!sliderActive && m_playheadActive) {
 				if (m_seekPending) {
-					if (auto musicSys = m_entityManager.GetMusicSystem()) {
+					if (auto musicSys = GetWorld().GetEntityManager().GetMusicSystem()) {
 						musicSys->Seek(m_musicEntity->GetId().index, m_pendingSeekPos);
 					}
 					m_seekPending = false;
@@ -1019,7 +1019,7 @@ void MusicVisualiserScene::DrawPlaybackControls() {
 				if (m_wasPlayingBeforeSeek) {
 					if (auto musCmp = m_musicEntity->GetComponent<CMusic>()) {
 						musCmp->state = CMusic::State::Playing;
-						if (auto musicSys = m_entityManager.GetMusicSystem())
+						if (auto musicSys = GetWorld().GetEntityManager().GetMusicSystem())
 							musicSys->Process();
 					}
 				}
@@ -1132,7 +1132,7 @@ void MusicVisualiserScene::UpdateExplosionsVA(float deltaTime) {
 
 /////////////////////////////////
 void MusicVisualiserScene::RenderExplosionsVA() {
-	if (m_activeExplosionsVA == 0 || !m_entityManager.GetRenderSystemGL().IsInitialized())
+	if (m_activeExplosionsVA == 0 || !GetWorld().GetEntityManager().GetRenderSystemGL().IsInitialized())
 		return;
 
 	m_explosionInstances.resize(m_activeExplosionsVA);
@@ -1163,7 +1163,7 @@ void MusicVisualiserScene::RenderExplosionsVA() {
 
 	m_window.pushGLStates();
 	m_window.setActive(true);
-	m_entityManager.GetRenderSystemGL().RenderExplosions(m_explosionInstances, m_screenCamera);
+	GetWorld().GetEntityManager().GetRenderSystemGL().RenderExplosions(m_explosionInstances, m_screenCamera);
 	m_window.popGLStates();
 	m_window.resetGLStates();
 }
@@ -1429,13 +1429,13 @@ void MusicVisualiserScene::ShowOpenFileBrowser() {
 				if (!sel.empty()) {
 					// kill and music entity that might exist, don't want multiple music entities
 					if (m_musicEntity) {
-						m_entityManager.KillEntity(m_musicEntity);
-						m_entityManager.Update(0.0f);
+						GetWorld().GetEntityManager().KillEntity(m_musicEntity);
+						GetWorld().GetEntityManager().Update(0.0f);
 						m_musicEntity = nullptr;
 					}
 
 					// create a new music entity with a CMusic component for the selected file
-					Entity* musicEntity = m_entityManager.AddEntity(EntityType::Default);
+					Entity* musicEntity = m_world.CreateEntity(EntityType::Default);
 					// add the componenent and music if we have an entity
 					if (musicEntity) {
 						LoadMusicFromPath(sel);
@@ -1454,11 +1454,11 @@ void MusicVisualiserScene::ShowOpenFileBrowser() {
 		if (ImGui::Button("OK") && !selectedPath.empty()) {
 			std::string sel = selectedPath;
 			if (m_musicEntity) {
-				m_entityManager.KillEntity(m_musicEntity);
-				m_entityManager.Update(0.0f);
+				GetWorld().GetEntityManager().KillEntity(m_musicEntity);
+				GetWorld().GetEntityManager().Update(0.0f);
 				m_musicEntity = nullptr;
 			}
-			Entity* musicEntity = m_entityManager.AddEntity(EntityType::Default);
+			Entity* musicEntity = m_world.CreateEntity(EntityType::Default);
 
 			// add the componenent and music if we have an entity bla bla bla, same as the double-click handler (might be better to refactor this into a helper function)
 			if (musicEntity) {
@@ -1466,8 +1466,8 @@ void MusicVisualiserScene::ShowOpenFileBrowser() {
 				musicComponent->state = CMusic::State::Playing;
 				musicComponent->loop = true;
 				m_musicEntity = musicEntity;
-				//m_entityManager.ProcessPending();
-				if (auto ms = m_entityManager.GetMusicSystem())
+				//GetWorld().GetEntityManager().ProcessPending();
+				if (auto ms = GetWorld().GetEntityManager().GetMusicSystem())
 					ms->Process();
 				m_musicStatus = std::string("Loaded: ") + sel;
 				std::cout << m_musicStatus << std::endl;
@@ -1603,7 +1603,7 @@ bool MusicVisualiserScene::RefreshDirectoryListing(const std::filesystem::path& 
 /////////////////////////////////
 // MusicVisualizerScene class implementation. This scene allows users to load music files, control playback, and visualize audio-reactive spawns based on the music's spectrum analysis. It includes an ImGui interface for file browsing, playback controls, and spawn system configuration. The scene 
 // manages a music entity with a CMusic component for audio playback and analysis, and a SpawnSystem for handling music-reactive spawns. The Update function processes music levels to trigger spawns and renders the ImGui UI for user interaction.
-MusicVisualiserScene::MusicVisualiserScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world): Scene(name, engine, entityManager, world), m_window(win) {
+MusicVisualiserScene::MusicVisualiserScene(std::string name, sf::RenderWindow& win, World& world): Scene(name, world), m_window(win) {
 	m_screenCamera.viewportWidth = m_window.getSize().x;
 	m_screenCamera.viewportHeight = m_window.getSize().y;
 	m_screenCamera.position = Vec2(m_screenCamera.viewportWidth * 0.5f, m_screenCamera.viewportHeight * 0.5f);
@@ -1645,7 +1645,7 @@ void MusicVisualiserScene::Update(float deltaTime) {
 	}
 
 	// Get the current FPS
-	m_fps = m_gameEngine.GetFPSCounter().GetFPS();
+	m_fps = GetWorld().GetFPSCounter().GetFPS();
 
 	// Ensure current dir is initialized - try to find a Music folder in common locations
 	if (m_currentDir.empty()) {
@@ -1717,14 +1717,14 @@ void MusicVisualiserScene::Update(float deltaTime) {
 	// Update spawn system - this actually triggers the spawning based on music level
 	// Ensure spawn system exists (initialize here so it works even if ImGui isn't rendering)
 	if (!m_spawnSystem) {
-		m_spawnSystem = new Spawn::SpawnSystem(&m_entityManager, &m_window);
+		m_spawnSystem = new Spawn::SpawnSystem(&GetWorld().GetEntityManager(), &m_window);
 		m_spawnSystem->LoadDefault();
 	}
 
 	if (m_spawnSystem) {
 		float levelForSpawn = 0.0f;
 		if (m_musicEntity) {
-			if (auto ms = m_entityManager.GetMusicSystem()) {
+			if (auto ms = GetWorld().GetEntityManager().GetMusicSystem()) {
 				
 				// If UI requested a restart (Play pressed after track end), seek to start before processing
 				if (m_requestRestart) {
@@ -1802,7 +1802,7 @@ void MusicVisualiserScene::Update(float deltaTime) {
 				// Update equalizer bars from latest spectrum (if enabled and available)
 				if (m_EqualizerActive) {
 					std::vector<float> bands;
-					auto& pool = m_entityManager.GetEntities(EntityType::Equalizer);
+					auto& pool = GetWorld().GetEntityManager().GetEntities(EntityType::Equalizer);
 					if (pool.empty()) {
 						InitialiseEqualiserBars(static_cast<size_t>(m_visualBarCount));
 					}
@@ -1861,7 +1861,7 @@ void MusicVisualiserScene::Update(float deltaTime) {
 
 	// simple input
 	ProcessInput();
-	m_entityManager.ProcessPending();
+	GetWorld().GetEntityManager().ProcessPending();
 }
 /////////////////////////////////
 
@@ -1871,14 +1871,14 @@ void MusicVisualiserScene::Update(float deltaTime) {
 // Render - this function is responsible for rendering the equalizer bars to the window. It checks if the equalizer is active and if there are any bars to render, then sets the view
 void MusicVisualiserScene::Render() {
 	// 1. Draw world (ECS)
-	m_entityManager.RenderAll(m_entityManager.GetRenderSystemGL(), RenderSystem::RenderMode::ShapesThenText, GetActiveCamera());
+	GetWorld().GetEntityManager().RenderAll(GetWorld().GetEntityManager().GetRenderSystemGL(), RenderSystem::RenderMode::ShapesThenText, GetActiveCamera());
 
 	// 2. Draw GPU overlays in screen-space
-	if (m_entityManager.GetRenderSystemGL().IsInitialized()) {
+	if (GetWorld().GetEntityManager().GetRenderSystemGL().IsInitialized()) {
 		m_window.pushGLStates();
 		m_window.setActive(true);
 		if (m_EqualizerActive && !m_equaliserInstances.empty()) {
-			m_entityManager.GetRenderSystemGL().RenderEqualizerBars(m_equaliserInstances);
+			GetWorld().GetEntityManager().GetRenderSystemGL().RenderEqualizerBars(m_equaliserInstances);
 		}
 		m_window.popGLStates();
 		m_window.resetGLStates();
@@ -1934,13 +1934,13 @@ void MusicVisualiserScene::OnEnter() {
 
 	// Initialize the listener position to the screen center so 3D sounds are positioned correctly from the start
 	Vec2 listenerPos(m_window.getSize().x / 2.0f, m_window.getSize().y / 2.0f);
-	if (m_entityManager.GetSoundSystem()) {
-		m_entityManager.GetSoundSystem()->SetListenerPosition(listenerPos);
+	if (GetWorld().GetEntityManager().GetSoundSystem()) {
+		GetWorld().GetEntityManager().GetSoundSystem()->SetListenerPosition(listenerPos);
 	}
 
 	m_window.setActive(true);
-	m_entityManager.GetRenderSystemGL().Initialise();
-	m_entityManager.GetRenderSystemGL().OnResize(static_cast<int>(m_window.getSize().x), static_cast<int>(m_window.getSize().y));
+	GetWorld().GetEntityManager().GetRenderSystemGL().Initialise();
+	GetWorld().GetEntityManager().GetRenderSystemGL().OnResize(static_cast<int>(m_window.getSize().x), static_cast<int>(m_window.getSize().y));
 }
 /////////////////////////////////
 
@@ -1950,14 +1950,14 @@ void MusicVisualiserScene::OnEnter() {
 // OnExit 
 void MusicVisualiserScene::OnExit() 
 {
-	if (m_entityManager.GetRenderSystemGL().IsInitialized()) {
+	if (GetWorld().GetEntityManager().GetRenderSystemGL().IsInitialized()) {
 		m_window.setActive(true);
-		m_entityManager.GetRenderSystemGL().Shutdown();
+		GetWorld().GetEntityManager().GetRenderSystemGL().Shutdown();
 	}
 
 	if (m_musicEntity) {
-		m_entityManager.KillEntity(m_musicEntity);
-		m_entityManager.Update(0.0f);
+		GetWorld().GetEntityManager().KillEntity(m_musicEntity);
+		GetWorld().GetEntityManager().Update(0.0f);
 		m_musicEntity = nullptr;
 	}
 }
@@ -1972,7 +1972,7 @@ void MusicVisualiserScene::OnWindowResized(sf::Vector2u newSize) {
 	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
 	view.setSize(sf::Vector2f(newSize.x, newSize.y));
 	m_window.setView(view);
-	m_entityManager.GetRenderSystemGL().OnResize(static_cast<int>(newSize.x), static_cast<int>(newSize.y));
+	GetWorld().GetEntityManager().GetRenderSystemGL().OnResize(static_cast<int>(newSize.x), static_cast<int>(newSize.y));
 	if (m_eqBarCount > 0) {
 		InitialiseEqualiserBars(m_eqBarCount);
 	}
@@ -2059,11 +2059,11 @@ void MusicVisualiserScene::ProcessInput() {
 void MusicVisualiserScene::LoadMusicFromPath(const std::string& path) {
 	// Kill any existing music entity to ensure we only have one music playing at a time. We also call Update after killing the entity to ensure it is fully removed before we create a new one, which can help prevent issues with the MusicSystem still trying to process the old entity.
 	if (m_musicEntity) {
-		m_entityManager.KillEntity(m_musicEntity);
-		m_entityManager.Update(0.0f);
+		GetWorld().GetEntityManager().KillEntity(m_musicEntity);
+		GetWorld().GetEntityManager().Update(0.0f);
 		m_musicEntity = nullptr;
 	}
-	Entity* musicEntity = m_entityManager.AddEntity(EntityType::Default);
+	Entity* musicEntity = m_world.CreateEntity(EntityType::Default);
 
 	// Guard: No entity created, return early
 	if (!musicEntity)
@@ -2088,15 +2088,15 @@ void MusicVisualiserScene::LoadMusicFromPath(const std::string& path) {
 	}
 
 	m_musicEntity = musicEntity;
-	//m_entityManager.ProcessPending();
+	//GetWorld().GetEntityManager().ProcessPending();
 
 	// Process the music system immediately to start playing the music and have the analysis buffer available right away for the audio-reactive spawning. This ensures that as soon as we load a music file, it starts playing and we can see the visual effects without delay.
-	if (auto ms = m_entityManager.GetMusicSystem())
+	if (auto ms = GetWorld().GetEntityManager().GetMusicSystem())
 		ms->Process();
 	m_musicStatus = std::string("Loaded: ") + path;
 
     // Initialize equalizer bars when loading music so we have pre-allocated bar entities
-	if (auto ms2 = m_entityManager.GetMusicSystem()) {
+	if (auto ms2 = GetWorld().GetEntityManager().GetMusicSystem()) {
 		// Create visual pool using current visual bar count (independent of spectrum bands)
 		InitialiseEqualiserBars(static_cast<size_t>(m_visualBarCount));
 	}
@@ -2112,3 +2112,5 @@ void MusicVisualiserScene::ToggleTileAt(int tx, int ty, bool setSolid) {}
 
 
 /////////////////////////////////
+
+

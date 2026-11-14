@@ -16,7 +16,7 @@
 //	|___________________________________________________________________________________
 class TestRenderGLScene : public Scene {
 public:
-	TestRenderGLScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& em, World& world);
+	TestRenderGLScene(std::string name, sf::RenderWindow& win, World& world);
 
     void Update(float dt) override;
 	void Render() override;
@@ -42,3 +42,4 @@ private:
 	CCamera m_screenCamera;
 };
 /////////////////////////////////
+

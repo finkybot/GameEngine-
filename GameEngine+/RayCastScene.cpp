@@ -37,8 +37,8 @@
 
 /////////////////////////////////
 // Constructor - initializes the ray cast scene with a reference to the game engine and the render window, and sets up the entity manager
-RayCastScene::RayCastScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world)
-	: Scene(name, engine, entityManager, world), m_window(win), m_chunkManager(engine.GetChunkManager()) {
+RayCastScene::RayCastScene(std::string name, sf::RenderWindow& win, World& world)
+	: Scene(name, world), m_window(win), m_chunkManager(world.GetChunkManager()) {
 	m_debugLines.reserve(256);
 	m_debugLineColors.reserve(256);
 	m_debugPoints.reserve(256);
@@ -414,7 +414,7 @@ bool RayCastScene::RaycastDynamicEntities(const Vec2& origin, const Vec2& dir, f
 		return false;
 
 	// Use unified spatial index instead of chunk BVHs
-	auto* si = GetEntityManager().GetSpatialIndex();
+	auto* si = GetWorld().GetEntityManager().GetSpatialIndex();
 	if (!si)
 		return false;
 
@@ -514,7 +514,7 @@ void RayCastScene::ProcessMouseDragRaycast(bool leftMouseDown, const Vec2& mouse
 			RaycastHit entityHit;
 			Entity* hitEntity = nullptr;
 
-			auto* si = GetEntityManager().GetSpatialIndex();
+			auto* si = GetWorld().GetEntityManager().GetSpatialIndex();
 			bool hitDynamic = false;
 
 			if (si) {
@@ -598,7 +598,7 @@ void RayCastScene::ProcessEscapeKey(bool keyDown) const {
 /////////////////////////////////
 // ProcessMiddleMousePan - pan the current window view by dragging with middle mouse button (PathTestScene style).
 void RayCastScene::ProcessMiddleMousePan() {
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	if (!camOpt)
 		return;
 
@@ -623,17 +623,17 @@ void RayCastScene::ProcessMiddleMousePan() {
 /////////////////////////////////
 // Update - handles events, updates the entity manager, and prepares debug visualization data for rendering
 void RayCastScene::Update(float deltaTime) {
-	GetEntityManager().ProcessPending();
+	GetWorld().GetEntityManager().ProcessPending();
 
-	GetEntityManager().Update(deltaTime);
+	GetWorld().GetEntityManager().Update(deltaTime);
 	// Update camera system and apply main camera view
 	if (m_cameraEntity)
-		m_cameraSystem.Update(deltaTime, GetEntityManager());
+		m_cameraSystem.Update(deltaTime, GetWorld().GetEntityManager());
 	ApplyMainCameraView();
 
 	// Ensure chunks are loaded for the current camera view
 	const float tileSize = m_chunkManager.GetTileSize();
-	auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	if (!camOpt)
 		return;
 	CCamera* cam = *camOpt;
@@ -685,9 +685,9 @@ void RayCastScene::Update(float deltaTime) {
 	}
 
 	// Event Handling (SFML 3.0: pollEvent returns std::optional<sf::Event>)
-	while (auto eventOpt = m_gameEngine.window.pollEvent()) {
+	while (auto eventOpt = GetWorld().GetWindow().pollEvent()) {
 		if (eventOpt->is<sf::Event::Closed>()) {
-			m_gameEngine.window.close(); // window X button - always close
+			GetWorld().GetWindow().close(); // window X button - always close
 		}
 		// Escape is handled globally by GameEngine before scenes run, so do NOT forward it here
 		if (!eventOpt->is<sf::Event::KeyPressed>() || [&] {
@@ -747,7 +747,7 @@ void RayCastScene::Render	() {
 		//
 
 		// Dynamic + static entity shapes
-		GetEntityManager().RenderShapesSFML();
+		GetWorld().GetEntityManager().RenderShapesSFML();
 
 		// Raycast debug
 		DrawDebugLines();
@@ -784,7 +784,7 @@ void RayCastScene::Render	() {
 		});
 
 		// Now render via GL
-		m_entityManager.GetRenderSystemGL().RenderTilesInstance(soa, m_window.getView(), m_window.getSize());
+		GetWorld().GetEntityManager().GetRenderSystemGL().RenderTilesInstance(soa, m_window.getView(), m_window.getSize());
 
 		// Restore SFML state before drawing overlays
 		m_window.resetGLStates();
@@ -805,7 +805,7 @@ void RayCastScene::Render	() {
 		// 4. UI SPACE RENDERING
 		// ────────────────────────────────
 		//
-		GetEntityManager().RenderTextSFML();
+		GetWorld().GetEntityManager().RenderTextSFML();
 
 		//
 		// ────────────────────────────────
@@ -1081,7 +1081,7 @@ void RayCastScene::TileCallback(const ChunkRenderData& data, const TextureAtlas&
 void RayCastScene::OnEnter() {
 	std::cout << "RayCastScene::OnEnter\n";
 
-	auto& em = GetEntityManager();
+	auto& em = GetWorld().GetEntityManager();
 
 	// Match TestScene: clear everything and set rendering mode
 	em.ClearAll();
@@ -1092,7 +1092,7 @@ void RayCastScene::OnEnter() {
 	// Recreate camera
 	// -------------------------
 	sf::Vector2u windowSize = m_window.getSize();
-	m_cameraEntity = em.AddEntity(EntityType::Camera);
+	m_cameraEntity = m_world.CreateEntity(EntityType::Camera);
 
 	Vec2 initialCamPos(0.0f, 0.0f);
 	auto* camera = m_cameraEntity->AddComponent<CCamera>(initialCamPos, 1.0f);
@@ -1113,7 +1113,7 @@ void RayCastScene::OnEnter() {
 		Vec2 position(200.f, 200.f);
 		Vec2 velocity(0.f, 0.f);
 
-		Entity* e = em.AddEntity(EntityType::DynamicBox1);
+		Entity* e = m_world.CreateEntity(EntityType::DynamicBox1);
 		e->AddComponent<CName>("DynamicBox1");
 		e->AddComponent<CTransform>(position, velocity);
 
@@ -1132,7 +1132,7 @@ void RayCastScene::OnEnter() {
 		Vec2 position(350.f, 250.f);
 		Vec2 velocity(0.f, 0.f);
 
-		Entity* e = em.AddEntity(EntityType::DynamicBox2);
+		Entity* e = m_world.CreateEntity(EntityType::DynamicBox2);
 		e->AddComponent<CName>("DynamicBox2");
 		e->AddComponent<CTransform>(position, velocity);
 
@@ -1151,7 +1151,7 @@ void RayCastScene::OnEnter() {
 		Vec2 position(500.f, 300.f);
 		Vec2 velocity(0.f, 0.f);
 
-		Entity* e = em.AddEntity(EntityType::DynamicBox3);
+		Entity* e = m_world.CreateEntity(EntityType::DynamicBox3);
 		e->AddComponent<CName>("DynamicBox3");
 		e->AddComponent<CTransform>(position, velocity);
 
@@ -1207,10 +1207,10 @@ void RayCastScene::OnEnter() {
 		std::cout << "WARNING: m_cameraEntity is null!\n";
 	}
 
-	std::cout << "Task completed for " << m_entityManager.GetDynamicEntities().size() << " entities.\n";
+	std::cout << "Task completed for " << GetWorld().GetEntityManager().GetDynamicEntities().size() << " entities.\n";
 
 
-	BVHSystem& bvh = m_entityManager.GetBVH();
+	BVHSystem& bvh = GetWorld().GetEntityManager().GetBVH();
 	int depth = bvh.ComputeDepth(bvh.GetRoot());
 	std::cout << "[RayCastScene] Dynamic BVH depth = " << depth << "\n";
 }
@@ -1271,7 +1271,7 @@ void RayCastScene::OnWindowResized(sf::Vector2u newSize) {
 
 /////////////////////////////////
 void RayCastScene::ApplyMainCameraView() {
-    auto camOpt = m_cameraSystem.GetMainCamera(GetEntityManager());
+    auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
     if (!camOpt)
         return;
 
@@ -1317,7 +1317,7 @@ void RayCastScene::UnloadResources() {
 void RayCastScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	sf::Vector2u windowSize = m_window.getSize();
 
-	m_cameraEntity = GetEntityManager().AddEntity(EntityType::Default);
+	m_cameraEntity = m_world.CreateEntity(EntityType::Default);
 	auto camera = m_cameraEntity->AddComponent<CCamera>(Vec2(0, 0), 1.0f);
 	camera->isMainCamera = true;
 	camera->isActive = true;
@@ -1367,7 +1367,7 @@ void RayCastScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	}
 	if (!hasAnyChunks) {
 		std::string err;
-		auto maybe = m_gameEngine.GetFileManager().LoadTileMap("assets\\testmap.json", &err);
+		auto maybe = GetWorld().GetFileManager().LoadTileMap("assets\\testmap.json", &err);
 		if (maybe) {
 			const TileMap& map = *maybe;
 			for (int y = 0; y < map.height; ++y) {
@@ -1399,20 +1399,20 @@ void RayCastScene::InitialiseGame(sf::Vector2u /*windowSize*/) {
 	ApplyMainCameraView();
 
 	// Load fonts for text rendering. We load two different font styles (regular and thin) from the assets/fonts/roboto directory. If the font fails to load, we print an error message to the console.
-	if (!m_gameEngine.GetFontManager().LoadFont("regular", "assets\\fonts\\roboto\\Roboto-Regular.ttf"))
+	if (!GetWorld().GetFontManager().LoadFont("regular", "assets\\fonts\\roboto\\Roboto-Regular.ttf"))
 		std::cerr << "Error loading font" << std::endl;
-	if (!m_gameEngine.GetFontManager().LoadFont("thin", "assets\\fonts\\roboto\\Roboto-Thin.ttf"))
+	if (!GetWorld().GetFontManager().LoadFont("thin", "assets\\fonts\\roboto\\Roboto-Thin.ttf"))
 		std::cerr << "Error loading font" << std::endl;
 
 	// Create text entities for the scene title and instructions. We create two entities with CTransform and CText components to display the scene title and instructions on the screen. The title is 
 	// displayed in cyan color with a larger font size, while the instructions are displayed in yellow color with a smaller font size. If the font fails to load for either entity, we print an error message to the console.
-	Entity* fontEntity = m_entityManager.AddEntity(EntityType::Default);
+	Entity* fontEntity = m_world.CreateEntity(EntityType::Default);
 	fontEntity->AddComponent<CTransform>(Vec2(50.0f, 50.0f), Vec2::Zero);
 	if (!fontEntity->AddComponent<CText>("RayCasting Demo (Chunked 3-Layer)", sf::Color::Cyan, "regular", 60))
 		std::cerr << "Error loading font for text entity" << std::endl;
 
 	// Instructions text entity
-	Entity* instructionsEntity = m_entityManager.AddEntity(EntityType::Default);
+	Entity* instructionsEntity = m_world.CreateEntity(EntityType::Default);
 	instructionsEntity->AddComponent<CTransform>(Vec2(50, windowSize.y - 150), Vec2::Zero);
 	if (!instructionsEntity->AddComponent<CText>("Left Click + Drag: Raycast\nPress 'D' to toggle debug visualization\nRead-only scene: edit in Level Editor",
 										 sf::Color::Yellow, "thin", 20))
@@ -1447,3 +1447,5 @@ RaycastHit RayCastScene::MakeStartCellHit(int tileX, int tileY, const Vec2& orig
 	return h;
 }
 /////////////////////////////////
+
+

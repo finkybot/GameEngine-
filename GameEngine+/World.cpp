@@ -7,6 +7,7 @@
 /////////////////////////////////
 // Includes
 #include "World.h"
+#include "GameEngine.h"
 #include "Scene.h"
 #include "EntityManager.h"
 #include "ChunkManager.h"
@@ -16,8 +17,8 @@
 
 
 /////////////////////////////////
-World::World(EntityManager& entityManager, ChunkManager& chunkManager)
-	: m_entityManager(entityManager), m_chunkManager(chunkManager) {}
+World::World(GameEngine& gameEngine, ChunkManager& chunkManager, sf::RenderWindow& window)
+	: m_chunkManager(chunkManager), m_gameEngine(&gameEngine), m_entityManager(std::make_unique<EntityManager>(window)) {}
 /////////////////////////////////
 
 
@@ -67,9 +68,8 @@ void World::ChangeScene(const std::string& sceneName) {
 			m_activeScene->OnExit();
 			m_activeScene->UnloadResources();
 			m_activeScene->ClearRenderQueue();
+			ClearAllEntities();
 		}
-
-		m_entityManager.ClearAll();
 
 		if (m_window)
 			m_window->clear(sf::Color::Black);
@@ -85,6 +85,27 @@ void World::ChangeScene(const std::string& sceneName) {
 
 }
 /////////////////////////////////
+
+EntityManager& World::GetEntityManager() { return *m_entityManager; }
+const EntityManager& World::GetEntityManager() const { return *m_entityManager; }
+GameEngine& World::GetGameEngine() { return *m_gameEngine; }
+InputController& World::GetInputController() { return m_gameEngine->GetInputController(); }
+CursorSystem& World::GetCursorSystem() { return m_gameEngine->GetCursorSystem(); }
+TextureManager& World::GetTextureManager() { return m_gameEngine->GetTextureManager(); }
+FontManager& World::GetFontManager() { return m_gameEngine->GetFontManager(); }
+FPSCounter& World::GetFPSCounter() { return m_gameEngine->GetFPSCounter(); }
+FileManager& World::GetFileManager() { return m_gameEngine->GetFileManager(); }
+RenderQueue& World::GetRenderQueue() { return m_gameEngine->GetRenderQueue(); }
+TechRegistry& World::GetTechRegistry() { return m_gameEngine->GetTechRegistry(); }
+WorldDiffusionConfig& World::GetWorldDiffusionConfig() { return m_gameEngine->GetWorldDiffusionConfig(); }
+Entity* World::CreateEntity(EntityType type) { return GetEntityManager().AddEntity(type); }
+Entity* World::GetEntity(EntityID id) { return GetEntityManager().GetEntity(id); }
+void World::DestroyEntity(EntityID id) { GetEntityManager().DestroyEntity(id); }
+EntityVector& World::GetEntities() { return GetEntityManager().GetEntities(); }
+std::vector<Entity*>& World::GetEntities(EntityType type) { return GetEntityManager().GetEntities(type); }
+void World::AddEntityToBucket(BucketID bucket, EntityID id) { GetEntityManager().AddEntityToBucket(bucket, id); }
+EntityBucket* World::GetEntityBucket(BucketID bucketId) { return GetEntityManager().GetEntityBucket(bucketId); }
+void World::ClearAllEntities() { GetEntityManager().ClearAll(); }
 
 
 

@@ -8,6 +8,8 @@
 // Includes for the MusicVisualiserScene class.
 #pragma once
 #include "Scene.h"
+#include "Entity.h"
+#include "GPUInstanceStructs.h"
 #include "TileMap.h"
 #include "Vec2.h"
 #include <SFML/Graphics.hpp>
@@ -37,7 +39,7 @@ class MusicVisualiserScene : public Scene {
 
 public:
 	// Constructor and destructor
-	MusicVisualiserScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world);
+	MusicVisualiserScene(std::string name, sf::RenderWindow& win, World& world);
 	~MusicVisualiserScene() override;
 
 
@@ -298,3 +300,4 @@ private:
 	std::vector<GPUBarInstanceData> m_equaliserInstances;
 };
 /////////////////////////////////
+

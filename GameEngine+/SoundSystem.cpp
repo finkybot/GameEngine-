@@ -108,10 +108,10 @@ Entity* SoundSystem::AcquirePooledSoundEntity() {
 
 		// Reset component state for reuse
 		if (auto* sound = entity->GetComponent<CSoundEffect>()) {
-			sound->m_shouldPlay = false;
-			sound->m_state = CSoundEffect::State::Stopped;
-			sound->m_fadeOutDuration = 0.0f;
-			sound->m_fadeOutElapsed = 0.0f;
+			sound->shouldPlay = false;
+			sound->state = CSoundEffect::State::Stopped;
+			sound->fadeOutDuration = 0.0f;
+			sound->fadeOutElapsed = 0.0f;
 		}
 
 		return entity;
@@ -130,11 +130,11 @@ void SoundSystem::ReturnSoundToPool(Entity* entity) {
 
 	// Stop the sound
 	if (auto* sound = entity->GetComponent<CSoundEffect>()) {
-		if (sound->m_sound) {
-			sound->m_sound->stop();
+		if (sound->sound) {
+			sound->sound->stop();
 		}
-		sound->m_shouldPlay = false;
-		sound->m_state = CSoundEffect::State::Stopped;
+		sound->shouldPlay = false;
+		sound->state = CSoundEffect::State::Stopped;
 	}
 
 	m_soundEffectPool.push_back(entity);
@@ -159,37 +159,37 @@ void SoundSystem::Process(EntityManager& em, float deltaTime) {
 
 		soundEffectCount++;
 
-		// Handle m_shouldPlay flag (data-driven control)
-		if (sound->m_shouldPlay && !sound->m_sound) {
+		// Handle shouldPlay flag (data-driven control)
+		if (sound->shouldPlay && !sound->sound) {
 			// Acquire or create backing sf::Sound
-			if (sound->m_Path.empty()) {
-				std::cerr << "[SoundSystem WARNING] Entity has m_shouldPlay=true but m_Path is empty" << std::endl;
+			if (sound->Path.empty()) {
+				std::cerr << "[SoundSystem WARNING] Entity has shouldPlay=true but Path is empty" << std::endl;
 				continue; // No audio file specified
 			}
 
-			sf::SoundBuffer* buffer = GetOrLoadBuffer(sound->m_Path);
+			sf::SoundBuffer* buffer = GetOrLoadBuffer(sound->Path);
 			if (!buffer) {
-				std::cerr << "[SoundSystem ERROR] Failed to load buffer for: " << sound->m_Path << std::endl;
-				sound->m_shouldPlay = false;  // Disable further attempts
+				std::cerr << "[SoundSystem ERROR] Failed to load buffer for: " << sound->Path << std::endl;
+				sound->shouldPlay = false;  // Disable further attempts
 				continue; // Failed to load audio
 			}
 
-			sound->m_sound = std::make_unique<sf::Sound>(*buffer);
+			sound->sound = std::make_unique<sf::Sound>(*buffer);
 			// SFML 3 volume range is 1-100 (not 0-100)
 			// Internal m_volume should be in range 1-100 for proper SFML playback
-			float finalVolume = std::clamp(sound->m_volume, 1.0f, 100.0f);
-			sound->m_sound->setVolume(finalVolume);
+			float finalVolume = std::clamp(sound->volume, 1.0f, 100.0f);
+			sound->sound->setVolume(finalVolume);
 			// Enable/disable 3D spatialization based on component flag
-			sound->m_sound->setSpatializationEnabled(sound->m_is3D);
+			sound->sound->setSpatializationEnabled(sound->is3D);
 		}
 
 		// Start playback if flagged
-		if (sound->m_shouldPlay && sound->m_sound && sound->m_state != CSoundEffect::State::Playing) {
+		if (sound->shouldPlay && sound->sound && sound->state != CSoundEffect::State::Playing) {
 			// Check if this is an explosion sound and prevent overlapping playback
 			bool canPlay = true;
 			// Disabled for now - entity keeps explosion alive until sound finishes
-			//if (sound->m_Path.find("explosion") != std::string::npos) {
-			//	const sf::SoundBuffer& buffer = sound->m_sound->getBuffer();
+			//if (sound->Path.find("explosion") != std::string::npos) {
+			//	const sf::SoundBuffer& buffer = sound->sound->getBuffer();
 			//	if (!CanPlayExplosion(accumulatedTime, buffer.getDuration().asSeconds())) {
 			//		canPlay = false;  // Don't play yet, wait for previous explosion to finish
 			//	} else {
@@ -198,39 +198,39 @@ void SoundSystem::Process(EntityManager& em, float deltaTime) {
 			//}
 
 			if (canPlay) {
-				sound->m_sound->play();
-				sound->m_state = CSoundEffect::State::Playing;
+				sound->sound->play();
+				sound->state = CSoundEffect::State::Playing;
 			}
 		}
 
 		// Update sound status based on actual playback
-		if (sound->m_sound && sound->m_state == CSoundEffect::State::Playing) {
-			auto actualStatus = sound->m_sound->getStatus();
+		if (sound->sound && sound->state == CSoundEffect::State::Playing) {
+			auto actualStatus = sound->sound->getStatus();
 			if (actualStatus == sf::Sound::Status::Stopped) {
-				sound->m_state = CSoundEffect::State::Stopped;
-				sound->m_shouldPlay = false; // Mark as done
+				sound->state = CSoundEffect::State::Stopped;
+				sound->shouldPlay = false; // Mark as done
 			}
 		}
 
 		// Handle pause/resume
-		if (sound->m_state == CSoundEffect::State::Paused && sound->m_sound) {
+		if (sound->state == CSoundEffect::State::Paused && sound->sound) {
 			// SFML status check - verify it's actually paused
-			if (sound->m_sound->getStatus() != sf::Sound::Status::Paused) {
-				sound->m_sound->pause();
+			if (sound->sound->getStatus() != sf::Sound::Status::Paused) {
+				sound->sound->pause();
 			}
 		}
 
 		// Handle explicit stop (only if m_shouldPlay was set to false AFTER creation)
-		if (!sound->m_shouldPlay && sound->m_sound && sound->m_state != CSoundEffect::State::Stopped && sound->m_state != CSoundEffect::State::Playing) {
-			sound->m_sound->stop();
-			sound->m_state = CSoundEffect::State::Stopped;
+		if (!sound->shouldPlay && sound->sound && sound->state != CSoundEffect::State::Stopped && sound->state != CSoundEffect::State::Playing) {
+			sound->sound->stop();
+			sound->state = CSoundEffect::State::Stopped;
 		}
 
 		// Update spatial audio if entity has a transform and 3D is enabled
-		if (sound->m_is3D) {
+		if (sound->is3D) {
 			if (auto* transform = entity->GetComponent<CTransform>()) {
-				if (sound->m_sound) {
-					ApplySpatialAudio(*sound->m_sound, *sound, transform->position);
+				if (sound->sound) {
+					ApplySpatialAudio(*sound->sound, *sound, transform->position);
 				}
 			}
 		}
@@ -265,29 +265,29 @@ void SoundSystem::Update(float deltaTime) {
 	for (auto& entityPtr : entities) {
 		Entity* entity = entityPtr.get();
 		CSoundEffect* sound = entity->GetComponent<CSoundEffect>();
-		if (!sound || !sound->m_sound) continue;
+		if (!sound || !sound->sound) continue;
 
 		// Update fade-out
-		if (sound->m_fadeOutDuration > 0.0f && sound->m_state == CSoundEffect::State::Playing) {
-			sound->m_fadeOutElapsed += deltaTime;
+		if (sound->fadeOutDuration > 0.0f && sound->state == CSoundEffect::State::Playing) {
+			sound->fadeOutElapsed += deltaTime;
 
-			float progress = sound->m_fadeOutElapsed / sound->m_fadeOutDuration;
+			float progress = sound->fadeOutElapsed / sound->fadeOutDuration;
 			if (progress >= 1.0f) {
-				sound->m_sound->stop();
-				sound->m_state = CSoundEffect::State::Stopped;
-				sound->m_shouldPlay = false;
-				sound->m_fadeOutDuration = 0.0f;
+				sound->sound->stop();
+				sound->state = CSoundEffect::State::Stopped;
+				sound->shouldPlay = false;
+				sound->fadeOutDuration = 0.0f;
 			} else {
 				// Linearly interpolate volume during fade-out (clamp to 1-100 for SFML 3)
-				float fadedVolume = std::max(1.0f, sound->m_volume * (1.0f - progress));
-				sound->m_sound->setVolume(fadedVolume);
+				float fadedVolume = std::max(1.0f, sound->volume * (1.0f - progress));
+				sound->sound->setVolume(fadedVolume);
 			}
 		}
 
 		// Update spatial audio distance
 		if (auto* transform = entity->GetComponent<CTransform>()) {
 			Vec2 delta = transform->position - m_listenerPosition;
-			sound->m_currentDistance = delta.Mag();
+			sound->currentDistance = delta.Mag();
 		}
 	}
 }
@@ -309,9 +309,9 @@ void SoundSystem::SetMasterVolume(float volume) {
 		for (auto& entityPtr : entities) {
 			Entity* entity = entityPtr.get();
 			CSoundEffect* sound = entity->GetComponent<CSoundEffect>();
-			if (sound && sound->m_sound) {
-				float finalVolume = std::clamp(sound->m_volume, 1.0f, 100.0f);
-				sound->m_sound->setVolume(finalVolume);
+			if (sound && sound->sound) {
+				float finalVolume = std::clamp(sound->volume, 1.0f, 100.0f);
+				sound->sound->setVolume(finalVolume);
 			}
 		}
 	}
@@ -351,14 +351,14 @@ void SoundSystem::StopSoundEffect(Entity* entity, float fadeOutTime) {
 	if (!sound) return;
 
 	if (fadeOutTime > 0.0f) {
-		sound->m_fadeOutDuration = fadeOutTime;
-		sound->m_fadeOutElapsed = 0.0f;
+		sound->fadeOutDuration = fadeOutTime;
+		sound->fadeOutElapsed = 0.0f;
 	} else {
-		if (sound->m_sound) {
-			sound->m_sound->stop();
+		if (sound->sound) {
+			sound->sound->stop();
 		}
-		sound->m_state = CSoundEffect::State::Stopped;
-		sound->m_shouldPlay = false;
+		sound->state = CSoundEffect::State::Stopped;
+		sound->shouldPlay = false;
 	}
 }
 /////////////////////////////////
@@ -371,9 +371,9 @@ void SoundSystem::PauseSoundEffect(Entity* entity) {
 	if (!entity) return;
 
 	CSoundEffect* sound = entity->GetComponent<CSoundEffect>();
-	if (sound && sound->m_sound) {
-		sound->m_sound->pause();
-		sound->m_state = CSoundEffect::State::Paused;
+	if (sound && sound->sound) {
+		sound->sound->pause();
+		sound->state = CSoundEffect::State::Paused;
 	}
 }
 /////////////////////////////////
@@ -386,9 +386,9 @@ void SoundSystem::ResumeSoundEffect(Entity* entity) {
 	if (!entity) return;
 
 	CSoundEffect* sound = entity->GetComponent<CSoundEffect>();
-	if (sound && sound->m_sound && sound->m_state == CSoundEffect::State::Paused) {
-		sound->m_sound->play();
-		sound->m_state = CSoundEffect::State::Playing;
+	if (sound && sound->sound && sound->state == CSoundEffect::State::Paused) {
+		sound->sound->play();
+		sound->state = CSoundEffect::State::Playing;
 	}
 }
 /////////////////////////////////
@@ -467,7 +467,7 @@ void SoundSystem::ApplySpatialAudio(sf::Sound& sound, const CSoundEffect& soundC
 	// Only apply spatial audio if enabled
 	if (!m_spatialAudioEnabled) {
 		// If spatial audio is disabled, just set full volume and no panning
-		float volume = soundCmp.m_volume;
+		float volume = soundCmp.volume;
 		volume = std::clamp(volume, 1.0f, 100.0f);
 		sound.setVolume(volume);
 		sound.setPan(0.0f);  // Center pan
@@ -484,12 +484,12 @@ void SoundSystem::ApplySpatialAudio(sf::Sound& sound, const CSoundEffect& soundC
 	sound.setPosition(soundPos);
 
 	// Set distance parameters for attenuation curve
-	sound.setMinDistance(soundCmp.m_3DMinDistance);
-	sound.setMaxDistance(soundCmp.m_3DMaxDistance);
+	sound.setMinDistance(soundCmp._3DMinDistance);
+	sound.setMaxDistance(soundCmp._3DMaxDistance);
 
 	// Set the volume to the component's base volume
 	// SFML's spatialization will handle attenuation based on distance
-	float volume = soundCmp.m_volume;
+	float volume = soundCmp.volume;
 	volume = std::clamp(volume, 1.0f, 100.0f);
 	sound.setVolume(volume);
 
@@ -498,7 +498,7 @@ void SoundSystem::ApplySpatialAudio(sf::Sound& sound, const CSoundEffect& soundC
 	// - Apply panning based on the horizontal offset
 	// We set the position, distance parameters, and let SFML handle the rest
 }
-//////////////////////////////////////////////////////////////////
+/////////////////////////////////
 
 
 
@@ -513,8 +513,8 @@ void SoundSystem::CullByPriority(EntityManager& em) {
 	for (auto& entityPtr : entities) {
 		Entity* entity = entityPtr.get();
 		CSoundEffect* sound = entity->GetComponent<CSoundEffect>();
-		if (sound && sound->m_state == CSoundEffect::State::Playing && sound->m_sound) {
-			activeSounds.push_back({ entity, sound->m_priority });
+		if (sound && sound->state == CSoundEffect::State::Playing && sound->sound) {
+			activeSounds.push_back({ entity, sound->priority });
 		}
 	}
 
@@ -544,8 +544,8 @@ size_t SoundSystem::CountActiveSounds(EntityManager& em) const {
 	for (const auto& entityPtr : entities) {
 		Entity* entity = entityPtr.get();
 		CSoundEffect* sound = entity->GetComponent<CSoundEffect>();
-		if (sound && sound->m_state == CSoundEffect::State::Playing && sound->m_sound) {
-			if (sound->m_sound->getStatus() == sf::Sound::Status::Playing) {
+		if (sound && sound->state == CSoundEffect::State::Playing && sound->sound) {
+			if (sound->sound->getStatus() == sf::Sound::Status::Playing) {
 				++count;
 			}
 		}
@@ -564,6 +564,8 @@ bool SoundSystem::CanPlayNewSound(EntityManager& em) const {
 	return activeCount < m_maxConcurrentSounds;
 }
 /////////////////////////////////
+
+
 
 /////////////////////////////////
 // CanPlayExplosion - Check if enough time has passed since the last explosion sound finished

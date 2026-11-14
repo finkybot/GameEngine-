@@ -25,7 +25,7 @@
 class RayCastScene : public Scene {
 public:
 	// Constructor and destructor for the RayCastScene class. The constructor initializes the scene with references to the game engine, render window, and entity manager, while the destructor can be used to clean up any resources if needed.
-	RayCastScene(std::string name, GameEngine& engine, sf::RenderWindow& win, EntityManager& entityManager, World& world);
+	RayCastScene(std::string name, sf::RenderWindow& win, World& world);
 	~RayCastScene() override;
 
 
@@ -147,3 +147,4 @@ private:
 	bool m_hasLastViewCenter = false;	
 };
 /////////////////////////////////
+

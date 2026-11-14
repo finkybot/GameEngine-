@@ -860,14 +860,14 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 	// Add sound effect component for explosion sound (if enabled in config)
 	if (cfg.hasSound) {
 		auto soundEffect = entity->AddComponent<CSoundEffect>();
-		soundEffect->m_Path = "assets/sounds/medium-explosion.ogg";
-		soundEffect->m_volume = 75.0f;
-		soundEffect->m_loop = false;
-		soundEffect->m_priority = SoundPriority::SFX;
-		soundEffect->m_is3D = true;  // Enable 3D spatialization
-		soundEffect->m_3DMinDistance = 200.0f;   // Full volume closer to listener
-		soundEffect->m_3DMaxDistance = 2000.0f;  // Extend max range so more explosions are audible
-		soundEffect->m_shouldPlay = true;
+		soundEffect->Path = "assets/sounds/medium-explosion.ogg";
+		soundEffect->volume = 75.0f;
+		soundEffect->loop = false;
+		soundEffect->priority = SoundPriority::SFX;
+		soundEffect->is3D = true;  // Enable 3D spatialization
+		soundEffect-> _3DMinDistance = 200.0f;   // Full volume closer to listener
+		soundEffect-> _3DMaxDistance = 2000.0f;  // Extend max range so more explosions are audible
+		soundEffect->shouldPlay = true;
 	}
 
 	// Place the initial explosion behind subsequent after-effects
@@ -878,6 +878,8 @@ void SpawnSystem::SpawnEntity(const SpawnerConfig& cfg, float level) {
 	// avoid possible re-entrancy and ensure all systems run in the expected order.
 }
 /////////////////////////////////
+
+
 
 /////////////////////////////////
 // SpawnExplosion - Spawn an explosion at the given position with component flags
@@ -908,23 +910,9 @@ Entity* SpawnSystem::SpawnExplosion(float x, float y, float vx, float vy, unsign
 		entity->AddComponentPtr<CShape>(std::move(explosion));
 	}
 
-	// Add sound component if requested
-	if (HasFlag(flags, ComponentFlags::HasSound)) {
-		auto soundEffect = entity->AddComponent<CSoundEffect>();
-		soundEffect->m_Path = "assets/sounds/medium-explosion.ogg";
-		soundEffect->m_volume = 75.0f;
-		soundEffect->m_loop = false;
-		soundEffect->m_priority = SoundPriority::Critical;
-		soundEffect->m_is3D = true;
-		soundEffect->m_3DMinDistance = 200.0f;
-		soundEffect->m_3DMaxDistance = 2000.0f;
-		soundEffect->m_shouldPlay = true;
-	}
-
 	// Set background layer
 	m_entityManager->SetEntityLayer(entity, Entity::Layer::Background);
 
 	return entity;
 }
-/////////////////////////////////
 /////////////////////////////////

@@ -12,14 +12,13 @@
 
 #include <SFML/Window/Event.hpp>
 #include <SFML/System/Clock.hpp>
-#include "GameEngine.h"
+#include "GameController.h"
 #include "RenderQueue.h"
 #include "CCamera.h"
 #include "IDTypes.h"	
+#include "World.h"
 
-class GameEngine;
 class EntityManager;
-class World;
 /////////////////////////////////
 
 
@@ -61,28 +60,23 @@ public:
 	Scene(const Scene&) = delete;
 	Scene& operator=(const Scene&) = delete;
 
-	// Scene holds a non-owning reference to the engine's EntityManager
-	EntityManager& m_entityManager;
-
-	// Helper to access the injected entity manager (already a reference)
-	EntityManager& GetEntityManager() { return m_entityManager; }
-
 	// Helper to access the injected game engine (already a reference)
-	GameEngine& GetGameEngine() { return m_gameEngine; }
-
 	// Helper to access the engine-wide render queue
 	RenderQueue& GetEngineRenderQueue();
 
 	std::string GetName() const { return m_sceneName; }
 
+
+	World& GetWorld() { return m_world; }
+	const World& GetWorld() const { return m_world; }
+
 protected:
 	// Construction contract: derived scenes must initialize these references
-	Scene(const std::string& sceneName, GameEngine& gameEngine, EntityManager& entityManager, World& world);
+	Scene(const std::string& sceneName, World& world);
 
 	GameController m_GameController;
 
 	// injected references (Scene does not own these)
-	GameEngine& m_gameEngine;
 	World& m_world;
 
 
@@ -98,3 +92,4 @@ protected:
 	sf::Clock deltaClock;
 };
 /////////////////////////////////
+

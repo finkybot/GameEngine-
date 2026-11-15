@@ -86,7 +86,7 @@ private:
 
 	void UpdateEntity(Entity* entity, float deltaTime, float worldWidth, float worldHeight);
 	Vec2 ClampBallToMap(const Vec2& position, float radius) const;
-	bool UpdateDraggedBall(Entity* entity, size_t transformIndex, CTransform& transform);
+	bool UpdateDraggedBall(Entity* entity, size_t transformIndex, CTransform& transform, float deltaTime);
 	void UpdateBallMovement(Entity* entity, size_t transformIndex, CTransform& transform, float deltaTime);
 	void SyncEntityTransform(Entity* entity, size_t transformIndex, CTransform& transform);
 	void UpdateFPS(float deltaTime);
@@ -98,7 +98,7 @@ private:
 	void SpawnInitialPopulation();
 	void SpawnReplacementEntities(int count);
 
-	void SpawnExplosion(const Vec2& position, float radius);
+	void SpawnExplosion(const Vec2& position, float radius, const Vec3& colour);
 	void ApplyMainCameraView(float deltaTime);
 	void ApplyCameraMovement(float deltaTime);
 	Vec2 GetMouseWorldPosition(const sf::Vector2i& mousePosition) const;
@@ -160,7 +160,12 @@ private:
 	std::uniform_real_distribution<float> m_radiusDistro;	// random radius between 1.5 and 2.0 for more visible entities
 	std::uniform_int_distribution<int> m_entityType;		// entity type (0-4) for team assignment
 	Entity* m_draggedBall = nullptr;
+
+	// Dragging state variables for managing the dragging of entities in the scene. These variables track the offset between the mouse position and the entity's position, the velocity of the drag movement, and the last sampled world position during dragging. They are used to calculate the release velocity when the mouse button is released, allowing for smooth and responsive movement of dragged entities.
 	Vec2 m_dragOffset = Vec2::Zero;
+	Vec2 m_dragVelocity = Vec2::Zero;
+	Vec2 m_lastDragWorldPosition = Vec2::Zero;
+	bool m_hasDragSample = false;
 	std::uniform_int_distribution<int> m_direction;			// direction (0-1) for left or right movement	
 };
 /////////////////////////////////

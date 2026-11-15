@@ -87,6 +87,7 @@ void TestScene::Update(float dt) {
 	//
 	raycast->screenPos = ms->screenPos;
 
+	// --- Update raycast world position and direction based on the main camera's position and orientation. This ensures that the raycast is correctly aligned with the camera's view, allowing for accurate detection of entities in the scene based on mouse input.
 	auto cCam = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	if (cCam) {
 		// Ray starts at the mouse world position
@@ -99,15 +100,12 @@ void TestScene::Update(float dt) {
 		raycast->maxDistance = 20.0f;
 	}
 
-
-	//std::cout << "Ray origin: " << raycast->worldPos.x << "," << raycast->worldPos.y << " dir: " << raycast->direction.x << "," << raycast->direction.y << "\n";
-
-
+	// --- Update delta time and explosion sound timer, and calculate smoothed FPS using an exponential moving average to reduce fluctuations in the reported FPS. This provides a more stable and accurate representation of the game's performance over time.
 	m_dt = dt;
 	m_explosionSoundTimer = std::min(1.0f / 12.0f, m_explosionSoundTimer + dt);
 	UpdateFPS(dt);
 
-
+	// --- Get the CollisionSystem from the EntityManager for handling collision detection and resolution ---
 	auto& CollisionSystem = GetWorld().GetEntityManager().GetCollisionSystem();
 
 	// --- Scene growth + spawning (bounded) ---
@@ -117,6 +115,7 @@ void TestScene::Update(float dt) {
 		m_growthTimer = 0.0f;
 	}
 
+	// --- Update spawning of entities based on the target entity count and current population. This manages the dynamic growth of the entity population in the scene, ensuring that new entities are spawned as needed to maintain the desired count.
 	UpdateSpawning(dt);
 
 	//
@@ -128,9 +127,11 @@ void TestScene::Update(float dt) {
 	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	CCamera* cam = camOpt ? *camOpt : nullptr;
 
+	// --- Determine world dimensions based on the camera's world width and height, or fallback to the window size if no camera is available. This ensures that entity updates are performed within the correct bounds of the game world.
 	float worldW = cam ? cam->worldWidth : static_cast<float>(m_window.getSize().x);
 	float worldH = cam ? cam->worldHeight : static_cast<float>(m_window.getSize().y);
 
+	// --- Update each entity in the scene, applying movement, collision detection, and other game logic as needed. This loop iterates through all entities, checking their alive status and updating their state based on the current delta time and world dimensions.
 	for (auto& uptr : entities) {
 		Entity* e = uptr.get();
 		if (!e->IsAlive())
@@ -139,6 +140,7 @@ void TestScene::Update(float dt) {
 		UpdateEntity(e, dt, worldW, worldH);
 	}
 
+	// --- Update explosions, handling their lifecycle and any associated effects. This manages the visual and audio feedback for explosions in the scene, ensuring that they are updated correctly based on the current game state and delta time.
 	UpdateExplosions();
 
 	// --- Broad‑phase collision (optional / throttled) ---
@@ -146,28 +148,35 @@ void TestScene::Update(float dt) {
 		GetWorld().GetEntityManager().GetCollisionSystem().DetectAndResolveSpatial(entities, GetWorld().GetEntityManager().GetSpatialIndex(), dt);
 	}
 
+	// --- Process collision explosion requests and spawn explosions at the collision points. This handles the visual and audio feedback for collisions between entities, creating explosion effects and playing sound effects as appropriate.
 	const auto& explosionRequests = CollisionSystem.GetExplosionRequests();
 	if (!explosionRequests.empty()) {
 		//std::cout << "[TestScene] Collision explosion requests: " << explosionRequests.size() << ", sound entity ID: " << m_explosionSoundID.index << "\n";
 	}
 
+	// --- Retrieve the main camera entity and its CCamera component to determine if the collision point is within the camera's view before playing the explosion sound effect. This prevents unnecessary sound effects for off-screen collisions, improving performance and user experience.
 	bool queuedExplosionSound = false;
 	for (const auto& request : explosionRequests) {
-		SpawnExplosion(request.position, request.radius);
+		SpawnExplosion(request.position, request.radius, request.colour);
 
+		// --- Check if the collision point is within the camera's view before playing the explosion sound effect. This prevents unnecessary sound effects for off-screen collisions, improving performance and user experience.
 		bool collisionInCameraView = false;
+
+		// Retrieve the main camera entity and its CCamera component to determine if the collision point is within the camera's view before playing the explosion sound effect. This prevents unnecessary sound effects for off-screen collisions, improving performance and user experience.
 		if (cam) {
 			float halfViewWidth = cam->viewportWidth / (2.0f * cam->zoom);
 			float halfViewHeight = cam->viewportHeight / (2.0f * cam->zoom);
+
+			// Check if the collision point is within the camera's view bounds by comparing the absolute difference between the collision position and the camera's position to half of the camera's viewport dimensions, adjusted for zoom. If both the x and y differences are within the respective half-view dimensions, the collision is considered to be in view.
 			collisionInCameraView =
 				std::abs(request.position.x - cam->position.x) <= halfViewWidth &&
 				std::abs(request.position.y - cam->position.y) <= halfViewHeight;
 		}
 
+		// --- Play explosion sound effect if the collision is within the camera's view and the sound timer allows for it. This throttles the sound effect to avoid overwhelming the audio system with too many simultaneous sounds, especially during high-collision scenarios.
 		if (collisionInCameraView && !queuedExplosionSound && m_explosionSoundTimer >= 1.0f / 12.0f) {
 			if (auto* SoundSystem = GetWorld().GetEntityManager().GetSoundSystem()) {
 				// Queue the explosion sound effect after collision detection has generated the request.
-				std::cout << "[TestScene] Queueing explosion sound effect\n";
 				SoundSystem->QueueSoundEffect(m_explosionSoundID, request.position);
 				m_explosionSoundTimer = 0.0f;
 				queuedExplosionSound = true;
@@ -177,6 +186,7 @@ void TestScene::Update(float dt) {
 		}
 	}
 
+	// Clear the explosion requests after processing to avoid duplicate explosions in the next update cycle. This ensures that each collision event results in a single explosion effect and sound, maintaining consistency in the game's visual and audio feedback.
 	CollisionSystem.ClearExplosionRequests();
 
 	// --- Audio listener (camera only) ---
@@ -188,13 +198,12 @@ void TestScene::Update(float dt) {
 	// --- Commit pending entities ---
 	GetWorld().GetEntityManager().ProcessPending();
 
-
 	m_raycastSystem->Update(dt);
 
-	if (raycast->lastHit.hit) {
-		std::cout << "Mouse worldPos: " << raycast->worldPos.x << ", " << raycast->worldPos.y << "\n";
-		std::cout << "\x1b[36mRaycast HIT entity ID: " << raycast->lastHit.entity->GetId().index << " at (" << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n\x1b[0m";
-	}
+	//if (raycast->lastHit.hit) {
+	//	std::cout << "Mouse worldPos: " << raycast->worldPos.x << ", " << raycast->worldPos.y << "\n";
+	//	std::cout << "\x1b[36mRaycast HIT entity ID: " << raycast->lastHit.entity->GetId().index << " at (" << raycast->lastHit.position.x << ", " << raycast->lastHit.position.y << ")\n\x1b[0m";
+	//}
 
 	//GetWorld().GetEntityManager().GetBVH().ReportBVHSize();
 	// --- Camera movement + view ---
@@ -204,8 +213,6 @@ void TestScene::Update(float dt) {
 		ApplyMainCameraView(dt);
 	}
 
-
-
 	// --- UI (ImGui) ---
 	RenderUI();
 }
@@ -214,8 +221,8 @@ void TestScene::Update(float dt) {
 
 
 /////////////////////////////////
-// Render - responsible for rendering the scene, including all entities and any scene-specific visuals. The actual rendering of entities is handled by the EntityManager's RenderAll 
-// method, which is called by the GameEngine after this method. This method can be used to render any additional scene-specific visuals or effects that are not part of the standard entity rendering process.
+// Render - responsible for rendering the scene, including all entities and any scene-specific visuals. The actual rendering of entities is handled by the EntityManager's RenderAll method, which is called by the GameEngine after this method. This method can be used to render any additional scene-specific visuals or effects that are not part of 
+// the standard entity rendering process.
 void TestScene::Render() {}
 /////////////////////////////////
 
@@ -229,8 +236,7 @@ void TestScene::DoAction() { /*scene-specific action*/ }
 
 
 /////////////////////////////////
-// HandleEvent - processes input events for the scene, such as keyboard and mouse input. In this implementation, it checks if the Escape key is pressed and calls the ProcessEscapeKey method to 
-// close the window if it is. This method can be expanded to handle additional input events as needed for the scene's functionality.
+// HandleEvent - processes input events for the scene, such as keyboard and mouse input. In this implementation, it checks if the Escape key is pressed and calls the ProcessEscapeKey method to close the window if it is. This method can be expanded to handle additional input events as needed for the scene's functionality.
 void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 	bool escapeKeyDown = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Escape);
 	// handle input events
@@ -261,6 +267,11 @@ void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 			if (m_draggedBall) {
 				if (auto* transform = m_draggedBall->GetComponent<CTransform>())
 					m_dragOffset = transform->position - mouseWorld;
+
+				// --- Reset drag velocity and last drag position for calculating the drag release velocity when the mouse button is released. This ensures that the entity being dragged will have a smooth and responsive movement when released, based on the user's drag input.
+				m_dragVelocity = Vec2::Zero;
+				m_lastDragWorldPosition = mouseWorld;
+				m_hasDragSample = true;
 			}
 		} else if (mb->button == sf::Mouse::Button::Right) {
 			m_cameraSystem.BeginPan(*cam, sf::Mouse::getPosition(m_window));
@@ -278,8 +289,37 @@ void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 	if (evt.is<sf::Event::MouseButtonReleased>()) {
 		auto* mb = evt.getIf<sf::Event::MouseButtonReleased>();
 		if (mb->button == sf::Mouse::Button::Left) {
+			// --- Calculate the drag release velocity based on the last sampled drag position and the current mouse world position. This allows for a smooth transition of the dragged entity's movement when the mouse button is released, giving it a natural momentum based on the user's drag input.
+			if (m_draggedBall && m_hasDragSample) {
+				const Vec2 releaseWorld = GetMouseWorldPosition(mb->position);
+				const float sampleTime = std::max(m_dt, 1.0f / 120.0f);
+				m_dragVelocity = (releaseWorld - m_lastDragWorldPosition) / sampleTime;
+
+				// Clamp the drag velocity to a maximum speed to prevent excessive movement when releasing the dragged entity. This ensures that the entity's movement remains within reasonable bounds and does not become uncontrollable or unrealistic.
+				constexpr float maxDragSpeed = 1200.0f;
+
+				// Clamp the drag velocity to a maximum speed to prevent excessive movement when releasing the dragged entity. This ensures that the entity's movement remains within reasonable bounds and does not become uncontrollable or unrealistic.
+				if (m_dragVelocity.Mag() > maxDragSpeed)
+					m_dragVelocity = m_dragVelocity.GetUnitVec() * maxDragSpeed;
+
+				// Apply the calculated drag velocity to the dragged entity's transform component, updating its velocity for movement in the next update cycle. This allows the entity to continue moving in the direction of the drag release, simulating momentum and providing a more dynamic interaction with the game world.
+				if (auto* transform = m_draggedBall->GetComponent<CTransform>()) {
+					transform->velocity = m_dragVelocity;
+
+					// If the dragged ball has a valid transform index, update its velocity in the Transform SoA (Structure of Arrays) for efficient access and processing. This allows for optimized updates of the entity's position and movement in the game world, leveraging the benefits of the SoA data structure for performance.
+					if (m_draggedBall->transformIndex != SIZE_MAX) {
+						auto& transforms = GetWorld().GetEntityManager().GetTransformSoA();
+						transforms.velX[m_draggedBall->transformIndex] = m_dragVelocity.x;
+						transforms.velY[m_draggedBall->transformIndex] = m_dragVelocity.y;
+					}
+				}
+			}
+
+			// Reset drag state variables after releasing the dragged entity, ensuring that the next drag operation starts with a clean state. This prevents unintended behavior or carry-over effects from previous drag interactions.
 			m_draggedBall = nullptr;
 			m_dragOffset = Vec2::Zero;
+			m_dragVelocity = Vec2::Zero;
+			m_hasDragSample = false;
 		} else if (mb->button == sf::Mouse::Button::Right) {
 			m_cameraSystem.EndPan(*cam);
 		}
@@ -289,17 +329,21 @@ void TestScene::HandleEvent(const std::optional<sf::Event>& event) {
 
 
 /////////////////////////////////
+// GetMouseWorldPosition - converts the given mouse position in window coordinates to world coordinates based on the camera's position, zoom, and viewport size. This allows for accurate interaction with entities and other game elements in the game's world space.
 Vec2 TestScene::GetMouseWorldPosition(const sf::Vector2i& mousePosition) const {
+	// Retrieve the main camera entity and its CCamera component to access the camera's position, zoom, and viewport size. If the camera is not available, return a zero vector as a fallback.
 	CCamera* cam = m_cameraEntity ? m_cameraEntity->GetComponent<CCamera>() : nullptr;
-	if (!cam) {
-		return Vec2::Zero;
-	}
+	if (!cam) {	return Vec2::Zero; }
 
+	// Calculate a safe zoom value to avoid division by zero or extremely small zoom values that could lead to rendering issues. If the camera's zoom is greater than a small threshold (0.0001f), use it; otherwise, default to 1.0f.
 	const float safeZoom = (cam->zoom > 0.0001f) ? cam->zoom : 1.0f;
 	sf::View view;
+
+	// Set the view's center and size based on the camera's position, viewport dimensions, and safe zoom value. This ensures that the mouse position is correctly mapped to world coordinates relative to the camera's current view.
 	view.setCenter(sf::Vector2f(cam->position.x, cam->position.y));
 	view.setSize(sf::Vector2f(cam->viewportWidth / safeZoom, cam->viewportHeight / safeZoom));
 
+	// Convert the mouse position from window coordinates to world coordinates using the SFML window's mapPixelToCoords function, which takes into account the current view. The resulting world position is then returned as a Vec2 object for use in game logic and interactions.
 	const sf::Vector2f worldPos = m_window.mapPixelToCoords(mousePosition, view);
 	return Vec2(worldPos.x, worldPos.y);
 }
@@ -307,26 +351,33 @@ Vec2 TestScene::GetMouseWorldPosition(const sf::Vector2i& mousePosition) const {
 
 
 /////////////////////////////////
+// PickBall - returns the closest entity (ball) to the given world position that is within its radius. It iterates through all entities, checking if they are alive and have a render instance, and calculates the distance from the world position to each entity's position. If the distance is less than or equal to the entity's radius, 
+// it considers it a potential pick and keeps track of the closest one found.
 Entity* TestScene::PickBall(const Vec2& worldPosition) const {
+	// Find the closest entity (ball) to the given world position that is within its radius. This method iterates through all entities, checking if they are alive and have a render instance, and calculates the distance from the world position to each entity's position. If the distance is less than or equal to the entity's radius, it considers it a 
+	// potential pick and keeps track of the closest one found.
 	Entity* closestBall = nullptr;
 	float closestDistanceSquared = std::numeric_limits<float>::max();
 
+	// --- Iterate through all entities in the EntityManager ---
 	for (const auto& uptr : GetWorld().GetEntityManager().GetEntities()) {
 		Entity* entity = uptr.get();
-		if (!entity || !entity->IsAlive())
-			continue;
-		if (!entity->GetComponent<CRenderInstance>())
-			continue;
 
+		// Skip entities that are not alive or do not have a render instance, as they cannot be picked.
+		if (!entity || !entity->IsAlive()) continue;
+		if (!entity->GetComponent<CRenderInstance>()) continue;
+
+		// Get the entity's transform component to access its position and radius for picking calculations.
 		const auto* transform = entity->GetComponent<CTransform>();
-		if (!transform)
-			continue;
+		if (!transform)	continue;
 
+		// Calculate the squared distance from the world position to the entity's position. This avoids the need for a square root calculation, which is more expensive and unnecessary for comparison purposes.
 		const float radius = entity->GetRadius();
 		const float dx = transform->position.x - worldPosition.x;
 		const float dy = transform->position.y - worldPosition.y;
 		const float distanceSquared = dx * dx + dy * dy;
 
+		// If the distance is less than or equal to the entity's radius and is the closest found so far, update the closest ball and its distance.
 		if (distanceSquared <= (radius * radius) && distanceSquared < closestDistanceSquared) {
 			closestDistanceSquared = distanceSquared;
 			closestBall = entity;
@@ -342,20 +393,28 @@ Entity* TestScene::PickBall(const Vec2& worldPosition) const {
 /////////////////////////////////
 // OnEnter - called when the scene becomes active, allowing for any necessary setup or initialization that should occur each time the scene is entered. This can include resetting game state, starting timers, or preparing resources specific to this scene.
 void TestScene::OnEnter() {
+	// --- Scene initialization ---
 	GetWorld().GetEntityManager().SetSFMLRenderingEnabled(false);
 	GetWorld().GetEntityManager().SetGLRenderingEnabled(true);
 	GetWorld().GetEntityManager().ClearAll();
+
+	// --- Reset scene state variables ---
 	m_explosionSoundEntity = nullptr;
+
+	// --- Initialise sound system with a pool size of 64 for managing sound effects efficiently. This prepares the sound system to handle multiple simultaneous sound effects without performance degradation.
 	GetWorld().GetEntityManager().GetSoundSystem()->InitialisePool(GetWorld().GetEntityManager(), 64);
 
+	// --- Create explosion sound entity ---
 	Entity* soundEntity = m_world.CreateEntity(EntityType::Default);
 	m_explosionSoundEntity = soundEntity;
 	auto* soundEffect = soundEntity->AddComponent<CSoundEffect>("Explosion", "assets/sounds/medium-explosion.ogg");
 	m_explosionSoundID = soundEntity->GetId();
 	m_explosionSoundTimer = 1.0f / 12.0f;
+
+	// --- Configure sound effect properties ---
 	soundEffect->volume = 100.0f;
 	soundEffect->_3DMinDistance = 1000.0f;
-	soundEffect->_3DMaxDistance = 15000.0f;
+	soundEffect->_3DMaxDistance = 6000.0f;
 	soundEffect->PlayOnAwake = false;
 	soundEffect->shouldPlay = false;
 	soundEffect->loop = false;
@@ -369,8 +428,10 @@ void TestScene::OnEnter() {
 	// Camera entity
 	m_cameraEntity = m_world.CreateEntity(EntityType::Camera);
 
+	// Calculate the initial camera position to be centered in the map bounds
 	Vec2 initialCamPos((m_mapMin.x + m_mapMax.x) * 0.5f, (m_mapMin.y + m_mapMax.y) * 0.5f);
 
+	// Add a CCamera component to the camera entity with the calculated initial position and set it as the main camera. The camera is configured with a zoom level of 1.0f, viewport dimensions based on the window size, and world dimensions based on the map bounds. The smoothness is set to 0.0f for immediate response to camera movements.
 	auto camera = m_cameraEntity->AddComponent<CCamera>(initialCamPos, 1.0f);
 	camera->isMainCamera = true;
 	camera->isActive = true;
@@ -416,11 +477,7 @@ void TestScene::OnEnter() {
 		std::cout << "Contains " << bucket->entities.size() << " entities:\n";
 	}
 
-	// Build BVH once after initial spawn (not needed as we build the bvh in the spatial index build)
-	//auto dyn = GetWorld().GetEntityManager().GetDynamicEntities();
-	//GetWorld().GetEntityManager().GetBVH().Rebuild(dyn);
-	//GetWorld().GetEntityManager().GetBVH().ReportBVHSize();
-
+	// Debug: print dynamic entity count
 	std::cout << "Dynamic entities: " << GetWorld().GetEntityManager().GetDynamicEntities().size() << "\n";
 
 	// Reset cell markers
@@ -430,6 +487,7 @@ void TestScene::OnEnter() {
 		e->currentCellY = INT_MIN;
 	}
 
+	// Set the mouse system to use world coordinates instead of SFML window coordinates. This ensures that mouse input is interpreted correctly in the context of the game's world space, allowing for accurate interaction with entities and other game elements based on their positions in the world rather than their positions on the screen.
 	m_mouseSystem->SetUseSFMLCoords(false);
 
 	std::cout << "Initial build of spatial index with " << entities.size() << " entities.\n";
@@ -444,6 +502,7 @@ void TestScene::OnEnter() {
 void TestScene::OnExit() { /* cleanup when scene exits */ 
 	std::cout << "Exiting TestScene...\n";
 	
+	// Clean up the mouse system and raycast system
 	if (m_testBucket != INVALID_BUCKET) {
 		bool removed = GetWorld().GetEntityManager().DeleteEntityBucket(m_testBucket);
 
@@ -455,8 +514,7 @@ void TestScene::OnExit() { /* cleanup when scene exits */
 
 
 /////////////////////////////////
-// OnWindowResized - called when the window is resized, allowing for any necessary adjustments to the scene's view or layout based on the new window size. 
-// In this implementation, it updates the view to center on the new window size and adjusts the view's size accordingly.
+// OnWindowResized - called when the window is resized, allowing for any necessary adjustments to the scene's view or layout based on the new window size. In this implementation, it updates the view to center on the new window size and adjusts the view's size accordingly.
 void TestScene::OnWindowResized(sf::Vector2u newSize) {
 	sf::View view;
 	view.setCenter(sf::Vector2f(newSize.x * 0.5f, newSize.y * 0.5f));
@@ -476,8 +534,7 @@ void TestScene::LoadResources() {
 
 
 /////////////////////////////////
-// UnloadResources - responsible for unloading any resources that were loaded for the scene, allowing for cleanup and freeing of memory when the scene is no longer needed. 
-// In this implementation, it is a placeholder, but in a more complete implementation, it would include actual resource unloading logic.
+// UnloadResources - responsible for unloading any resources that were loaded for the scene, allowing for cleanup and freeing of memory when the scene is no longer needed. In this implementation, it is a placeholder, but in a more complete implementation, it would include actual resource unloading logic.
 void TestScene::UnloadResources() { /* unload resources */ }
 /////////////////////////////////
 
@@ -519,8 +576,7 @@ void TestScene::Initialise(sf::Vector2u windowSize) {
 
 
 /////////////////////////////////
-// SpawnEntityByType - Spawns an entity of the specified team type with random properties and adds it to the EntityManager. It takes the EntityManager reference, team type (0-4), radius, color, position, velocity, and alpha as parameters. The team type is mapped to a specific EntityType enum value, and the new 
-// entity is created and added to the EntityManager using the addEntity method.
+// SpawnEntityByType - Spawns an entity of the specified team type with random properties and adds it to the EntityManager. It takes the EntityManager reference, team type (0-4), radius, color, position, velocity, and alpha as parameters. The team type is mapped to a specific EntityType enum value, and the new entity is created and added to the EntityManager using the addEntity method.
 void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 color, Vec2 position, Vec2 velocity, int alpha) {
 	// Map teamType (0-4) to EntityType enum values
 	const EntityType teamTypes[] = {EntityType::TeamEagle, EntityType::TeamHawk, EntityType::TeamBoogaloo, EntityType::TeamRocket, EntityType::TeamMonkey};
@@ -572,8 +628,7 @@ void TestScene::SpawnEntityByType(unsigned int teamType, float radius, Vec3 colo
 
 
 /////////////////////////////////
-// RenderGameInfoWindow - Renders the ImGui window displaying game information and performance metrics. It takes the current entity count, death count for the current frame, and active explosion count as parameters to display in the UI. The window is positioned at (10, 10) and sized to (450, 280) on first use, 
-// and it includes sections for entity statistics and spatial hash collision detection performance metrics.
+// RenderGameInfoWindow - Renders the ImGui window displaying game information and performance metrics. It takes the current entity count, death count for the current frame, and active explosion count as parameters to display in the UI. The window is positioned at (10, 10) and sized to (450, 280) on first use, and it includes sections for entity statistics and spatial hash collision detection performance metrics.
 void TestScene::RenderGameInfoWindow(size_t entityCount, int deathCount, int explosionCount) {
 	ImGui::SetNextWindowPos(ImVec2(10, 10), ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowSize(ImVec2(450, 280), ImGuiCond_FirstUseEver);
@@ -602,6 +657,8 @@ void TestScene::RenderGameInfoWindow(size_t entityCount, int deathCount, int exp
 
 
 /////////////////////////////////
+// UpdateEntity - Updates the state of a single entity based on its components and the current game state. It checks if the entity has a CSoundEffect component, and if so, it skips further updates. If the entity has a CTransform component, it updates its position based on whether it is being dragged or moving normally, 
+// and synchronizes the transform with the SoA data.
 void TestScene::UpdateEntity(Entity* e, float dt, float worldW, float worldH) {
 	(void)worldW;
 	(void)worldH;
@@ -613,7 +670,7 @@ void TestScene::UpdateEntity(Entity* e, float dt, float worldW, float worldH) {
 		return;
 
 	const size_t transformIndex = e->transformIndex;
-	if (UpdateDraggedBall(e, transformIndex, *transform)) {
+	if (UpdateDraggedBall(e, transformIndex, *transform, dt)) {
 		SyncEntityTransform(e, transformIndex, *transform);
 		return;
 	}
@@ -626,6 +683,7 @@ void TestScene::UpdateEntity(Entity* e, float dt, float worldW, float worldH) {
 
 
 /////////////////////////////////
+// ClampBallToMap - Clamps the position of a ball entity to ensure it stays within the defined map bounds, taking into account the ball's radius. It returns a new Vec2 representing the clamped position, ensuring that the ball does not go outside the map boundaries.
 Vec2 TestScene::ClampBallToMap(const Vec2& position, float radius) const {
 	return Vec2(
 		std::clamp(position.x, m_mapMin.x + radius, m_mapMax.x - radius),
@@ -636,12 +694,19 @@ Vec2 TestScene::ClampBallToMap(const Vec2& position, float radius) const {
 
 
 /////////////////////////////////
-bool TestScene::UpdateDraggedBall(Entity* entity, size_t transformIndex, CTransform& transform) {
-	if (entity != m_draggedBall)
-		return false;
+// UpdateDraggedBall - Updates the position of a dragged ball entity based on the current mouse position and drag offset. It checks if the entity being updated is the one currently being dragged, and if so, it calculates the new position by adding the drag offset to the mouse world position. The new position is then clamped to ensure it stays within the 
+// defined map bounds, taking into account the ball's radius. The updated position is stored back in the SoA (Structure of Arrays) data and the entity's transform component.
+bool TestScene::UpdateDraggedBall(Entity* entity, size_t transformIndex, CTransform& transform, float deltaTime) {
+	if (entity != m_draggedBall) return false;
 
+	// Retrieve the current mouse world position from the CMouseState component
 	const Vec2 mouseWorld = m_mouseEntity->GetComponent<CMouseState>()->worldPos;
 	const Vec2 position = ClampBallToMap(mouseWorld + m_dragOffset, entity->GetRadius());
+	if (m_hasDragSample && deltaTime > 0.0f)
+		m_dragVelocity = (mouseWorld - m_lastDragWorldPosition) / deltaTime;
+	m_lastDragWorldPosition = mouseWorld;
+
+	// Update the SoA (Structure of Arrays) data with the new position
 	auto& transforms = GetWorld().GetEntityManager().GetTransformSoA();
 	transforms.SetPosition(transformIndex, position.x, position.y);
 	transform.position = position;
@@ -652,20 +717,34 @@ bool TestScene::UpdateDraggedBall(Entity* entity, size_t transformIndex, CTransf
 
 
 /////////////////////////////////
+// UpdateBallMovement - Updates the movement of a ball entity based on its current velocity and position, applying clamping to ensure it stays within the defined map bounds. It calculates the new position based on the velocity and delta time, checks for collisions with the map boundaries, and adjusts the velocity accordingly. The updated position 
+// and velocity are then stored back in the SoA (Structure of Arrays) data and the entity's transform component.
 void TestScene::UpdateBallMovement(Entity* entity, size_t transformIndex, CTransform& transform, float deltaTime) {
-	constexpr float ballSpeed = 180.0f;
+	constexpr float ballSpeed = 18.0f;
+	constexpr float speedConvergence = 3.0f;
 	auto& transforms = GetWorld().GetEntityManager().GetTransformSoA();
 	Vec2 velocity(transforms.velX[transformIndex], transforms.velY[transformIndex]);
-	velocity = velocity.Mag2() <= 0.0001f ? Vec2::RandomDirection() * ballSpeed : velocity.GetUnitVec() * ballSpeed;
+	if (velocity.Mag2() <= 0.0001f) {
+		velocity = Vec2::RandomDirection() * ballSpeed;
+	} else {
+		float speed = velocity.Mag();
+		float blend = std::min(1.0f, speedConvergence * deltaTime);
+		speed += (ballSpeed - speed) * blend;
+		velocity = velocity.GetUnitVec() * speed;
+	}
+	
+	// Retrieve the current position from the SoA data
 	Vec2 position(transforms.posX[transformIndex], transforms.posY[transformIndex]);
 	position += velocity * deltaTime;
 
+	// Clamp the position to ensure the ball stays within the map bounds, taking into account its radius
 	const Vec2 clampedPosition = ClampBallToMap(position, entity->GetRadius());
 	if (clampedPosition.x != position.x)
 		velocity.x = position.x < clampedPosition.x ? std::abs(velocity.x) : -std::abs(velocity.x);
 	if (clampedPosition.y != position.y)
 		velocity.y = position.y < clampedPosition.y ? std::abs(velocity.y) : -std::abs(velocity.y);
 
+	// Update the SoA data with the new position and velocity
 	transforms.SetPosition(transformIndex, clampedPosition.x, clampedPosition.y);
 	transforms.velX[transformIndex] = velocity.x;
 	transforms.velY[transformIndex] = velocity.y;
@@ -727,6 +806,8 @@ void TestScene::UpdateFPS(float deltaTime) {
 
 
 /////////////////////////////////
+// ProcessEvents - Processes input events for the scene, including window events and camera input. It retrieves the main camera (if any) and polls SFML events, forwarding them to ImGui first. It handles window close events, mouse wheel zoom for the camera, and mouse button events for panning the camera. It also updates the camera's position based 
+// on mouse movement while panning.
 void TestScene::ProcessEvents() {
 	// Retrieve main camera (if any)
 	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
@@ -785,8 +866,8 @@ void TestScene::ProcessEvents() {
 
 
 
-
 /////////////////////////////////
+// UpdateSceneLogic - Updates the scene's logic, including entity growth and spawning. It increments the growth timer and checks if it has reached 5 seconds, at which point it increases the target entity count by 20 and resets the timer. It then calls UpdateSpawning to handle spawning new entities based on the current entity count and target.
 void TestScene::UpdateSceneLogic(float dt) {
 	m_growthTimer += dt;
 
@@ -828,6 +909,7 @@ void TestScene::UpdateSpawning(float deltaTime) {
 
 
 /////////////////////////////////
+// SpawnInitialPopulation - Spawns the initial population of entities in the scene based on the target entity count. It randomly generates properties for each entity, including team type, spawn position, velocity, color, and radius, and calls SpawnEntityByType to create and add the entities to the scene.
 void TestScene::SpawnInitialPopulation() {
 	const auto windowSize = m_window.getSize();
 	for (int i = 0; i < m_targetEntityCount; ++i) {
@@ -836,19 +918,11 @@ void TestScene::SpawnInitialPopulation() {
 
 		// 2. Sample spawn position within map bounds (with a margin of 50 units)
 		float spawnX = std::uniform_real_distribution<float>(m_mapMin.x + 50.0f, m_mapMax.x - 50.0f)(m_rng);
-
 		float spawnY = std::uniform_real_distribution<float>(m_mapMin.y + 50.0f, m_mapMax.y - 50.0f)(m_rng);
 
 		// 3. Initial velocity (full 2D motion)
-		float velX = std::uniform_real_distribution<float>(-180.0f, 180.0f)(m_rng);
-		float velY = std::uniform_real_distribution<float>(-180.0f, 180.0f)(m_rng);
-
-		//// Clamp minimum speeds to avoid slow movers
-		//if (std::abs(velX) < 250.0f)
-		//	velX = (velX < 0.0f ? -250.0f : 250.0f);
-
-		//if (std::abs(velY) < 180.0f)
-		//	velY = (velY < 0.0f ? -180.0f : 180.0f);
+		float velX = std::uniform_real_distribution<float>(-18.0f, 18.0f)(m_rng);
+		float velY = std::uniform_real_distribution<float>(-18.0f, 18.0f)(m_rng);
 
 		// 4. Visual properties
 		int r = m_redVal(m_rng);
@@ -866,6 +940,7 @@ void TestScene::SpawnInitialPopulation() {
 
 
 /////////////////////////////////
+// SpawnReplacementEntities - Spawns a specified number of replacement entities in the scene when the current entity count is below the target. It randomly generates properties for each entity, including movement direction, team type, spawn position, velocity, color, and radius, and calls SpawnEntityByType to create and add the entities to the scene.
 void TestScene::SpawnReplacementEntities(int count) {
 	for (int i = 0; i < count; ++i) {
 		// 1. Choose movement direction (0 = leftward, 1 = rightward)
@@ -876,7 +951,9 @@ void TestScene::SpawnReplacementEntities(int count) {
 
 		// 3. Sample velocity (horizontal only)
 		float velX = 30.0f;
-		float velY = 0.0f;
+		float velY = std::uniform_real_distribution<float>(-30.0f, 30.0f)(m_rng);
+		
+		// Invert velocity for rightward movement
 		if (direction == 1)
 			velX = -velX;
 
@@ -884,6 +961,7 @@ void TestScene::SpawnReplacementEntities(int count) {
 		float spawnX;
 		float spawnY = std::uniform_real_distribution<float>(m_mapMin.y + 150.0f, m_mapMax.y - 150.0f)(m_rng);
 
+		// Spawn off-screen based on direction
 		if (direction == 1) {
 			spawnX = std::uniform_real_distribution<float>(m_mapMin.x - 150.0f, m_mapMin.x)(m_rng);
 		} else {
@@ -906,8 +984,8 @@ void TestScene::SpawnReplacementEntities(int count) {
 
 
 /////////////////////////////////
-// SpawnExplosion - Spawns an explosion entity at the specified position with the given radius. It creates a new entity of type Explosion, sets up its transform and explosion components, and adds it to the scene's registry of active explosions for tracking and updating.
-void TestScene::SpawnExplosion(const Vec2& pos, float radius) {
+// SpawnExplosion - Spawns an explosion entity at the specified position with the given radius and color. It creates a new entity of type Explosion, sets up its transform and explosion components, and adds it to the scene's registry of active explosions for tracking and updating.
+void TestScene::SpawnExplosion(const Vec2& pos, float radius, const Vec3& colour) {
 	// Create explosion entity through ECS
 	Entity* e = m_world.CreateEntity(EntityType::Explosion);
 
@@ -920,6 +998,7 @@ void TestScene::SpawnExplosion(const Vec2& pos, float radius) {
 	auto* explosion = e->GetComponent<CExplosion>();
 	explosion->age = 0;
 	explosion->SetRadius(radius);
+	explosion->SetColor(colour.x, colour.y, colour.z, 200);
 
 	// Add to scene registry
 	m_explosions.push_back(e);
@@ -929,15 +1008,18 @@ void TestScene::SpawnExplosion(const Vec2& pos, float radius) {
 
 
 /////////////////////////////////
+// ApplyMainCameraView - Applies the main camera's view to the SFML window, adjusting for zoom and clamping the camera position within the defined map bounds. It also snaps the camera position to a sub-pixel grid based on the zoom level to reduce visual jitter when rendering.
 void TestScene::ApplyMainCameraView(float deltaTime) {
+	// Retrieve the main camera from the camera system
 	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
-	if (!camOpt)
-		return;
+	
+	// If no main camera is found, exit early
+	if (!camOpt) return;
+
+	// Retrieve the main camera component
 	CCamera* cam = *camOpt;
 
-	//std::cout << "CAMERA BEFORE CLAMP: " << cam->position.x << ", " << cam->position.y << std::endl;
-
-
+	// Set up the SFML view based on the camera's position and zoom level
 	sf::View v;
 	v.setSize(sf::Vector2f(cam->viewportWidth / cam->zoom, cam->viewportHeight / cam->zoom));
 
@@ -946,18 +1028,21 @@ void TestScene::ApplyMainCameraView(float deltaTime) {
 	float halfH = (cam->viewportHeight / cam->zoom) * 0.5f;
 	Vec2 newPos = cam->position;
 
+	// Clamp camera position to map bounds if they are defined
 	if (m_hasMapBounds) {
 		float minCx = m_mapMin.x + halfW;
 		float maxCx = m_mapMax.x - halfW;
 		float minCy = m_mapMin.y + halfH;
 		float maxCy = m_mapMax.y - halfH;
 
+		// If the camera's viewport is larger than the map bounds, center the camera instead of clamping
 		if (minCx <= maxCx) {
 			newPos.x = std::clamp(newPos.x, minCx, maxCx);
 		} else {
 			newPos.x = (m_mapMin.x + m_mapMax.x) * 0.5f;
 		}
 
+		// If the camera's viewport is larger than the map bounds, center the camera instead of clamping
 		if (minCy <= maxCy) {
 			newPos.y = std::clamp(newPos.y, minCy, maxCy);
 		} else {
@@ -965,15 +1050,16 @@ void TestScene::ApplyMainCameraView(float deltaTime) {
 		}
 	}
 
+	// Update the camera's position after clamping
 	cam->position = newPos;
 
-	//std::cout << "CAMERA AFTER CLAMP: " << newPos.x << ", " << newPos.y << std::endl;
 
 	// Snap camera to sub-pixel grid based on zoom level to reduce shimmer/jitter when rendering At zoom levels 2.0x or higher, snap to tile alignment (32 pixels). Otherwise snap to half-pixel.
 	float snapGrid = (cam->zoom >= 2.0f) ? 32.0f : 0.5f; // Snap to tile grid at 2x+ zoom, else half-pixel
 	float snapX = std::round(newPos.x / snapGrid) * snapGrid;
 	float snapY = std::round(newPos.y / snapGrid) * snapGrid;
 
+	// Set the view's center to the snapped position and apply it to the SFML window
 	v.setCenter(sf::Vector2f(snapX, snapY));
 	m_window.setView(v);
 }
@@ -982,6 +1068,7 @@ void TestScene::ApplyMainCameraView(float deltaTime) {
 
 
 /////////////////////////////////
+// ApplyCameraMovement - Applies camera movement based on keyboard input (WASD) and delta time. It retrieves the main camera and adjusts its position based on the pressed keys, normalizing the movement vector to ensure consistent speed regardless of direction. The camera's position is updated accordingly.
 void TestScene::ApplyCameraMovement(float deltaTime) {
 	auto camOpt = m_cameraSystem.GetMainCamera(GetWorld().GetEntityManager());
 	if (!camOpt)
@@ -991,6 +1078,7 @@ void TestScene::ApplyCameraMovement(float deltaTime) {
 
 	Vec2 move(0, 0);
 
+	// Keyboard input for camera movement (WASD)
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W))
 		move.y -= 1;
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S))
@@ -1000,12 +1088,11 @@ void TestScene::ApplyCameraMovement(float deltaTime) {
 	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D))
 		move.x += 1;
 
+	// Normalize movement vector and apply speed based on delta time
 	if (move.Mag2() > 0.0f) {
 		move.Normalise();
 		move *= 600.0f * deltaTime;
 		cam->position += move;
-
-		//std::cout << "Camera pos (after WASD): " << cam->position.x << ", " << cam->position.y << std::endl;
 	}
 }
 /////////////////////////////////
@@ -1013,8 +1100,7 @@ void TestScene::ApplyCameraMovement(float deltaTime) {
 
 
 /////////////////////////////////
-// UpdateExplosions - Updates the state of all active explosions; iterates through the tracked explosion entities, calculates their 
-// age based on their creation time, updates their color alpha for fading effect, and removes them if they have exceeded their lifespan.
+// UpdateExplosions - Updates the state of all active explosions; iterates through the tracked explosion entities, calculates their age based on their creation time, updates their color alpha for fading effect, and removes them if they have exceeded their lifespan.
 void TestScene::UpdateExplosions() {
 	m_explosionCount = 0; // Reset explosion count and recalculate based on active explosions in the scene
 	auto now = std::chrono::high_resolution_clock::now();
@@ -1027,31 +1113,30 @@ void TestScene::UpdateExplosions() {
 		m_explosions.end()
 	);
 
+	// Iterate over all entities in the world to find explosions and update their state based on elapsed time since creation
 	for (auto& entity : GetWorld().GetEntityManager().GetEntities()) { // Iterate over all entities to find explosions and update their state based on elapsed time since creation
 		if (entity->GetType() == EntityType::Explosion) {
 			auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(now - entity->GetCreationTime());
 
-			// Check if the sound effect is still playing
-	/*		CSoundEffect* soundEffect = entity->GetComponent<CSoundEffect>();
-			bool soundStillPlaying = soundEffect && soundEffect->m_sound && soundEffect->m_state == CSoundEffect::State::Playing;*/
-
 			// Only destroy the entity if both the visual lifespan is over AND the sound has finished
 			if (elapsed.count() > 9000) {
-				//std::cout << "Destroying explosion entity after 9000ms" << std::endl;
 				entity->Destroy();
 			} else {
-				m_explosionCount++; // Increment explosion count for active explosions that have not yet expired
+				// Increment explosion count for active explosions that have not yet expired
+				m_explosionCount++; 
 				float fadeProgress = static_cast<float>(elapsed.count()) / 9000.0f;
+				
 				// Use a higher base alpha so explosions remain more visible as they expand.
 				const int maxAlpha = 220; // match CExplosion default alpha
 				int newAlpha = static_cast<int>(maxAlpha * (1.0f - fadeProgress));
 
+				// Update the explosion's visual representation (CShape) to grow in size and fade out over time
 				auto* explosion = entity->GetComponent<CExplosion>();
 				auto* shape = entity->GetComponent<CShape>();
 
+				// Ensure both components exist before attempting to modify them
 				if (explosion && shape) {
 					// Grow radius
-					//std::cout << "Grow you little bastard, grow! Explosion radius before: " << explosion->GetRadius() << std::endl;
 					float r = shape->GetRadius(); // renderer uses CShape radius
 					r *= 1.004f;
 					shape->SetRadius(r);
@@ -1069,6 +1154,7 @@ void TestScene::UpdateExplosions() {
 
 
 /////////////////////////////////
+// InitialiseSpatialLayers - Initializes the spatial layers for the scene, creating a dedicated layer for TestScene entities with a specified cell size for accurate collision detection. It wires the spatial layer registry into the EntityManager to enable spatial queries and collision handling.
 void TestScene::InitialiseSpatialLayers() {
 	// Wire this registry into the EntityManager
 	GetWorld().GetEntityManager().SetSpatialLayerRegistry(&m_spatialLayers);
@@ -1078,5 +1164,3 @@ void TestScene::InitialiseSpatialLayers() {
 	m_spatialLayers.CreateLayer("TestScene", 96.0f);
 }
 /////////////////////////////////
-
-

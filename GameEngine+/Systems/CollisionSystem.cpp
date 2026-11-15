@@ -195,6 +195,7 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) {
 
 		Vec2 collisionPoint;
 
+		// If the distance is greater than zero, calculate the collision point along the line between the two entities based on their radii. If the distance is zero (perfect overlap), use the midpoint between the two entities as the collision point.
 		if (distance > 0.0f) {
 			Vec2 direction = distanceVec / distance;
 			collisionPoint = p1 + direction * entity1->GetRadius();
@@ -202,8 +203,10 @@ int CollisionSystem::ResolveCollision(Entity* entity1, Entity* entity2) {
 			collisionPoint = (p1 + p2) * 0.5f;
 		}
 
+		// Spawn explosion at the collision point with a fixed radius. The explosion is added to the list of explosion requests for processing by the SpawnSystem. Both colliding entities are destroyed after spawning the explosion.
 		constexpr float explosionRadius = 5.0f;
 
+		// Queue the explosion request for processing by the SpawnSystem
 		ExplosionRequest request;
 		request.position = collisionPoint;
 		request.colour = blendedColor;
